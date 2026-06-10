@@ -1,0 +1,20 @@
+{
+  "name": "my-furniture-app",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "concurrently -n server,client -c blue,green \"node server.js\" \"cd client && npm start\"",
+    "server": "node server.js",
+    "build": "cd client && npm install && npm run build",
+    "deploy": "npm run build && npm start"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2",
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}

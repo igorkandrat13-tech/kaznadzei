@@ -1,0 +1,18 @@
+[Unit]
+Description=Kaznadzei Furniture Factory App
+After=network.target mongod.service
+Requires=mongod.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/kaznadzei
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

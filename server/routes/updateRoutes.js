@@ -1,0 +1,196 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const { execFile } = require('child_process');
+
+const router = express.Router();
+
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
+const CLIENT_ROOT = path.join(PROJECT_ROOT, 'client');
+const DEFAULT_BRANCH = process.env.UPDATE_BRANCH || 'main';
+
+let installInProgress = false;
+
+function runFile(command, args, cwd = PROJECT_ROOT) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { cwd, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+  });
+}
+
+function getNpmCommand() {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+function getErrorText(error) {
+  return [error.message, error.stdout, error.stderr].filter(Boolean).join('\n').trim();
+}
+
+async function hasGit() {
+  try {
+    const result = await runFile('git', ['--version']);
+    return result.stdout || 'git available';
+  } catch {
+    return null;
+  }
+}
+
+async function tryGit(args, cwd) {
+  try {
+    return await runFile('git', args, cwd);
+  } catch {
+    return null;
+  }
+}
+
+async function getUpdateStatus() {
+  const gitVersion = await hasGit();
+  const status = {
+    gitAvailable: Boolean(gitVersion),
+    gitVersion,
+    isRepo: fs.existsSync(path.join(PROJECT_ROOT, '.git')),
+    hasRemote: false,
+    upstreamConfigured: false,
+    branch: null,
+    remoteUrl: null,
+    currentCommit: null,
+    targetRef: null,
+    updatesAvailable: false,
+    ahead: 0,
+    behind: 0,
+    canInstall: false,
+    installInProgress,
+    message: '',
+  };
+
+  if (!status.gitAvailable) {
+    status.message = 'Git не найден в PATH. Установите Git на локальную машину.';
+    return status;
+  }
+
+  if (!status.isRepo) {
+    status.message = 'Локальный git-репозиторий не инициализирован.';
+    return status;
+  }
+
+  const branchResult = await tryGit(['rev-parse', '--abbrev-ref', 'HEAD']);
+  status.branch = branchResult?.stdout || null;
+
+  const commitResult = await tryGit(['rev-parse', 'HEAD']);
+  status.currentCommit = commitResult?.stdout || null;
+
+  const remoteResult = await tryGit(['remote', 'get-url', 'origin']);
+  status.remoteUrl = remoteResult?.stdout || null;
+  status.hasRemote = Boolean(status.remoteUrl);
+
+  if (!status.hasRemote) {
+    status.message = 'Remote origin не настроен. Подключите удаленный репозиторий.';
+    return status;
+  }
+
+  await tryGit(['fetch', 'origin', '--prune']);
+
+  const upstreamName = await tryGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+  if (upstreamName?.stdout) {
+    status.upstreamConfigured = true;
+    status.targetRef = upstreamName.stdout;
+  } else {
+    const fallbackBranch = process.env.UPDATE_BRANCH || status.branch || DEFAULT_BRANCH;
+    const remoteBranch = await tryGit(['rev-parse', '--verify', `origin/${fallbackBranch}`]);
+    if (remoteBranch?.stdout) {
+      status.targetRef = `origin/${fallbackBranch}`;
+    }
+  }
+
+  if (!status.targetRef) {
+    status.message = 'Не удалось определить ветку для обновления.';
+    return status;
+  }
+
+  const counts = await tryGit(['rev-list', '--left-right', '--count', `HEAD...${status.targetRef}`]);
+  if (counts?.stdout) {
+    const [ahead = '0', behind = '0'] = counts.stdout.split(/\s+/);
+    status.ahead = Number(ahead) || 0;
+    status.behind = Number(behind) || 0;
+    status.updatesAvailable = status.behind > 0;
+  }
+
+  status.canInstall = !installInProgress && status.hasRemote && Boolean(status.targetRef);
+  status.message = status.updatesAvailable
+    ? `Доступно обновлений: ${status.behind}`
+    : 'Обновлений нет';
+
+  return status;
+}
+
+router.get('/updates/status', async (req, res) => {
+  try {
+    const status = await getUpdateStatus();
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({ message: getErrorText(error) });
+  }
+});
+
+router.post('/updates/install', async (req, res) => {
+  if (installInProgress) {
+    return res.status(409).json({ message: 'Установка обновлений уже выполняется.' });
+  }
+
+  installInProgress = true;
+  const logs = [];
+
+  try {
+    const statusBefore = await getUpdateStatus();
+
+    if (!statusBefore.gitAvailable) {
+      return res.status(400).json({ message: statusBefore.message, status: statusBefore });
+    }
+    if (!statusBefore.isRepo) {
+      return res.status(400).json({ message: statusBefore.message, status: statusBefore });
+    }
+    if (!statusBefore.hasRemote || !statusBefore.targetRef) {
+      return res.status(400).json({ message: statusBefore.message, status: statusBefore });
+    }
+
+    if (!statusBefore.updatesAvailable) {
+      return res.json({ ok: true, updated: false, message: 'Новых обновлений нет.', logs, status: statusBefore });
+    }
+
+    logs.push(`git pull --ff-only origin ${statusBefore.targetRef.replace('origin/', '')}`);
+    await runFile('git', ['pull', '--ff-only', 'origin', statusBefore.targetRef.replace('origin/', '')], PROJECT_ROOT);
+
+    logs.push('npm install');
+    await runFile(getNpmCommand(), ['install'], PROJECT_ROOT);
+
+    logs.push('npm install (client)');
+    await runFile(getNpmCommand(), ['install'], CLIENT_ROOT);
+
+    installInProgress = false;
+    const statusAfter = await getUpdateStatus();
+    res.json({
+      ok: true,
+      updated: true,
+      message: 'Обновления установлены. Перезапустите приложение для применения изменений.',
+      logs,
+      status: statusAfter,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Не удалось установить обновления.',
+      details: getErrorText(error),
+      logs,
+    });
+  } finally {
+    installInProgress = false;
+  }
+});
+
+module.exports = router;
