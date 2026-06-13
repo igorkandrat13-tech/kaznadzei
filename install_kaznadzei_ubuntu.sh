@@ -65,6 +65,35 @@ cleanup_unused_repos() {
   fi
 }
 
+upsert_env_var() {
+  local file_path="$1"
+  local key="$2"
+  local value="$3"
+
+  touch "$file_path"
+  if grep -Eq "^${key}=" "$file_path"; then
+    sed -i -E "s|^${key}=.*|${key}=${value}|" "$file_path"
+  else
+    echo "${key}=${value}" >> "$file_path"
+  fi
+}
+
+ensure_admin_token() {
+  local file_path="$1"
+  local current_token=""
+
+  if grep -Eq '^ADMIN_TOKEN=' "$file_path"; then
+    current_token="$(sed -n 's/^ADMIN_TOKEN=//p' "$file_path" | tail -n 1 | tr -d '\r' | xargs)"
+  fi
+
+  if [[ -z "$current_token" || "$current_token" == "change-me" ]]; then
+    current_token="$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")"
+    upsert_env_var "$file_path" "ADMIN_TOKEN" "$current_token"
+    echo "Сгенерирован ADMIN_TOKEN: ${current_token}"
+    echo "Сохраните этот токен и используйте его в интерфейсе администратора."
+  fi
+}
+
 ensure_project_files() {
   local missing=0
   echo "  Проверка файлов проекта..."
@@ -150,18 +179,12 @@ cd "$APP_DIR"
 chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 
 echo "[5/8] Настройка .env..."
-if [[ ! -f .env ]]; then
-  ADMIN_TOKEN="$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")"
-  cat > .env <<EOF
-PORT=5000
-PUBLIC_BASE_URL=http://localhost:5000
-ADMIN_TOKEN=${ADMIN_TOKEN}
-ENABLE_SELF_UPDATE=false
-UPDATE_BRANCH=${BRANCH}
-EOF
-  echo "Сгенерирован ADMIN_TOKEN: ${ADMIN_TOKEN}"
-  echo "Сохраните этот токен и используйте его в интерфейсе администратора."
-fi
+touch .env
+upsert_env_var .env "PORT" "5000"
+upsert_env_var .env "PUBLIC_BASE_URL" "http://localhost:5000"
+upsert_env_var .env "ENABLE_SELF_UPDATE" "true"
+upsert_env_var .env "UPDATE_BRANCH" "${BRANCH}"
+ensure_admin_token .env
 chown "$APP_USER":"$APP_USER" .env
 
 echo "[6/8] Установка зависимостей..."
@@ -185,6 +208,7 @@ ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EnvironmentFile=${APP_DIR}/.env
 StandardOutput=journal
 StandardError=journal

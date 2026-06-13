@@ -366,30 +366,38 @@ function Admin() {
             </button>
           </div>
         </div>
-        <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-          <div><strong>Git:</strong> {updateStatus?.gitAvailable ? (updateStatus.gitVersion || 'установлен') : 'не найден'}</div>
-          <div><strong>Репозиторий:</strong> {updateStatus?.isRepo ? 'инициализирован' : 'не инициализирован'}</div>
-          <div><strong>Remote origin:</strong> {updateStatus?.remoteUrl || 'не настроен'}</div>
-          <div><strong>Ветка:</strong> {updateStatus?.branch || '—'}</div>
-          <div><strong>Источник обновления:</strong> {updateStatus?.targetRef || '—'}</div>
-          <div><strong>Новых коммитов:</strong> {updateStatus?.behind ?? '—'}</div>
-        </div>
         {updateMessage && <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: '#eef7ee', color: '#1f6b35' }}>{updateMessage}</div>}
         {updateError && <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318', whiteSpace: 'pre-wrap' }}>{updateError}</div>}
-        {!updateError && updateStatus?.message && <div style={{ marginTop: 12, color: '#666' }}>{updateStatus.message}</div>}
-        {updateStatus && !updateStatus.gitAvailable && (
-          <div style={{ marginTop: 12, color: '#666' }}>
-            Для включения обновлений установите Git и убедитесь, что команда <strong>git</strong> доступна в PATH.
-          </div>
-        )}
-        {updateStatus && updateStatus.gitAvailable && !updateStatus.isRepo && (
-          <div style={{ marginTop: 12, color: '#666' }}>
-            Инициализируйте локальный репозиторий командой <strong>git init</strong> в корне проекта.
-          </div>
-        )}
-        {updateStatus && updateStatus.isRepo && !updateStatus.hasRemote && (
-          <div style={{ marginTop: 12, color: '#666' }}>
-            Подключите удаленный репозиторий командой <strong>git remote add origin &lt;URL_РЕПОЗИТОРИЯ&gt;</strong>.
+        {updateStatus?.enabled ? (
+          <>
+            <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              <div><strong>Git:</strong> {updateStatus?.gitAvailable ? (updateStatus.gitVersion || 'установлен') : 'не найден'}</div>
+              <div><strong>Репозиторий:</strong> {updateStatus?.isRepo ? 'инициализирован' : 'не инициализирован'}</div>
+              <div><strong>Remote origin:</strong> {updateStatus?.remoteUrl || 'не настроен'}</div>
+              <div><strong>Ветка:</strong> {updateStatus?.branch || '—'}</div>
+              <div><strong>Источник обновления:</strong> {updateStatus?.targetRef || '—'}</div>
+              <div><strong>Новых коммитов:</strong> {updateStatus?.behind ?? '—'}</div>
+            </div>
+            {!updateError && updateStatus?.message && <div style={{ marginTop: 12, color: '#666' }}>{updateStatus.message}</div>}
+            {updateStatus && !updateStatus.gitAvailable && (
+              <div style={{ marginTop: 12, color: '#666' }}>
+                Для включения обновлений установите Git и убедитесь, что команда <strong>git</strong> доступна в PATH.
+              </div>
+            )}
+            {updateStatus && updateStatus.gitAvailable && !updateStatus.isRepo && (
+              <div style={{ marginTop: 12, color: '#666' }}>
+                Инициализируйте локальный репозиторий командой <strong>git init</strong> в корне проекта.
+              </div>
+            )}
+            {updateStatus && updateStatus.isRepo && !updateStatus.hasRemote && (
+              <div style={{ marginTop: 12, color: '#666' }}>
+                Подключите удаленный репозиторий командой <strong>git remote add origin &lt;URL_РЕПОЗИТОРИЯ&gt;</strong>.
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ marginTop: 12, color: '#666', lineHeight: 1.6 }}>
+            Self-update сейчас отключён. Чтобы включить обновления из интерфейса, установите <strong>ENABLE_SELF_UPDATE=true</strong> в <strong>/opt/kaznadzei/.env</strong>, перезапустите сервис и сохраните актуальный <strong>ADMIN_TOKEN</strong> в панели сверху.
           </div>
         )}
       </div>

@@ -9,12 +9,22 @@ const router = express.Router();
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const CLIENT_ROOT = path.join(PROJECT_ROOT, 'client');
 const DEFAULT_BRANCH = process.env.UPDATE_BRANCH || 'main';
+const DEFAULT_PATH = process.platform === 'win32'
+  ? process.env.PATH
+  : '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
 let installInProgress = false;
 
 function runFile(command, args, cwd = PROJECT_ROOT) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { cwd, windowsHide: true }, (error, stdout, stderr) => {
+    execFile(command, args, {
+      cwd,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        PATH: process.env.PATH || DEFAULT_PATH,
+      },
+    }, (error, stdout, stderr) => {
       if (error) {
         error.stdout = stdout;
         error.stderr = stderr;
@@ -26,8 +36,31 @@ function runFile(command, args, cwd = PROJECT_ROOT) {
   });
 }
 
+function getExecutable(candidates) {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (candidate.includes(path.sep) && fs.existsSync(candidate)) {
+      return candidate;
+    }
+    if (!candidate.includes(path.sep)) {
+      return candidate;
+    }
+  }
+  return candidates[candidates.length - 1];
+}
+
+function getGitCommand() {
+  if (process.platform === 'win32') {
+    return getExecutable(['git.exe', 'git']);
+  }
+  return getExecutable(['/usr/bin/git', '/usr/local/bin/git', 'git']);
+}
+
 function getNpmCommand() {
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  if (process.platform === 'win32') {
+    return getExecutable(['npm.cmd', 'npm']);
+  }
+  return getExecutable(['/usr/bin/npm', '/usr/local/bin/npm', 'npm']);
 }
 
 function getErrorText(error) {
@@ -36,7 +69,7 @@ function getErrorText(error) {
 
 async function hasGit() {
   try {
-    const result = await runFile('git', ['--version']);
+    const result = await runFile(getGitCommand(), ['--version']);
     return result.stdout || 'git available';
   } catch {
     return null;
@@ -45,7 +78,7 @@ async function hasGit() {
 
 async function tryGit(args, cwd) {
   try {
-    return await runFile('git', args, cwd);
+    return await runFile(getGitCommand(), args, cwd);
   } catch {
     return null;
   }
