@@ -27,6 +27,45 @@ function calculateOverallStatus(stages) {
   return 'in_progress';
 }
 
+function getStageMatchIndex(stages, step) {
+  return stages.findIndex((stage) => (
+    stage.stepId === step._id
+    || (stage.stepName === step.stepName && stage.role === step.role)
+    || stage.stepName === step.stepName
+  ));
+}
+
+function syncSingleOrderStages(order, steps) {
+  const sourceStages = Array.isArray(order.stages) ? order.stages.slice() : [];
+  const remainingStages = sourceStages.slice();
+  const nextStages = steps.map((step) => {
+    const matchIndex = getStageMatchIndex(remainingStages, step);
+    if (matchIndex === -1) {
+      return {
+        stepId: step._id,
+        stepName: step.stepName,
+        role: step.role,
+        status: 'pending',
+        completedAt: null,
+      };
+    }
+
+    const [matchedStage] = remainingStages.splice(matchIndex, 1);
+    return {
+      ...matchedStage,
+      stepId: step._id,
+      stepName: step.stepName,
+      role: step.role,
+    };
+  });
+
+  if (sourceStages.length === 0 && nextStages.length > 0 && nextStages.every((stage) => stage.status === 'pending')) {
+    nextStages[0].status = 'in_progress';
+  }
+
+  return nextStages;
+}
+
 const OrderStore = {
   findAll() {
     return load().orders;
@@ -80,6 +119,34 @@ const OrderStore = {
     order.overallStatus = calculateOverallStatus(order.stages);
     save();
     return order;
+  },
+
+  syncStagesWithProcessSteps() {
+    const db = load();
+    const steps = ProcessStepStore.findAll().slice().sort(compareSteps);
+    let changed = false;
+
+    for (const order of db.orders) {
+      const nextStages = syncSingleOrderStages(order, steps);
+      const nextOverallStatus = calculateOverallStatus(nextStages);
+      const currentStages = JSON.stringify(order.stages || []);
+
+      if (currentStages !== JSON.stringify(nextStages)) {
+        order.stages = nextStages;
+        changed = true;
+      }
+
+      if (order.overallStatus !== nextOverallStatus) {
+        order.overallStatus = nextOverallStatus;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      save();
+    }
+
+    return changed;
   },
 
   count() {

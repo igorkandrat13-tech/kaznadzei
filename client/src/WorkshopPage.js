@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 
 const STATUS_CYCLE = { pending: 'in_progress', in_progress: 'completed', completed: 'pending' };
 const DEFAULT_BADGE = {
@@ -28,16 +29,17 @@ function WorkshopPage({
   const [editingId, setEditingId] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [extraData, setExtraData] = useState(initialExtraData);
+  const [error, setError] = useState('');
 
   const fetchOrders = async () => {
-    const res = await fetch('/api/orders');
-    const data = await res.json();
+    const res = await apiFetch('/api/orders');
+    const data = await parseJsonSafely(res);
     setOrders(Array.isArray(data) ? data : []);
   };
 
   useEffect(() => {
-    fetch('/api/processSteps?role=' + role)
-      .then(res => res.json())
+    apiFetch('/api/processSteps?role=' + role)
+      .then(res => parseJsonSafely(res))
       .then(data => setSteps(Array.isArray(data) ? data : []))
       .catch(() => setSteps([]));
 
@@ -60,22 +62,32 @@ function WorkshopPage({
 
   const saveComment = async (orderId) => {
     if (!commentText.trim()) return;
-    await fetch(`/api/orders/${orderId}/comments`, {
+    setError('');
+    const res = await apiFetch(`/api/orders/${orderId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role, text: commentText }),
     });
+    if (!res.ok) {
+      setError(await getErrorMessage(res, 'Не удалось сохранить примечание.'));
+      return;
+    }
     setEditingId(null);
     setCommentText('');
     await fetchOrders();
   };
 
   const updateStage = async (orderId, stage) => {
-    await fetch(`/api/orders/${orderId}/stages/${stage.stepId}`, {
+    setError('');
+    const res = await apiFetch(`/api/orders/${orderId}/stages/${stage.stepId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: STATUS_CYCLE[stage.status] || 'pending' }),
     });
+    if (!res.ok) {
+      setError(await getErrorMessage(res, 'Не удалось обновить статус этапа.'));
+      return;
+    }
     await fetchOrders();
   };
 
@@ -159,6 +171,7 @@ function WorkshopPage({
     <div className="card">
       <h2>{title}</h2>
       <p>{description}</p>
+      {error && <div style={{ marginBottom: 16, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{error}</div>}
 
       {renderBeforeTable ? renderBeforeTable(context) : null}
 

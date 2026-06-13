@@ -1,6 +1,8 @@
 const express = require('express');
 const QRCode = require('qrcode');
 const OrderStore = require('../stores/orderStore');
+const { requireWriteAccess } = require('../middleware/security');
+const { sanitizeCommentInput, sanitizeOrderInput } = require('../utils/validators');
 const router = express.Router();
 
 router.get('/orders', (req, res) => {
@@ -8,7 +10,7 @@ router.get('/orders', (req, res) => {
     const orders = OrderStore.findAll().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     res.json(orders);
   } catch (error) {
-    res.json([]);
+    res.status(500).json({ message: error.message || 'Не удалось загрузить заказы.' });
   }
 });
 
@@ -22,64 +24,56 @@ router.get('/orders/:id', (req, res) => {
   }
 });
 
-router.post('/orders/:id/comments', (req, res) => {
+router.post('/orders/:id/comments', requireWriteAccess, (req, res) => {
   try {
-    const { role, text } = req.body;
-    if (!role || !text) return res.status(400).json({ message: 'role and text required' });
+    const { role, text } = sanitizeCommentInput(req.body || {});
     const comments = OrderStore.addComment(req.params.id, role, text);
     if (!comments) return res.status(404).json({ message: 'Order not found' });
     res.status(201).json(comments);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(error.status || 400).json({ message: error.message });
   }
 });
 
-router.post('/orders', (req, res) => {
+router.post('/orders', requireWriteAccess, (req, res) => {
   try {
-    const { customer, name, quantity, material, notes, startDate, endDate } = req.body;
-    if (!name) return res.status(400).json({ message: 'name is required' });
+    const { customer, name, quantity, material, notes, startDate, endDate } = sanitizeOrderInput(req.body || {});
     const stages = OrderStore.buildInitialStages();
     const order = OrderStore.create({
-      customer: customer || '',
-      name: name.trim(),
-      quantity: quantity || 1,
-      material: material || '',
-      notes: notes || '',
+      customer,
+      name,
+      quantity,
+      material,
+      notes,
       orderDate: new Date().toISOString().split('T')[0],
-      startDate: startDate || null,
-      endDate: endDate || null,
+      startDate,
+      endDate,
       comments: [],
       stages,
       overallStatus: OrderStore.calculateOverallStatus(stages),
     });
     res.status(201).json(order);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(error.status || 400).json({ message: error.message });
   }
 });
 
-router.put('/orders/:id', (req, res) => {
+router.put('/orders/:id', requireWriteAccess, (req, res) => {
   try {
     const db = require('../stores/store');
     const data = db.load();
     const idx = data.orders.findIndex(o => o._id === req.params.id);
     if (idx === -1) return res.status(404).json({ message: 'Order not found' });
-    const { customer, name, quantity, material, notes, startDate, endDate } = req.body;
-    if (name !== undefined) data.orders[idx].name = name;
-    if (customer !== undefined) data.orders[idx].customer = customer;
-    if (quantity !== undefined) data.orders[idx].quantity = quantity;
-    if (material !== undefined) data.orders[idx].material = material;
-    if (notes !== undefined) data.orders[idx].notes = notes;
-    if (startDate !== undefined) data.orders[idx].startDate = startDate;
-    if (endDate !== undefined) data.orders[idx].endDate = endDate;
+    const updates = sanitizeOrderInput(req.body || {}, { partial: true });
+    data.orders[idx] = { ...data.orders[idx], ...updates };
     db.save();
     res.json(data.orders[idx]);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(error.status || 400).json({ message: error.message });
   }
 });
 
-router.delete('/orders/:id', (req, res) => {
+router.delete('/orders/:id', requireWriteAccess, (req, res) => {
   try {
     const db = require('../stores/store');
     const data = db.load();
@@ -93,7 +87,7 @@ router.delete('/orders/:id', (req, res) => {
   }
 });
 
-router.patch('/orders/:id/stages/:stepId', (req, res) => {
+router.patch('/orders/:id/stages/:stepId', requireWriteAccess, (req, res) => {
   try {
     const { status } = req.body;
     const allowedStatuses = ['pending', 'in_progress', 'completed'];
@@ -113,9 +107,8 @@ router.get('/orders/:id/qrcode', async (req, res) => {
   try {
     const order = OrderStore.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
-    const host = req.get('host');
-    const proto = req.get('x-forwarded-proto') || req.protocol;
-    const url = `${proto}://${host}/order/${order._id}`;
+    const publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').trim() || `http://localhost:${process.env.PORT || 5000}`;
+    const url = new URL(`/order/${order._id}`, publicBaseUrl).toString();
     const png = await QRCode.toBuffer(url, { width: 400, margin: 2 });
     res.type('image/png').send(png);
   } catch (error) {

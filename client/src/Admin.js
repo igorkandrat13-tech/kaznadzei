@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 
 const roleTabs = [
   { key: 'carpenter', label: '🪚 Столяр' },
@@ -20,6 +22,7 @@ function Admin() {
   const [updateError, setUpdateError] = useState('');
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdates, setInstallingUpdates] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
 
   const [editStep, setEditStep] = useState(null);
   const [editColor, setEditColor] = useState(null);
@@ -41,21 +44,21 @@ function Admin() {
   }, []);
 
   const fetchSteps = async () => {
-    const res = await fetch('/api/processSteps');
-    const data = await res.json();
+    const res = await apiFetch('/api/processSteps');
+    const data = await parseJsonSafely(res);
     setSteps(Array.isArray(data) ? data : []);
   };
 
   const fetchColors = async () => {
-    const res = await fetch('/api/colors');
-    const data = await res.json();
+    const res = await apiFetch('/api/colors');
+    const data = await parseJsonSafely(res);
     setColors(Array.isArray(data) ? data : []);
   };
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders');
-      const data = await res.json();
+      const res = await apiFetch('/api/orders');
+      const data = await parseJsonSafely(res);
       setOrders(Array.isArray(data) ? data : []);
     } catch { setOrders([]); }
   };
@@ -64,11 +67,11 @@ function Admin() {
     setCheckingUpdates(true);
     setUpdateError('');
     try {
-      const res = await fetch('/api/updates/status');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Не удалось проверить обновления');
+      const res = await apiFetch('/api/updates/status');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) throw new Error(data?.message || 'Не удалось проверить обновления');
       setUpdateStatus(data);
-      setUpdateMessage(data.message || '');
+      setUpdateMessage(data?.message || '');
     } catch (error) {
       setUpdateError(error.message || 'Не удалось проверить обновления');
     } finally {
@@ -80,11 +83,11 @@ function Admin() {
     setInstallingUpdates(true);
     setUpdateError('');
     try {
-      const res = await fetch('/api/updates/install', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.details || data.message || 'Не удалось установить обновления');
-      setUpdateStatus(data.status || null);
-      setUpdateMessage(data.message || 'Обновления установлены');
+      const res = await apiFetch('/api/updates/install', { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось установить обновления');
+      setUpdateStatus(data?.status || null);
+      setUpdateMessage(data?.message || 'Обновления установлены');
     } catch (error) {
       setUpdateError(error.message || 'Не удалось установить обновления');
     } finally {
@@ -111,58 +114,98 @@ function Admin() {
     return 'badge';
   };
 
+  const getOverallStatusMeta = (status) => {
+    if (status === 'completed') {
+      return { className: 'badge badge-active', label: 'Завершён' };
+    }
+    if (status === 'in_progress') {
+      return { className: 'badge badge-pending', label: 'В работе' };
+    }
+    return { className: 'badge', label: 'Ожидание' };
+  };
+
   // Settings
   const handleAddStep = async () => {
     if (!newStep.stepName || !newStep.description) return;
-    await fetch('/api/processSteps', {
+    setSettingsError('');
+    const res = await apiFetch('/api/processSteps', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...newStep, role: activeRole }),
     });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось добавить этап.'));
+      return;
+    }
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
     fetchSteps();
   };
 
   const handleUpdateStep = async () => {
     if (!editStep) return;
-    await fetch(`/api/processSteps/${editStep._id}`, {
+    setSettingsError('');
+    const res = await apiFetch(`/api/processSteps/${editStep._id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stepName: editStep.stepName, description: editStep.description, order: editStep.order }),
     });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось обновить этап.'));
+      return;
+    }
     setEditStep(null);
     fetchSteps();
   };
 
   const handleDeleteStep = async (id) => {
-    await fetch(`/api/processSteps/${id}`, { method: 'DELETE' });
+    setSettingsError('');
+    const res = await apiFetch(`/api/processSteps/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось удалить этап.'));
+      return;
+    }
     fetchSteps();
   };
 
   const handleAddColor = async () => {
     if (!newColor.name) return;
-    await fetch('/api/colors', {
+    setSettingsError('');
+    const res = await apiFetch('/api/colors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newColor),
     });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось добавить цвет.'));
+      return;
+    }
     setNewColor({ name: '', hex: '#000000' });
     fetchColors();
   };
 
   const handleUpdateColor = async () => {
     if (!editColor) return;
-    await fetch(`/api/colors/${editColor._id}`, {
+    setSettingsError('');
+    const res = await apiFetch(`/api/colors/${editColor._id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: editColor.name, hex: editColor.hex }),
     });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось обновить цвет.'));
+      return;
+    }
     setEditColor(null);
     fetchColors();
   };
 
   const handleDeleteColor = async (id) => {
-    await fetch(`/api/colors/${id}`, { method: 'DELETE' });
+    setSettingsError('');
+    const res = await apiFetch(`/api/colors/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось удалить цвет.'));
+      return;
+    }
     fetchColors();
   };
 
@@ -185,6 +228,7 @@ function Admin() {
 
           <div className="card">
             <p>Список доступных цветов для малярного цеха</p>
+          {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
             <table>
               <thead><tr><th>Название</th><th>Цвет</th><th>Действия</th></tr></thead>
               <tbody>
@@ -241,6 +285,7 @@ function Admin() {
 
         <div className="card">
           <p>Настройка этапов для данной роли</p>
+          {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
           <table>
             <thead><tr><th>№</th><th>Название этапа</th><th>Описание</th><th>Действия</th></tr></thead>
             <tbody>
@@ -294,7 +339,7 @@ function Admin() {
             <p>Общая сводка по этапам производства и заказам</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <a href="/archive" className="btn" style={{ background: '#8e44ad', color: 'white', padding: '10px 24px', fontSize: 14, textDecoration: 'none' }}>📦 Архив</a>
+            <Link to="/archive" className="btn" style={{ background: '#8e44ad', color: 'white', padding: '10px 24px', fontSize: 14, textDecoration: 'none' }}>📦 Архив</Link>
             <button className="btn" style={{ background: '#2c3e50', color: 'white', padding: '10px 24px', fontSize: 14 }} onClick={() => setShowSettings(true)}>
               ⚙️ Настройки этапов
             </button>
@@ -364,6 +409,7 @@ function Admin() {
           <tbody>
             {orders.map(order => {
               const comments = order.comments || [];
+              const overallStatusMeta = getOverallStatusMeta(order.overallStatus);
               return (
                 <tr key={order._id}>
                   <td><strong>{order.name}</strong></td>
@@ -376,8 +422,8 @@ function Admin() {
                     );
                   })}
                   <td style={{ textAlign: 'center' }}>
-                    <span className={order.overallStatus === 'completed' ? 'badge badge-active' : 'badge badge-pending'}>
-                      {order.overallStatus === 'completed' ? 'Завершён' : 'В работе'}
+                    <span className={overallStatusMeta.className}>
+                      {overallStatusMeta.label}
                     </span>
                   </td>
                   <td style={{ fontSize: 12, maxWidth: 200, wordBreak: 'break-word', overflowWrap: 'break-word' }}>

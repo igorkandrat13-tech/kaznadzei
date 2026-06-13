@@ -61,10 +61,16 @@ chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 
 echo "[4/7] Настройка .env..."
 if [[ ! -f .env ]]; then
+  ADMIN_TOKEN="$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")"
   cat > .env <<EOF
 PORT=5000
+PUBLIC_BASE_URL=http://localhost:5000
+ADMIN_TOKEN=${ADMIN_TOKEN}
+ENABLE_SELF_UPDATE=false
 UPDATE_BRANCH=${BRANCH}
 EOF
+  echo "Сгенерирован ADMIN_TOKEN: ${ADMIN_TOKEN}"
+  echo "Сохраните этот токен и используйте его в интерфейсе администратора."
 fi
 chown "$APP_USER":"$APP_USER" .env
 

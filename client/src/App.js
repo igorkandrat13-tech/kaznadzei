@@ -9,6 +9,7 @@ import Designer from './Designer';
 import Assembler from './Assembler';
 import Painter from './Painter';
 import Home from './Home';
+import AdminTokenControls from './AdminTokenControls';
 import './App.css';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
                     <Link to="/assembler">Комплектовщик</Link>
                     <Link to="/painter">Маляр</Link>
                 </nav>
+                <AdminTokenControls />
             </div>
             <div className="container">
                 <Routes>

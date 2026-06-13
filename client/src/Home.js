@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const roles = [
     { path: '/admin', icon: '⚙️', title: 'Администратор', desc: 'Управление этапами и заказами' },
@@ -15,12 +16,12 @@ function Home() {
             <h2>Добро пожаловать на фабрику!</h2>
             <p>Выберите ваш цех для просмотра задач и этапов производства</p>
             <div className="home-grid">
-                {roles.map((role, i) => (
-                    <a key={i} href={role.path} className="home-card">
+                {roles.map((role) => (
+                    <Link key={role.path} to={role.path} className="home-card">
                         <div className="icon">{role.icon}</div>
                         <h3>{role.title}</h3>
                         <p>{role.desc}</p>
-                    </a>
+                    </Link>
                 ))}
             </div>
         </div>

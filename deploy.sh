@@ -14,57 +14,41 @@ else
     echo "[1/5] Node.js уже установлен: $(node -v)"
 fi
 
-# 2. Docker (для MongoDB)
-if ! command -v docker &> /dev/null; then
-    echo "[2/5] Устанавливаю Docker..."
-    sudo apt-get update
-    sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt-get update
-    sudo apt-get install -y docker-ce
-    sudo systemctl start docker
-    sudo systemctl enable docker
-else
-    echo "[2/5] Docker уже установлен"
-fi
-
-# 3. MongoDB в Docker
-echo "[3/5] Запускаю MongoDB в Docker..."
-sudo docker rm -f kaznadzei-mongo 2>/dev/null || true
-sudo docker run -d \
-  --name kaznadzei-mongo \
-  --restart always \
-  -p 27017:27017 \
-  -v kaznadzei-mongo-data:/data/db \
-  mongo:7
-
-# 4. Настройка .env
-echo "[4/5] Настраиваю .env..."
+# 2. Настройка .env
+echo "[2/4] Настраиваю .env..."
 if [ ! -f .env ]; then
-    cat > .env << 'EOF'
-MONGODB_URI=mongodb://127.0.0.1:27017/my-furniture-db
+    ADMIN_TOKEN="$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")"
+    cat > .env <<EOF
 PORT=5000
+PUBLIC_BASE_URL=http://localhost:5000
+ADMIN_TOKEN=${ADMIN_TOKEN}
+ENABLE_SELF_UPDATE=false
+UPDATE_BRANCH=main
 EOF
     echo "  Создан .env с параметрами по умолчанию"
+    echo "  Сгенерирован ADMIN_TOKEN: ${ADMIN_TOKEN}"
+    echo "  Сохраните этот токен и используйте его в интерфейсе администратора"
 else
     echo "  .env уже существует, пропускаю"
 fi
 
-# 5. Установка зависимостей и сборка
-echo "[5/5] Устанавливаю зависимости и собираю клиент..."
+# 3. Установка зависимостей и сборка
+echo "[3/4] Устанавливаю зависимости и собираю клиент..."
 npm install
 cd client
 npm install
 npm run build
 cd ..
 
+# 4. Завершение
+echo "[4/4] Готово"
 echo ""
 echo "============================================"
 echo " Установка завершена!"
 echo "============================================"
 echo ""
-echo "Запуск:  npm start"
+echo "Production: npm start"
+echo "Dev:        npm run dev"
 echo "Сайт:    http://$(curl -s ifconfig.me):5000"
 echo "         (или http://localhost:5000 локально)"
 echo ""

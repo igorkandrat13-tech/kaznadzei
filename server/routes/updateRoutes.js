@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
+const { checkAdminAccess, isSelfUpdateEnabled, requireAdminAccess } = require('../middleware/security');
 
 const router = express.Router();
 
@@ -53,6 +54,7 @@ async function tryGit(args, cwd) {
 async function getUpdateStatus() {
   const gitVersion = await hasGit();
   const status = {
+    enabled: isSelfUpdateEnabled(),
     gitAvailable: Boolean(gitVersion),
     gitVersion,
     isRepo: fs.existsSync(path.join(PROJECT_ROOT, '.git')),
@@ -131,6 +133,34 @@ async function getUpdateStatus() {
 }
 
 router.get('/updates/status', async (req, res) => {
+  if (!isSelfUpdateEnabled()) {
+    return res.json({
+      enabled: false,
+      gitAvailable: false,
+      gitVersion: null,
+      isRepo: false,
+      hasRemote: false,
+      upstreamConfigured: false,
+      branch: null,
+      remoteUrl: null,
+      currentCommit: null,
+      targetRef: null,
+      updatesAvailable: false,
+      ahead: 0,
+      behind: 0,
+      canInstall: false,
+      installInProgress,
+      message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true и настройте ADMIN_TOKEN.',
+    });
+  }
+
+  const authError = checkAdminAccess(req, {
+    invalidTokenMessage: 'Для проверки обновлений требуется ADMIN_TOKEN.',
+  });
+  if (authError) {
+    return res.status(authError.status).json(authError.body);
+  }
+
   try {
     const status = await getUpdateStatus();
     res.json(status);
@@ -139,7 +169,13 @@ router.get('/updates/status', async (req, res) => {
   }
 });
 
-router.post('/updates/install', async (req, res) => {
+router.post('/updates/install', requireAdminAccess({
+  invalidTokenMessage: 'Для установки обновлений требуется ADMIN_TOKEN.',
+}), async (req, res) => {
+  if (!isSelfUpdateEnabled()) {
+    return res.status(403).json({ message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true в .env.' });
+  }
+
   if (installInProgress) {
     return res.status(409).json({ message: 'Установка обновлений уже выполняется.' });
   }
@@ -173,12 +209,14 @@ router.post('/updates/install', async (req, res) => {
     logs.push('npm install (client)');
     await runFile(getNpmCommand(), ['install'], CLIENT_ROOT);
 
-    installInProgress = false;
+    logs.push('npm run build (client)');
+    await runFile(getNpmCommand(), ['run', 'build'], CLIENT_ROOT);
+
     const statusAfter = await getUpdateStatus();
     res.json({
       ok: true,
       updated: true,
-      message: 'Обновления установлены. Перезапустите приложение для применения изменений.',
+      message: 'Обновления установлены, клиент пересобран. Перезапустите приложение для применения изменений.',
       logs,
       status: statusAfter,
     });

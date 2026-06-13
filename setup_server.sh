@@ -25,11 +25,17 @@ fi
 # 3. .env
 echo "[3/5] Настраиваю .env..."
 if [ ! -f .env ]; then
-    cat > .env << 'EOF'
-MONGODB_URI=mongodb://127.0.0.1:27017/my-furniture-db
+    ADMIN_TOKEN="$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")"
+    cat > .env <<EOF
 PORT=5000
+PUBLIC_BASE_URL=http://localhost:5000
+ADMIN_TOKEN=${ADMIN_TOKEN}
+ENABLE_SELF_UPDATE=false
+UPDATE_BRANCH=main
 EOF
     echo "  .env создан"
+    echo "  Сгенерирован ADMIN_TOKEN: ${ADMIN_TOKEN}"
+    echo "  Сохраните этот токен и используйте его в интерфейсе администратора"
 else
     echo "  .env уже существует"
 fi
@@ -60,7 +66,8 @@ echo "============================================"
 echo " Установка завершена!"
 echo "============================================"
 echo ""
-echo "Запуск:  node server.js &"
+echo "Production: npm start"
+echo "Dev:        npm run dev"
 echo "Сайт:    http://$(curl -s ifconfig.me 2>/dev/null || echo '<IP_сервера>'):5000"
 echo "         (или http://localhost:5000 локально)"
 echo ""
@@ -70,4 +77,4 @@ echo "  sudo systemctl daemon-reload"
 echo "  sudo systemctl enable --now kaznadzei"
 echo ""
 
-node server.js
+npm start

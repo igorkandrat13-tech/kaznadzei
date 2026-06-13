@@ -32,8 +32,13 @@ const ProcessStepStore = {
 
   deleteOne(stepId) {
     const db = load();
+    const initialLength = db.processSteps.length;
     db.processSteps = db.processSteps.filter(s => s._id !== stepId);
+    if (db.processSteps.length === initialLength) {
+      return false;
+    }
     save();
+    return true;
   },
 
   insertMany(arr) {

@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 
 function Manager() {
   const [orders, setOrders] = useState([]);
@@ -6,12 +8,13 @@ function Manager() {
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [qrOrderId, setQrOrderId] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => { fetchOrders(); }, []);
 
   const fetchOrders = async () => {
-    const res = await fetch('/api/orders');
-    const data = await res.json();
+    const res = await apiFetch('/api/orders');
+    const data = await parseJsonSafely(res);
     setOrders(Array.isArray(data) ? data : []);
   };
 
@@ -33,19 +36,25 @@ function Manager() {
 
   const handleSubmit = async () => {
     if (!form.name.trim()) return;
+    setError('');
     const body = { ...form, quantity: Number(form.quantity) || 1 };
+    let res;
     if (editingId) {
-      await fetch('/api/orders/' + editingId, {
+      res = await apiFetch('/api/orders/' + editingId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
     } else {
-      await fetch('/api/orders', {
+      res = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+    }
+    if (!res.ok) {
+      setError(await getErrorMessage(res, editingId ? 'Не удалось сохранить заказ.' : 'Не удалось создать заказ.'));
+      return;
     }
     setForm({ customer: '', name: '', quantity: 1, material: '', notes: '', orderDate: '', startDate: '', endDate: '' });
     setEditingId(null);
@@ -69,13 +78,18 @@ function Manager() {
   };
 
   const handleDelete = async (id) => {
-    await fetch('/api/orders/' + id, { method: 'DELETE' });
+    setError('');
+    const res = await apiFetch('/api/orders/' + id, { method: 'DELETE' });
+    if (!res.ok) {
+      setError(await getErrorMessage(res, 'Не удалось удалить заказ.'));
+      return;
+    }
     if (editingId === id) { setEditingId(null); setForm({ customer: '', name: '', quantity: 1, material: '', notes: '', orderDate: '', startDate: '', endDate: '' }); }
     fetchOrders();
   };
 
   const handleDownloadQr = async () => {
-    const res = await fetch(`/api/orders/${qrOrderId}/qrcode`);
+    const res = await apiFetch(`/api/orders/${qrOrderId}/qrcode`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -109,9 +123,10 @@ function Manager() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-success" style={{ padding: '10px 24px', fontSize: 14 }} onClick={openNewForm}>➕ Новый заказ</button>
-            <a href="/archive" className="btn" style={{ background: '#8e44ad', color: 'white', padding: '10px 24px', fontSize: 14, textDecoration: 'none' }}>📦 Архив</a>
+            <Link to="/archive" className="btn" style={{ background: '#8e44ad', color: 'white', padding: '10px 24px', fontSize: 14, textDecoration: 'none' }}>📦 Архив</Link>
           </div>
         </div>
+        {error && <div style={{ margin: '16px 0 0', padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{error}</div>}
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>

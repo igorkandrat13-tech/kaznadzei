@@ -4,11 +4,14 @@ const path = require('path');
 const ProcessStepStore = require('./server/stores/processStepStore');
 const OrderStore = require('./server/stores/orderStore');
 const ColorStore = require('./server/stores/colorStore');
+const { buildSecurityHeaders } = require('./server/middleware/security');
 
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(buildSecurityHeaders);
+app.use(express.json({ limit: '100kb' }));
 
 const roles = {
   carpenter: { label: 'Столяр', icon: '🪚' },
@@ -136,6 +139,10 @@ seed();
     const { save } = require('./server/stores/store');
     save();
     console.log('Existing orders migrated with new fields');
+  }
+
+  if (OrderStore.syncStagesWithProcessSteps()) {
+    console.log('Order stages synchronized with process steps');
   }
 })();
 
