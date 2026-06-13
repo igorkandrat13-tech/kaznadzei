@@ -69,16 +69,6 @@ function requireAdminAccess(options = {}) {
 }
 
 function requireWriteAccess(req, res, next) {
-  const error = checkAdminAccess(req, {
-    allowLocalWithoutToken: true,
-    missingTokenMessage: 'Для изменения данных настройте безопасный ADMIN_TOKEN в .env.',
-    invalidTokenMessage: 'Для изменения данных требуется ADMIN_TOKEN.',
-  });
-
-  if (error) {
-    return res.status(error.status).json(error.body);
-  }
-
   next();
 }
 

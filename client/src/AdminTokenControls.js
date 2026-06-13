@@ -20,7 +20,7 @@ function AdminTokenControls() {
     <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: '#f7f9fc', border: '1px solid #e2e8f0' }}>
       <div style={{ fontWeight: 600, marginBottom: 6 }}>Ключ администратора</div>
       <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
-        Используется для изменения данных и управления обновлениями, если на сервере задан `ADMIN_TOKEN`.
+        Используется для управления обновлениями, если на сервере задан `ADMIN_TOKEN`.
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
