@@ -20,8 +20,8 @@ function WorkshopPage({
   const [orders, setOrders] = useState([]);
   const [steps, setSteps] = useState([]);
   const [popupText, setPopupText] = useState(null);
-  const [editingId, setEditingId] = useState(null);
-  const [commentText, setCommentText] = useState('');
+  const [commentModal, setCommentModal] = useState(null);
+  const [commentError, setCommentError] = useState('');
   const [extraData, setExtraData] = useState(initialExtraData);
   const [error, setError] = useState('');
 
@@ -49,25 +49,81 @@ function WorkshopPage({
     return (order.stages || []).find(stage => stage.stepId === step._id);
   };
 
-  const getComment = (order) => {
+  const getCommentEntry = (order) => {
     const comments = (order.comments || []).filter(comment => comment.role === role);
-    return comments.length > 0 ? comments[comments.length - 1].text : '';
+    return comments.length > 0 ? comments[comments.length - 1] : null;
   };
 
-  const saveComment = async (orderId) => {
-    if (!commentText.trim()) return;
+  const getComment = (order) => {
+    return getCommentEntry(order)?.text || '';
+  };
+
+  const closeCommentModal = () => {
+    setCommentModal(null);
+    setCommentError('');
+  };
+
+  const openCommentModal = (order, mode = 'replace') => {
+    const currentText = getComment(order);
     setError('');
-    const res = await apiFetch(`/api/orders/${orderId}/comments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role, text: commentText }),
+    setCommentError('');
+    setCommentModal({
+      orderId: order._id,
+      orderName: order.name,
+      currentText,
+      draftText: mode === 'append' ? '' : currentText,
+      mode: currentText ? mode : 'create',
     });
-    if (!res.ok) {
-      setError(await getErrorMessage(res, 'Не удалось сохранить примечание.'));
+  };
+
+  const setCommentMode = (mode) => {
+    setCommentError('');
+    setCommentModal(current => {
+      if (!current) return current;
+      return {
+        ...current,
+        mode,
+        draftText: mode === 'append' ? '' : current.currentText,
+      };
+    });
+  };
+
+  const saveComment = async () => {
+    if (!commentModal) return;
+    const nextText = commentModal.mode === 'append' && commentModal.currentText
+      ? [commentModal.currentText.trim(), commentModal.draftText.trim()].filter(Boolean).join('\n')
+      : commentModal.draftText.trim();
+    if (!nextText) {
+      setCommentError('Введите текст примечания.');
       return;
     }
-    setEditingId(null);
-    setCommentText('');
+    setError('');
+    setCommentError('');
+    const res = await apiFetch(`/api/orders/${commentModal.orderId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, text: nextText }),
+    });
+    if (!res.ok) {
+      setCommentError(await getErrorMessage(res, 'Не удалось сохранить примечание.'));
+      return;
+    }
+    closeCommentModal();
+    await fetchOrders();
+  };
+
+  const deleteComment = async () => {
+    if (!commentModal?.currentText) return;
+    setError('');
+    setCommentError('');
+    const res = await apiFetch(`/api/orders/${commentModal.orderId}/comments/${encodeURIComponent(role)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      setCommentError(await getErrorMessage(res, 'Не удалось удалить примечание.'));
+      return;
+    }
+    closeCommentModal();
     await fetchOrders();
   };
 
@@ -88,49 +144,30 @@ function WorkshopPage({
   const renderCommentCell = (order) => {
     const text = getComment(order);
     const isLong = text.length > 40;
-
-    if (editingId === order._id) {
-      return (
-        <div style={{ display: 'flex', gap: 4 }}>
-          <input
-            value={commentText}
-            onChange={e => setCommentText(e.target.value)}
-            style={{ flex: 1, padding: '4px 8px', fontSize: 12, border: '1px solid #ddd', borderRadius: 4 }}
-            placeholder="Примечание..."
-            autoFocus
-          />
-          <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => saveComment(order._id)}>OK</button>
-          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingId(null)}>✕</button>
-        </div>
-      );
-    }
-
-    if (!text) {
-      return (
-        <span
-          onClick={() => { setEditingId(order._id); setCommentText(text); }}
-          style={{ cursor: 'pointer', fontSize: 13, color: '#bbb', display: 'inline-block', minHeight: 20 }}
-        >
-          ➕ Добавить
-        </span>
-      );
-    }
-
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span
-          onClick={() => { if (isLong) setPopupText(text); else { setEditingId(order._id); setCommentText(text); } }}
-          style={{ cursor: 'pointer', fontSize: 13, color: '#333', minHeight: 20, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          title={text}
+          onClick={() => openCommentModal(order, text ? 'replace' : 'create')}
+          style={{
+            cursor: 'pointer',
+            fontSize: 13,
+            color: text ? '#333' : '#bbb',
+            minHeight: 20,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}
+          title={text || 'Добавить примечание'}
         >
-          {isLong ? text.slice(0, 40) + '...' : text}
+          {text ? (isLong ? text.slice(0, 40) + '...' : text) : '➕ Добавить'}
         </span>
         <span
-          onClick={() => { setEditingId(order._id); setCommentText(text); }}
+          onClick={() => openCommentModal(order, text ? 'replace' : 'create')}
           style={{ cursor: 'pointer', fontSize: 14, color: '#999', userSelect: 'none', flexShrink: 0 }}
-          title="Редактировать"
+          title={text ? 'Открыть примечание' : 'Добавить примечание'}
         >
-          ✏️
+          {text ? '✏️' : '📝'}
         </span>
       </div>
     );
@@ -212,6 +249,89 @@ function WorkshopPage({
             <div style={{ fontWeight: 600, marginBottom: 10, color: '#2c3e50' }}>📝 Примечание</div>
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>{popupText}</div>
             <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setPopupText(null)}>Закрыть</button>
+          </div>
+        </div>
+      )}
+
+      {commentModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeCommentModal}>
+          <div style={{ background: 'white', borderRadius: 14, padding: 24, maxWidth: 640, width: '92%', boxShadow: '0 12px 44px rgba(0,0,0,0.22)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: 4 }}>📝 Примечание</div>
+                <div style={{ fontSize: 13, color: '#666' }}>{commentModal.orderName}</div>
+              </div>
+              <button className="btn" style={{ padding: '6px 10px' }} onClick={closeCommentModal}>✕</button>
+            </div>
+
+            {commentModal.currentText ? (
+              <>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  <button
+                    className="btn"
+                    style={{ background: commentModal.mode !== 'append' ? '#2c3e50' : '#f3f4f6', color: commentModal.mode !== 'append' ? 'white' : '#2c3e50' }}
+                    onClick={() => setCommentMode('replace')}
+                  >
+                    Редактировать
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ background: commentModal.mode === 'append' ? '#2c3e50' : '#f3f4f6', color: commentModal.mode === 'append' ? 'white' : '#2c3e50' }}
+                    onClick={() => setCommentMode('append')}
+                  >
+                    Добавить текст
+                  </button>
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>Текущий комментарий</div>
+                  <div style={{ padding: '12px 14px', background: '#f7f8fa', borderRadius: 10, whiteSpace: 'pre-wrap', lineHeight: 1.5, fontSize: 14 }}>
+                    {commentModal.currentText}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ marginBottom: 14, padding: '12px 14px', background: '#f7f8fa', borderRadius: 10, color: '#666', fontSize: 14 }}>
+                Комментарий пока не добавлен. Заполните текст ниже и сохраните его.
+              </div>
+            )}
+
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label>{commentModal.mode === 'append' && commentModal.currentText ? 'Текст, который нужно добавить' : 'Текст комментария'}</label>
+              <textarea
+                value={commentModal.draftText}
+                onChange={e => {
+                  const value = e.target.value;
+                  setCommentError('');
+                  setCommentModal(current => current ? { ...current, draftText: value } : current);
+                }}
+                placeholder={commentModal.mode === 'append' && commentModal.currentText ? 'Введите дополнение к текущему комментарию' : 'Введите комментарий'}
+                rows={6}
+                autoFocus
+              />
+            </div>
+
+            {commentError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{commentError}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <div>
+                {commentModal.currentText && (
+                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={deleteComment}>
+                    Удалить
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn" onClick={closeCommentModal}>Отмена</button>
+                <button className="btn btn-success" onClick={saveComment}>
+                  {commentModal.mode === 'append' && commentModal.currentText
+                    ? 'Добавить в конец'
+                    : commentModal.currentText
+                      ? 'Сохранить изменения'
+                      : 'Сохранить комментарий'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

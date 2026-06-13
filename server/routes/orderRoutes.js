@@ -35,6 +35,21 @@ router.post('/orders/:id/comments', requireWriteAccess, (req, res) => {
   }
 });
 
+router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
+  try {
+    const role = String(req.params.role || '').trim();
+    if (!role) {
+      return res.status(400).json({ message: 'Role is required' });
+    }
+    const comments = OrderStore.deleteComment(req.params.id, role);
+    if (comments === null) return res.status(404).json({ message: 'Order not found' });
+    if (comments === false) return res.status(404).json({ message: 'Comment not found' });
+    res.json(comments);
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
 router.post('/orders', requireWriteAccess, (req, res) => {
   try {
     const { customer, name, quantity, material, notes, startDate, endDate } = sanitizeOrderInput(req.body || {});

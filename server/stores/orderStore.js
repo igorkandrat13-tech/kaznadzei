@@ -108,6 +108,22 @@ const OrderStore = {
     return order.comments;
   },
 
+  deleteComment(orderId, role) {
+    const db = load();
+    const order = db.orders.find(o => o._id === orderId);
+    if (!order) return null;
+    if (!order.comments) {
+      return false;
+    }
+    const nextComments = order.comments.filter(comment => comment.role !== role);
+    if (nextComments.length === order.comments.length) {
+      return false;
+    }
+    order.comments = nextComments;
+    save();
+    return order.comments;
+  },
+
   updateStageStatus(orderId, stepId, status) {
     const db = load();
     const order = db.orders.find(o => o._id === orderId);

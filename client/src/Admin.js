@@ -17,7 +17,7 @@ function Admin() {
   const [steps, setSteps] = useState([]);
   const [colors, setColors] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [popupText, setPopupText] = useState(null);
+  const [commentsModal, setCommentsModal] = useState(null);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [updateMessage, setUpdateMessage] = useState('');
   const [updateError, setUpdateError] = useState('');
@@ -99,6 +99,30 @@ function Admin() {
   // Admin overview
   const findStage = (order, stepId) => {
     return (order.stages || []).find(stage => stage.stepId === stepId);
+  };
+
+  const getRoleLabel = (role) => {
+    return roleTabs.find(item => item.key === role)?.label || role;
+  };
+
+  const getCommentPreview = (text) => {
+    if (!text) return 'Без текста';
+    return text.length > 80 ? `${text.slice(0, 80)}...` : text;
+  };
+
+  const openCommentsModal = (order, initialRole) => {
+    const comments = Array.isArray(order.comments) ? order.comments : [];
+    if (comments.length === 0) return;
+    const activeComment = comments.find(comment => comment.role === initialRole) || comments[0];
+    setCommentsModal({
+      orderName: order.name,
+      comments,
+      activeRole: activeComment.role,
+    });
+  };
+
+  const closeCommentsModal = () => {
+    setCommentsModal(null);
   };
 
   // Settings
@@ -416,12 +440,26 @@ function Admin() {
                   </td>
                   <td style={{ fontSize: 12, maxWidth: 200, wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                     {comments.length === 0 ? <span style={{ color: '#ccc' }}>—</span> : (
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {comments.map((c, i) => (
-                          <span key={i} onClick={() => setPopupText({ role: c.role, text: c.text })} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, background: '#f0f0f0', fontSize: 11 }} title={c.text}>
-                            📝 {roleTabs.find(r => r.key === c.role)?.label || c.role}
-                          </span>
-                        ))}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <button
+                          className="btn"
+                          style={{ alignSelf: 'flex-start', padding: '6px 10px', fontSize: 12 }}
+                          onClick={() => openCommentsModal(order)}
+                        >
+                          Открыть все ({comments.length})
+                        </button>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {comments.map((c, i) => (
+                            <span
+                              key={i}
+                              onClick={() => openCommentsModal(order, c.role)}
+                              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 12, background: '#f0f0f0', fontSize: 11 }}
+                              title={c.text}
+                            >
+                              📝 {getRoleLabel(c.role)}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </td>
@@ -433,12 +471,62 @@ function Admin() {
         </table>
       </div>
 
-      {popupText && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => setPopupText(null)}>
-          <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 500, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 600, marginBottom: 10, color: '#2c3e50' }}>📝 Примечание — {roleTabs.find(r => r.key === popupText.role)?.label || popupText.role}</div>
-            <div style={{ fontSize: 14, lineHeight: 1.5, wordBreak: 'break-word' }}>{popupText.text}</div>
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setPopupText(null)}>Закрыть</button>
+      {commentsModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={closeCommentsModal}>
+          <div style={{ background: 'white', borderRadius: 14, padding: 24, maxWidth: 900, width: '94%', boxShadow: '0 12px 44px rgba(0,0,0,0.22)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', marginBottom: 18 }}>
+              <div>
+                <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: 4 }}>📝 Примечания по заказу</div>
+                <div style={{ fontSize: 13, color: '#666' }}>{commentsModal.orderName}</div>
+              </div>
+              <button className="btn" style={{ padding: '6px 10px' }} onClick={closeCommentsModal}>✕</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 300px) minmax(0, 1fr)', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {commentsModal.comments.map((comment, index) => (
+                  <button
+                    key={`${comment.role}-${index}`}
+                    className="btn"
+                    style={{
+                      textAlign: 'left',
+                      padding: '12px 14px',
+                      background: commentsModal.activeRole === comment.role ? '#2c3e50' : '#f7f8fa',
+                      color: commentsModal.activeRole === comment.role ? 'white' : '#2c3e50',
+                    }}
+                    onClick={() => setCommentsModal(current => current ? { ...current, activeRole: comment.role } : current)}
+                  >
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{getRoleLabel(comment.role)}</div>
+                    <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.4, whiteSpace: 'normal' }}>
+                      {getCommentPreview(comment.text)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ background: '#f7f8fa', borderRadius: 12, padding: 18, minHeight: 260 }}>
+                {(() => {
+                  const activeComment = commentsModal.comments.find(comment => comment.role === commentsModal.activeRole) || commentsModal.comments[0];
+                  return (
+                    <>
+                      <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: 6 }}>
+                        {getRoleLabel(activeComment.role)}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#666', marginBottom: 14 }}>
+                        {activeComment.createdAt ? new Date(activeComment.createdAt).toLocaleString() : 'Дата не указана'}
+                      </div>
+                      <div style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {activeComment.text}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={closeCommentsModal}>Закрыть</button>
+            </div>
           </div>
         </div>
       )}
