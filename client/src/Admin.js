@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 
 const roleTabs = [
   { key: 'carpenter', label: '🪚 Столяр' },
@@ -98,30 +99,6 @@ function Admin() {
   // Admin overview
   const findStage = (order, stepId) => {
     return (order.stages || []).find(stage => stage.stepId === stepId);
-  };
-
-  const stageStatus = (stage) => {
-    const s = stage;
-    if (!s) return '—';
-    if (s.status === 'completed') return '✓';
-    if (s.status === 'in_progress') return '●';
-    return '○';
-  };
-
-  const stageClass = (status) => {
-    if (status === 'completed') return 'badge badge-active';
-    if (status === 'in_progress') return 'badge badge-pending';
-    return 'badge';
-  };
-
-  const getOverallStatusMeta = (status) => {
-    if (status === 'completed') {
-      return { className: 'badge badge-active', label: 'Завершён' };
-    }
-    if (status === 'in_progress') {
-      return { className: 'badge badge-pending', label: 'В работе' };
-    }
-    return { className: 'badge', label: 'Ожидание' };
   };
 
   // Settings
@@ -417,15 +394,18 @@ function Admin() {
           <tbody>
             {orders.map(order => {
               const comments = order.comments || [];
-              const overallStatusMeta = getOverallStatusMeta(order.overallStatus);
+              const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
               return (
                 <tr key={order._id}>
                   <td><strong>{order.name}</strong></td>
                   {sortedSteps.map(s => {
                     const st = findStage(order, s._id);
+                    const stageMeta = st ? getStageStatusMeta(st.status) : null;
                     return (
                       <td key={s._id} style={{ textAlign: 'center' }}>
-                        <span className={stageClass(st?.status)}>{st ? stageStatus(st) : '—'}</span>
+                        {stageMeta ? (
+                          <span className={stageMeta.className}>{stageMeta.label}</span>
+                        ) : '—'}
                       </td>
                     );
                   })}

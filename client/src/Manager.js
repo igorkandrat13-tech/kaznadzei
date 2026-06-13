@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { getOrderStatusMeta } from './statusMeta';
 
 function Manager() {
   const [orders, setOrders] = useState([]);
@@ -154,7 +155,11 @@ function Manager() {
                   <td style={{ whiteSpace: 'nowrap' }}>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
                   <td>{calcDuration(order.startDate, order.endDate) || '—'}</td>
-                  <td><span className={order.overallStatus === 'completed' ? 'badge badge-active' : order.overallStatus === 'in_progress' ? 'badge badge-pending' : 'badge'}>{order.overallStatus === 'completed' ? 'Завершён' : order.overallStatus === 'in_progress' ? 'В работе' : 'Ожидание'}</span></td>
+                  <td>
+                    <span className={getOrderStatusMeta(order.overallStatus).className}>
+                      {getOrderStatusMeta(order.overallStatus).label}
+                    </span>
+                  </td>
                   <td>
                     <button className="btn btn-primary" style={{ marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => handleEdit(order)}>✎</button>
                     <button className="btn" style={{ background: '#2c3e50', color: 'white', marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => setQrOrderId(order._id)}>📱 QR</button>

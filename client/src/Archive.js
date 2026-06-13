@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getOrderStatusMeta, ORDER_STATUS_OPTIONS } from './statusMeta';
 
 function Archive() {
   const [orders, setOrders] = useState([]);
@@ -50,9 +51,9 @@ function Archive() {
             <label>Статус</label>
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 'auto', padding: '10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }}>
               <option value="all">Все</option>
-              <option value="pending">Ожидание</option>
-              <option value="in_progress">В работе</option>
-              <option value="completed">Завершён</option>
+              {ORDER_STATUS_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -94,7 +95,11 @@ function Archive() {
                   <td style={{ whiteSpace: 'nowrap' }}>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
                   <td>{calcDuration(order.startDate, order.endDate) || '—'}</td>
-                  <td><span className={order.overallStatus === 'completed' ? 'badge badge-active' : order.overallStatus === 'in_progress' ? 'badge badge-pending' : 'badge'}>{order.overallStatus === 'completed' ? 'Завершён' : order.overallStatus === 'in_progress' ? 'В работе' : 'Ожидание'}</span></td>
+                  <td>
+                    <span className={getOrderStatusMeta(order.overallStatus).className}>
+                      {getOrderStatusMeta(order.overallStatus).label}
+                    </span>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}

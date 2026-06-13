@@ -1,11 +1,6 @@
 import React from 'react';
 import WorkshopPage from './WorkshopPage';
-
-const DESIGNER_BADGE = {
-  pending: { className: 'badge', label: '○' },
-  in_progress: { className: 'badge badge-pending', label: '● В работе' },
-  completed: { className: 'badge badge-active', label: '✓ Готов' },
-};
+import { getOrderStatusMeta } from './statusMeta';
 
 function Designer() {
   return (
@@ -15,10 +10,16 @@ function Designer() {
       description="Разработка дизайна, чертежей и спецификаций"
       summaryColumnTitle="Статус"
       emptyOrdersText="Нет заказов"
-      getBadgeMeta={(status) => DESIGNER_BADGE[status] || DESIGNER_BADGE.pending}
       renderSummaryCell={(order, { steps, findStage }) => {
-        const isReady = steps.length > 0 && steps.every(step => findStage(order, step)?.status === 'completed');
-        return <span className={isReady ? 'badge badge-active' : 'badge badge-pending'}>{isReady ? 'Завершён' : 'В работе'}</span>;
+        const orderStatus = steps.length === 0
+          ? 'pending'
+          : steps.every(step => findStage(order, step)?.status === 'completed')
+            ? 'completed'
+            : steps.some(step => findStage(order, step)?.status === 'in_progress')
+              ? 'in_progress'
+              : 'pending';
+        const badge = getOrderStatusMeta(orderStatus);
+        return <span className={badge.className}>{badge.label}</span>;
       }}
       renderNoSteps={({ orders, renderCommentCell }) => (
         <>
@@ -29,7 +30,7 @@ function Designer() {
               {orders.map(order => (
                 <tr key={order._id}>
                   <td><strong>{order.name}</strong></td>
-                  <td><span className="badge">Ожидание</span></td>
+                  <td><span className="badge">{getOrderStatusMeta('pending').label}</span></td>
                   <td style={{ minWidth: 160, maxWidth: 200 }}>{renderCommentCell(order)}</td>
                 </tr>
               ))}

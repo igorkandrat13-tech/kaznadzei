@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
-
-const STATUS_CYCLE = { pending: 'in_progress', in_progress: 'completed', completed: 'pending' };
-const DEFAULT_BADGE = {
-  pending: { className: 'badge', label: '○' },
-  in_progress: { className: 'badge badge-pending', label: '●' },
-  completed: { className: 'badge badge-active', label: '✓' },
-};
+import { getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
 
 function WorkshopPage({
   role,
@@ -19,7 +13,7 @@ function WorkshopPage({
   renderBeforeTable,
   extraColumns = [],
   renderNoSteps,
-  getBadgeMeta = (status) => DEFAULT_BADGE[status] || DEFAULT_BADGE.pending,
+  getBadgeMeta = getStageStatusMeta,
   fetchExtraData,
   initialExtraData = {},
 }) {
@@ -82,7 +76,7 @@ function WorkshopPage({
     const res = await apiFetch(`/api/orders/${orderId}/stages/${stage.stepId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: STATUS_CYCLE[stage.status] || 'pending' }),
+      body: JSON.stringify({ status: STAGE_STATUS_CYCLE[stage.status] || 'pending' }),
     });
     if (!res.ok) {
       setError(await getErrorMessage(res, 'Не удалось обновить статус этапа.'));

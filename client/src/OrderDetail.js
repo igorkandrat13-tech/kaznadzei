@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { getOrderStatusMeta } from './statusMeta';
 
 function OrderDetail() {
   const { id } = useParams();
@@ -45,11 +46,7 @@ function OrderDetail() {
     return diff >= 0 ? diff + ' дн.' : '—';
   };
 
-  const statusLabel = {
-    pending: 'Ожидание',
-    in_progress: 'В работе',
-    completed: 'Завершён',
-  };
+  const statusMeta = getOrderStatusMeta(order.overallStatus);
 
   return (
     <div className="card">
@@ -65,7 +62,7 @@ function OrderDetail() {
           <tr><td><strong>Начало изготовления</strong></td><td>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td></tr>
           <tr><td><strong>Окончание изготовления</strong></td><td>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td></tr>
           <tr><td><strong>Время изготовления</strong></td><td>{calcDuration(order.startDate, order.endDate)}</td></tr>
-          <tr><td><strong>Статус</strong></td><td><span className={order.overallStatus === 'completed' ? 'badge badge-active' : order.overallStatus === 'in_progress' ? 'badge badge-pending' : 'badge'}>{statusLabel[order.overallStatus] || 'Ожидание'}</span></td></tr>
+          <tr><td><strong>Статус</strong></td><td><span className={statusMeta.className}>{statusMeta.label}</span></td></tr>
         </tbody>
       </table>
     </div>
