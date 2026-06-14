@@ -643,6 +643,24 @@ function Admin() {
               </div>
             )}
           </div>
+
+          <UpdatesOverview
+            updateStatus={updateStatus}
+            updateMessage={updateMessage}
+            updateError={updateError}
+            checkingUpdates={checkingUpdates}
+            installingUpdates={installingUpdates}
+            restartingService={restartingService}
+            loadingServiceDetails={loadingServiceDetails}
+            serviceDetails={serviceDetails}
+            appSettings={appSettings}
+            onSettingsChange={setAppSettings}
+            onRefresh={fetchUpdateStatus}
+            onInstall={installUpdates}
+            onRestartService={restartService}
+            onShowServiceDetails={fetchServiceDetails}
+            onSaveUpdateSettings={saveUpdateSettings}
+          />
         </div>
       );
     }
@@ -843,24 +861,6 @@ function Admin() {
           }
         />
       </div>
-
-      <UpdatesOverview
-        updateStatus={updateStatus}
-        updateMessage={updateMessage}
-        updateError={updateError}
-        checkingUpdates={checkingUpdates}
-        installingUpdates={installingUpdates}
-        restartingService={restartingService}
-        loadingServiceDetails={loadingServiceDetails}
-        serviceDetails={serviceDetails}
-        appSettings={appSettings}
-        onSettingsChange={setAppSettings}
-        onRefresh={fetchUpdateStatus}
-        onInstall={installUpdates}
-        onRestartService={restartService}
-        onShowServiceDetails={fetchServiceDetails}
-        onSaveUpdateSettings={saveUpdateSettings}
-      />
 
       <div className="card" style={{ marginBottom: 20 }}>
         <SectionHeader

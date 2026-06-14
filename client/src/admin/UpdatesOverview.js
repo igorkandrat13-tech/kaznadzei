@@ -53,7 +53,7 @@ function UpdatesOverview({
         }
       />
       <div className="settings-hint" style={{ marginBottom: 10 }}>
-        Настройки обновления перенесены сюда и больше не показываются в разделе общих настроек.
+        Здесь собраны все действия и настройки, связанные с обновлением проекта и перезапуском сервиса.
       </div>
       <div className="responsive-form-grid" style={{ marginBottom: 12 }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
