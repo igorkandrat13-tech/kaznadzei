@@ -208,6 +208,33 @@ table tr:hover td {
   margin-top: 12px;
 }
 
+.manager-comment-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d0d7e2;
+  background: #f8fafc;
+  color: #425466;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.manager-comment-trigger:hover {
+  background: #eef4fb;
+  border-color: #bfd3ea;
+}
+
+.manager-comment-trigger-active {
+  background: #ecfdf3;
+  border-color: #9ed8b5;
+  color: #1f6b35;
+}
+
 .mobile-order-card-summary {
   flex-shrink: 0;
 }

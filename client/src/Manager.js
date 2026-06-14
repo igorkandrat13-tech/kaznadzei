@@ -48,6 +48,9 @@ function Manager() {
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deletingOrder, setDeletingOrder] = useState(false);
+  const [managerCommentModal, setManagerCommentModal] = useState(null);
+  const [savingManagerComment, setSavingManagerComment] = useState(false);
+  const [deletingManagerComment, setDeletingManagerComment] = useState(false);
 
   const formErrors = validateManagerForm(form);
   const isFormValid = Object.keys(formErrors).length === 0;
@@ -179,6 +182,60 @@ function Manager() {
     setShowForm(true);
   };
 
+  const openManagerCommentModal = (order) => {
+    setError('');
+    setManagerCommentModal({
+      orderId: order._id,
+      orderName: order.name || 'Без названия',
+      customer: order.customer || 'Заказчик не указан',
+      currentNotes: String(order.notes || ''),
+      draftNotes: String(order.notes || ''),
+    });
+  };
+
+  const closeManagerCommentModal = () => {
+    if (savingManagerComment || deletingManagerComment) return;
+    setManagerCommentModal(null);
+  };
+
+  const saveManagerComment = async () => {
+    if (!managerCommentModal?.orderId) return;
+    setSavingManagerComment(true);
+    setError('');
+    const res = await apiFetch(`/api/orders/${managerCommentModal.orderId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: managerCommentModal.draftNotes }),
+    });
+    if (!res.ok) {
+      setError(await getErrorMessage(res, 'Не удалось сохранить комментарий менеджера.'));
+      setSavingManagerComment(false);
+      return;
+    }
+    setSavingManagerComment(false);
+    setManagerCommentModal(null);
+    fetchOrders();
+  };
+
+  const deleteManagerComment = async () => {
+    if (!managerCommentModal?.orderId) return;
+    setDeletingManagerComment(true);
+    setError('');
+    const res = await apiFetch(`/api/orders/${managerCommentModal.orderId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: '' }),
+    });
+    if (!res.ok) {
+      setError(await getErrorMessage(res, 'Не удалось удалить комментарий менеджера.'));
+      setDeletingManagerComment(false);
+      return;
+    }
+    setDeletingManagerComment(false);
+    setManagerCommentModal(null);
+    fetchOrders();
+  };
+
   return (
     <div>
       <div className="card">
@@ -227,7 +284,12 @@ function Manager() {
                     </span>
                   </td>
                   <td style={{ maxWidth: 220, whiteSpace: 'normal', lineHeight: 1.45 }}>
-                    {getManagerCommentPreview(order.notes)}
+                    <button
+                      className={`manager-comment-trigger ${String(order.notes || '').trim() ? 'manager-comment-trigger-active' : ''}`}
+                      onClick={() => openManagerCommentModal(order)}
+                    >
+                      {String(order.notes || '').trim() ? 'Есть комментарий' : 'Нет комментария'}
+                    </button>
                   </td>
                   <td>
                     <button className="btn btn-primary" style={{ marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => handleEdit(order)}>✎</button>
@@ -281,12 +343,20 @@ function Manager() {
                   </div>
                 </div>
 
-                {order.notes ? (
-                  <div className="mobile-order-card-note">
-                    <div className="mobile-order-card-label">Комментарий менеджера</div>
-                    <div className="mobile-order-card-value">{order.notes}</div>
-                  </div>
-                ) : null}
+                <div className="mobile-order-card-note">
+                  <div className="mobile-order-card-label">Комментарий менеджера</div>
+                  <button
+                    className={`manager-comment-trigger ${String(order.notes || '').trim() ? 'manager-comment-trigger-active' : ''}`}
+                    onClick={() => openManagerCommentModal(order)}
+                  >
+                    {String(order.notes || '').trim() ? 'Открыть комментарий' : 'Добавить комментарий'}
+                  </button>
+                  {order.notes ? (
+                    <div className="mobile-order-card-value" style={{ marginTop: 8 }}>
+                      {getManagerCommentPreview(order.notes)}
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="mobile-order-card-actions">
                   <button className="btn btn-primary" onClick={() => handleEdit(order)}>Редактировать</button>
@@ -351,6 +421,53 @@ function Manager() {
             <img src={`/api/orders/${qrOrderId}/qrcode`} alt="QR Code" style={{ width: 280, height: 280, display: 'block', margin: '0 auto 16px' }} />
             <button className="btn btn-primary" onClick={handleDownloadQr}>⬇ Скачать</button>
             <button className="btn" style={{ marginLeft: 8 }} onClick={() => setQrOrderId(null)}>Закрыть</button>
+          </div>
+        </div>
+      )}
+      {managerCommentModal && (
+        <div className="modal-overlay" onClick={closeManagerCommentModal}>
+          <div className="modal-window" style={{ width: 'min(100%, 640px)' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">Комментарий менеджера</div>
+                <div className="modal-subtitle">{managerCommentModal.orderName} · {managerCommentModal.customer}</div>
+              </div>
+              <button className="btn" style={{ padding: '6px 10px' }} onClick={closeManagerCommentModal} disabled={savingManagerComment || deletingManagerComment}>
+                ✕
+              </button>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Текст комментария</label>
+              <textarea
+                value={managerCommentModal.draftNotes}
+                onChange={e => setManagerCommentModal(current => (current ? { ...current, draftNotes: e.target.value } : current))}
+                placeholder="Введите комментарий менеджера для сотрудника"
+                rows={8}
+                autoFocus
+              />
+            </div>
+
+            <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+              <div>
+                <button
+                  className="btn"
+                  style={{ background: '#e74c3c', color: 'white' }}
+                  onClick={deleteManagerComment}
+                  disabled={savingManagerComment || deletingManagerComment || !String(managerCommentModal.currentNotes || '').trim()}
+                >
+                  {deletingManagerComment ? 'Удаление...' : 'Удалить'}
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn" onClick={closeManagerCommentModal} disabled={savingManagerComment || deletingManagerComment}>
+                  Отмена
+                </button>
+                <button className="btn btn-success" onClick={saveManagerComment} disabled={savingManagerComment || deletingManagerComment}>
+                  {savingManagerComment ? 'Сохранение...' : 'Сохранить'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
