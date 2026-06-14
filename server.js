@@ -4,6 +4,7 @@ const path = require('path');
 const ProcessStepStore = require('./server/stores/processStepStore');
 const OrderStore = require('./server/stores/orderStore');
 const ColorStore = require('./server/stores/colorStore');
+const SettingsStore = require('./server/stores/settingsStore');
 const { buildSecurityHeaders } = require('./server/middleware/security');
 
 dotenv.config();
@@ -104,6 +105,7 @@ seed();
 (function migrate() {
   const orders = OrderStore.findAll();
   const steps = ProcessStepStore.findAll();
+  const settings = SettingsStore.get();
   let changed = false;
   for (const o of orders) {
     if (!o.customer) { o.customer = ''; changed = true; }
@@ -135,10 +137,24 @@ seed();
       changed = true;
     }
   }
+
+  const nextSettings = {
+    publicBaseUrl: settings.publicBaseUrl,
+    telegramBotUrl: settings.telegramBotUrl || '',
+    selfUpdateEnabled: Boolean(settings.selfUpdateEnabled),
+    updateBranch: settings.updateBranch || 'main',
+  };
+  const settingsChanged = JSON.stringify(settings) !== JSON.stringify(nextSettings);
+
   if (changed) {
     const { save } = require('./server/stores/store');
     save();
     console.log('Existing orders migrated with new fields');
+  }
+
+  if (settingsChanged) {
+    SettingsStore.update(nextSettings);
+    console.log('Application settings migrated with new fields');
   }
 
   if (OrderStore.syncStagesWithProcessSteps()) {
@@ -150,10 +166,14 @@ const processStepRoutes = require('./server/routes/processStepRoutes');
 const orderRoutes = require('./server/routes/orderRoutes');
 const colorRoutes = require('./server/routes/colorRoutes');
 const updateRoutes = require('./server/routes/updateRoutes');
+const settingsRoutes = require('./server/routes/settingsRoutes');
+const employeeRoutes = require('./server/routes/employeeRoutes');
 app.use('/api', processStepRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', colorRoutes);
 app.use('/api', updateRoutes);
+app.use('/api', settingsRoutes);
+app.use('/api', employeeRoutes);
 
 app.get('/api/roles', (req, res) => {
   res.json(roles);

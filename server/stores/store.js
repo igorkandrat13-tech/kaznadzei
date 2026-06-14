@@ -15,6 +15,8 @@ function load() {
   cache.processSteps = cache.processSteps || [];
   cache.orders = cache.orders || [];
   cache.colors = cache.colors || [];
+  cache.settings = cache.settings || {};
+  cache.employees = cache.employees || [];
   return cache;
 }
 
@@ -23,6 +25,8 @@ function save() {
     processSteps: cache.processSteps || [],
     orders: cache.orders || [],
     colors: cache.colors || [],
+    settings: cache.settings || {},
+    employees: cache.employees || [],
   };
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
   cache = null;

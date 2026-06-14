@@ -1,6 +1,7 @@
 const express = require('express');
 const QRCode = require('qrcode');
 const OrderStore = require('../stores/orderStore');
+const SettingsStore = require('../stores/settingsStore');
 const { requireWriteAccess } = require('../middleware/security');
 const { sanitizeCommentInput, sanitizeOrderInput } = require('../utils/validators');
 const router = express.Router();
@@ -122,7 +123,7 @@ router.get('/orders/:id/qrcode', async (req, res) => {
   try {
     const order = OrderStore.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
-    const publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').trim() || `http://localhost:${process.env.PORT || 5000}`;
+    const publicBaseUrl = SettingsStore.get().publicBaseUrl;
     const url = new URL(`/order/${order._id}`, publicBaseUrl).toString();
     const png = await QRCode.toBuffer(url, { width: 400, margin: 2 });
     res.type('image/png').send(png);

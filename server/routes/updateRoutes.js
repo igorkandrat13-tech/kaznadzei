@@ -2,18 +2,22 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
+const SettingsStore = require('../stores/settingsStore');
 const { checkAdminAccess, isSelfUpdateEnabled, requireAdminAccess } = require('../middleware/security');
 
 const router = express.Router();
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const CLIENT_ROOT = path.join(PROJECT_ROOT, 'client');
-const DEFAULT_BRANCH = process.env.UPDATE_BRANCH || 'main';
 const DEFAULT_PATH = process.platform === 'win32'
   ? process.env.PATH
   : '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
 let installInProgress = false;
+
+function getConfiguredUpdateBranch() {
+  return SettingsStore.get().updateBranch || process.env.UPDATE_BRANCH || 'main';
+}
 
 function runFile(command, args, cwd = PROJECT_ROOT) {
   return new Promise((resolve, reject) => {
@@ -137,7 +141,7 @@ async function getUpdateStatus() {
     status.upstreamConfigured = true;
     status.targetRef = upstreamName.stdout;
   } else {
-    const fallbackBranch = process.env.UPDATE_BRANCH || status.branch || DEFAULT_BRANCH;
+    const fallbackBranch = getConfiguredUpdateBranch() || status.branch || 'main';
     const remoteBranch = await tryGit(['rev-parse', '--verify', `origin/${fallbackBranch}`]);
     if (remoteBranch?.stdout) {
       status.targetRef = `origin/${fallbackBranch}`;

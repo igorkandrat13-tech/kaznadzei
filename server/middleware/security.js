@@ -1,5 +1,6 @@
 const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const UNSAFE_ADMIN_TOKENS = new Set(['change-me']);
+const SettingsStore = require('../stores/settingsStore');
 
 function getConfiguredAdminToken() {
   const token = (process.env.ADMIN_TOKEN || '').trim();
@@ -73,7 +74,7 @@ function requireWriteAccess(req, res, next) {
 }
 
 function isSelfUpdateEnabled() {
-  return String(process.env.ENABLE_SELF_UPDATE || '').toLowerCase() === 'true';
+  return Boolean(SettingsStore.get().selfUpdateEnabled);
 }
 
 function buildSecurityHeaders(req, res, next) {

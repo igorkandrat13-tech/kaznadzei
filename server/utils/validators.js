@@ -81,6 +81,33 @@ function normalizeHexColor(value, fieldName = 'hex') {
   return normalized.toUpperCase();
 }
 
+function normalizeBoolean(value, fieldName) {
+  if (typeof value !== 'boolean') {
+    fail(`Поле "${fieldName}" должно быть булевым значением.`);
+  }
+  return value;
+}
+
+function normalizeUrl(value, fieldName, options = {}) {
+  const normalized = normalizeString(value, fieldName, {
+    required: options.required,
+    maxLength: options.maxLength || 500,
+  });
+  if (!normalized && options.allowEmpty !== false) {
+    return '';
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      fail(`Поле "${fieldName}" должно быть ссылкой http или https.`);
+    }
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    fail(`Поле "${fieldName}" должно быть корректной ссылкой.`);
+  }
+}
+
 function sanitizeOrderInput(payload, options = {}) {
   const partial = options.partial === true;
   const data = {};
@@ -155,9 +182,64 @@ function sanitizeColorInput(payload, options = {}) {
   return data;
 }
 
+function sanitizeSettingsInput(payload, options = {}) {
+  const partial = options.partial === true;
+  const data = {};
+
+  if (!partial || payload.publicBaseUrl !== undefined) {
+    data.publicBaseUrl = normalizeUrl(payload.publicBaseUrl, 'publicBaseUrl', { required: !partial, allowEmpty: false });
+  }
+  if (!partial || payload.telegramBotUrl !== undefined) {
+    data.telegramBotUrl = normalizeUrl(payload.telegramBotUrl, 'telegramBotUrl', { allowEmpty: true });
+  }
+  if (!partial || payload.selfUpdateEnabled !== undefined) {
+    data.selfUpdateEnabled = normalizeBoolean(payload.selfUpdateEnabled, 'selfUpdateEnabled');
+  }
+  if (!partial || payload.updateBranch !== undefined) {
+    data.updateBranch = normalizeString(payload.updateBranch, 'updateBranch', { required: !partial, maxLength: 80 });
+  }
+
+  return data;
+}
+
+function sanitizeEmployeeInput(payload, options = {}) {
+  const partial = options.partial === true;
+  const data = {};
+  const allowedRoles = new Set(['carpenter', 'assembler', 'painter', 'designer']);
+
+  if (!partial || payload.fullName !== undefined) {
+    data.fullName = normalizeString(payload.fullName, 'fullName', { required: !partial, maxLength: 160 });
+  }
+  if (!partial || payload.role !== undefined) {
+    const role = normalizeString(payload.role, 'role', { required: !partial, maxLength: 40 });
+    if (role && !allowedRoles.has(role)) {
+      fail('Поле "role" содержит недопустимую роль.');
+    }
+    data.role = role;
+  }
+  if (!partial || payload.telegramUsername !== undefined) {
+    const username = normalizeString(payload.telegramUsername, 'telegramUsername', { maxLength: 80 });
+    data.telegramUsername = username ? username.replace(/^@+/, '@') : '';
+  }
+  if (!partial || payload.password !== undefined) {
+    data.password = normalizeString(payload.password, 'password', { required: !partial, maxLength: 120 });
+  }
+  if (!partial || payload.pinCode !== undefined) {
+    const pinCode = normalizeString(payload.pinCode, 'pinCode', { required: !partial, maxLength: 20 });
+    if (pinCode && !/^[A-Za-z0-9_-]{4,20}$/.test(pinCode)) {
+      fail('Поле "pinCode" должно содержать 4-20 символов: буквы, цифры, "_" или "-".');
+    }
+    data.pinCode = pinCode;
+  }
+
+  return data;
+}
+
 module.exports = {
   sanitizeColorInput,
   sanitizeCommentInput,
+  sanitizeEmployeeInput,
   sanitizeOrderInput,
   sanitizeProcessStepInput,
+  sanitizeSettingsInput,
 };

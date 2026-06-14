@@ -8,12 +8,34 @@ const roleTabs = [
   { key: 'assembler', label: '🔧 Комплектовщик' },
   { key: 'painter', label: '🎨 Маляр' },
   { key: 'designer', label: '📐 Дизайнер' },
+];
+
+const settingsTabs = [
+  { key: 'general', label: '⚙️ Общие' },
+  { key: 'employees', label: '👥 Сотрудники' },
+  ...roleTabs,
   { key: 'colors', label: '🎨 Цвета' },
 ];
 
+const emptyEmployeeForm = {
+  fullName: '',
+  role: 'carpenter',
+  telegramUsername: '',
+  password: '',
+  pinCode: '',
+};
+
+function generatePassword() {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6).toUpperCase();
+}
+
+function generatePinCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 function Admin() {
   const [showSettings, setShowSettings] = useState(false);
-  const [activeRole, setActiveRole] = useState('carpenter');
+  const [activeRole, setActiveRole] = useState('general');
   const [steps, setSteps] = useState([]);
   const [colors, setColors] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -24,18 +46,38 @@ function Admin() {
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdates, setInstallingUpdates] = useState(false);
   const [settingsError, setSettingsError] = useState('');
+  const [settingsSuccess, setSettingsSuccess] = useState('');
+  const [appSettings, setAppSettings] = useState({
+    publicBaseUrl: '',
+    telegramBotUrl: '',
+    selfUpdateEnabled: false,
+    updateBranch: 'main',
+  });
+  const [employees, setEmployees] = useState([]);
 
   const [editStep, setEditStep] = useState(null);
   const [editColor, setEditColor] = useState(null);
+  const [editEmployee, setEditEmployee] = useState(null);
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
   const [newColor, setNewColor] = useState({ name: '', hex: '#000000' });
+  const [newEmployee, setNewEmployee] = useState(emptyEmployeeForm);
 
   const filteredSteps = steps.filter(s => s.role === activeRole).sort((a, b) => a.order - b.order);
   useEffect(() => {
     if (!showSettings) return;
     setEditStep(null);
+    setEditEmployee(null);
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
-  }, [activeRole, showSettings]);
+    setNewEmployee(emptyEmployeeForm);
+    setSettingsError('');
+    setSettingsSuccess('');
+  }, [activeRole, showSettings, filteredSteps.length]);
+
+  useEffect(() => {
+    if (!showSettings) return;
+    fetchAppSettings().catch(error => setSettingsError(error.message || 'Не удалось загрузить настройки.'));
+    fetchEmployees().catch(error => setSettingsError(error.message || 'Не удалось загрузить сотрудников.'));
+  }, [showSettings]);
 
   useEffect(() => {
     fetchSteps();
@@ -62,6 +104,29 @@ function Admin() {
       const data = await parseJsonSafely(res);
       setOrders(Array.isArray(data) ? data : []);
     } catch { setOrders([]); }
+  };
+
+  const fetchAppSettings = async () => {
+    const res = await apiFetch('/api/settings');
+    const data = await parseJsonSafely(res);
+    if (!res.ok) {
+      throw new Error(data?.message || 'Не удалось загрузить настройки.');
+    }
+    setAppSettings({
+      publicBaseUrl: data?.publicBaseUrl || '',
+      telegramBotUrl: data?.telegramBotUrl || '',
+      selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
+      updateBranch: data?.updateBranch || 'main',
+    });
+  };
+
+  const fetchEmployees = async () => {
+    const res = await apiFetch('/api/employees');
+    const data = await parseJsonSafely(res);
+    if (!res.ok) {
+      throw new Error(data?.message || 'Не удалось загрузить сотрудников.');
+    }
+    setEmployees(Array.isArray(data) ? data : []);
   };
 
   const fetchUpdateStatus = async () => {
@@ -123,6 +188,84 @@ function Admin() {
 
   const closeCommentsModal = () => {
     setCommentsModal(null);
+  };
+
+  const saveAppSettings = async () => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    const res = await apiFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appSettings),
+    });
+    const data = await parseJsonSafely(res);
+    if (!res.ok) {
+      setSettingsError(data?.message || 'Не удалось сохранить настройки.');
+      return;
+    }
+    setAppSettings({
+      publicBaseUrl: data?.publicBaseUrl || '',
+      telegramBotUrl: data?.telegramBotUrl || '',
+      selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
+      updateBranch: data?.updateBranch || 'main',
+    });
+    setSettingsSuccess('Настройки сохранены.');
+    fetchUpdateStatus();
+  };
+
+  const resetEmployeeForm = () => {
+    setEditEmployee(null);
+    setNewEmployee(emptyEmployeeForm);
+  };
+
+  const handleAddEmployee = async () => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    const res = await apiFetch('/api/employees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newEmployee),
+    });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось добавить сотрудника.'));
+      return;
+    }
+    resetEmployeeForm();
+    await fetchEmployees();
+    setSettingsSuccess('Сотрудник добавлен.');
+  };
+
+  const handleUpdateEmployee = async () => {
+    if (!editEmployee) return;
+    setSettingsError('');
+    setSettingsSuccess('');
+    const res = await apiFetch(`/api/employees/${editEmployee._id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editEmployee),
+    });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось обновить сотрудника.'));
+      return;
+    }
+    resetEmployeeForm();
+    await fetchEmployees();
+    setSettingsSuccess('Данные сотрудника обновлены.');
+  };
+
+  const handleDeleteEmployee = async (id) => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    const res = await apiFetch(`/api/employees/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      setSettingsError(await getErrorMessage(res, 'Не удалось удалить сотрудника.'));
+      return;
+    }
+    if (editEmployee?._id === id) {
+      resetEmployeeForm();
+    }
+    await fetchEmployees();
+    setSettingsSuccess('Сотрудник удален.');
   };
 
   // Settings
@@ -212,6 +355,173 @@ function Admin() {
 
   // ===== SETTINGS VIEW =====
   if (showSettings) {
+    if (activeRole === 'general') {
+      return (
+        <div>
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>⚙️ Настройки — Общие параметры</h2>
+              <button className="btn" onClick={() => setShowSettings(false)}>← Назад к обзору</button>
+            </div>
+            <div className="tabs">
+              {settingsTabs.map(tab => (
+                <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => setActiveRole(tab.key)}>{tab.label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <p>Здесь можно настроить адрес проекта для QR-кодов, self-update и ссылку на Telegram-бота.</p>
+            {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
+            {settingsSuccess && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#eef7ee', color: '#1f6b35' }}>{settingsSuccess}</div>}
+
+            <div className="form-group">
+              <label>Публичный адрес проекта</label>
+              <input
+                value={appSettings.publicBaseUrl}
+                onChange={e => setAppSettings({ ...appSettings, publicBaseUrl: e.target.value })}
+                placeholder="Например: https://factory.example.com"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Адрес Telegram-бота</label>
+              <input
+                value={appSettings.telegramBotUrl}
+                onChange={e => setAppSettings({ ...appSettings, telegramBotUrl: e.target.value })}
+                placeholder="Например: https://t.me/your_bot"
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div className="form-group" style={{ minWidth: 220, flex: 1 }}>
+                <label>Ветка обновлений</label>
+                <input
+                  value={appSettings.updateBranch}
+                  onChange={e => setAppSettings({ ...appSettings, updateBranch: e.target.value })}
+                  placeholder="main"
+                />
+              </div>
+
+              <div className="form-group" style={{ minWidth: 220, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={appSettings.selfUpdateEnabled}
+                    onChange={e => setAppSettings({ ...appSettings, selfUpdateEnabled: e.target.checked })}
+                  />
+                  Разрешить self-update из интерфейса
+                </label>
+              </div>
+            </div>
+
+            <div style={{ color: '#666', fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
+              Для установки обновлений по-прежнему требуется корректный <strong>ADMIN_TOKEN</strong>. Здесь настраиваются рабочие параметры интерфейса, а не содержимое `.env`.
+            </div>
+
+            <button className="btn btn-success" onClick={saveAppSettings}>Сохранить настройки</button>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeRole === 'employees') {
+      const employeeForm = editEmployee || newEmployee;
+      const setEmployeeForm = (nextValue) => {
+        if (editEmployee) {
+          setEditEmployee(nextValue);
+          return;
+        }
+        setNewEmployee(nextValue);
+      };
+
+      return (
+        <div>
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>⚙️ Настройки — Сотрудники</h2>
+              <button className="btn" onClick={() => setShowSettings(false)}>← Назад к обзору</button>
+            </div>
+            <div className="tabs">
+              {settingsTabs.map(tab => (
+                <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => setActiveRole(tab.key)}>{tab.label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 20 }}>
+            <p>Список сотрудников для входа в Telegram-бот и работы с заказами по ролям.</p>
+            {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
+            {settingsSuccess && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#eef7ee', color: '#1f6b35' }}>{settingsSuccess}</div>}
+
+            <table>
+              <thead><tr><th>ФИО</th><th>Роль</th><th>Telegram</th><th>Пароль</th><th>PIN</th><th>Действия</th></tr></thead>
+              <tbody>
+                {employees.map(employee => (
+                  <tr key={employee._id}>
+                    <td>{employee.fullName}</td>
+                    <td>{getRoleLabel(employee.role)}</td>
+                    <td>{employee.telegramUsername || '—'}</td>
+                    <td>{employee.password || '—'}</td>
+                    <td>{employee.pinCode || '—'}</td>
+                    <td>
+                      <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => setEditEmployee({ ...employee })}>✎</button>
+                      <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteEmployee(employee._id)}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+                {employees.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#999' }}>Сотрудники пока не добавлены</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card">
+            <h3>{editEmployee ? 'Редактировать сотрудника' : 'Добавить сотрудника'}</h3>
+
+            <div className="form-group"><label>ФИО</label><input value={employeeForm.fullName} onChange={e => setEmployeeForm({ ...employeeForm, fullName: e.target.value })} placeholder="Например: Иванов Иван Иванович" /></div>
+
+            <div className="form-group">
+              <label>Должность</label>
+              <select value={employeeForm.role} onChange={e => setEmployeeForm({ ...employeeForm, role: e.target.value })} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }}>
+                {roleTabs.map(role => (
+                  <option key={role.key} value={role.key}>{role.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group"><label>Telegram username</label><input value={employeeForm.telegramUsername} onChange={e => setEmployeeForm({ ...employeeForm, telegramUsername: e.target.value })} placeholder="@username" /></div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Пароль</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={employeeForm.password} onChange={e => setEmployeeForm({ ...employeeForm, password: e.target.value })} placeholder="Пароль для первичного входа" />
+                  <button className="btn" type="button" onClick={() => setEmployeeForm({ ...employeeForm, password: generatePassword() })}>Сгенерировать</button>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>PIN-код</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={employeeForm.pinCode} onChange={e => setEmployeeForm({ ...employeeForm, pinCode: e.target.value })} placeholder="Код для Telegram-бота" />
+                  <button className="btn" type="button" onClick={() => setEmployeeForm({ ...employeeForm, pinCode: generatePinCode() })}>Сгенерировать</button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+              <button className="btn btn-success" onClick={editEmployee ? handleUpdateEmployee : handleAddEmployee}>
+                {editEmployee ? 'Сохранить сотрудника' : 'Добавить сотрудника'}
+              </button>
+              {(editEmployee || newEmployee.fullName || newEmployee.telegramUsername || newEmployee.password || newEmployee.pinCode) && (
+                <button className="btn" onClick={resetEmployeeForm}>Очистить</button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (activeRole === 'colors') {
       return (
         <div>
@@ -221,7 +531,7 @@ function Admin() {
               <button className="btn" onClick={() => setShowSettings(false)}>← Назад к обзору</button>
             </div>
             <div className="tabs">
-              {roleTabs.map(tab => (
+              {settingsTabs.map(tab => (
                 <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => setActiveRole(tab.key)}>{tab.label}</button>
               ))}
             </div>
@@ -229,7 +539,8 @@ function Admin() {
 
           <div className="card">
             <p>Список доступных цветов для малярного цеха</p>
-          {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
+            {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
+            {settingsSuccess && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#eef7ee', color: '#1f6b35' }}>{settingsSuccess}</div>}
             <table>
               <thead><tr><th>Название</th><th>Цвет</th><th>Действия</th></tr></thead>
               <tbody>
@@ -278,7 +589,7 @@ function Admin() {
             <button className="btn" onClick={() => setShowSettings(false)}>← Назад к обзору</button>
           </div>
           <div className="tabs">
-            {roleTabs.map(tab => (
+            {settingsTabs.map(tab => (
               <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => setActiveRole(tab.key)}>{tab.label}</button>
             ))}
           </div>
@@ -287,6 +598,7 @@ function Admin() {
         <div className="card">
           <p>Настройка этапов для данной роли</p>
           {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
+          {settingsSuccess && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#eef7ee', color: '#1f6b35' }}>{settingsSuccess}</div>}
           <table>
             <thead><tr><th>№</th><th>Название этапа</th><th>Описание</th><th>Действия</th></tr></thead>
             <tbody>
@@ -341,8 +653,8 @@ function Admin() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Link to="/archive" className="btn" style={{ background: '#8e44ad', color: 'white', padding: '10px 24px', fontSize: 14, textDecoration: 'none' }}>📦 Архив</Link>
-            <button className="btn" style={{ background: '#2c3e50', color: 'white', padding: '10px 24px', fontSize: 14 }} onClick={() => setShowSettings(true)}>
-              ⚙️ Настройки этапов
+            <button className="btn" style={{ background: '#2c3e50', color: 'white', padding: '10px 24px', fontSize: 14 }} onClick={() => { setActiveRole('general'); setShowSettings(true); }}>
+              ⚙️ Настройки
             </button>
           </div>
         </div>
