@@ -88,6 +88,29 @@ function OrderDetail() {
     }
   }, [telegramMode]);
 
+  const calcDuration = (start, end) => {
+    if (!start || !end) return '—';
+    const s = new Date(start);
+    const e = new Date(end);
+    const diff = Math.round((e - s) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff + ' дн.' : '—';
+  };
+
+  const statusMeta = getOrderStatusMeta(order?.overallStatus);
+  const currentRoleComment = telegramEmployee?.role
+    ? (order?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
+    : '';
+  const detailItems = order ? [
+    { label: 'Заказчик', value: order.customer || '—' },
+    { label: 'Наименование', value: order.name || '—' },
+    { label: 'Кол-во изделий', value: order.quantity || 1 },
+    { label: 'Материал', value: order.material || '—' },
+    { label: 'Дата заказа', value: order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—' },
+    { label: 'Начало изготовления', value: order.startDate ? new Date(order.startDate).toLocaleDateString() : '—' },
+    { label: 'Окончание изготовления', value: order.endDate ? new Date(order.endDate).toLocaleDateString() : '—' },
+    { label: 'Время изготовления', value: calcDuration(order.startDate, order.endDate) },
+  ] : [];
+
   useEffect(() => {
     if (!telegramMode || !telegramEmployee) return;
     setCommentDraft(currentRoleComment);
@@ -109,29 +132,6 @@ function OrderDetail() {
       </div>
     );
   }
-
-  const calcDuration = (start, end) => {
-    if (!start || !end) return '—';
-    const s = new Date(start);
-    const e = new Date(end);
-    const diff = Math.round((e - s) / (1000 * 60 * 60 * 24));
-    return diff >= 0 ? diff + ' дн.' : '—';
-  };
-
-  const statusMeta = getOrderStatusMeta(order.overallStatus);
-  const currentRoleComment = telegramEmployee?.role
-    ? (order.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
-    : '';
-  const detailItems = [
-    { label: 'Заказчик', value: order.customer || '—' },
-    { label: 'Наименование', value: order.name || '—' },
-    { label: 'Кол-во изделий', value: order.quantity || 1 },
-    { label: 'Материал', value: order.material || '—' },
-    { label: 'Дата заказа', value: order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—' },
-    { label: 'Начало изготовления', value: order.startDate ? new Date(order.startDate).toLocaleDateString() : '—' },
-    { label: 'Окончание изготовления', value: order.endDate ? new Date(order.endDate).toLocaleDateString() : '—' },
-    { label: 'Время изготовления', value: calcDuration(order.startDate, order.endDate) },
-  ];
 
   const saveTelegramComment = async () => {
     if (!telegramMode || !telegramEmployee) return;
