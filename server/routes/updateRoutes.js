@@ -15,6 +15,10 @@ const DEFAULT_PATH = process.platform === 'win32'
 
 let installInProgress = false;
 
+function getConfiguredServiceName() {
+  return (process.env.SYSTEMD_SERVICE_NAME || 'kaznadzei').trim();
+}
+
 function getConfiguredUpdateBranch() {
   return SettingsStore.get().updateBranch || process.env.UPDATE_BRANCH || 'main';
 }
@@ -76,6 +80,20 @@ function getNpmCommand() {
   return getExecutable(['/usr/bin/npm', '/usr/local/bin/npm', 'npm']);
 }
 
+function getSystemctlCommand() {
+  if (process.platform === 'win32') {
+    return null;
+  }
+  return getExecutable(['/usr/bin/systemctl', '/bin/systemctl', 'systemctl']);
+}
+
+function getSudoCommand() {
+  if (process.platform === 'win32') {
+    return null;
+  }
+  return getExecutable(['/usr/bin/sudo', '/bin/sudo', 'sudo']);
+}
+
 function getErrorText(error) {
   return [error.message, error.stdout, error.stderr].filter(Boolean).join('\n').trim();
 }
@@ -86,6 +104,64 @@ async function hasGit() {
     return result.stdout || 'git available';
   } catch {
     return null;
+  }
+}
+
+async function hasSystemctl() {
+  const command = getSystemctlCommand();
+  if (!command) {
+    return null;
+  }
+  try {
+    const result = await runFile(command, ['--version']);
+    return result.stdout || 'systemctl available';
+  } catch {
+    return null;
+  }
+}
+
+async function trySystemctl(args) {
+  const systemctlCommand = getSystemctlCommand();
+  if (!systemctlCommand) {
+    return null;
+  }
+
+  const sudoCommand = getSudoCommand();
+  const command = sudoCommand || systemctlCommand;
+  const finalArgs = sudoCommand ? ['-n', systemctlCommand, ...args] : args;
+
+  try {
+    return await runFile(command, finalArgs);
+  } catch {
+    return null;
+  }
+}
+
+async function trySystemctlDetailed(args) {
+  const systemctlCommand = getSystemctlCommand();
+  if (!systemctlCommand) {
+    return {
+      ok: false,
+      stdout: '',
+      stderr: '',
+      errorText: 'systemctl недоступен на этой платформе.',
+    };
+  }
+
+  const sudoCommand = getSudoCommand();
+  const command = sudoCommand || systemctlCommand;
+  const finalArgs = sudoCommand ? ['-n', systemctlCommand, ...args] : args;
+
+  try {
+    const result = await runFile(command, finalArgs);
+    return { ok: true, ...result };
+  } catch (error) {
+    return {
+      ok: false,
+      stdout: error.stdout || '',
+      stderr: error.stderr || '',
+      errorText: getErrorText(error),
+    };
   }
 }
 
@@ -159,6 +235,10 @@ async function getUpdateStatus() {
     enabled: isSelfUpdateEnabled(),
     gitAvailable: Boolean(gitVersion),
     gitVersion,
+    systemctlAvailable: Boolean(await hasSystemctl()),
+    serviceName: getConfiguredServiceName(),
+    serviceActiveState: null,
+    restartSupported: false,
     isRepo: fs.existsSync(path.join(PROJECT_ROOT, '.git')),
     hasRemote: false,
     upstreamConfigured: false,
@@ -191,6 +271,14 @@ async function getUpdateStatus() {
 
   const commitResult = await tryGit(['rev-parse', 'HEAD']);
   status.currentCommit = commitResult?.stdout || null;
+
+  if (status.systemctlAvailable && status.serviceName) {
+    const serviceStateResult = await trySystemctl(['is-active', status.serviceName]);
+    if (serviceStateResult?.stdout) {
+      status.serviceActiveState = serviceStateResult.stdout;
+      status.restartSupported = ['active', 'activating', 'reloading'].includes(serviceStateResult.stdout);
+    }
+  }
 
   const remoteSetup = await ensureGitRemoteConfigured();
   status.remoteUrl = remoteSetup.remoteUrl || null;
@@ -254,6 +342,10 @@ router.get('/updates/status', async (req, res) => {
       enabled: false,
       gitAvailable: false,
       gitVersion: null,
+      systemctlAvailable: Boolean(await hasSystemctl()),
+      serviceName: getConfiguredServiceName(),
+      serviceActiveState: null,
+      restartSupported: false,
       isRepo: false,
       hasRemote: false,
       upstreamConfigured: false,
@@ -336,6 +428,36 @@ router.post('/updates/install', async (req, res) => {
   } finally {
     installInProgress = false;
   }
+});
+
+router.post('/updates/restart-service', async (req, res) => {
+  const systemctlVersion = await hasSystemctl();
+  if (!systemctlVersion) {
+    return res.status(400).json({
+      message: 'Перезапуск сервиса поддерживается только на Linux-сервере с systemd.',
+    });
+  }
+
+  const serviceName = getConfiguredServiceName();
+  if (!serviceName) {
+    return res.status(400).json({
+      message: 'Не задано имя systemd-сервиса. Укажите SYSTEMD_SERVICE_NAME в .env.',
+    });
+  }
+
+  const restartResult = await trySystemctlDetailed(['restart', '--no-block', serviceName]);
+  if (!restartResult.ok) {
+    return res.status(500).json({
+      message: 'Не удалось запустить перезапуск сервиса.',
+      details: restartResult.errorText || 'Проверьте права на systemctl и sudoers.',
+    });
+  }
+
+  res.json({
+    ok: true,
+    message: `Команда перезапуска отправлена для сервиса ${serviceName}.`,
+    serviceName,
+  });
 });
 
 module.exports = router;

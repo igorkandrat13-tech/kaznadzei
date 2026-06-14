@@ -185,6 +185,7 @@ upsert_env_var .env "PUBLIC_BASE_URL" "http://localhost:5000"
 upsert_env_var .env "ENABLE_SELF_UPDATE" "true"
 upsert_env_var .env "UPDATE_BRANCH" "${BRANCH}"
 upsert_env_var .env "UPDATE_REPOSITORY_URL" "${REPO_URL}"
+upsert_env_var .env "SYSTEMD_SERVICE_NAME" "${SERVICE_NAME}"
 ensure_admin_token .env
 chown "$APP_USER":"$APP_USER" .env
 

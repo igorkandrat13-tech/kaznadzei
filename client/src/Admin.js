@@ -30,6 +30,7 @@ function Admin() {
   const [updateError, setUpdateError] = useState('');
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdates, setInstallingUpdates] = useState(false);
+  const [restartingService, setRestartingService] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [appSettings, setAppSettings] = useState({
@@ -165,6 +166,21 @@ function Admin() {
       setUpdateError(error.message || 'Не удалось установить обновления');
     } finally {
       setInstallingUpdates(false);
+    }
+  };
+
+  const restartService = async () => {
+    setRestartingService(true);
+    setUpdateError('');
+    try {
+      const res = await apiFetch('/api/updates/restart-service', { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось перезапустить сервис');
+      setUpdateMessage(data?.message || 'Команда перезапуска отправлена');
+    } catch (error) {
+      setUpdateError(error.message || 'Не удалось перезапустить сервис');
+    } finally {
+      setRestartingService(false);
     }
   };
 
@@ -836,8 +852,10 @@ function Admin() {
         updateError={updateError}
         checkingUpdates={checkingUpdates}
         installingUpdates={installingUpdates}
+        restartingService={restartingService}
         onRefresh={fetchUpdateStatus}
         onInstall={installUpdates}
+        onRestartService={restartService}
       />
 
       <div className="card" style={{ marginBottom: 20 }}>

@@ -7,8 +7,10 @@ function UpdatesOverview({
   updateError,
   checkingUpdates,
   installingUpdates,
+  restartingService,
   onRefresh,
   onInstall,
+  onRestartService,
 }) {
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -27,6 +29,13 @@ function UpdatesOverview({
             >
               {installingUpdates ? 'Установка...' : 'Установить обновления'}
             </button>
+            <button
+              className="btn"
+              onClick={onRestartService}
+              disabled={restartingService || checkingUpdates || !updateStatus?.systemctlAvailable}
+            >
+              {restartingService ? 'Перезапуск...' : 'Перезапустить сервис'}
+            </button>
           </>
         }
       />
@@ -36,6 +45,9 @@ function UpdatesOverview({
         <>
           <div className="overview-stats-grid" style={{ marginTop: 16 }}>
             <div className="overview-stat-card"><strong>Git:</strong> {updateStatus?.gitAvailable ? (updateStatus.gitVersion || 'установлен') : 'не найден'}</div>
+            <div className="overview-stat-card"><strong>systemd:</strong> {updateStatus?.systemctlAvailable ? 'доступен' : 'недоступен'}</div>
+            <div className="overview-stat-card"><strong>Сервис:</strong> {updateStatus?.serviceName || '—'}</div>
+            <div className="overview-stat-card"><strong>Статус сервиса:</strong> {updateStatus?.serviceActiveState || 'не определен'}</div>
             <div className="overview-stat-card"><strong>Репозиторий:</strong> {updateStatus?.isRepo ? 'инициализирован' : 'не инициализирован'}</div>
             <div className="overview-stat-card"><strong>Remote origin:</strong> {updateStatus?.remoteUrl || 'не настроен'}</div>
             <div className="overview-stat-card"><strong>Ветка:</strong> {updateStatus?.branch || '—'}</div>
@@ -56,6 +68,16 @@ function UpdatesOverview({
           {updateStatus && updateStatus.isRepo && !updateStatus.hasRemote && (
             <SettingsHint>
               Подключите удаленный репозиторий командой <strong>git remote add origin &lt;URL_РЕПОЗИТОРИЯ&gt;</strong>.
+            </SettingsHint>
+          )}
+          {updateStatus && !updateStatus.systemctlAvailable && (
+            <SettingsHint>
+              Перезапуск из интерфейса доступен только на Linux-сервере с <strong>systemd</strong>.
+            </SettingsHint>
+          )}
+          {updateStatus && updateStatus.systemctlAvailable && (
+            <SettingsHint>
+              Для работы кнопки перезапуска процессу приложения нужны права на <strong>systemctl restart {updateStatus.serviceName || 'kaznadzei'}</strong>. Обычно это настраивается через <strong>sudoers</strong> с режимом <strong>NOPASSWD</strong>.
             </SettingsHint>
           )}
         </>
