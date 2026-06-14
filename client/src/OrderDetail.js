@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getOrderStatusMeta } from './statusMeta';
@@ -31,8 +31,8 @@ function OrderDetail() {
   const [commentError, setCommentError] = useState('');
   const [savingComment, setSavingComment] = useState(false);
 
-  const telegramMode = useMemo(() => isTelegramWebApp(), []);
-  const telegramInitData = useMemo(() => getTelegramInitData(), []);
+  const telegramMode = isTelegramWebApp();
+  const telegramInitData = getTelegramInitData();
 
   useEffect(() => {
     setLoading(true);
@@ -48,13 +48,18 @@ function OrderDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  useEffect(() => {
-    if (!telegramMode || !telegramInitData) return;
-
+  const loadTelegramEmployeeSession = useCallback(() => {
+    if (!telegramMode) return;
+    if (!telegramInitData) {
+      setTelegramEmployee(null);
+      setSessionLoading(false);
+      setSessionError('Telegram не передал данные сотрудника. Откройте заказ заново через кнопку в боте.');
+      return;
+    }
     setSessionLoading(true);
     setSessionError('');
 
-    apiFetch('/api/telegram/webapp/session', {
+    return apiFetch('/api/telegram/webapp/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ initData: telegramInitData }),
@@ -73,6 +78,10 @@ function OrderDetail() {
       })
       .finally(() => setSessionLoading(false));
   }, [telegramInitData, telegramMode]);
+
+  useEffect(() => {
+    loadTelegramEmployeeSession();
+  }, [loadTelegramEmployeeSession]);
 
   useEffect(() => {
     if (!telegramMode) return;
@@ -100,6 +109,7 @@ function OrderDetail() {
   };
 
   const statusMeta = getOrderStatusMeta(order?.overallStatus);
+  const managerNotes = String(order?.notes || '').trim();
   const currentRoleComment = telegramEmployee?.role
     ? (order?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
     : '';
@@ -228,7 +238,9 @@ function OrderDetail() {
 
           <div className="detail-block detail-block-wide">
             <div className="detail-label">Примечания менеджера</div>
-            <div className="detail-value detail-value-multiline">{order.notes || '—'}</div>
+            <div className="detail-value detail-value-multiline">
+              {managerNotes || 'Менеджер пока не добавил примечание.'}
+            </div>
           </div>
         </>
       ) : (
@@ -263,6 +275,17 @@ function OrderDetail() {
           {sessionError && (
             <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
               {sessionError}
+            </div>
+          )}
+
+          {!sessionLoading && !telegramEmployee && (
+            <div className="telegram-comment-placeholder">
+              Комментарий сотрудника пока недоступен.
+              <div style={{ marginTop: 10 }}>
+                <button className="btn btn-primary" onClick={loadTelegramEmployeeSession}>
+                  Повторить определение сотрудника
+                </button>
+              </div>
             </div>
           )}
 
