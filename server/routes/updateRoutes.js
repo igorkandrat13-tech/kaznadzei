@@ -87,6 +87,13 @@ function getSystemctlCommand() {
   return getExecutable(['/usr/bin/systemctl', '/bin/systemctl', 'systemctl']);
 }
 
+function getJournalctlCommand() {
+  if (process.platform === 'win32') {
+    return null;
+  }
+  return getExecutable(['/usr/bin/journalctl', '/bin/journalctl', 'journalctl']);
+}
+
 function getSudoCommand() {
   if (process.platform === 'win32') {
     return null;
@@ -151,6 +158,34 @@ async function trySystemctlDetailed(args) {
   const sudoCommand = getSudoCommand();
   const command = sudoCommand || systemctlCommand;
   const finalArgs = sudoCommand ? ['-n', systemctlCommand, ...args] : args;
+
+  try {
+    const result = await runFile(command, finalArgs);
+    return { ok: true, ...result };
+  } catch (error) {
+    return {
+      ok: false,
+      stdout: error.stdout || '',
+      stderr: error.stderr || '',
+      errorText: getErrorText(error),
+    };
+  }
+}
+
+async function tryJournalctlDetailed(args) {
+  const journalctlCommand = getJournalctlCommand();
+  if (!journalctlCommand) {
+    return {
+      ok: false,
+      stdout: '',
+      stderr: '',
+      errorText: 'journalctl недоступен на этой платформе.',
+    };
+  }
+
+  const sudoCommand = getSudoCommand();
+  const command = sudoCommand || journalctlCommand;
+  const finalArgs = sudoCommand ? ['-n', journalctlCommand, ...args] : args;
 
   try {
     const result = await runFile(command, finalArgs);
@@ -457,6 +492,41 @@ router.post('/updates/restart-service', async (req, res) => {
     ok: true,
     message: `Команда перезапуска отправлена для сервиса ${serviceName}.`,
     serviceName,
+  });
+});
+
+router.get('/updates/service-details', async (req, res) => {
+  const systemctlVersion = await hasSystemctl();
+  if (!systemctlVersion) {
+    return res.status(400).json({
+      message: 'Просмотр статуса сервиса поддерживается только на Linux-сервере с systemd.',
+    });
+  }
+
+  const serviceName = getConfiguredServiceName();
+  if (!serviceName) {
+    return res.status(400).json({
+      message: 'Не задано имя systemd-сервиса. Укажите SYSTEMD_SERVICE_NAME в .env.',
+    });
+  }
+
+  const statusResult = await trySystemctlDetailed(['status', serviceName, '--no-pager', '-l']);
+  const logsResult = await tryJournalctlDetailed(['-u', serviceName, '-n', '80', '--no-pager', '-o', 'short-iso']);
+
+  if (!statusResult.ok && !logsResult.ok) {
+    return res.status(500).json({
+      message: 'Не удалось получить статус и логи сервиса.',
+      details: [statusResult.errorText, logsResult.errorText].filter(Boolean).join('\n\n'),
+    });
+  }
+
+  res.json({
+    ok: true,
+    serviceName,
+    statusText: statusResult.stdout || statusResult.stderr || 'Статус сервиса не получен.',
+    logsText: logsResult.stdout || logsResult.stderr || 'Логи сервиса не получены.',
+    statusError: statusResult.ok ? '' : statusResult.errorText,
+    logsError: logsResult.ok ? '' : logsResult.errorText,
   });
 });
 

@@ -31,6 +31,8 @@ function Admin() {
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdates, setInstallingUpdates] = useState(false);
   const [restartingService, setRestartingService] = useState(false);
+  const [loadingServiceDetails, setLoadingServiceDetails] = useState(false);
+  const [serviceDetails, setServiceDetails] = useState(null);
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [appSettings, setAppSettings] = useState({
@@ -177,10 +179,52 @@ function Admin() {
       const data = await parseJsonSafely(res);
       if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось перезапустить сервис');
       setUpdateMessage(data?.message || 'Команда перезапуска отправлена');
+      fetchUpdateStatus();
     } catch (error) {
       setUpdateError(error.message || 'Не удалось перезапустить сервис');
     } finally {
       setRestartingService(false);
+    }
+  };
+
+  const fetchServiceDetails = async () => {
+    setLoadingServiceDetails(true);
+    setUpdateError('');
+    try {
+      const res = await apiFetch('/api/updates/service-details');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось получить статус и логи сервиса');
+      setServiceDetails(data);
+      setUpdateMessage(`Получены статус и логи сервиса ${data?.serviceName || ''}`.trim());
+    } catch (error) {
+      setUpdateError(error.message || 'Не удалось получить статус и логи сервиса');
+    } finally {
+      setLoadingServiceDetails(false);
+    }
+  };
+
+  const saveUpdateSettings = async () => {
+    setUpdateError('');
+    setUpdateMessage('');
+    try {
+      const res = await apiFetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appSettings),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) throw new Error(data?.message || 'Не удалось сохранить настройки обновления');
+      setAppSettings({
+        publicBaseUrl: data?.publicBaseUrl || '',
+        telegramBotToken: data?.telegramBotToken || '',
+        selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
+        updateBranch: data?.updateBranch || 'main',
+        updateRepositoryUrl: data?.updateRepositoryUrl || '',
+      });
+      setUpdateMessage('Настройки обновления сохранены.');
+      fetchUpdateStatus();
+    } catch (error) {
+      setUpdateError(error.message || 'Не удалось сохранить настройки обновления');
     }
   };
 
@@ -538,7 +582,7 @@ function Admin() {
           <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} />
 
           <div className="card">
-            <p>Здесь можно настроить адрес проекта для QR-кодов, self-update и токен Telegram-бота.</p>
+            <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
 
             <div className="form-group">
@@ -565,52 +609,6 @@ function Admin() {
                 placeholder="Например: 123456789:AA..."
               />
             </div>
-
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <div className="form-group" style={{ minWidth: 220, flex: 1 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  Ветка обновлений
-                  <HelpTooltip text="Укажите git-ветку, из которой сервер будет забирать обновления при self-update. Для текущего репозитория GitHub используйте main." />
-                </label>
-                <input
-                  value={appSettings.updateBranch}
-                  onChange={e => setAppSettings({ ...appSettings, updateBranch: e.target.value })}
-                  placeholder="main"
-                />
-              </div>
-
-              <div className="form-group" style={{ minWidth: 280, flex: 1 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  Git репозиторий для обновлений
-                  <HelpTooltip text="Для текущего публичного GitHub укажите HTTPS URL, например https://github.com/igorkandrat13-tech/kaznadzei.git. Для приватного репозитория позже можно будет перейти на SSH URL с deploy key." />
-                </label>
-                <input
-                  value={appSettings.updateRepositoryUrl}
-                  onChange={e => setAppSettings({ ...appSettings, updateRepositoryUrl: e.target.value })}
-                  placeholder="Например: https://github.com/igorkandrat13-tech/kaznadzei.git"
-                />
-              </div>
-
-              <div className="form-group" style={{ minWidth: 220, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={appSettings.selfUpdateEnabled}
-                    onChange={e => setAppSettings({ ...appSettings, selfUpdateEnabled: e.target.checked })}
-                  />
-                  Разрешить self-update из интерфейса
-                  <HelpTooltip text="Включайте только если сервер уже настроен на обновление из git и имеет доступ к удаленному репозиторию. Для текущего публичного GitHub достаточно корректного origin и установленного Git." />
-                </label>
-              </div>
-            </div>
-
-            <SettingsHint>
-              Эти настройки сохраняются в данных приложения. Для текущего публичного GitHub обновления из интерфейса могут работать без <strong>ADMIN_TOKEN</strong>.
-            </SettingsHint>
-
-            <SettingsHint>
-              Сейчас у проекта публичный репозиторий, поэтому можно использовать HTTPS URL <strong>https://github.com/igorkandrat13-tech/kaznadzei.git</strong>. Для приватного GitHub позже настройте SSH deploy key и сохраните SSH URL репозитория.
-            </SettingsHint>
 
             <SettingsActions>
               <button className="btn btn-success" onClick={saveAppSettings}>Сохранить настройки</button>
@@ -853,9 +851,15 @@ function Admin() {
         checkingUpdates={checkingUpdates}
         installingUpdates={installingUpdates}
         restartingService={restartingService}
+        loadingServiceDetails={loadingServiceDetails}
+        serviceDetails={serviceDetails}
+        appSettings={appSettings}
+        onSettingsChange={setAppSettings}
         onRefresh={fetchUpdateStatus}
         onInstall={installUpdates}
         onRestartService={restartService}
+        onShowServiceDetails={fetchServiceDetails}
+        onSaveUpdateSettings={saveUpdateSettings}
       />
 
       <div className="card" style={{ marginBottom: 20 }}>
