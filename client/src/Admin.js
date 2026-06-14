@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import ConfirmDialog from './ConfirmDialog';
 import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 import {
   HelpTooltip,
@@ -49,6 +51,8 @@ function Admin() {
   const [employeeModalMode, setEmployeeModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
   const [colorModalMode, setColorModalMode] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const [editStep, setEditStep] = useState(null);
   const [editColor, setEditColor] = useState(null);
@@ -433,6 +437,63 @@ function Admin() {
     setNewColor({ name: '', hex: '#000000' });
   };
 
+  const requestDeleteAction = (action) => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    setConfirmAction(action);
+  };
+
+  const requestDeleteEmployee = (employee) => {
+    requestDeleteAction({
+      type: 'employee',
+      id: employee._id,
+      title: 'Удалить сотрудника?',
+      message: `Сотрудник "${employee.fullName}" будет удален. Если он уже привязан к Telegram, связь тоже придется настраивать заново.`,
+      confirmLabel: 'Удалить сотрудника',
+    });
+  };
+
+  const requestDeleteStep = (step) => {
+    requestDeleteAction({
+      type: 'step',
+      id: step._id,
+      title: 'Удалить этап?',
+      message: `Этап "${step.stepName}" будет удален из роли "${getRoleLabel(step.role)}". Проверьте, что он больше не нужен в рабочих сценариях.`,
+      confirmLabel: 'Удалить этап',
+    });
+  };
+
+  const requestDeleteColor = (color) => {
+    requestDeleteAction({
+      type: 'color',
+      id: color._id,
+      title: 'Удалить цвет?',
+      message: `Цвет "${color.name}" (${color.hex}) будет удален из справочника.`,
+      confirmLabel: 'Удалить цвет',
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmAction) return;
+    setConfirmLoading(true);
+    let success = false;
+
+    if (confirmAction.type === 'employee') {
+      success = await handleDeleteEmployee(confirmAction.id);
+    }
+    if (confirmAction.type === 'step') {
+      success = await handleDeleteStep(confirmAction.id);
+    }
+    if (confirmAction.type === 'color') {
+      success = await handleDeleteColor(confirmAction.id);
+    }
+
+    setConfirmLoading(false);
+    if (success) {
+      setConfirmAction(null);
+    }
+  };
+
   const handleAddEmployee = async () => {
     setSettingsError('');
     setSettingsSuccess('');
@@ -476,13 +537,14 @@ function Admin() {
     const res = await apiFetch(`/api/employees/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       setSettingsError(await getErrorMessage(res, 'Не удалось удалить сотрудника.'));
-      return;
+      return false;
     }
     if (editEmployee?._id === id) {
       resetEmployeeForm();
     }
     await fetchEmployees();
     setSettingsSuccess('Сотрудник удален.');
+    return true;
   };
 
   // Settings
@@ -525,9 +587,11 @@ function Admin() {
     const res = await apiFetch(`/api/processSteps/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       setSettingsError(await getErrorMessage(res, 'Не удалось удалить этап.'));
-      return;
+      return false;
     }
-    fetchSteps();
+    await fetchSteps();
+    setSettingsSuccess('Этап удален.');
+    return true;
   };
 
   const handleAddColor = async () => {
@@ -569,9 +633,11 @@ function Admin() {
     const res = await apiFetch(`/api/colors/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       setSettingsError(await getErrorMessage(res, 'Не удалось удалить цвет.'));
-      return;
+      return false;
     }
-    fetchColors();
+    await fetchColors();
+    setSettingsSuccess('Цвет удален.');
+    return true;
   };
 
   // ===== SETTINGS VIEW =====
@@ -642,6 +708,8 @@ function Admin() {
                 )}
               </div>
             )}
+
+            <AdminTokenControls />
           </div>
 
           <UpdatesOverview
@@ -694,7 +762,7 @@ function Admin() {
                       <td>{employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</td>
                       <td>
                         <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditEmployeeModal(employee)}>✎</button>
-                        <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteEmployee(employee._id)}>✕</button>
+                        <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteEmployee(employee)}>✕</button>
                       </td>
                     </tr>
                   ))}
@@ -724,7 +792,7 @@ function Admin() {
                   ) : null}
                   <div className="mobile-settings-card-actions">
                     <button className="btn btn-primary" onClick={() => openEditEmployeeModal(employee)}>Редактировать</button>
-                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteEmployee(employee._id)}>Удалить</button>
+                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteEmployee(employee)}>Удалить</button>
                   </div>
                 </div>
               ))}
@@ -757,7 +825,7 @@ function Admin() {
                       <td><span className="color-swatch-inline" style={{ background: c.hex }} />{c.hex}</td>
                       <td>
                         <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditColorModal(c)}>✎</button>
-                        <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteColor(c._id)}>✕</button>
+                        <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteColor(c)}>✕</button>
                       </td>
                     </tr>
                   ))}
@@ -777,7 +845,7 @@ function Admin() {
                   </div>
                   <div className="mobile-settings-card-actions">
                     <button className="btn btn-primary" onClick={() => openEditColorModal(color)}>Редактировать</button>
-                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteColor(color._id)}>Удалить</button>
+                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteColor(color)}>Удалить</button>
                   </div>
                 </div>
               ))}
@@ -808,7 +876,7 @@ function Admin() {
                     <td>{s.order}</td><td>{s.stepName}</td><td>{s.description}</td>
                     <td>
                       <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditStepModal(s)}>✎</button>
-                      <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteStep(s._id)}>✕</button>
+                      <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteStep(s)}>✕</button>
                     </td>
                   </tr>
                 ))}
@@ -831,7 +899,7 @@ function Admin() {
                 </div>
                 <div className="mobile-settings-card-actions">
                   <button className="btn btn-primary" onClick={() => openEditStepModal(step)}>Редактировать</button>
-                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteStep(step._id)}>Удалить</button>
+                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteStep(step)}>Удалить</button>
                 </div>
               </div>
             ))}
@@ -983,6 +1051,16 @@ function Admin() {
         onAdd={handleAddColor}
         onUpdate={handleUpdateColor}
         onClose={closeColorModal}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        confirmLabel={confirmAction?.confirmLabel}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => !confirmLoading && setConfirmAction(null)}
+        loading={confirmLoading}
       />
     </div>
   );

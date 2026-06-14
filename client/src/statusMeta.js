@@ -26,6 +26,10 @@ export function getStageStatusMeta(status) {
   return STAGE_STATUS_META[status] || STAGE_STATUS_META.pending;
 }
 
+export function getNextStageStatusMeta(status) {
+  return getStageStatusMeta(STAGE_STATUS_CYCLE[status] || 'pending');
+}
+
 export function getOrderStatusMeta(status) {
   return ORDER_STATUS_META[status] || ORDER_STATUS_META.pending;
 }

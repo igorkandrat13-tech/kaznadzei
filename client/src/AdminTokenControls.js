@@ -17,10 +17,10 @@ function AdminTokenControls() {
   };
 
   return (
-    <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: '#f7f9fc', border: '1px solid #e2e8f0' }}>
+    <div style={{ marginTop: 20, padding: 12, borderRadius: 10, background: '#f7f9fc', border: '1px solid #e2e8f0' }}>
       <div style={{ fontWeight: 600, marginBottom: 6 }}>Ключ администратора</div>
       <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
-        Зарезервирован для защищенных операций. Для текущего публичного GitHub обновления из интерфейса можно выполнять без него.
+        Хранится только в браузере и нужен лишь для защищенных операций. Для текущего публичного GitHub обновления из интерфейса можно выполнять без него.
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input

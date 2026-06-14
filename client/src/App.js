@@ -9,7 +9,6 @@ import Designer from './Designer';
 import Assembler from './Assembler';
 import Painter from './Painter';
 import Home from './Home';
-import AdminTokenControls from './AdminTokenControls';
 import TelegramScannerPage from './TelegramScannerPage';
 import { isTelegramWebApp as detectTelegramWebApp } from './telegramWebApp';
 import './App.css';
@@ -25,17 +24,16 @@ function App() {
         <Router>
             {!isTelegramWebApp && (
                 <div className="App-header">
-                    <h1>🏭 Мебельная фабрика Kaznadzei</h1>
+                    <div className="App-header-brand">
+                        <h1>🏭 Мебельная фабрика Kaznadzei</h1>
+                        <div className="App-header-subtitle">Быстрый доступ к ключевым разделам. Рабочие роли остаются на главной странице.</div>
+                    </div>
                     <nav>
                         <Link to="/">Главная</Link>
-                        <Link to="/admin">Админ</Link>
                         <Link to="/manager">Менеджер</Link>
-                        <Link to="/carpenter">Столяр</Link>
-                        <Link to="/designer">Дизайнер</Link>
-                        <Link to="/assembler">Комплектовщик</Link>
-                        <Link to="/painter">Маляр</Link>
+                        <Link to="/archive">Архив</Link>
+                        <Link to="/admin">Админ</Link>
                     </nav>
-                    <AdminTokenControls />
                 </div>
             )}
             <div className={isTelegramWebApp ? 'container container-telegram' : 'container'}>

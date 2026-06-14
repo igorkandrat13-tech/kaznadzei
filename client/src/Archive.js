@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getOrderStatusMeta, ORDER_STATUS_OPTIONS } from './statusMeta';
 
 function Archive() {
@@ -39,8 +40,14 @@ function Archive() {
     <div>
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="section-header">
-          <h2>📦 Архив заказов</h2>
-          <button className="btn" onClick={() => window.history.back()}>← Назад</button>
+          <div>
+            <h2>📦 Архив заказов</h2>
+            <p>Фильтрация и просмотр завершенных и текущих заказов без возврата через историю браузера.</p>
+          </div>
+          <div className="section-header-actions">
+            <Link to="/manager" className="btn" style={{ textDecoration: 'none' }}>К менеджеру</Link>
+            <Link to="/admin" className="btn" style={{ textDecoration: 'none' }}>К админке</Link>
+          </div>
         </div>
         <div className="responsive-filters">
           <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>

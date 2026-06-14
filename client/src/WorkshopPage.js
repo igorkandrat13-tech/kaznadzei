@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
-import { getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
+import { getNextStageStatusMeta, getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
+import ConfirmDialog from './ConfirmDialog';
 
 function WorkshopPage({
   role,
@@ -24,6 +25,8 @@ function WorkshopPage({
   const [commentError, setCommentError] = useState('');
   const [extraData, setExtraData] = useState(initialExtraData);
   const [error, setError] = useState('');
+  const [confirmDeleteComment, setConfirmDeleteComment] = useState(false);
+  const [deletingComment, setDeletingComment] = useState(false);
 
   const fetchOrders = async () => {
     const res = await apiFetch('/api/orders');
@@ -61,6 +64,7 @@ function WorkshopPage({
   const closeCommentModal = () => {
     setCommentModal(null);
     setCommentError('');
+    setConfirmDeleteComment(false);
   };
 
   const openCommentModal = (order, mode = 'replace') => {
@@ -114,6 +118,7 @@ function WorkshopPage({
 
   const deleteComment = async () => {
     if (!commentModal?.currentText) return;
+    setDeletingComment(true);
     setError('');
     setCommentError('');
     const res = await apiFetch(`/api/orders/${commentModal.orderId}/comments/${encodeURIComponent(role)}`, {
@@ -121,8 +126,11 @@ function WorkshopPage({
     });
     if (!res.ok) {
       setCommentError(await getErrorMessage(res, 'Не удалось удалить примечание.'));
+      setDeletingComment(false);
       return;
     }
+    setConfirmDeleteComment(false);
+    setDeletingComment(false);
     closeCommentModal();
     await fetchOrders();
   };
@@ -175,9 +183,15 @@ function WorkshopPage({
 
   const renderStageButton = (order, stage) => {
     const badge = getBadgeMeta(stage.status);
+    const nextStatusMeta = getNextStageStatusMeta(stage.status);
     return (
-      <button className={badge.className} onClick={() => updateStage(order._id, stage)} title="Сменить статус этапа">
-        {badge.label}
+      <button
+        className={`${badge.className} stage-status-button`}
+        onClick={() => updateStage(order._id, stage)}
+        aria-label={`Статус "${badge.label}". Нажатие переведет этап в "${nextStatusMeta.label}".`}
+      >
+        <span className="stage-status-button-label">{badge.label}</span>
+        <span className="stage-status-button-next">Нажмите: {nextStatusMeta.label}</span>
       </button>
     );
   };
@@ -369,7 +383,11 @@ function WorkshopPage({
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
               <div>
                 {commentModal.currentText && (
-                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={deleteComment}>
+                  <button
+                    className="btn"
+                    style={{ background: '#e74c3c', color: 'white' }}
+                    onClick={() => setConfirmDeleteComment(true)}
+                  >
                     Удалить
                   </button>
                 )}
@@ -388,6 +406,15 @@ function WorkshopPage({
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmDeleteComment}
+        title="Удалить комментарий?"
+        message={commentModal ? `Комментарий для заказа "${commentModal.orderName}" будет удален без возможности восстановления.` : ''}
+        confirmLabel="Удалить комментарий"
+        onConfirm={deleteComment}
+        onCancel={() => !deletingComment && setConfirmDeleteComment(false)}
+        loading={deletingComment}
+      />
     </div>
   );
 }

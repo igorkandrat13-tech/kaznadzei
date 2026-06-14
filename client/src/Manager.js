@@ -2,14 +2,49 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getOrderStatusMeta } from './statusMeta';
+import ConfirmDialog from './ConfirmDialog';
+
+const EMPTY_FORM = {
+  customer: '',
+  name: '',
+  quantity: 1,
+  material: '',
+  notes: '',
+  orderDate: '',
+  startDate: '',
+  endDate: '',
+};
+
+function validateManagerForm(form) {
+  const errors = {};
+
+  if (!form.name.trim()) {
+    errors.name = 'Укажите наименование изделия.';
+  }
+
+  if ((Number(form.quantity) || 0) < 1) {
+    errors.quantity = 'Количество должно быть не меньше 1.';
+  }
+
+  if (form.startDate && form.endDate && new Date(form.endDate) < new Date(form.startDate)) {
+    errors.endDate = 'Дата окончания не может быть раньше даты начала.';
+  }
+
+  return errors;
+}
 
 function Manager() {
   const [orders, setOrders] = useState([]);
-  const [form, setForm] = useState({ customer: '', name: '', quantity: 1, material: '', notes: '', orderDate: '', startDate: '', endDate: '' });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [qrOrderId, setQrOrderId] = useState(null);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deletingOrder, setDeletingOrder] = useState(false);
+
+  const formErrors = validateManagerForm(form);
+  const isFormValid = Object.keys(formErrors).length === 0;
 
   useEffect(() => { fetchOrders(); }, []);
 
@@ -29,6 +64,7 @@ function Manager() {
 
   const handleChange = (field) => (e) => {
     const val = e.target.value;
+    setError('');
     setForm(prev => {
       const next = { ...prev, [field]: val };
       return next;
@@ -36,7 +72,10 @@ function Manager() {
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) return;
+    if (!isFormValid) {
+      setError(formErrors.name || formErrors.quantity || formErrors.endDate || 'Проверьте заполнение формы.');
+      return;
+    }
     setError('');
     const body = { ...form, quantity: Number(form.quantity) || 1 };
     let res;
@@ -57,13 +96,14 @@ function Manager() {
       setError(await getErrorMessage(res, editingId ? 'Не удалось сохранить заказ.' : 'Не удалось создать заказ.'));
       return;
     }
-    setForm({ customer: '', name: '', quantity: 1, material: '', notes: '', orderDate: '', startDate: '', endDate: '' });
+    setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
     fetchOrders();
   };
 
   const handleEdit = (order) => {
+    setError('');
     setForm({
       customer: order.customer || '',
       name: order.name || '',
@@ -78,14 +118,31 @@ function Manager() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
+  const requestDelete = (order) => {
     setError('');
-    const res = await apiFetch('/api/orders/' + id, { method: 'DELETE' });
+    setConfirmDelete({
+      id: order._id,
+      name: order.name || 'Без названия',
+      customer: order.customer || 'Заказчик не указан',
+    });
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete?.id) return;
+    setDeletingOrder(true);
+    setError('');
+    const res = await apiFetch('/api/orders/' + confirmDelete.id, { method: 'DELETE' });
     if (!res.ok) {
       setError(await getErrorMessage(res, 'Не удалось удалить заказ.'));
+      setDeletingOrder(false);
       return;
     }
-    if (editingId === id) { setEditingId(null); setForm({ customer: '', name: '', quantity: 1, material: '', notes: '', orderDate: '', startDate: '', endDate: '' }); }
+    if (editingId === confirmDelete.id) {
+      setEditingId(null);
+      setForm(EMPTY_FORM);
+    }
+    setConfirmDelete(null);
+    setDeletingOrder(false);
     fetchOrders();
   };
 
@@ -103,13 +160,15 @@ function Manager() {
   };
 
   const handleCancel = () => {
-    setForm({ customer: '', name: '', quantity: 1, material: '', notes: '', orderDate: '', startDate: '', endDate: '' });
+    setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
+    setError('');
   };
 
   const openNewForm = () => {
-    setForm({ customer: '', name: '', quantity: 1, material: '', notes: '', orderDate: new Date().toISOString().split('T')[0], startDate: '', endDate: '' });
+    setError('');
+    setForm({ ...EMPTY_FORM, orderDate: new Date().toISOString().split('T')[0] });
     setEditingId(null);
     setShowForm(true);
   };
@@ -163,7 +222,7 @@ function Manager() {
                   <td>
                     <button className="btn btn-primary" style={{ marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => handleEdit(order)}>✎</button>
                     <button className="btn" style={{ background: '#2c3e50', color: 'white', marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => setQrOrderId(order._id)}>📱 QR</button>
-                    <button className="btn" style={{ background: '#e74c3c', color: 'white', padding: '4px 10px', fontSize: 12 }} onClick={() => handleDelete(order._id)}>✕</button>
+                    <button className="btn" style={{ background: '#e74c3c', color: 'white', padding: '4px 10px', fontSize: 12 }} onClick={() => requestDelete(order)}>✕</button>
                   </td>
                 </tr>
               ))}
@@ -222,7 +281,7 @@ function Manager() {
                 <div className="mobile-order-card-actions">
                   <button className="btn btn-primary" onClick={() => handleEdit(order)}>Редактировать</button>
                   <button className="btn" style={{ background: '#2c3e50', color: 'white' }} onClick={() => setQrOrderId(order._id)}>QR-код</button>
-                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDelete(order._id)}>Удалить</button>
+                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDelete(order)}>Удалить</button>
                 </div>
               </div>
             );
@@ -236,18 +295,41 @@ function Manager() {
             <div style={{ fontWeight: 600, marginBottom: 16, color: '#2c3e50', fontSize: 18 }}>{editingId ? '✏️ Редактировать заказ' : '➕ Новый заказ'}</div>
             <div className="responsive-form-grid">
               <div className="form-group" style={{ marginBottom: 0 }}><label>Заказчик</label><input value={form.customer} onChange={handleChange('customer')} placeholder="ФИО или название" /></div>
-              <div className="form-group" style={{ marginBottom: 0 }}><label>Наименование изделия *</label><input value={form.name} onChange={handleChange('name')} placeholder="Например: Шкаф Модерн" /></div>
-              <div className="form-group" style={{ marginBottom: 0 }}><label>Кол-во изделий</label><input type="number" min="1" value={form.quantity} onChange={handleChange('quantity')} /></div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Наименование изделия *</label>
+                <input
+                  value={form.name}
+                  onChange={handleChange('name')}
+                  placeholder="Например: Шкаф Модерн"
+                  className={formErrors.name ? 'input-invalid' : ''}
+                />
+                {formErrors.name ? <div className="field-error">{formErrors.name}</div> : null}
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Кол-во изделий</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.quantity}
+                  onChange={handleChange('quantity')}
+                  className={formErrors.quantity ? 'input-invalid' : ''}
+                />
+                {formErrors.quantity ? <div className="field-error">{formErrors.quantity}</div> : null}
+              </div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>Материал</label><input value={form.material} onChange={handleChange('material')} placeholder="Например: ЛДСП, массив дуба" /></div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>Дата заказа</label><input type="date" value={form.orderDate} disabled style={{ background: '#f5f5f5' }} /></div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>Начало изготовления</label><input type="date" value={form.startDate} onChange={handleChange('startDate')} /></div>
-              <div className="form-group" style={{ marginBottom: 0 }}><label>Окончание изготовления</label><input type="date" value={form.endDate} onChange={handleChange('endDate')} /></div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Окончание изготовления</label>
+                <input type="date" value={form.endDate} onChange={handleChange('endDate')} className={formErrors.endDate ? 'input-invalid' : ''} />
+                {formErrors.endDate ? <div className="field-error">{formErrors.endDate}</div> : null}
+              </div>
               <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}><label>Примечания</label><textarea value={form.notes} onChange={handleChange('notes')} placeholder="Дополнительная информация" rows={2} /></div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Время изготовления: <strong>{calcDuration(form.startDate, form.endDate) || '—'}</strong></label>
               </div>
             </div>
-            <button className="btn btn-success" style={{ marginRight: 8 }} onClick={handleSubmit}>{editingId ? 'Сохранить' : 'Создать заказ'}</button>
+            <button className="btn btn-success" style={{ marginRight: 8 }} onClick={handleSubmit} disabled={!isFormValid}>{editingId ? 'Сохранить' : 'Создать заказ'}</button>
             <button className="btn" onClick={handleCancel}>Отмена</button>
           </div>
         </div>
@@ -262,6 +344,15 @@ function Manager() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Удалить заказ?"
+        message={confirmDelete ? `Заказ "${confirmDelete.name}" будет удален без возможности восстановления.\nЗаказчик: ${confirmDelete.customer}` : ''}
+        confirmLabel="Удалить заказ"
+        onConfirm={handleDelete}
+        onCancel={() => !deletingOrder && setConfirmDelete(null)}
+        loading={deletingOrder}
+      />
     </div>
   );
 }
