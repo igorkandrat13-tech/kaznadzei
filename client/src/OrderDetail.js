@@ -34,19 +34,30 @@ function OrderDetail() {
   const telegramMode = isTelegramWebApp();
   const telegramInitData = getTelegramInitData();
 
-  useEffect(() => {
-    setLoading(true);
-    apiFetch(`/api/orders/${id}`)
-      .then(async res => {
-        if (!res.ok) {
-          throw new Error('Order not found');
-        }
-        return parseJsonSafely(res);
-      })
-      .then(data => setOrder(data || null))
-      .catch(() => setOrder(null))
-      .finally(() => setLoading(false));
+  const fetchOrder = useCallback(async ({ showLoader = false } = {}) => {
+    if (showLoader) {
+      setLoading(true);
+    }
+
+    try {
+      const res = await apiFetch(`/api/orders/${id}`);
+      if (!res.ok) {
+        throw new Error('Order not found');
+      }
+      const data = await parseJsonSafely(res);
+      setOrder(data || null);
+    } catch {
+      setOrder(null);
+    } finally {
+      if (showLoader) {
+        setLoading(false);
+      }
+    }
   }, [id]);
+
+  useEffect(() => {
+    fetchOrder({ showLoader: true });
+  }, [fetchOrder]);
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
@@ -99,6 +110,24 @@ function OrderDetail() {
       webApp.expand();
     }
   }, [telegramMode]);
+
+  useEffect(() => {
+    if (!telegramMode) return undefined;
+
+    const refreshOrder = () => {
+      fetchOrder();
+    };
+
+    const intervalId = window.setInterval(refreshOrder, 10000);
+    window.addEventListener('focus', refreshOrder);
+    document.addEventListener('visibilitychange', refreshOrder);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshOrder);
+      document.removeEventListener('visibilitychange', refreshOrder);
+    };
+  }, [fetchOrder, telegramMode]);
 
   const calcDuration = (start, end) => {
     if (!start || !end) return '—';
@@ -173,9 +202,7 @@ function OrderDetail() {
       return;
     }
 
-    const updatedOrderRes = await apiFetch(`/api/orders/${id}`);
-    const updatedOrder = await parseJsonSafely(updatedOrderRes);
-    setOrder(updatedOrder || null);
+    await fetchOrder();
     setCommentDraft('');
     setSavingComment(false);
   };
@@ -240,6 +267,9 @@ function OrderDetail() {
             <div className="detail-label">Примечания менеджера</div>
             <div className="detail-value detail-value-multiline">
               {managerNotes || 'Менеджер пока не добавил примечание.'}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>
+              Данные заказа обновляются автоматически.
             </div>
           </div>
         </>

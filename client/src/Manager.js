@@ -33,6 +33,12 @@ function validateManagerForm(form) {
   return errors;
 }
 
+function getManagerCommentPreview(notes) {
+  const text = String(notes || '').trim();
+  if (!text) return '—';
+  return text.length > 90 ? `${text.slice(0, 90)}...` : text;
+}
+
 function Manager() {
   const [orders, setOrders] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -200,6 +206,7 @@ function Manager() {
                 <th>Окончание</th>
                 <th>Время</th>
                 <th>Статус</th>
+                <th>Комментарий менеджера</th>
                 <th>Действия</th>
               </tr>
             </thead>
@@ -219,6 +226,9 @@ function Manager() {
                       {getOrderStatusMeta(order.overallStatus).label}
                     </span>
                   </td>
+                  <td style={{ maxWidth: 220, whiteSpace: 'normal', lineHeight: 1.45 }}>
+                    {getManagerCommentPreview(order.notes)}
+                  </td>
                   <td>
                     <button className="btn btn-primary" style={{ marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => handleEdit(order)}>✎</button>
                     <button className="btn" style={{ background: '#2c3e50', color: 'white', marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => setQrOrderId(order._id)}>📱 QR</button>
@@ -226,7 +236,7 @@ function Manager() {
                   </td>
                 </tr>
               ))}
-              {orders.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}
+              {orders.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
@@ -273,7 +283,7 @@ function Manager() {
 
                 {order.notes ? (
                   <div className="mobile-order-card-note">
-                    <div className="mobile-order-card-label">Примечания</div>
+                    <div className="mobile-order-card-label">Комментарий менеджера</div>
                     <div className="mobile-order-card-value">{order.notes}</div>
                   </div>
                 ) : null}
@@ -324,7 +334,7 @@ function Manager() {
                 <input type="date" value={form.endDate} onChange={handleChange('endDate')} className={formErrors.endDate ? 'input-invalid' : ''} />
                 {formErrors.endDate ? <div className="field-error">{formErrors.endDate}</div> : null}
               </div>
-              <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}><label>Примечания</label><textarea value={form.notes} onChange={handleChange('notes')} placeholder="Дополнительная информация" rows={2} /></div>
+              <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}><label>Комментарий менеджера</label><textarea value={form.notes} onChange={handleChange('notes')} placeholder="Комментарий для сотрудника в Telegram и для внутреннего просмотра" rows={3} /></div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Время изготовления: <strong>{calcDuration(form.startDate, form.endDate) || '—'}</strong></label>
               </div>
