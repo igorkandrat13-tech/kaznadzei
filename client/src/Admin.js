@@ -416,7 +416,7 @@ function Admin() {
             </div>
 
             <div style={{ color: '#666', fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
-              Для установки обновлений по-прежнему требуется корректный <strong>ADMIN_TOKEN</strong>. Здесь настраиваются рабочие параметры интерфейса, а не содержимое `.env`.
+              Эти настройки сохраняются в данных приложения. <strong>ADMIN_TOKEN</strong> по-прежнему используется только для проверки и установки обновлений.
             </div>
 
             <button className="btn btn-success" onClick={saveAppSettings}>Сохранить настройки</button>

@@ -1,11 +1,11 @@
 const express = require('express');
 const EmployeeStore = require('../stores/employeeStore');
-const { requireAdminAccess } = require('../middleware/security');
+const { requireWriteAccess } = require('../middleware/security');
 const { sanitizeEmployeeInput } = require('../utils/validators');
 
 const router = express.Router();
 
-router.get('/employees', requireAdminAccess(), (req, res) => {
+router.get('/employees', requireWriteAccess, (req, res) => {
   const employees = EmployeeStore.findAll().sort((a, b) => {
     const roleDiff = String(a.role || '').localeCompare(String(b.role || ''), 'ru');
     if (roleDiff !== 0) return roleDiff;
@@ -14,7 +14,7 @@ router.get('/employees', requireAdminAccess(), (req, res) => {
   res.json(employees);
 });
 
-router.post('/employees', requireAdminAccess(), (req, res) => {
+router.post('/employees', requireWriteAccess, (req, res) => {
   try {
     const employee = EmployeeStore.create(sanitizeEmployeeInput(req.body || {}));
     res.status(201).json(employee);
@@ -23,7 +23,7 @@ router.post('/employees', requireAdminAccess(), (req, res) => {
   }
 });
 
-router.put('/employees/:id', requireAdminAccess(), (req, res) => {
+router.put('/employees/:id', requireWriteAccess, (req, res) => {
   try {
     const employee = EmployeeStore.update(req.params.id, sanitizeEmployeeInput(req.body || {}, { partial: true }));
     if (!employee) {
@@ -35,7 +35,7 @@ router.put('/employees/:id', requireAdminAccess(), (req, res) => {
   }
 });
 
-router.delete('/employees/:id', requireAdminAccess(), (req, res) => {
+router.delete('/employees/:id', requireWriteAccess, (req, res) => {
   const deleted = EmployeeStore.delete(req.params.id);
   if (!deleted) {
     return res.status(404).json({ message: 'Сотрудник не найден.' });

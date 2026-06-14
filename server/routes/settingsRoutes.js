@@ -1,15 +1,15 @@
 const express = require('express');
 const SettingsStore = require('../stores/settingsStore');
-const { requireAdminAccess } = require('../middleware/security');
+const { requireWriteAccess } = require('../middleware/security');
 const { sanitizeSettingsInput } = require('../utils/validators');
 
 const router = express.Router();
 
-router.get('/settings', requireAdminAccess(), (req, res) => {
+router.get('/settings', requireWriteAccess, (req, res) => {
   res.json(SettingsStore.get());
 });
 
-router.put('/settings', requireAdminAccess(), (req, res) => {
+router.put('/settings', requireWriteAccess, (req, res) => {
   try {
     const updates = sanitizeSettingsInput(req.body || {});
     const settings = SettingsStore.update(updates);
