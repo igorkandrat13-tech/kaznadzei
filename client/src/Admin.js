@@ -49,10 +49,13 @@ function Admin() {
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [appSettings, setAppSettings] = useState({
     publicBaseUrl: '',
-    telegramBotUrl: '',
+    telegramBotToken: '',
     selfUpdateEnabled: false,
     updateBranch: 'main',
   });
+  const [telegramCheckResult, setTelegramCheckResult] = useState(null);
+  const [checkingTelegramBot, setCheckingTelegramBot] = useState(false);
+  const [settingTelegramWebhook, setSettingTelegramWebhook] = useState(false);
   const [employees, setEmployees] = useState([]);
 
   const [editStep, setEditStep] = useState(null);
@@ -114,7 +117,7 @@ function Admin() {
     }
     setAppSettings({
       publicBaseUrl: data?.publicBaseUrl || '',
-      telegramBotUrl: data?.telegramBotUrl || '',
+      telegramBotToken: data?.telegramBotToken || '',
       selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
       updateBranch: data?.updateBranch || 'main',
     });
@@ -205,12 +208,51 @@ function Admin() {
     }
     setAppSettings({
       publicBaseUrl: data?.publicBaseUrl || '',
-      telegramBotUrl: data?.telegramBotUrl || '',
+      telegramBotToken: data?.telegramBotToken || '',
       selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
       updateBranch: data?.updateBranch || 'main',
     });
     setSettingsSuccess('Настройки сохранены.');
     fetchUpdateStatus();
+  };
+
+  const checkTelegramBot = async () => {
+    setCheckingTelegramBot(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/check', { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось проверить Telegram-бота.');
+      }
+      setTelegramCheckResult(data);
+      setSettingsSuccess(`Бот ${data?.bot?.firstName || ''} @${data?.bot?.username || ''} успешно проверен.`.trim());
+    } catch (error) {
+      setTelegramCheckResult(null);
+      setSettingsError(error.message || 'Не удалось проверить Telegram-бота.');
+    } finally {
+      setCheckingTelegramBot(false);
+    }
+  };
+
+  const setupTelegramWebhook = async () => {
+    setSettingTelegramWebhook(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/webhook/setup', { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось установить webhook Telegram-бота.');
+      }
+      setTelegramCheckResult(data);
+      setSettingsSuccess(data?.message || 'Webhook Telegram-бота установлен.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось установить webhook Telegram-бота.');
+    } finally {
+      setSettingTelegramWebhook(false);
+    }
   };
 
   const resetEmployeeForm = () => {
@@ -371,7 +413,7 @@ function Admin() {
           </div>
 
           <div className="card">
-            <p>Здесь можно настроить адрес проекта для QR-кодов, self-update и ссылку на Telegram-бота.</p>
+            <p>Здесь можно настроить адрес проекта для QR-кодов, self-update и токен Telegram-бота.</p>
             {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
             {settingsSuccess && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#eef7ee', color: '#1f6b35' }}>{settingsSuccess}</div>}
 
@@ -385,11 +427,12 @@ function Admin() {
             </div>
 
             <div className="form-group">
-              <label>Адрес Telegram-бота</label>
+              <label>Токен Telegram-бота</label>
               <input
-                value={appSettings.telegramBotUrl}
-                onChange={e => setAppSettings({ ...appSettings, telegramBotUrl: e.target.value })}
-                placeholder="Например: https://t.me/your_bot"
+                type="password"
+                value={appSettings.telegramBotToken}
+                onChange={e => setAppSettings({ ...appSettings, telegramBotToken: e.target.value })}
+                placeholder="Например: 123456789:AA..."
               />
             </div>
 
@@ -419,7 +462,38 @@ function Admin() {
               Эти настройки сохраняются в данных приложения. <strong>ADMIN_TOKEN</strong> по-прежнему используется только для проверки и установки обновлений.
             </div>
 
-            <button className="btn btn-success" onClick={saveAppSettings}>Сохранить настройки</button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-success" onClick={saveAppSettings}>Сохранить настройки</button>
+              <button className="btn btn-primary" onClick={checkTelegramBot} disabled={checkingTelegramBot}>
+                {checkingTelegramBot ? 'Проверка...' : 'Проверить бота'}
+              </button>
+              <button className="btn" onClick={setupTelegramWebhook} disabled={settingTelegramWebhook}>
+                {settingTelegramWebhook ? 'Установка...' : 'Установить webhook'}
+              </button>
+            </div>
+
+            {telegramCheckResult && (
+              <div style={{ marginTop: 16, padding: 16, borderRadius: 10, background: '#f7f8fa' }}>
+                <div style={{ fontWeight: 700, marginBottom: 10, color: '#2c3e50' }}>Telegram-бот подключен</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                  <div><strong>Бот:</strong> {telegramCheckResult?.bot?.firstName || '—'}</div>
+                  <div><strong>Username:</strong> {telegramCheckResult?.bot?.username ? `@${telegramCheckResult.bot.username}` : '—'}</div>
+                  <div><strong>Webhook:</strong> {telegramCheckResult?.webhook?.url || 'не настроен'}</div>
+                  <div><strong>Ожидает обновлений:</strong> {telegramCheckResult?.webhook?.pendingUpdateCount ?? 0}</div>
+                </div>
+                <div style={{ marginTop: 10, fontSize: 13, color: '#555', lineHeight: 1.5 }}>
+                  Для авторизации сотрудников webhook должен указывать на адрес:
+                  <div style={{ marginTop: 6, padding: '8px 10px', background: 'white', borderRadius: 8, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                    {telegramCheckResult.recommendedWebhookUrl}
+                  </div>
+                </div>
+                {telegramCheckResult?.webhook?.lastErrorMessage && (
+                  <div style={{ marginTop: 10, color: '#b42318', fontSize: 13 }}>
+                    Последняя ошибка webhook: {telegramCheckResult.webhook.lastErrorMessage}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -454,23 +528,39 @@ function Admin() {
             {settingsError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{settingsError}</div>}
             {settingsSuccess && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#eef7ee', color: '#1f6b35' }}>{settingsSuccess}</div>}
 
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button className="btn" onClick={fetchEmployees}>Обновить список</button>
+            </div>
+
             <table>
-              <thead><tr><th>ФИО</th><th>Роль</th><th>Telegram</th><th>Пароль</th><th>PIN</th><th>Действия</th></tr></thead>
+              <thead><tr><th>ФИО</th><th>Роль</th><th>Статус TG</th><th>Пользователь TG</th><th>Авторизован</th><th>Пароль</th><th>PIN</th><th>Действия</th></tr></thead>
               <tbody>
                 {employees.map(employee => (
                   <tr key={employee._id}>
                     <td>{employee.fullName}</td>
                     <td>{getRoleLabel(employee.role)}</td>
-                    <td>{employee.telegramUsername || '—'}</td>
+                    <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
+                    <td>
+                      {employee.telegramUserId ? (
+                        <div>
+                          <div>{employee.telegramUsername || 'без username'}</div>
+                          <div style={{ fontSize: 12, color: '#777' }}>
+                            {employee.telegramFirstName || ''} {employee.telegramLastName || ''}
+                            {employee.telegramFirstName || employee.telegramLastName ? ' ' : ''}ID: {employee.telegramUserId}
+                          </div>
+                        </div>
+                      ) : '—'}
+                    </td>
+                    <td>{employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</td>
                     <td>{employee.password || '—'}</td>
-                    <td>{employee.pinCode || '—'}</td>
+                    <td>{employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</td>
                     <td>
                       <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => setEditEmployee({ ...employee })}>✎</button>
                       <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteEmployee(employee._id)}>✕</button>
                     </td>
                   </tr>
                 ))}
-                {employees.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#999' }}>Сотрудники пока не добавлены</td></tr>}
+                {employees.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#999' }}>Сотрудники пока не добавлены</td></tr>}
               </tbody>
             </table>
           </div>

@@ -189,8 +189,8 @@ function sanitizeSettingsInput(payload, options = {}) {
   if (!partial || payload.publicBaseUrl !== undefined) {
     data.publicBaseUrl = normalizeUrl(payload.publicBaseUrl, 'publicBaseUrl', { required: !partial, allowEmpty: false });
   }
-  if (!partial || payload.telegramBotUrl !== undefined) {
-    data.telegramBotUrl = normalizeUrl(payload.telegramBotUrl, 'telegramBotUrl', { allowEmpty: true });
+  if (!partial || payload.telegramBotToken !== undefined) {
+    data.telegramBotToken = normalizeString(payload.telegramBotToken, 'telegramBotToken', { maxLength: 200 });
   }
   if (!partial || payload.selfUpdateEnabled !== undefined) {
     data.selfUpdateEnabled = normalizeBoolean(payload.selfUpdateEnabled, 'selfUpdateEnabled');
