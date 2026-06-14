@@ -10,6 +10,7 @@ import Assembler from './Assembler';
 import Painter from './Painter';
 import Home from './Home';
 import AdminTokenControls from './AdminTokenControls';
+import TelegramScannerPage from './TelegramScannerPage';
 import './App.css';
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
                     <Route path='/designer' element={<Designer />} />
                     <Route path='/assembler' element={<Assembler />} />
                     <Route path='/painter' element={<Painter />} />
+                    <Route path='/telegram-app' element={<TelegramScannerPage />} />
                     <Route path='/' element={<Home />} />
                 </Routes>
             </div>

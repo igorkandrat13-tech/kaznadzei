@@ -15,6 +15,17 @@ function getRecommendedWebhookUrl() {
   return new URL('/api/telegram/webhook', baseUrl).toString();
 }
 
+function getTelegramWebAppUrl() {
+  const baseUrl = String(SettingsStore.get().publicBaseUrl || '').trim();
+  if (!baseUrl) return '';
+
+  try {
+    return new URL('/telegram-app', baseUrl).toString();
+  } catch (error) {
+    return '';
+  }
+}
+
 function getEmployeeRoleLabel(role) {
   const labels = {
     carpenter: 'Столяр',
@@ -23,6 +34,30 @@ function getEmployeeRoleLabel(role) {
     designer: 'Дизайнер',
   };
   return labels[role] || role;
+}
+
+function getAuthorizedReplyMarkup() {
+  const webAppUrl = getTelegramWebAppUrl();
+  if (!webAppUrl) return null;
+
+  return {
+    keyboard: [[{
+      text: 'Сканировать QR-код',
+      web_app: { url: webAppUrl },
+    }]],
+    resize_keyboard: true,
+    persistent: true,
+  };
+}
+
+async function sendAuthorizedMessage(token, chatId, text) {
+  const replyMarkup = getAuthorizedReplyMarkup();
+  await sendMessage(
+    token,
+    chatId,
+    text,
+    replyMarkup ? { reply_markup: replyMarkup } : {}
+  );
 }
 
 async function processTelegramMessage(token, message) {
@@ -46,7 +81,11 @@ async function processTelegramMessage(token, message) {
 
   if (text.startsWith('/start')) {
     if (existingEmployee) {
-      await sendMessage(token, chatId, `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.`);
+      await sendAuthorizedMessage(
+        token,
+        chatId,
+        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку "Сканировать QR-код", чтобы открыть камеру и перейти к заказу.`
+      );
       return;
     }
     await sendMessage(token, chatId, 'Здравствуйте! Для первичной авторизации отправьте PIN-код, который выдал администратор.');
@@ -54,7 +93,11 @@ async function processTelegramMessage(token, message) {
   }
 
   if (existingEmployee) {
-    await sendMessage(token, chatId, `Вы уже авторизованы как ${existingEmployee.fullName}. Если нужен новый вход, попросите администратора сгенерировать новый PIN.`);
+    await sendAuthorizedMessage(
+      token,
+      chatId,
+      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку "Сканировать QR-код" для открытия камеры в Telegram Web App.`
+    );
     return;
   }
 
@@ -77,10 +120,10 @@ async function processTelegramMessage(token, message) {
     lastName: from.last_name || '',
   });
 
-  await sendMessage(
+  await sendAuthorizedMessage(
     token,
     chatId,
-    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}`
+    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь можно открыть сканер QR-кодов кнопкой ниже.`
   );
 }
 
@@ -112,6 +155,7 @@ router.post('/telegram/check', requireWriteAccess, async (req, res) => {
         lastErrorDate: webhook.last_error_date || null,
       } : null,
       recommendedWebhookUrl: getRecommendedWebhookUrl(),
+      telegramWebAppUrl: getTelegramWebAppUrl(),
     });
   } catch (error) {
     res.status(400).json({ message: error.message || 'Не удалось проверить Telegram-бота.' });
@@ -147,6 +191,7 @@ router.post('/telegram/webhook/setup', requireWriteAccess, async (req, res) => {
         lastErrorDate: webhook.last_error_date || null,
       },
       recommendedWebhookUrl: webhookUrl,
+      telegramWebAppUrl: getTelegramWebAppUrl(),
     });
   } catch (error) {
     res.status(400).json({ message: error.message || 'Не удалось установить webhook Telegram-бота.' });

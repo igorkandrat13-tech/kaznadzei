@@ -52,10 +52,11 @@ async function setWebhook(token, url) {
   });
 }
 
-async function sendMessage(token, chatId, text) {
+async function sendMessage(token, chatId, text, extra = {}) {
   return telegramRequest(token, 'sendMessage', {
     chat_id: chatId,
     text,
+    ...extra,
   });
 }
 
