@@ -1,10 +1,28 @@
+const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
+
 export function getTelegramWebApp() {
   return window.Telegram?.WebApp || null;
 }
 
+export function markTelegramWebAppSession() {
+  try {
+    window.sessionStorage?.setItem(TELEGRAM_SESSION_STORAGE_KEY, '1');
+  } catch (error) {
+    // Ignore storage issues in restricted webviews.
+  }
+}
+
+export function hasTelegramWebAppSession() {
+  try {
+    return window.sessionStorage?.getItem(TELEGRAM_SESSION_STORAGE_KEY) === '1';
+  } catch (error) {
+    return false;
+  }
+}
+
 export function isTelegramWebApp() {
   const webApp = getTelegramWebApp();
-  return Boolean(webApp && (webApp.initData || webApp.initDataUnsafe?.user));
+  return Boolean(webApp && (webApp.initData || webApp.initDataUnsafe?.user || hasTelegramWebAppSession()));
 }
 
 export function getTelegramInitData() {

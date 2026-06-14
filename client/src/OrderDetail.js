@@ -7,6 +7,7 @@ import {
   getTelegramInitData,
   getTelegramWebApp,
   isTelegramWebApp,
+  markTelegramWebAppSession,
   openTelegramQrScanner,
 } from './telegramWebApp';
 
@@ -78,6 +79,8 @@ function OrderDetail() {
 
     const webApp = getTelegramWebApp();
     if (!webApp) return;
+
+    markTelegramWebAppSession();
 
     if (typeof webApp.ready === 'function') {
       webApp.ready();

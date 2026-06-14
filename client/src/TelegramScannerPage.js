@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { closeTelegramWebApp, getTelegramWebApp, openTelegramQrScanner } from './telegramWebApp';
+import { closeTelegramWebApp, getTelegramWebApp, markTelegramWebAppSession, openTelegramQrScanner } from './telegramWebApp';
 
 function TelegramScannerPage() {
   const navigate = useNavigate();
@@ -19,6 +19,8 @@ function TelegramScannerPage() {
   useEffect(() => {
     const webApp = getTelegramWebApp();
     if (!webApp) return;
+
+    markTelegramWebAppSession();
 
     if (typeof webApp.ready === 'function') {
       webApp.ready();

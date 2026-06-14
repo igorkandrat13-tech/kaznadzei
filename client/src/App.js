@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
 import Admin from './Admin';
 import Manager from './Manager';
 import Archive from './Archive';
@@ -10,19 +10,27 @@ import Assembler from './Assembler';
 import Painter from './Painter';
 import Home from './Home';
 import TelegramScannerPage from './TelegramScannerPage';
-import { isTelegramWebApp as detectTelegramWebApp } from './telegramWebApp';
+import {
+    hasTelegramWebAppSession,
+    isTelegramWebApp as detectTelegramWebApp,
+    markTelegramWebAppSession,
+} from './telegramWebApp';
 import './App.css';
 
-function App() {
-    const [isTelegramWebApp, setIsTelegramWebApp] = useState(false);
+function AppLayout() {
+    const location = useLocation();
+    const routeTelegramMode = location.pathname === '/telegram-app';
+    const telegramMode = detectTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
 
     useEffect(() => {
-        setIsTelegramWebApp(detectTelegramWebApp());
-    }, []);
+        if (detectTelegramWebApp()) {
+            markTelegramWebAppSession();
+        }
+    }, [location.pathname]);
 
     return (
-        <Router>
-            {!isTelegramWebApp && (
+        <>
+            {!telegramMode && (
                 <div className="App-header">
                     <div className="App-header-brand">
                         <h1>🏭 Мебельная фабрика Kaznadzei</h1>
@@ -36,7 +44,7 @@ function App() {
                     </nav>
                 </div>
             )}
-            <div className={isTelegramWebApp ? 'container container-telegram' : 'container'}>
+            <div className={telegramMode ? 'container container-telegram' : 'container'}>
                 <Routes>
                     <Route path='/admin' element={<Admin />} />
                     <Route path='/manager' element={<Manager />} />
@@ -50,6 +58,14 @@ function App() {
                     <Route path='/' element={<Home />} />
                 </Routes>
             </div>
+        </>
+    );
+}
+
+function App() {
+    return (
+        <Router>
+            <AppLayout />
         </Router>
     );
 }

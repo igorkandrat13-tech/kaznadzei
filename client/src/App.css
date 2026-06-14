@@ -1034,12 +1034,34 @@ table tr:hover td {
     display: block;
   }
   .telegram-order-actions,
-  .telegram-order-grid,
   .mobile-order-card-grid,
   .mobile-order-card-actions,
   .mobile-settings-card-actions,
   .responsive-form-grid {
     grid-template-columns: 1fr;
+  }
+  .telegram-order-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .telegram-order-card {
+    padding: 14px;
+  }
+  .telegram-order-summary {
+    margin-bottom: 10px;
+    padding: 12px;
+  }
+  .detail-block {
+    padding: 11px;
+    border-radius: 12px;
+  }
+  .detail-label {
+    font-size: 11px;
+    margin-bottom: 5px;
+  }
+  .detail-value {
+    font-size: 14px;
+    line-height: 1.35;
   }
   .telegram-comment-actions .btn,
   .telegram-order-actions .btn,
@@ -1080,6 +1102,11 @@ table tr:hover td {
 }
 
 @media (max-width: 480px) {
+  .container-telegram {
+    margin: 8px auto 12px;
+    padding: 0 8px;
+  }
+
   .card {
     padding: 14px;
     border-radius: 10px;
@@ -1136,18 +1163,35 @@ table tr:hover td {
   }
 
   .telegram-order-card {
-    padding: 14px;
+    padding: 10px;
+    border-radius: 14px;
   }
 
-  .detail-block,
+  .telegram-order-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .telegram-order-subtitle {
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+
   .telegram-order-summary,
+  .detail-block,
   .telegram-comment-meta,
   .telegram-comment-placeholder,
   .telegram-comment-current {
-    padding: 12px;
+    padding: 10px;
+  }
+
+  .detail-label {
+    font-size: 10px;
+    margin-bottom: 4px;
   }
 
   .detail-value {
-    font-size: 15px;
+    font-size: 13px;
+    line-height: 1.3;
   }
 }
