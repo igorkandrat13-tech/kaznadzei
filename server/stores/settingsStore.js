@@ -6,6 +6,7 @@ function getDefaultSettings() {
     telegramBotToken: '',
     selfUpdateEnabled: String(process.env.ENABLE_SELF_UPDATE || '').toLowerCase() === 'true',
     updateBranch: (process.env.UPDATE_BRANCH || '').trim() || 'main',
+    updateRepositoryUrl: (process.env.UPDATE_REPOSITORY_URL || process.env.GIT_REMOTE_URL || '').trim(),
   };
 }
 
@@ -16,6 +17,7 @@ function normalizeSettings(source = {}) {
     telegramBotToken: source.telegramBotToken ?? defaults.telegramBotToken,
     selfUpdateEnabled: source.selfUpdateEnabled ?? defaults.selfUpdateEnabled,
     updateBranch: source.updateBranch ?? defaults.updateBranch,
+    updateRepositoryUrl: source.updateRepositoryUrl ?? defaults.updateRepositoryUrl,
   };
 }
 

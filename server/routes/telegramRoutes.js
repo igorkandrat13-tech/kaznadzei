@@ -3,6 +3,7 @@ const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireWriteAccess } = require('../middleware/security');
 const { getBotInfo, getWebhookInfo, setWebhook, sendMessage } = require('../services/telegramService');
+const { getTelegramWebAppUser } = require('../services/telegramWebAppAuth');
 
 const router = express.Router();
 
@@ -195,6 +196,39 @@ router.post('/telegram/webhook/setup', requireWriteAccess, async (req, res) => {
     });
   } catch (error) {
     res.status(400).json({ message: error.message || 'Не удалось установить webhook Telegram-бота.' });
+  }
+});
+
+router.post('/telegram/webapp/session', async (req, res) => {
+  const token = getConfiguredBotToken();
+  if (!token) {
+    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
+  }
+
+  try {
+    const telegramUser = getTelegramWebAppUser(token, req.body?.initData);
+    const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+    if (!employee) {
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+
+    EmployeeStore.touchTelegramUser(employee._id, {
+      telegramUsername: telegramUser.username ? `@${String(telegramUser.username).replace(/^@+/, '')}` : employee.telegramUsername || '',
+      telegramFirstName: telegramUser.first_name || employee.telegramFirstName || '',
+      telegramLastName: telegramUser.last_name || employee.telegramLastName || '',
+    });
+
+    res.json({
+      ok: true,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+        telegramUsername: employee.telegramUsername || '',
+      },
+    });
+  } catch (error) {
+    res.status(401).json({ message: error.message || 'Не удалось авторизовать Telegram Web App.' });
   }
 });
 

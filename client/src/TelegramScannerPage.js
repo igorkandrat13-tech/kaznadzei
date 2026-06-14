@@ -1,21 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-function getOrderPathFromQr(rawValue) {
-  const value = String(rawValue || '').trim();
-  if (!value) return '';
-
-  const directMatch = value.match(/\/order\/([^/?#]+)/i);
-  if (directMatch?.[1]) {
-    return `/order/${decodeURIComponent(directMatch[1])}`;
-  }
-
-  if (/^[a-zA-Z0-9_-]{6,}$/.test(value)) {
-    return `/order/${value}`;
-  }
-
-  return '';
-}
+import { closeTelegramWebApp, getTelegramWebApp, openTelegramQrScanner } from './telegramWebApp';
 
 function TelegramScannerPage() {
   const navigate = useNavigate();
@@ -24,37 +9,15 @@ function TelegramScannerPage() {
   const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
 
   const openScanner = useCallback(() => {
-    const webApp = window.Telegram?.WebApp;
-    if (!webApp || typeof webApp.showScanQrPopup !== 'function') {
-      setError('Сканирование доступно только внутри Telegram Web App на поддерживаемом устройстве.');
-      return;
-    }
-
-    setError('');
-    setStatus('Наведите камеру на QR-код заказа.');
-
-    webApp.showScanQrPopup(
-      { text: 'Наведите камеру на QR-код заказа' },
-      (scannedText) => {
-        const orderPath = getOrderPathFromQr(scannedText);
-        if (!orderPath) {
-          setError('QR-код не распознан. Используйте QR-код заказа, сгенерированный в системе.');
-          return false;
-        }
-
-        if (typeof webApp.closeScanQrPopup === 'function') {
-          webApp.closeScanQrPopup();
-        }
-
-        setStatus('Открываю страницу заказа...');
-        navigate(orderPath);
-        return true;
-      }
-    );
+    openTelegramQrScanner({
+      onSuccess: (orderPath) => navigate(orderPath),
+      onError: setError,
+      onStatusChange: setStatus,
+    });
   }, [navigate]);
 
   useEffect(() => {
-    const webApp = window.Telegram?.WebApp;
+    const webApp = getTelegramWebApp();
     if (!webApp) return;
 
     if (typeof webApp.ready === 'function') {
@@ -67,7 +30,7 @@ function TelegramScannerPage() {
   }, []);
 
   useEffect(() => {
-    const webApp = window.Telegram?.WebApp;
+    const webApp = getTelegramWebApp();
     if (!webApp || autoOpenedRef.current) return;
 
     autoOpenedRef.current = true;
@@ -95,8 +58,8 @@ function TelegramScannerPage() {
         <button className="btn btn-primary" onClick={openScanner}>
           Открыть камеру
         </button>
-        <button className="btn" onClick={() => navigate('/')}>
-          На главную
+        <button className="btn" onClick={() => closeTelegramWebApp() || navigate('/')}>
+          Закрыть
         </button>
       </div>
     </div>

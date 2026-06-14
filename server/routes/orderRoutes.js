@@ -2,8 +2,10 @@ const express = require('express');
 const QRCode = require('qrcode');
 const OrderStore = require('../stores/orderStore');
 const SettingsStore = require('../stores/settingsStore');
+const EmployeeStore = require('../stores/employeeStore');
 const { requireWriteAccess } = require('../middleware/security');
 const { sanitizeCommentInput, sanitizeOrderInput } = require('../utils/validators');
+const { getTelegramWebAppUser } = require('../services/telegramWebAppAuth');
 const router = express.Router();
 
 router.get('/orders', (req, res) => {
@@ -33,6 +35,41 @@ router.post('/orders/:id/comments', requireWriteAccess, (req, res) => {
     res.status(201).json(comments);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+router.post('/orders/:id/telegram-comment', (req, res) => {
+  try {
+    const token = String(SettingsStore.get().telegramBotToken || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+    }
+
+    const telegramUser = getTelegramWebAppUser(token, req.body?.initData);
+    const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+    if (!employee) {
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+
+    const { role, text } = sanitizeCommentInput({
+      role: employee.role,
+      text: req.body?.text,
+    });
+
+    const comments = OrderStore.addComment(req.params.id, role, text);
+    if (!comments) return res.status(404).json({ message: 'Order not found' });
+
+    res.status(201).json({
+      ok: true,
+      comments,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+      },
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось сохранить комментарий из Telegram.' });
   }
 });
 

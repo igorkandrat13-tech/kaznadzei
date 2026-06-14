@@ -37,6 +37,7 @@ function Admin() {
     telegramBotToken: '',
     selfUpdateEnabled: false,
     updateBranch: 'main',
+    updateRepositoryUrl: '',
   });
   const [telegramCheckResult, setTelegramCheckResult] = useState(null);
   const [checkingTelegramBot, setCheckingTelegramBot] = useState(false);
@@ -122,6 +123,7 @@ function Admin() {
       telegramBotToken: data?.telegramBotToken || '',
       selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
       updateBranch: data?.updateBranch || 'main',
+      updateRepositoryUrl: data?.updateRepositoryUrl || '',
     });
   };
 
@@ -180,6 +182,53 @@ function Admin() {
     return text.length > 80 ? `${text.slice(0, 80)}...` : text;
   };
 
+  const renderOrderComments = (order) => {
+    const comments = order.comments || [];
+    if (comments.length === 0) {
+      return <span style={{ color: '#ccc' }}>—</span>;
+    }
+
+    return (
+      <div className="comments-cell">
+        <button
+          className="btn"
+          style={{ alignSelf: 'flex-start', padding: '6px 10px', fontSize: 12 }}
+          onClick={() => openCommentsModal(order)}
+        >
+          Открыть все ({comments.length})
+        </button>
+        <div className="comments-chip-list">
+          {comments.map((comment, index) => (
+            <span
+              key={`${comment.role}-${index}`}
+              onClick={() => openCommentsModal(order, comment.role)}
+              className="comments-chip"
+              title={comment.text}
+            >
+              📝 {getRoleLabel(comment.role)}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const getEmployeeTelegramSummary = (employee) => {
+    if (!employee.telegramUserId) {
+      return '—';
+    }
+
+    return (
+      <div>
+        <div>{employee.telegramUsername || 'без username'}</div>
+        <div style={{ fontSize: 12, color: '#777' }}>
+          {employee.telegramFirstName || ''} {employee.telegramLastName || ''}
+          {employee.telegramFirstName || employee.telegramLastName ? ' ' : ''}ID: {employee.telegramUserId}
+        </div>
+      </div>
+    );
+  };
+
   const openCommentsModal = (order, initialRole) => {
     const comments = Array.isArray(order.comments) ? order.comments : [];
     if (comments.length === 0) return;
@@ -213,6 +262,7 @@ function Admin() {
       telegramBotToken: data?.telegramBotToken || '',
       selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
       updateBranch: data?.updateBranch || 'main',
+      updateRepositoryUrl: data?.updateRepositoryUrl || '',
     });
     setSettingsSuccess('Настройки сохранены.');
     fetchUpdateStatus();
@@ -504,12 +554,24 @@ function Admin() {
               <div className="form-group" style={{ minWidth: 220, flex: 1 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   Ветка обновлений
-                  <HelpTooltip text="Укажите git-ветку, из которой сервер будет забирать обновления при self-update. Обычно это main." />
+                  <HelpTooltip text="Укажите git-ветку, из которой сервер будет забирать обновления при self-update. Для текущего репозитория GitHub используйте main." />
                 </label>
                 <input
                   value={appSettings.updateBranch}
                   onChange={e => setAppSettings({ ...appSettings, updateBranch: e.target.value })}
                   placeholder="main"
+                />
+              </div>
+
+              <div className="form-group" style={{ minWidth: 280, flex: 1 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Git репозиторий для обновлений
+                  <HelpTooltip text="Для текущего публичного GitHub укажите HTTPS URL, например https://github.com/igorkandrat13-tech/kaznadzei.git. Для приватного репозитория позже можно будет перейти на SSH URL с deploy key." />
+                </label>
+                <input
+                  value={appSettings.updateRepositoryUrl}
+                  onChange={e => setAppSettings({ ...appSettings, updateRepositoryUrl: e.target.value })}
+                  placeholder="Например: https://github.com/igorkandrat13-tech/kaznadzei.git"
                 />
               </div>
 
@@ -521,13 +583,17 @@ function Admin() {
                     onChange={e => setAppSettings({ ...appSettings, selfUpdateEnabled: e.target.checked })}
                   />
                   Разрешить self-update из интерфейса
-                  <HelpTooltip text="Включайте только если сервер уже настроен на обновление из git и сохранен ADMIN_TOKEN. Иначе кнопка установки обновлений будет недоступна или завершится ошибкой." />
+                  <HelpTooltip text="Включайте только если сервер уже настроен на обновление из git и имеет доступ к удаленному репозиторию. Для текущего публичного GitHub достаточно корректного origin и установленного Git." />
                 </label>
               </div>
             </div>
 
             <SettingsHint>
-              Эти настройки сохраняются в данных приложения. <strong>ADMIN_TOKEN</strong> по-прежнему используется только для проверки и установки обновлений.
+              Эти настройки сохраняются в данных приложения. Для текущего публичного GitHub обновления из интерфейса могут работать без <strong>ADMIN_TOKEN</strong>.
+            </SettingsHint>
+
+            <SettingsHint>
+              Сейчас у проекта публичный репозиторий, поэтому можно использовать HTTPS URL <strong>https://github.com/igorkandrat13-tech/kaznadzei.git</strong>. Для приватного GitHub позже настройте SSH deploy key и сохраните SSH URL репозитория.
             </SettingsHint>
 
             <SettingsActions>
@@ -581,37 +647,57 @@ function Admin() {
               <button className="btn" onClick={fetchEmployees}>Обновить список</button>
             </SettingsActions>
 
-            <table>
-              <thead><tr><th>ФИО</th><th>Роль</th><th>Статус TG</th><th>Пользователь TG</th><th>Авторизован</th><th>Пароль</th><th>PIN</th><th>Действия</th></tr></thead>
-              <tbody>
-                {employees.map(employee => (
-                  <tr key={employee._id}>
-                    <td>{employee.fullName}</td>
-                    <td>{getRoleLabel(employee.role)}</td>
-                    <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
-                    <td>
-                      {employee.telegramUserId ? (
-                        <div>
-                          <div>{employee.telegramUsername || 'без username'}</div>
-                          <div style={{ fontSize: 12, color: '#777' }}>
-                            {employee.telegramFirstName || ''} {employee.telegramLastName || ''}
-                            {employee.telegramFirstName || employee.telegramLastName ? ' ' : ''}ID: {employee.telegramUserId}
-                          </div>
-                        </div>
-                      ) : '—'}
-                    </td>
-                    <td>{employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</td>
-                    <td>{employee.password || '—'}</td>
-                    <td>{employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</td>
-                    <td>
-                      <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditEmployeeModal(employee)}>✎</button>
-                      <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteEmployee(employee._id)}>✕</button>
-                    </td>
-                  </tr>
-                ))}
-                {employees.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#999' }}>Сотрудники пока не добавлены</td></tr>}
-              </tbody>
-            </table>
+            <div className="table-scroll desktop-table-only">
+              <table>
+                <thead><tr><th>ФИО</th><th>Роль</th><th>Статус TG</th><th>Пользователь TG</th><th>Авторизован</th><th>Пароль</th><th>PIN</th><th>Действия</th></tr></thead>
+                <tbody>
+                  {employees.map(employee => (
+                    <tr key={employee._id}>
+                      <td>{employee.fullName}</td>
+                      <td>{getRoleLabel(employee.role)}</td>
+                      <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
+                      <td>{getEmployeeTelegramSummary(employee)}</td>
+                      <td>{employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</td>
+                      <td>{employee.password || '—'}</td>
+                      <td>{employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</td>
+                      <td>
+                        <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditEmployeeModal(employee)}>✎</button>
+                        <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteEmployee(employee._id)}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {employees.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#999' }}>Сотрудники пока не добавлены</td></tr>}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mobile-card-list">
+              {employees.map(employee => (
+                <div key={employee._id} className="mobile-settings-card">
+                  <div className="mobile-settings-card-header">
+                    <div className="mobile-order-card-title">{employee.fullName}</div>
+                    <div className="mobile-order-card-subtitle">{getRoleLabel(employee.role)}</div>
+                  </div>
+                  <div className="mobile-settings-card-meta">
+                    <div><strong>Статус TG:</strong> {employee.telegramUserId ? 'Привязан' : 'Не привязан'}</div>
+                    <div><strong>Пользователь TG:</strong> {employee.telegramUserId ? employee.telegramUsername || 'без username' : '—'}</div>
+                    <div><strong>Авторизован:</strong> {employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</div>
+                    <div><strong>Пароль:</strong> {employee.password || '—'}</div>
+                    <div><strong>PIN:</strong> {employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</div>
+                  </div>
+                  {employee.telegramUserId ? (
+                    <div className="mobile-settings-card-note">
+                      {getEmployeeTelegramSummary(employee)}
+                    </div>
+                  ) : null}
+                  <div className="mobile-settings-card-actions">
+                    <button className="btn btn-primary" onClick={() => openEditEmployeeModal(employee)}>Редактировать</button>
+                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteEmployee(employee._id)}>Удалить</button>
+                  </div>
+                </div>
+              ))}
+              {employees.length === 0 && <div className="mobile-empty-state">Сотрудники пока не добавлены</div>}
+            </div>
           </div>
         </div>
       );
@@ -629,21 +715,42 @@ function Admin() {
               <button className="btn btn-success" onClick={openCreateColorModal}>Добавить цвет</button>
               <button className="btn" onClick={fetchColors}>Обновить список</button>
             </SettingsActions>
-            <table>
-              <thead><tr><th>Название</th><th>Цвет</th><th>Действия</th></tr></thead>
-              <tbody>
-                {colors.map(c => (
-                  <tr key={c._id}>
-                    <td>{c.name}</td>
-                    <td><span style={{ display: 'inline-block', width: 24, height: 24, background: c.hex, borderRadius: 4, border: '1px solid #ccc', verticalAlign: 'middle', marginRight: 8 }} />{c.hex}</td>
-                    <td>
-                      <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditColorModal(c)}>✎</button>
-                      <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteColor(c._id)}>✕</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-scroll desktop-table-only">
+              <table>
+                <thead><tr><th>Название</th><th>Цвет</th><th>Действия</th></tr></thead>
+                <tbody>
+                  {colors.map(c => (
+                    <tr key={c._id}>
+                      <td>{c.name}</td>
+                      <td><span className="color-swatch-inline" style={{ background: c.hex }} />{c.hex}</td>
+                      <td>
+                        <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditColorModal(c)}>✎</button>
+                        <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteColor(c._id)}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mobile-card-list">
+              {colors.map(color => (
+                <div key={color._id} className="mobile-settings-card">
+                  <div className="mobile-settings-card-header">
+                    <div className="mobile-order-card-title">{color.name}</div>
+                    <div className="mobile-settings-color-row">
+                      <span className="color-swatch-inline" style={{ background: color.hex }} />
+                      {color.hex}
+                    </div>
+                  </div>
+                  <div className="mobile-settings-card-actions">
+                    <button className="btn btn-primary" onClick={() => openEditColorModal(color)}>Редактировать</button>
+                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteColor(color._id)}>Удалить</button>
+                  </div>
+                </div>
+              ))}
+              {colors.length === 0 && <div className="mobile-empty-state">Цвета пока не добавлены</div>}
+            </div>
           </div>
         </div>
       );
@@ -660,21 +767,44 @@ function Admin() {
             <button className="btn btn-success" onClick={openCreateStepModal}>Добавить этап</button>
             <button className="btn" onClick={fetchSteps}>Обновить список</button>
           </SettingsActions>
-          <table>
-            <thead><tr><th>№</th><th>Название этапа</th><th>Описание</th><th>Действия</th></tr></thead>
-            <tbody>
-              {filteredSteps.map(s => (
-                <tr key={s._id}>
-                  <td>{s.order}</td><td>{s.stepName}</td><td>{s.description}</td>
-                  <td>
-                    <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditStepModal(s)}>✎</button>
-                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteStep(s._id)}>✕</button>
-                  </td>
-                </tr>
-              ))}
-              {filteredSteps.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: '#999' }}>Нет этапов</td></tr>}
-            </tbody>
-          </table>
+          <div className="table-scroll desktop-table-only">
+            <table>
+              <thead><tr><th>№</th><th>Название этапа</th><th>Описание</th><th>Действия</th></tr></thead>
+              <tbody>
+                {filteredSteps.map(s => (
+                  <tr key={s._id}>
+                    <td>{s.order}</td><td>{s.stepName}</td><td>{s.description}</td>
+                    <td>
+                      <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditStepModal(s)}>✎</button>
+                      <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteStep(s._id)}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredSteps.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: '#999' }}>Нет этапов</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mobile-card-list">
+            {filteredSteps.map(step => (
+              <div key={step._id} className="mobile-settings-card">
+                <div className="mobile-settings-card-header">
+                  <div>
+                    <div className="mobile-order-card-title">{step.stepName}</div>
+                    <div className="mobile-order-card-subtitle">Порядок: {step.order}</div>
+                  </div>
+                </div>
+                <div className="mobile-settings-card-note">
+                  {step.description || 'Без описания'}
+                </div>
+                <div className="mobile-settings-card-actions">
+                  <button className="btn btn-primary" onClick={() => openEditStepModal(step)}>Редактировать</button>
+                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDeleteStep(step._id)}>Удалить</button>
+                </div>
+              </div>
+            ))}
+            {filteredSteps.length === 0 && <div className="mobile-empty-state">Нет этапов</div>}
+          </div>
         </div>
       </div>
     );
@@ -715,69 +845,83 @@ function Admin() {
           title="📊 Сводка по всем заказам"
           description="Прогресс каждого изделия по всем этапам производства"
         />
-        <table className="orders-table">
-          <thead>
-            <tr>
-              <th>Изделие</th>
-              {sortedSteps.map(s => <th key={s._id} title={s.description}>{s.stepName}</th>)}
-              <th>Общий статус</th>
-              <th>Примечания</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map(order => {
-              const comments = order.comments || [];
-              const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
-              return (
-                <tr key={order._id}>
-                  <td><strong>{order.name}</strong></td>
-                  {sortedSteps.map(s => {
-                    const st = findStage(order, s._id);
-                    const stageMeta = st ? getStageStatusMeta(st.status) : null;
+        <div className="table-scroll desktop-table-only">
+          <table className="orders-table">
+            <thead>
+              <tr>
+                <th>Изделие</th>
+                {sortedSteps.map(s => <th key={s._id} title={s.description}>{s.stepName}</th>)}
+                <th>Общий статус</th>
+                <th>Примечания</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map(order => {
+                const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
+                return (
+                  <tr key={order._id}>
+                    <td><strong>{order.name}</strong></td>
+                    {sortedSteps.map(s => {
+                      const st = findStage(order, s._id);
+                      const stageMeta = st ? getStageStatusMeta(st.status) : null;
+                      return (
+                        <td key={s._id} style={{ textAlign: 'center' }}>
+                          {stageMeta ? (
+                            <span className={stageMeta.className}>{stageMeta.label}</span>
+                          ) : '—'}
+                        </td>
+                      );
+                    })}
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={overallStatusMeta.className}>
+                        {overallStatusMeta.label}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 12, maxWidth: 200, wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                      {renderOrderComments(order)}
+                    </td>
+                  </tr>
+                );
+              })}
+              {orders.length === 0 && <tr><td colSpan={sortedSteps.length + 3} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mobile-card-list">
+          {orders.map(order => {
+            const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
+            return (
+              <div key={order._id} className="mobile-order-card">
+                <div className="mobile-order-card-header">
+                  <div className="mobile-order-card-title">{order.name}</div>
+                  <span className={overallStatusMeta.className}>{overallStatusMeta.label}</span>
+                </div>
+
+                <div className="mobile-order-stage-list">
+                  {sortedSteps.map(step => {
+                    const stage = findStage(order, step._id);
+                    const stageMeta = stage ? getStageStatusMeta(stage.status) : null;
                     return (
-                      <td key={s._id} style={{ textAlign: 'center' }}>
-                        {stageMeta ? (
-                          <span className={stageMeta.className}>{stageMeta.label}</span>
-                        ) : '—'}
-                      </td>
-                    );
-                  })}
-                  <td style={{ textAlign: 'center' }}>
-                    <span className={overallStatusMeta.className}>
-                      {overallStatusMeta.label}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 12, maxWidth: 200, wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                    {comments.length === 0 ? <span style={{ color: '#ccc' }}>—</span> : (
-                      <div className="comments-cell">
-                        <button
-                          className="btn"
-                          style={{ alignSelf: 'flex-start', padding: '6px 10px', fontSize: 12 }}
-                          onClick={() => openCommentsModal(order)}
-                        >
-                          Открыть все ({comments.length})
-                        </button>
-                        <div className="comments-chip-list">
-                          {comments.map((c, i) => (
-                            <span
-                              key={i}
-                              onClick={() => openCommentsModal(order, c.role)}
-                              className="comments-chip"
-                              title={c.text}
-                            >
-                              📝 {getRoleLabel(c.role)}
-                            </span>
-                          ))}
+                      <div key={step._id} className="mobile-order-stage-row">
+                        <div className="mobile-order-card-label">{step.stepName}</div>
+                        <div className="mobile-order-stage-action">
+                          {stageMeta ? <span className={stageMeta.className}>{stageMeta.label}</span> : '—'}
                         </div>
                       </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {orders.length === 0 && <tr><td colSpan={sortedSteps.length + 3} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}
-          </tbody>
-        </table>
+                    );
+                  })}
+                </div>
+
+                <div className="mobile-order-card-note">
+                  <div className="mobile-order-card-label">Примечания</div>
+                  <div>{renderOrderComments(order)}</div>
+                </div>
+              </div>
+            );
+          })}
+          {orders.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
+        </div>
       </div>
 
       <CommentsModal

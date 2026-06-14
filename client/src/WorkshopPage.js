@@ -187,6 +187,11 @@ function WorkshopPage({
     return <span className="badge badge-active">{done}/{steps.length}</span>;
   };
 
+  const getSummaryCell = (order) => {
+    if (renderSummaryCell === null) return null;
+    return renderSummaryCell ? renderSummaryCell(order, context) : defaultSummaryCell(order, context);
+  };
+
   const context = {
     orders,
     steps,
@@ -209,38 +214,86 @@ function WorkshopPage({
       {steps.length === 0 ? (
         renderNoSteps ? renderNoSteps(context) : <p style={{ color: '#999' }}>{emptyStepsText}</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Изделие</th>
-              {steps.map(step => <th key={step._id}>{step.stepName}</th>)}
-              {extraColumns.map(column => <th key={column.key}>{column.header}</th>)}
-              {renderSummaryCell !== null && <th>{summaryColumnTitle}</th>}
-              <th>Примечание</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map(order => (
-              <tr key={order._id}>
-                <td><strong>{order.name}</strong></td>
-                {steps.map(step => {
-                  const stage = findStage(order, step);
-                  return <td key={step._id} style={{ textAlign: 'center' }}>{stage ? renderStageButton(order, stage) : '—'}</td>;
-                })}
-                {extraColumns.map(column => (
-                  <td key={column.key} style={column.cellStyle}>
-                    {column.render(order, context)}
-                  </td>
+        <>
+          <div className="table-scroll desktop-table-only">
+            <table>
+              <thead>
+                <tr>
+                  <th>Изделие</th>
+                  {steps.map(step => <th key={step._id}>{step.stepName}</th>)}
+                  {extraColumns.map(column => <th key={column.key}>{column.header}</th>)}
+                  {renderSummaryCell !== null && <th>{summaryColumnTitle}</th>}
+                  <th>Примечание</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map(order => (
+                  <tr key={order._id}>
+                    <td><strong>{order.name}</strong></td>
+                    {steps.map(step => {
+                      const stage = findStage(order, step);
+                      return <td key={step._id} style={{ textAlign: 'center' }}>{stage ? renderStageButton(order, stage) : '—'}</td>;
+                    })}
+                    {extraColumns.map(column => (
+                      <td key={column.key} style={column.cellStyle}>
+                        {column.render(order, context)}
+                      </td>
+                    ))}
+                    {renderSummaryCell !== null && (
+                      <td>{getSummaryCell(order)}</td>
+                    )}
+                    <td style={{ minWidth: 160, maxWidth: 200 }}>{renderCommentCell(order)}</td>
+                  </tr>
                 ))}
-                {renderSummaryCell !== null && (
-                  <td>{renderSummaryCell ? renderSummaryCell(order, context) : defaultSummaryCell(order, context)}</td>
+                {orders.length === 0 && <tr><td colSpan={steps.length + extraColumns.length + (renderSummaryCell !== null ? 3 : 2)} style={{ textAlign: 'center', color: '#999' }}>{emptyOrdersText}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mobile-card-list">
+            {orders.map(order => (
+              <div key={order._id} className="mobile-order-card">
+                <div className="mobile-order-card-header">
+                  <div className="mobile-order-card-title">{order.name}</div>
+                  {renderSummaryCell !== null && (
+                    <div className="mobile-order-card-summary">{getSummaryCell(order)}</div>
+                  )}
+                </div>
+
+                <div className="mobile-order-stage-list">
+                  {steps.map(step => {
+                    const stage = findStage(order, step);
+                    return (
+                      <div key={step._id} className="mobile-order-stage-row">
+                        <div className="mobile-order-card-label">{step.stepName}</div>
+                        <div className="mobile-order-stage-action">
+                          {stage ? renderStageButton(order, stage) : '—'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {extraColumns.length > 0 && (
+                  <div className="mobile-order-card-grid">
+                    {extraColumns.map(column => (
+                      <div key={column.key} className="mobile-order-card-field">
+                        <div className="mobile-order-card-label">{column.header}</div>
+                        <div className="mobile-order-card-value">{column.render(order, context)}</div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-                <td style={{ minWidth: 160, maxWidth: 200 }}>{renderCommentCell(order)}</td>
-              </tr>
+
+                <div className="mobile-order-card-note">
+                  <div className="mobile-order-card-label">Примечание</div>
+                  <div>{renderCommentCell(order)}</div>
+                </div>
+              </div>
             ))}
-            {orders.length === 0 && <tr><td colSpan={steps.length + extraColumns.length + (renderSummaryCell !== null ? 3 : 2)} style={{ textAlign: 'center', color: '#999' }}>{emptyOrdersText}</td></tr>}
-          </tbody>
-        </table>
+            {orders.length === 0 && <div className="mobile-empty-state">{emptyOrdersText}</div>}
+          </div>
+        </>
       )}
 
       {popupText && (

@@ -1,25 +1,92 @@
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getOrderStatusMeta } from './statusMeta';
+import {
+  closeTelegramWebApp,
+  getTelegramInitData,
+  getTelegramWebApp,
+  isTelegramWebApp,
+  openTelegramQrScanner,
+} from './telegramWebApp';
+
+const ROLE_LABELS = {
+  carpenter: 'Столяр',
+  assembler: 'Комплектовщик',
+  painter: 'Маляр',
+  designer: 'Дизайнер',
+};
 
 function OrderDetail() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [telegramEmployee, setTelegramEmployee] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [sessionError, setSessionError] = useState('');
+  const [telegramActionError, setTelegramActionError] = useState('');
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentError, setCommentError] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
+
+  const telegramMode = useMemo(() => isTelegramWebApp(), []);
+  const telegramInitData = useMemo(() => getTelegramInitData(), []);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/orders/${id}`)
+    apiFetch(`/api/orders/${id}`)
       .then(async res => {
         if (!res.ok) {
           throw new Error('Order not found');
         }
-        return res.json();
+        return parseJsonSafely(res);
       })
       .then(data => setOrder(data || null))
       .catch(() => setOrder(null))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!telegramMode || !telegramInitData) return;
+
+    setSessionLoading(true);
+    setSessionError('');
+
+    apiFetch('/api/telegram/webapp/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: telegramInitData }),
+    })
+      .then(async res => {
+        const data = await parseJsonSafely(res);
+        if (!res.ok) {
+          throw new Error(data?.message || 'Не удалось определить сотрудника Telegram.');
+        }
+        return data;
+      })
+      .then(data => setTelegramEmployee(data?.employee || null))
+      .catch(error => {
+        setTelegramEmployee(null);
+        setSessionError(error.message || 'Не удалось определить сотрудника Telegram.');
+      })
+      .finally(() => setSessionLoading(false));
+  }, [telegramInitData, telegramMode]);
+
+  useEffect(() => {
+    if (!telegramMode) return;
+
+    const webApp = getTelegramWebApp();
+    if (!webApp) return;
+
+    if (typeof webApp.ready === 'function') {
+      webApp.ready();
+    }
+
+    if (typeof webApp.expand === 'function') {
+      webApp.expand();
+    }
+  }, [telegramMode]);
 
   if (loading) {
     return (
@@ -47,24 +114,201 @@ function OrderDetail() {
   };
 
   const statusMeta = getOrderStatusMeta(order.overallStatus);
+  const currentRoleComment = telegramEmployee?.role
+    ? (order.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
+    : '';
+  const detailItems = [
+    { label: 'Заказчик', value: order.customer || '—' },
+    { label: 'Наименование', value: order.name || '—' },
+    { label: 'Кол-во изделий', value: order.quantity || 1 },
+    { label: 'Материал', value: order.material || '—' },
+    { label: 'Дата заказа', value: order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—' },
+    { label: 'Начало изготовления', value: order.startDate ? new Date(order.startDate).toLocaleDateString() : '—' },
+    { label: 'Окончание изготовления', value: order.endDate ? new Date(order.endDate).toLocaleDateString() : '—' },
+    { label: 'Время изготовления', value: calcDuration(order.startDate, order.endDate) },
+  ];
+
+  useEffect(() => {
+    if (!telegramMode || !telegramEmployee) return;
+    setCommentDraft(currentRoleComment);
+  }, [currentRoleComment, telegramEmployee, telegramMode]);
+
+  const saveTelegramComment = async () => {
+    if (!telegramMode || !telegramEmployee) return;
+
+    const text = commentDraft.trim();
+    if (!text) {
+      setCommentError('Введите текст комментария.');
+      return;
+    }
+
+    setSavingComment(true);
+    setCommentError('');
+
+    const res = await apiFetch(`/api/orders/${id}/telegram-comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        initData: telegramInitData,
+        text,
+      }),
+    });
+
+    if (!res.ok) {
+      setCommentError(await getErrorMessage(res, 'Не удалось сохранить комментарий.'));
+      setSavingComment(false);
+      return;
+    }
+
+    const updatedOrderRes = await apiFetch(`/api/orders/${id}`);
+    const updatedOrder = await parseJsonSafely(updatedOrderRes);
+    setOrder(updatedOrder || null);
+    setCommentDraft('');
+    setSavingComment(false);
+  };
+
+  const handleScanAnotherQr = () => {
+    setTelegramActionError('');
+    openTelegramQrScanner({
+      onSuccess: (orderPath) => navigate(orderPath),
+      onError: setTelegramActionError,
+    });
+  };
+
+  const handleCloseTelegramApp = () => {
+    if (!closeTelegramWebApp()) {
+      navigate('/telegram-app');
+    }
+  };
 
   return (
-    <div className="card">
-      <h2>📋 Заказ: {order.name}</h2>
-      <table>
-        <tbody>
-          <tr><td><strong>Заказчик</strong></td><td>{order.customer || '—'}</td></tr>
-          <tr><td><strong>Наименование</strong></td><td>{order.name}</td></tr>
-          <tr><td><strong>Кол-во изделий</strong></td><td>{order.quantity || 1}</td></tr>
-          <tr><td><strong>Материал</strong></td><td>{order.material || '—'}</td></tr>
-          <tr><td><strong>Примечания</strong></td><td>{order.notes || '—'}</td></tr>
-          <tr><td><strong>Дата заказа</strong></td><td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td></tr>
-          <tr><td><strong>Начало изготовления</strong></td><td>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td></tr>
-          <tr><td><strong>Окончание изготовления</strong></td><td>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td></tr>
-          <tr><td><strong>Время изготовления</strong></td><td>{calcDuration(order.startDate, order.endDate)}</td></tr>
-          <tr><td><strong>Статус</strong></td><td><span className={statusMeta.className}>{statusMeta.label}</span></td></tr>
-        </tbody>
-      </table>
+    <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
+      <h2>{telegramMode ? `Заказ: ${order.name}` : `📋 Заказ: ${order.name}`}</h2>
+      {telegramMode && (
+        <p className="telegram-order-subtitle">Просмотр заказа в Telegram Web App.</p>
+      )}
+
+      {telegramMode && (
+        <div className="telegram-order-actions">
+          <button className="btn btn-primary" onClick={handleScanAnotherQr}>
+            Сканировать другой QR-код
+          </button>
+          <button className="btn" onClick={handleCloseTelegramApp}>
+            Закрыть и вернуться в бот
+          </button>
+        </div>
+      )}
+
+      {telegramActionError && (
+        <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+          {telegramActionError}
+        </div>
+      )}
+
+      {telegramMode ? (
+        <>
+          <div className="telegram-order-summary">
+            <div className="telegram-order-summary-label">Статус заказа</div>
+            <div className="telegram-order-summary-value">
+              <span className={statusMeta.className}>{statusMeta.label}</span>
+            </div>
+          </div>
+
+          <div className="telegram-order-grid">
+            {detailItems.map((item) => (
+              <div key={item.label} className="detail-block">
+                <div className="detail-label">{item.label}</div>
+                <div className="detail-value">{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="detail-block detail-block-wide">
+            <div className="detail-label">Примечания менеджера</div>
+            <div className="detail-value detail-value-multiline">{order.notes || '—'}</div>
+          </div>
+        </>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <tbody>
+              <tr><td><strong>Заказчик</strong></td><td>{order.customer || '—'}</td></tr>
+              <tr><td><strong>Наименование</strong></td><td>{order.name}</td></tr>
+              <tr><td><strong>Кол-во изделий</strong></td><td>{order.quantity || 1}</td></tr>
+              <tr><td><strong>Материал</strong></td><td>{order.material || '—'}</td></tr>
+              <tr><td><strong>Примечания</strong></td><td>{order.notes || '—'}</td></tr>
+              <tr><td><strong>Дата заказа</strong></td><td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td></tr>
+              <tr><td><strong>Начало изготовления</strong></td><td>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td></tr>
+              <tr><td><strong>Окончание изготовления</strong></td><td>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td></tr>
+              <tr><td><strong>Время изготовления</strong></td><td>{calcDuration(order.startDate, order.endDate)}</td></tr>
+              <tr><td><strong>Статус</strong></td><td><span className={statusMeta.className}>{statusMeta.label}</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {telegramMode && (
+        <div className="telegram-comment-section">
+          <div className="telegram-comment-title">Комментарий сотрудника</div>
+
+          {sessionLoading && (
+            <div className="telegram-comment-placeholder">
+              Определяю сотрудника Telegram...
+            </div>
+          )}
+
+          {sessionError && (
+            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+              {sessionError}
+            </div>
+          )}
+
+          {telegramEmployee && (
+            <>
+              <div className="telegram-comment-meta">
+                <div><strong>Сотрудник:</strong> {telegramEmployee.fullName}</div>
+                <div><strong>Роль:</strong> {ROLE_LABELS[telegramEmployee.role] || telegramEmployee.role}</div>
+              </div>
+
+              <div className="telegram-comment-label">
+                Текущий комментарий по вашей роли
+              </div>
+              <div className={`telegram-comment-current${currentRoleComment ? '' : ' telegram-comment-current-empty'}`}>
+                {currentRoleComment || 'Комментарий пока не добавлен.'}
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>{currentRoleComment ? 'Изменить комментарий' : 'Добавить комментарий'}</label>
+                <textarea
+                  value={commentDraft}
+                  onChange={(e) => {
+                    setCommentDraft(e.target.value);
+                    setCommentError('');
+                  }}
+                  rows={5}
+                  placeholder="Введите комментарий по заказу"
+                />
+              </div>
+
+              {commentError && (
+                <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                  {commentError}
+                </div>
+              )}
+
+              <div className="telegram-comment-actions">
+                <button className="btn btn-success" onClick={saveTelegramComment} disabled={savingComment}>
+                  {savingComment
+                    ? 'Сохранение...'
+                    : currentRoleComment
+                      ? 'Сохранить комментарий'
+                      : 'Добавить комментарий'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

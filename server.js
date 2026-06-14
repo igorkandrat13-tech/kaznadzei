@@ -154,6 +154,7 @@ seed();
     telegramBotToken: settings.telegramBotToken || '',
     selfUpdateEnabled: Boolean(settings.selfUpdateEnabled),
     updateBranch: settings.updateBranch || 'main',
+    updateRepositoryUrl: settings.updateRepositoryUrl || process.env.UPDATE_REPOSITORY_URL || process.env.GIT_REMOTE_URL || '',
   };
   const settingsChanged = JSON.stringify(settings) !== JSON.stringify(nextSettings);
 

@@ -117,18 +117,18 @@ function Manager() {
   return (
     <div>
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="section-header">
           <div>
             <h2>📋 Все заказы</h2>
             <p>Управление заказами клиентов</p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="section-header-actions">
             <button className="btn btn-success" style={{ padding: '10px 24px', fontSize: 14 }} onClick={openNewForm}>➕ Новый заказ</button>
             <Link to="/archive" className="btn" style={{ background: '#8e44ad', color: 'white', padding: '10px 24px', fontSize: 14, textDecoration: 'none' }}>📦 Архив</Link>
           </div>
         </div>
         {error && <div style={{ margin: '16px 0 0', padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{error}</div>}
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll desktop-table-only">
           <table>
             <thead>
               <tr>
@@ -171,12 +171,70 @@ function Manager() {
             </tbody>
           </table>
         </div>
+
+        <div className="mobile-card-list">
+          {orders.map(order => {
+            const statusMeta = getOrderStatusMeta(order.overallStatus);
+            return (
+              <div key={order._id} className="mobile-order-card">
+                <div className="mobile-order-card-header">
+                  <div>
+                    <div className="mobile-order-card-title">{order.name}</div>
+                    <div className="mobile-order-card-subtitle">{order.customer || 'Заказчик не указан'}</div>
+                  </div>
+                  <span className={statusMeta.className}>{statusMeta.label}</span>
+                </div>
+
+                <div className="mobile-order-card-grid">
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Количество</div>
+                    <div className="mobile-order-card-value">{order.quantity || 1}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Материал</div>
+                    <div className="mobile-order-card-value">{order.material || '—'}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Дата заказа</div>
+                    <div className="mobile-order-card-value">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Начало</div>
+                    <div className="mobile-order-card-value">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Окончание</div>
+                    <div className="mobile-order-card-value">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Время</div>
+                    <div className="mobile-order-card-value">{calcDuration(order.startDate, order.endDate) || '—'}</div>
+                  </div>
+                </div>
+
+                {order.notes ? (
+                  <div className="mobile-order-card-note">
+                    <div className="mobile-order-card-label">Примечания</div>
+                    <div className="mobile-order-card-value">{order.notes}</div>
+                  </div>
+                ) : null}
+
+                <div className="mobile-order-card-actions">
+                  <button className="btn btn-primary" onClick={() => handleEdit(order)}>Редактировать</button>
+                  <button className="btn" style={{ background: '#2c3e50', color: 'white' }} onClick={() => setQrOrderId(order._id)}>QR-код</button>
+                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => handleDelete(order._id)}>Удалить</button>
+                </div>
+              </div>
+            );
+          })}
+          {orders.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
+        </div>
       </div>
       {showForm && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={handleCancel}>
           <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 560, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 600, marginBottom: 16, color: '#2c3e50', fontSize: 18 }}>{editingId ? '✏️ Редактировать заказ' : '➕ Новый заказ'}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div className="responsive-form-grid">
               <div className="form-group" style={{ marginBottom: 0 }}><label>Заказчик</label><input value={form.customer} onChange={handleChange('customer')} placeholder="ФИО или название" /></div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>Наименование изделия *</label><input value={form.name} onChange={handleChange('name')} placeholder="Например: Шкаф Модерн" /></div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>Кол-во изделий</label><input type="number" min="1" value={form.quantity} onChange={handleChange('quantity')} /></div>

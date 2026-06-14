@@ -61,7 +61,7 @@ function UpdatesOverview({
         </>
       ) : (
         <SettingsHint>
-          Self-update сейчас отключён. Чтобы включить обновления из интерфейса, установите <strong>ENABLE_SELF_UPDATE=true</strong> в <strong>/opt/kaznadzei/.env</strong>, перезапустите сервис и сохраните актуальный <strong>ADMIN_TOKEN</strong> в панели сверху.
+          Self-update сейчас отключён. Чтобы включить обновления из интерфейса, установите <strong>ENABLE_SELF_UPDATE=true</strong> в <strong>/opt/kaznadzei/.env</strong> и перезапустите сервис.
         </SettingsHint>
       )}
     </div>

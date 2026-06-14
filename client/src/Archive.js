@@ -38,18 +38,18 @@ function Archive() {
   return (
     <div>
       <div className="card" style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="section-header">
           <h2>📦 Архив заказов</h2>
           <button className="btn" onClick={() => window.history.back()}>← Назад</button>
         </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end', marginTop: 16 }}>
+        <div className="responsive-filters">
           <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
             <label>Поиск</label>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Название, заказчик, материал" />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Статус</label>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 'auto', padding: '10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }}>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }}>
               <option value="all">Все</option>
               {ORDER_STATUS_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -69,7 +69,7 @@ function Archive() {
       </div>
 
       <div className="card">
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll desktop-table-only">
           <table>
             <thead>
               <tr>
@@ -105,6 +105,51 @@ function Archive() {
               {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}
             </tbody>
           </table>
+        </div>
+
+        <div className="mobile-card-list">
+          {filtered.map(order => {
+            const statusMeta = getOrderStatusMeta(order.overallStatus);
+            return (
+              <div key={order._id} className="mobile-order-card">
+                <div className="mobile-order-card-header">
+                  <div>
+                    <div className="mobile-order-card-title">{order.name}</div>
+                    <div className="mobile-order-card-subtitle">{order.customer || 'Заказчик не указан'}</div>
+                  </div>
+                  <span className={statusMeta.className}>{statusMeta.label}</span>
+                </div>
+
+                <div className="mobile-order-card-grid">
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Количество</div>
+                    <div className="mobile-order-card-value">{order.quantity || 1}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Материал</div>
+                    <div className="mobile-order-card-value">{order.material || '—'}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Дата заказа</div>
+                    <div className="mobile-order-card-value">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Начало</div>
+                    <div className="mobile-order-card-value">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Окончание</div>
+                    <div className="mobile-order-card-value">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</div>
+                  </div>
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Время</div>
+                    <div className="mobile-order-card-value">{calcDuration(order.startDate, order.endDate) || '—'}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
         </div>
       </div>
     </div>

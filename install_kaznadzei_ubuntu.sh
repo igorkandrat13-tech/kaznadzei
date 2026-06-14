@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="https://github.com/igorkandrat13-tech/kaznadzei.git"
+REPO_URL="${REPO_URL:-${UPDATE_REPOSITORY_URL:-https://github.com/igorkandrat13-tech/kaznadzei.git}}"
 BRANCH="main"
 APP_DIR="/opt/kaznadzei"
 SERVICE_NAME="kaznadzei"
@@ -184,6 +184,7 @@ upsert_env_var .env "PORT" "5000"
 upsert_env_var .env "PUBLIC_BASE_URL" "http://localhost:5000"
 upsert_env_var .env "ENABLE_SELF_UPDATE" "true"
 upsert_env_var .env "UPDATE_BRANCH" "${BRANCH}"
+upsert_env_var .env "UPDATE_REPOSITORY_URL" "${REPO_URL}"
 ensure_admin_token .env
 chown "$APP_USER":"$APP_USER" .env
 

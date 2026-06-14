@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="https://github.com/igorkandrat13-tech/kaznadzei.git"
+REPO_URL="${REPO_URL:-${UPDATE_REPOSITORY_URL:-https://github.com/igorkandrat13-tech/kaznadzei.git}}"
 BRANCH="main"
 APP_DIR="/opt/kaznadzei"
 SERVICE_NAME="kaznadzei"

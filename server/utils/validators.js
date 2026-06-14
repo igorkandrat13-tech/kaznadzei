@@ -108,6 +108,32 @@ function normalizeUrl(value, fieldName, options = {}) {
   }
 }
 
+function normalizeGitRemote(value, fieldName, options = {}) {
+  const normalized = normalizeString(value, fieldName, {
+    required: options.required,
+    maxLength: options.maxLength || 500,
+  });
+
+  if (!normalized) {
+    return '';
+  }
+
+  const isScpLike = /^[A-Za-z0-9_.-]+@[A-Za-z0-9.-]+:[A-Za-z0-9_./-]+(?:\.git)?$/.test(normalized);
+  if (isScpLike) {
+    return normalized;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    if (!['https:', 'ssh:'].includes(parsed.protocol)) {
+      fail(`Поле "${fieldName}" должно быть SSH или HTTPS адресом git-репозитория.`);
+    }
+    return normalized;
+  } catch {
+    fail(`Поле "${fieldName}" должно быть корректным git remote URL, например git@github.com:owner/repo.git.`);
+  }
+}
+
 function sanitizeOrderInput(payload, options = {}) {
   const partial = options.partial === true;
   const data = {};
@@ -197,6 +223,9 @@ function sanitizeSettingsInput(payload, options = {}) {
   }
   if (!partial || payload.updateBranch !== undefined) {
     data.updateBranch = normalizeString(payload.updateBranch, 'updateBranch', { required: !partial, maxLength: 80 });
+  }
+  if (!partial || payload.updateRepositoryUrl !== undefined) {
+    data.updateRepositoryUrl = normalizeGitRemote(payload.updateRepositoryUrl, 'updateRepositoryUrl', { maxLength: 500 });
   }
 
   return data;

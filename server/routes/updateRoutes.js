@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const SettingsStore = require('../stores/settingsStore');
-const { checkAdminAccess, isSelfUpdateEnabled, requireAdminAccess } = require('../middleware/security');
+const { isSelfUpdateEnabled } = require('../middleware/security');
 
 const router = express.Router();
 
@@ -17,6 +17,15 @@ let installInProgress = false;
 
 function getConfiguredUpdateBranch() {
   return SettingsStore.get().updateBranch || process.env.UPDATE_BRANCH || 'main';
+}
+
+function getConfiguredUpdateRepositoryUrl() {
+  return (
+    SettingsStore.get().updateRepositoryUrl
+    || process.env.UPDATE_REPOSITORY_URL
+    || process.env.GIT_REMOTE_URL
+    || ''
+  ).trim();
 }
 
 function runFile(command, args, cwd = PROJECT_ROOT) {
@@ -88,6 +97,62 @@ async function tryGit(args, cwd) {
   }
 }
 
+async function tryGitDetailed(args, cwd) {
+  try {
+    const result = await runFile(getGitCommand(), args, cwd);
+    return { ok: true, ...result };
+  } catch (error) {
+    return {
+      ok: false,
+      stdout: error.stdout || '',
+      stderr: error.stderr || '',
+      errorText: getErrorText(error),
+    };
+  }
+}
+
+async function ensureGitRemoteConfigured() {
+  const configuredRemoteUrl = getConfiguredUpdateRepositoryUrl();
+  if (!configuredRemoteUrl) {
+    return {
+      configuredRemoteUrl: '',
+      remoteUrl: (await tryGit(['remote', 'get-url', 'origin']))?.stdout || null,
+      changed: false,
+      error: '',
+    };
+  }
+
+  const currentRemote = await tryGit(['remote', 'get-url', 'origin']);
+  if (currentRemote?.stdout === configuredRemoteUrl) {
+    return {
+      configuredRemoteUrl,
+      remoteUrl: configuredRemoteUrl,
+      changed: false,
+      error: '',
+    };
+  }
+
+  const remoteUpdateResult = currentRemote?.stdout
+    ? await tryGitDetailed(['remote', 'set-url', 'origin', configuredRemoteUrl])
+    : await tryGitDetailed(['remote', 'add', 'origin', configuredRemoteUrl]);
+
+  if (!remoteUpdateResult.ok) {
+    return {
+      configuredRemoteUrl,
+      remoteUrl: currentRemote?.stdout || null,
+      changed: false,
+      error: remoteUpdateResult.errorText || 'Не удалось настроить origin.',
+    };
+  }
+
+  return {
+    configuredRemoteUrl,
+    remoteUrl: configuredRemoteUrl,
+    changed: true,
+    error: '',
+  };
+}
+
 async function getUpdateStatus() {
   const gitVersion = await hasGit();
   const status = {
@@ -99,6 +164,7 @@ async function getUpdateStatus() {
     upstreamConfigured: false,
     branch: null,
     remoteUrl: null,
+    configuredRemoteUrl: getConfiguredUpdateRepositoryUrl() || null,
     currentCommit: null,
     targetRef: null,
     updatesAvailable: false,
@@ -106,6 +172,7 @@ async function getUpdateStatus() {
     behind: 0,
     canInstall: false,
     installInProgress,
+    fetchError: '',
     message: '',
   };
 
@@ -125,16 +192,28 @@ async function getUpdateStatus() {
   const commitResult = await tryGit(['rev-parse', 'HEAD']);
   status.currentCommit = commitResult?.stdout || null;
 
-  const remoteResult = await tryGit(['remote', 'get-url', 'origin']);
-  status.remoteUrl = remoteResult?.stdout || null;
+  const remoteSetup = await ensureGitRemoteConfigured();
+  status.remoteUrl = remoteSetup.remoteUrl || null;
   status.hasRemote = Boolean(status.remoteUrl);
 
-  if (!status.hasRemote) {
-    status.message = 'Remote origin не настроен. Подключите удаленный репозиторий.';
+  if (remoteSetup.error) {
+    status.message = remoteSetup.error;
     return status;
   }
 
-  await tryGit(['fetch', 'origin', '--prune']);
+  if (!status.hasRemote) {
+    status.message = status.configuredRemoteUrl
+      ? 'Не удалось применить URL репозитория к origin.'
+      : 'Remote origin не настроен. Укажите URL репозитория в настройках обновлений.';
+    return status;
+  }
+
+  const fetchResult = await tryGitDetailed(['fetch', 'origin', '--prune']);
+  if (!fetchResult.ok) {
+    status.fetchError = fetchResult.errorText || 'Не удалось выполнить git fetch origin.';
+    status.message = 'Не удалось обратиться к удаленному репозиторию. Проверьте SSH deploy key и URL репозитория.';
+    return status;
+  }
 
   const upstreamName = await tryGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
   if (upstreamName?.stdout) {
@@ -187,15 +266,8 @@ router.get('/updates/status', async (req, res) => {
       behind: 0,
       canInstall: false,
       installInProgress,
-      message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true и настройте ADMIN_TOKEN.',
+      message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true в .env.',
     });
-  }
-
-  const authError = checkAdminAccess(req, {
-    invalidTokenMessage: 'Для проверки обновлений требуется ADMIN_TOKEN.',
-  });
-  if (authError) {
-    return res.status(authError.status).json(authError.body);
   }
 
   try {
@@ -206,9 +278,7 @@ router.get('/updates/status', async (req, res) => {
   }
 });
 
-router.post('/updates/install', requireAdminAccess({
-  invalidTokenMessage: 'Для установки обновлений требуется ADMIN_TOKEN.',
-}), async (req, res) => {
+router.post('/updates/install', async (req, res) => {
   if (!isSelfUpdateEnabled()) {
     return res.status(403).json({ message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true в .env.' });
   }
@@ -238,7 +308,7 @@ router.post('/updates/install', requireAdminAccess({
     }
 
     logs.push(`git pull --ff-only origin ${statusBefore.targetRef.replace('origin/', '')}`);
-    await runFile('git', ['pull', '--ff-only', 'origin', statusBefore.targetRef.replace('origin/', '')], PROJECT_ROOT);
+    await runFile(getGitCommand(), ['pull', '--ff-only', 'origin', statusBefore.targetRef.replace('origin/', '')], PROJECT_ROOT);
 
     logs.push('npm install');
     await runFile(getNpmCommand(), ['install'], PROJECT_ROOT);

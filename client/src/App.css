@@ -9,6 +9,7 @@ body {
   background: #f0f2f5;
   color: #333;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .App-header {
@@ -54,11 +55,18 @@ body {
   padding: 0 20px;
 }
 
+.container-telegram {
+  max-width: 760px;
+  margin: 12px auto 20px;
+  padding: 0 12px;
+}
+
 .card {
   background: white;
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  overflow-wrap: anywhere;
 }
 
 .card h2 {
@@ -97,6 +105,208 @@ table td {
 
 table tr:hover td {
   background: #fafbfc;
+}
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll table {
+  min-width: 520px;
+}
+
+.desktop-table-only {
+  display: block;
+}
+
+.mobile-card-list {
+  display: none;
+  margin-top: 16px;
+}
+
+.mobile-order-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7f8fa;
+  border: 1px solid #edf1f5;
+}
+
+.mobile-order-card + .mobile-order-card {
+  margin-top: 12px;
+}
+
+.mobile-order-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mobile-order-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.35;
+}
+
+.mobile-order-card-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.mobile-order-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobile-order-card-field,
+.mobile-order-card-note {
+  padding: 12px;
+  border-radius: 12px;
+  background: white;
+}
+
+.mobile-order-card-note {
+  margin-top: 10px;
+}
+
+.mobile-order-card-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.mobile-order-card-value {
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.mobile-order-card-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mobile-order-card-summary {
+  flex-shrink: 0;
+}
+
+.mobile-order-stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-order-stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: white;
+}
+
+.mobile-order-stage-action {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.mobile-empty-state {
+  padding: 14px;
+  border-radius: 12px;
+  background: #f7f8fa;
+  color: #777;
+  text-align: center;
+}
+
+.mobile-settings-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7f8fa;
+  border: 1px solid #edf1f5;
+}
+
+.mobile-settings-card + .mobile-settings-card {
+  margin-top: 12px;
+}
+
+.mobile-settings-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.mobile-settings-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #2c3e50;
+  line-height: 1.45;
+}
+
+.mobile-settings-card-note {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: white;
+  color: #1f2937;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.mobile-settings-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mobile-settings-color-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.color-swatch-inline {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  vertical-align: middle;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.responsive-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.responsive-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+  margin-top: 16px;
 }
 
 .home-grid {
@@ -145,6 +355,8 @@ table tr:hover td {
   cursor: pointer;
   font-size: 13px;
   transition: background 0.2s;
+  min-height: 40px;
+  line-height: 1.2;
 }
 
 .btn-primary {
@@ -557,14 +769,165 @@ table tr:hover td {
   visibility: visible;
 }
 
+.order-detail-card {
+  max-width: 100%;
+}
+
+.telegram-order-card {
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.telegram-order-subtitle {
+  color: #5f6c7b;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.telegram-order-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.telegram-order-summary {
+  margin-bottom: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f7f9fc, #eef4fb);
+}
+
+.telegram-order-summary-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.telegram-order-summary-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.telegram-order-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.detail-block {
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7f8fa;
+  border: 1px solid #edf1f5;
+}
+
+.detail-block-wide {
+  margin-top: 10px;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.detail-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.45;
+}
+
+.detail-value-multiline {
+  white-space: pre-wrap;
+}
+
+.telegram-comment-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #edf1f5;
+}
+
+.telegram-comment-title {
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 10px;
+  font-size: 17px;
+}
+
+.telegram-comment-meta,
+.telegram-comment-placeholder,
+.telegram-comment-current {
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7f8fa;
+  margin-bottom: 12px;
+  line-height: 1.55;
+}
+
+.telegram-comment-meta {
+  color: #2c3e50;
+}
+
+.telegram-comment-placeholder {
+  color: #666;
+}
+
+.telegram-comment-label {
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #666;
+}
+
+.telegram-comment-current {
+  white-space: pre-wrap;
+  color: #2c3e50;
+}
+
+.telegram-comment-current-empty {
+  color: #777;
+}
+
+.telegram-comment-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+@media (max-width: 1024px) {
+  .App-header {
+    padding: 18px 24px;
+  }
+
+  .container {
+    margin: 20px auto;
+    padding: 0 16px;
+  }
+
+  .home-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+}
+
 @media (max-width: 768px) {
   .App-header {
     flex-direction: column;
     gap: 10px;
     text-align: center;
+    padding: 16px;
+  }
+  .App-header nav {
+    justify-content: center;
+    gap: 8px;
   }
   .App-header nav a {
-    margin: 0 8px;
+    margin: 0;
     padding: 6px 12px;
     font-size: 12px;
   }
@@ -594,8 +957,43 @@ table tr:hover td {
   .section-header {
     flex-direction: column;
   }
+  .section-header-actions {
+    width: 100%;
+  }
   .comments-modal-layout {
     grid-template-columns: 1fr;
+  }
+  .desktop-table-only {
+    display: none;
+  }
+  .mobile-card-list {
+    display: block;
+  }
+  .telegram-order-actions,
+  .telegram-order-grid,
+  .mobile-order-card-grid,
+  .mobile-order-card-actions,
+  .mobile-settings-card-actions,
+  .responsive-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .telegram-comment-actions .btn,
+  .telegram-order-actions .btn,
+  .section-header-actions .btn,
+  .settings-actions .btn,
+  .modal-actions .btn,
+  .mobile-order-card-actions .btn,
+  .mobile-settings-card-actions .btn {
+    width: 100%;
+  }
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .tab {
+    white-space: nowrap;
+    flex: 0 0 auto;
   }
   .help-tooltip-content {
     left: 0;
@@ -605,5 +1003,78 @@ table tr:hover td {
   .help-tooltip-content::after {
     left: 16px;
     transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 14px;
+    border-radius: 10px;
+  }
+
+  .card h2 {
+    font-size: 20px;
+  }
+
+  .card p {
+    margin-bottom: 16px;
+  }
+
+  .home-card {
+    padding: 22px 18px;
+  }
+
+  .home-card .icon {
+    font-size: 40px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px 14px;
+  }
+
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-window {
+    padding: 16px;
+    max-height: calc(100vh - 20px);
+  }
+
+  .mobile-order-card {
+    padding: 12px;
+  }
+
+  .mobile-order-card-field,
+  .mobile-order-card-note,
+  .mobile-order-stage-row,
+  .mobile-settings-card-note {
+    padding: 10px;
+  }
+
+  .responsive-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .responsive-filters > * {
+    width: 100%;
+  }
+
+  .telegram-order-card {
+    padding: 14px;
+  }
+
+  .detail-block,
+  .telegram-order-summary,
+  .telegram-comment-meta,
+  .telegram-comment-placeholder,
+  .telegram-comment-current {
+    padding: 12px;
+  }
+
+  .detail-value {
+    font-size: 15px;
   }
 }
