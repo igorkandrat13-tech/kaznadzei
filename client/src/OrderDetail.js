@@ -88,6 +88,11 @@ function OrderDetail() {
     }
   }, [telegramMode]);
 
+  useEffect(() => {
+    if (!telegramMode || !telegramEmployee) return;
+    setCommentDraft(currentRoleComment);
+  }, [currentRoleComment, telegramEmployee, telegramMode]);
+
   if (loading) {
     return (
       <div className="card">
@@ -127,11 +132,6 @@ function OrderDetail() {
     { label: 'Окончание изготовления', value: order.endDate ? new Date(order.endDate).toLocaleDateString() : '—' },
     { label: 'Время изготовления', value: calcDuration(order.startDate, order.endDate) },
   ];
-
-  useEffect(() => {
-    if (!telegramMode || !telegramEmployee) return;
-    setCommentDraft(currentRoleComment);
-  }, [currentRoleComment, telegramEmployee, telegramMode]);
 
   const saveTelegramComment = async () => {
     if (!telegramMode || !telegramEmployee) return;
