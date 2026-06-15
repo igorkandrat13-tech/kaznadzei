@@ -66,7 +66,7 @@ router.delete('/employees/:id', requireWriteAccess, (req, res) => {
   sendMessage(
     token,
     chatId,
-    `Ваш доступ к системе Kaznadzei был отключен администратором.\nСотрудник: ${employee.fullName}\nЕсли это ошибка, обратитесь к администратору.`
+    `Ваш профиль в системе Kaznadzei удален администратором.\nСотрудник: ${employee.fullName}\nДоступ к заказам и Telegram-функциям отключен.\nЕсли это ошибка, обратитесь к администратору.`
   )
     .then(() => finishResponse())
     .catch(() => finishResponse('Сотрудник удален, но уведомление в Telegram отправить не удалось.'));

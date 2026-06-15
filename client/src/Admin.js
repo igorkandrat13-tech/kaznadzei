@@ -763,6 +763,11 @@ function Admin() {
 
           <div className="card" style={{ marginBottom: 20 }}>
             <p>Список сотрудников для входа в Telegram-бот и работы с заказами по ролям.</p>
+            <SettingsHint>
+              <div><strong>Как работать:</strong> нажмите "Добавить сотрудника", заполните ФИО, роль, пароль и PIN-код.</div>
+              <div><strong>Редактирование:</strong> используйте кнопку ✎ или "Редактировать" в карточке сотрудника.</div>
+              <div><strong>Удаление:</strong> используйте кнопку ✕ или "Удалить", подтвердите действие, после чего привязанному сотруднику придет уведомление в Telegram.</div>
+            </SettingsHint>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
 
             <SettingsActions>
