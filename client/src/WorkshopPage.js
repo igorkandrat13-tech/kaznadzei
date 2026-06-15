@@ -48,6 +48,32 @@ function WorkshopPage({
       .catch(() => setExtraData(initialExtraData));
   }, [role, fetchExtraData]);
 
+  useEffect(() => {
+    const refreshData = () => {
+      fetchOrders().catch(() => setOrders([]));
+
+      if (!fetchExtraData) return;
+      fetchExtraData()
+        .then(data => setExtraData(data || initialExtraData))
+        .catch(() => setExtraData(initialExtraData));
+    };
+
+    const handleVisibilityRefresh = () => {
+      if (document.visibilityState === 'hidden') return;
+      refreshData();
+    };
+
+    const intervalId = window.setInterval(refreshData, 10000);
+    window.addEventListener('focus', refreshData);
+    document.addEventListener('visibilitychange', handleVisibilityRefresh);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshData);
+      document.removeEventListener('visibilitychange', handleVisibilityRefresh);
+    };
+  }, [fetchExtraData, initialExtraData]);
+
   const findStage = (order, step) => {
     return (order.stages || []).find(stage => stage.stepId === step._id);
   };

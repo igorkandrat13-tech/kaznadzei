@@ -45,7 +45,6 @@ function OrderDetail() {
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
   const telegramUnsafeUser = telegramAuth.unsafeUser;
-  const telegramWebApp = getTelegramWebApp();
 
   const refreshTelegramAuth = useCallback(() => {
     const nextInitData = persistTelegramInitData() || getTelegramInitData();
@@ -233,17 +232,6 @@ function OrderDetail() {
     { label: 'Окончание изготовления', value: order.endDate ? new Date(order.endDate).toLocaleDateString() : '—' },
     { label: 'Время изготовления', value: calcDuration(order.startDate, order.endDate) },
   ] : [];
-  const telegramDebugRows = [
-    { label: 'WebApp объект', value: telegramWebApp ? 'есть' : 'нет' },
-    { label: 'Session помечена', value: telegramMode ? 'да' : 'нет' },
-    { label: 'Auth данные считаны', value: telegramAuthResolved ? 'да' : 'ещё читаются' },
-    { label: 'initData', value: telegramInitData ? `есть (${telegramInitData.length} симв.)` : 'нет' },
-    { label: 'unsafe user', value: telegramUnsafeUser?.id ? `есть (id: ${telegramUnsafeUser.id})` : 'нет' },
-    { label: 'session token', value: telegramSessionToken ? 'есть' : 'нет' },
-    { label: 'Определён сотрудник', value: telegramEmployee ? `${telegramEmployee.fullName} (${ROLE_LABELS[telegramEmployee.role] || telegramEmployee.role})` : 'нет' },
-    { label: 'Ошибка сессии', value: sessionError || 'нет' },
-  ];
-
   useEffect(() => {
     if (!telegramMode || !telegramEmployee || commentEditing) return;
     setCommentDraft(currentRoleComment);
@@ -369,22 +357,6 @@ function OrderDetail() {
         <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
           {telegramActionError}
         </div>
-      )}
-
-      {telegramMode && (
-        <details style={{ marginBottom: 14, borderRadius: 12, background: '#fff7e6', border: '1px solid #f2d6a2', padding: 12 }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#8a5a00' }}>
-            Диагностика Telegram Web App
-          </summary>
-          <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
-            {telegramDebugRows.map((row) => (
-              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, lineHeight: 1.45 }}>
-                <span style={{ color: '#6b7280' }}>{row.label}</span>
-                <span style={{ color: '#1f2937', textAlign: 'right', wordBreak: 'break-word' }}>{row.value}</span>
-              </div>
-            ))}
-          </div>
-        </details>
       )}
 
       {telegramMode ? (

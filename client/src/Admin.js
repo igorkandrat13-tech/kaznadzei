@@ -99,6 +99,28 @@ function Admin() {
     fetchUpdateStatus();
   }, []);
 
+  useEffect(() => {
+    const refreshOverview = () => {
+      fetchOrders();
+      fetchSteps();
+    };
+
+    const handleVisibilityRefresh = () => {
+      if (document.visibilityState === 'hidden') return;
+      refreshOverview();
+    };
+
+    const intervalId = window.setInterval(refreshOverview, 10000);
+    window.addEventListener('focus', refreshOverview);
+    document.addEventListener('visibilitychange', handleVisibilityRefresh);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshOverview);
+      document.removeEventListener('visibilitychange', handleVisibilityRefresh);
+    };
+  }, []);
+
   const fetchSteps = async () => {
     const res = await apiFetch('/api/processSteps');
     const data = await parseJsonSafely(res);
