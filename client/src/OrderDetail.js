@@ -35,6 +35,7 @@ function OrderDetail() {
   const [commentDraft, setCommentDraft] = useState('');
   const [commentError, setCommentError] = useState('');
   const [savingComment, setSavingComment] = useState(false);
+  const [commentEditing, setCommentEditing] = useState(false);
   const [savingStageId, setSavingStageId] = useState('');
   const [stageError, setStageError] = useState('');
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
@@ -174,6 +175,7 @@ function OrderDetail() {
     if (!telegramMode) return undefined;
 
     const handleVisibilityRefresh = () => {
+      if (commentEditing) return;
       refreshTelegramAuth();
     };
 
@@ -184,12 +186,13 @@ function OrderDetail() {
       window.removeEventListener('focus', handleVisibilityRefresh);
       document.removeEventListener('visibilitychange', handleVisibilityRefresh);
     };
-  }, [refreshTelegramAuth, telegramMode]);
+  }, [commentEditing, refreshTelegramAuth, telegramMode]);
 
   useEffect(() => {
     if (!telegramMode) return undefined;
 
     const refreshOrder = () => {
+      if (commentEditing) return;
       fetchOrder();
     };
 
@@ -202,7 +205,7 @@ function OrderDetail() {
       window.removeEventListener('focus', refreshOrder);
       document.removeEventListener('visibilitychange', refreshOrder);
     };
-  }, [fetchOrder, telegramMode]);
+  }, [commentEditing, fetchOrder, telegramMode]);
 
   const calcDuration = (start, end) => {
     if (!start || !end) return '—';
@@ -242,9 +245,9 @@ function OrderDetail() {
   ];
 
   useEffect(() => {
-    if (!telegramMode || !telegramEmployee) return;
+    if (!telegramMode || !telegramEmployee || commentEditing) return;
     setCommentDraft(currentRoleComment);
-  }, [currentRoleComment, telegramEmployee, telegramMode]);
+  }, [commentEditing, currentRoleComment, telegramEmployee, telegramMode]);
 
   if (loading) {
     return (
@@ -294,6 +297,7 @@ function OrderDetail() {
 
     await fetchOrder();
     setCommentDraft(text);
+    setCommentEditing(false);
     setSavingComment(false);
   };
 
@@ -528,8 +532,11 @@ function OrderDetail() {
                     setCommentDraft(e.target.value);
                     setCommentError('');
                   }}
+                  onFocus={() => setCommentEditing(true)}
+                  onBlur={() => setCommentEditing(false)}
                   rows={5}
                   placeholder="Введите комментарий по заказу"
+                  style={{ fontSize: 16 }}
                 />
               </div>
 

@@ -55,7 +55,25 @@ function Manager() {
   const formErrors = validateManagerForm(form);
   const isFormValid = Object.keys(formErrors).length === 0;
 
-  useEffect(() => { fetchOrders(); }, []);
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  useEffect(() => {
+    const refreshOrders = () => {
+      fetchOrders();
+    };
+
+    const intervalId = window.setInterval(refreshOrders, 10000);
+    window.addEventListener('focus', refreshOrders);
+    document.addEventListener('visibilitychange', refreshOrders);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshOrders);
+      document.removeEventListener('visibilitychange', refreshOrders);
+    };
+  }, []);
 
   const fetchOrders = async () => {
     const res = await apiFetch('/api/orders');
