@@ -21,55 +21,69 @@ function TelegramScannerPage() {
   const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
 
-  const bootstrapTelegramSession = useCallback(async () => {
+  const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
     markTelegramWebAppSession();
-    persistTelegramInitData();
-    persistTelegramUnsafeUser();
+    let lastError = null;
 
-    const initData = getTelegramInitData();
-    const unsafeUser = getTelegramUnsafeUser();
-    const sessionToken = getTelegramEmployeeSessionToken();
+    for (let attempt = 0; attempt < retries; attempt += 1) {
+      persistTelegramInitData();
+      persistTelegramUnsafeUser();
 
-    if (!initData && !unsafeUser?.id && !sessionToken) {
-      setBootstrappingSession(false);
-      return;
-    }
+      const initData = getTelegramInitData();
+      const unsafeUser = getTelegramUnsafeUser();
+      const sessionToken = getTelegramEmployeeSessionToken();
 
-    try {
-      const res = await apiFetch('/api/telegram/webapp/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initData,
-          unsafeUser,
-          sessionToken,
-        }),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось подготовить Telegram-сессию.');
+      if (!initData && !unsafeUser?.id && !sessionToken) {
+        await new Promise(resolve => window.setTimeout(resolve, 250));
+        continue;
       }
-      setTelegramEmployeeSessionToken(data?.sessionToken || '');
-    } catch (sessionError) {
-      setError(sessionError.message || 'Не удалось подготовить Telegram-сессию.');
-    } finally {
-      setBootstrappingSession(false);
+
+      try {
+        const res = await apiFetch('/api/telegram/webapp/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initData,
+            unsafeUser,
+            sessionToken,
+          }),
+        });
+        const data = await parseJsonSafely(res);
+        if (!res.ok) {
+          throw new Error(data?.message || 'Не удалось подготовить Telegram-сессию.');
+        }
+        setTelegramEmployeeSessionToken(data?.sessionToken || '');
+        return Boolean(data?.sessionToken);
+      } catch (sessionError) {
+        lastError = sessionError;
+        await new Promise(resolve => window.setTimeout(resolve, 250));
+      }
     }
+
+    if (lastError) {
+      setError(lastError.message || 'Не удалось подготовить Telegram-сессию.');
+    }
+    return false;
   }, []);
 
   const openScanner = useCallback(() => {
     openTelegramQrScanner({
-      onSuccess: (orderPath) => navigate(orderPath),
+      onSuccess: async (orderPath) => {
+        setStatus('Подготавливаю доступ к заказу...');
+        await bootstrapTelegramSession({ retries: 6 });
+        navigate(orderPath);
+      },
       onError: setError,
       onStatusChange: setStatus,
     });
-  }, [navigate]);
+  }, [bootstrapTelegramSession, navigate]);
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
     if (!webApp) return;
 
-    bootstrapTelegramSession();
+    bootstrapTelegramSession()
+      .finally(() => setBootstrappingSession(false));
 
     if (typeof webApp.ready === 'function') {
       webApp.ready();
