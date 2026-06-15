@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
   closeTelegramWebApp,
@@ -16,6 +16,7 @@ import {
 
 function TelegramScannerPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const autoOpenedRef = useRef(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
@@ -112,6 +113,20 @@ function TelegramScannerPage() {
       onStatusChange: setStatus,
     });
   }, [bootstrapTelegramSession, navigate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const sessionTokenFromUrl = params.get('employeeSessionToken');
+    if (!sessionTokenFromUrl) return;
+
+    setTelegramEmployeeSessionToken(sessionTokenFromUrl);
+    setScannerDebug(current => ({
+      ...current,
+      sessionTokenPresent: true,
+    }));
+
+    navigate('/telegram-app', { replace: true });
+  }, [location.search, navigate]);
 
   useEffect(() => {
     const webApp = getTelegramWebApp();

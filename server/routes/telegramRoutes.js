@@ -20,12 +20,16 @@ function getRecommendedWebhookUrl() {
   return new URL('/api/telegram/webhook', baseUrl).toString();
 }
 
-function getTelegramWebAppUrl() {
+function getTelegramWebAppUrl(employeeSessionToken = '') {
   const baseUrl = String(SettingsStore.get().publicBaseUrl || '').trim();
   if (!baseUrl) return '';
 
   try {
-    return new URL('/telegram-app', baseUrl).toString();
+    const url = new URL('/telegram-app', baseUrl);
+    if (employeeSessionToken) {
+      url.searchParams.set('employeeSessionToken', employeeSessionToken);
+    }
+    return url.toString();
   } catch (error) {
     return '';
   }
@@ -41,8 +45,9 @@ function getEmployeeRoleLabel(role) {
   return labels[role] || role;
 }
 
-function getAuthorizedReplyMarkup() {
-  const webAppUrl = getTelegramWebAppUrl();
+function getAuthorizedReplyMarkup(token, employee) {
+  const employeeSessionToken = employee ? createTelegramEmployeeSessionToken(token, employee) : '';
+  const webAppUrl = getTelegramWebAppUrl(employeeSessionToken);
   if (!webAppUrl) return null;
 
   return {
@@ -55,8 +60,8 @@ function getAuthorizedReplyMarkup() {
   };
 }
 
-async function sendAuthorizedMessage(token, chatId, text) {
-  const replyMarkup = getAuthorizedReplyMarkup();
+async function sendAuthorizedMessage(token, chatId, text, employee) {
+  const replyMarkup = getAuthorizedReplyMarkup(token, employee);
   await sendMessage(
     token,
     chatId,
@@ -89,7 +94,8 @@ async function processTelegramMessage(token, message) {
       await sendAuthorizedMessage(
         token,
         chatId,
-        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку "Сканировать QR-код", чтобы открыть камеру и перейти к заказу.`
+        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку "Сканировать QR-код", чтобы открыть камеру и перейти к заказу.`,
+        existingEmployee
       );
       return;
     }
@@ -101,7 +107,8 @@ async function processTelegramMessage(token, message) {
     await sendAuthorizedMessage(
       token,
       chatId,
-      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку "Сканировать QR-код" для открытия камеры в Telegram Web App.`
+      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку "Сканировать QR-код" для открытия камеры в Telegram Web App.`,
+      existingEmployee
     );
     return;
   }
@@ -128,7 +135,8 @@ async function processTelegramMessage(token, message) {
   await sendAuthorizedMessage(
     token,
     chatId,
-    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь можно открыть сканер QR-кодов кнопкой ниже.`
+    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь можно открыть сканер QR-кодов кнопкой ниже.`,
+    linkedEmployee
   );
 }
 
