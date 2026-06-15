@@ -101,7 +101,7 @@ function OrderDetail() {
       }
       setTelegramEmployee(null);
       setSessionLoading(false);
-      setSessionError('Telegram не передал данные сотрудника. Откройте заказ заново через кнопку в боте.');
+      setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте.');
       return;
     }
     setSessionLoading(true);
@@ -119,7 +119,7 @@ function OrderDetail() {
       .then(async res => {
         const data = await parseJsonSafely(res);
         if (!res.ok) {
-          throw new Error(data?.message || 'Не удалось определить сотрудника Telegram.');
+          throw new Error(data?.message || 'Не удалось определить ваш профиль.');
         }
         return data;
       })
@@ -132,7 +132,7 @@ function OrderDetail() {
       })
       .catch(error => {
         setTelegramEmployee(null);
-        setSessionError(error.message || 'Не удалось определить сотрудника Telegram.');
+        setSessionError(error.message || 'Не удалось определить ваш профиль.');
       })
       .finally(() => setSessionLoading(false));
   }, [telegramAuthResolved, telegramInitData, telegramMode, telegramSessionToken, telegramUnsafeUser]);
@@ -291,7 +291,7 @@ function OrderDetail() {
 
   const updateTelegramStage = async (stage) => {
     if (!telegramMode || !telegramEmployee || (!telegramInitData && !telegramUnsafeUser?.id && !telegramSessionToken)) {
-      setStageError('Не удалось определить сотрудника Telegram для смены статуса.');
+      setStageError('Не удалось определить ваш профиль для смены статуса.');
       return;
     }
 
@@ -339,7 +339,7 @@ function OrderDetail() {
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
       <h2>{telegramMode ? `Заказ: ${order.name}` : `📋 Заказ: ${order.name}`}</h2>
       {telegramMode && (
-        <p className="telegram-order-subtitle">Просмотр заказа в Telegram Web App.</p>
+        <p className="telegram-order-subtitle">Актуальная информация по заказу.</p>
       )}
 
       {telegramMode && (
@@ -398,7 +398,7 @@ function OrderDetail() {
 
             {!sessionLoading && !telegramEmployee && (
               <div className="telegram-comment-placeholder">
-                После определения сотрудника здесь появятся кнопки смены статуса.
+                После проверки доступа здесь появятся кнопки смены статуса.
               </div>
             )}
 
@@ -461,7 +461,7 @@ function OrderDetail() {
 
           {sessionLoading && (
             <div className="telegram-comment-placeholder">
-              Определяю сотрудника Telegram...
+              Проверяю доступ...
             </div>
           )}
 
@@ -473,10 +473,10 @@ function OrderDetail() {
 
           {!sessionLoading && !telegramEmployee && (
             <div className="telegram-comment-placeholder">
-              Комментарий сотрудника пока недоступен.
+              Комментарий пока недоступен.
               <div style={{ marginTop: 10 }}>
                 <button className="btn btn-primary" onClick={loadTelegramEmployeeSession}>
-                  Повторить определение сотрудника
+                  Повторить проверку
                 </button>
               </div>
             </div>

@@ -120,7 +120,7 @@ export function getOrderPathFromQr(rawValue) {
 export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {}) {
   const webApp = getTelegramWebApp();
   if (!webApp || typeof webApp.showScanQrPopup !== 'function') {
-    onError?.('Сканирование доступно только внутри Telegram Web App на поддерживаемом устройстве.');
+    onError?.('Сканирование доступно только в приложении Telegram на поддерживаемом устройстве.');
     return false;
   }
 

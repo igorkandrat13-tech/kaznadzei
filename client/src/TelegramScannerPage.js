@@ -51,7 +51,7 @@ function TelegramScannerPage() {
         });
         const data = await parseJsonSafely(res);
         if (!res.ok) {
-          throw new Error(data?.message || 'Не удалось подготовить Telegram-сессию.');
+          throw new Error(data?.message || 'Не удалось подготовить доступ к заказу.');
         }
         setTelegramEmployeeSessionToken(data?.sessionToken || '');
         return Boolean(data?.sessionToken);
@@ -62,7 +62,7 @@ function TelegramScannerPage() {
     }
 
     if (lastError) {
-      setError(lastError.message || 'Не удалось подготовить Telegram-сессию.');
+      setError(lastError.message || 'Не удалось подготовить доступ к заказу.');
     }
     return false;
   }, []);
@@ -116,11 +116,11 @@ function TelegramScannerPage() {
     <div className="card" style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
       <h2>Сканирование QR-кода</h2>
       <p style={{ color: '#555', lineHeight: 1.6 }}>
-        После сканирования откроется страница заказа прямо внутри Telegram Web App.
+        После сканирования откроется страница заказа.
       </p>
 
       <div style={{ margin: '20px 0', padding: 16, borderRadius: 10, background: '#f7f8fa', color: '#2c3e50' }}>
-        {bootstrappingSession ? 'Подготавливаю Telegram-сессию сотрудника...' : status}
+        {bootstrappingSession ? 'Подготавливаю доступ...' : status}
       </div>
 
       {error && (
