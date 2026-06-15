@@ -20,10 +20,26 @@ function TelegramScannerPage() {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
+  const [scannerDebug, setScannerDebug] = useState({
+    initDataLength: 0,
+    unsafeUserId: '',
+    sessionTokenPresent: false,
+    bootstrapAttempts: 0,
+    lastBootstrapError: '',
+    webAppPresent: false,
+  });
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
     markTelegramWebAppSession();
     let lastError = null;
+    const webApp = getTelegramWebApp();
+
+    setScannerDebug(current => ({
+      ...current,
+      webAppPresent: Boolean(webApp),
+      bootstrapAttempts: retries,
+      lastBootstrapError: '',
+    }));
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
@@ -32,6 +48,14 @@ function TelegramScannerPage() {
       const initData = getTelegramInitData();
       const unsafeUser = getTelegramUnsafeUser();
       const sessionToken = getTelegramEmployeeSessionToken();
+
+      setScannerDebug(current => ({
+        ...current,
+        initDataLength: initData.length,
+        unsafeUserId: unsafeUser?.id ? String(unsafeUser.id) : '',
+        sessionTokenPresent: Boolean(sessionToken),
+        bootstrapAttempts: attempt + 1,
+      }));
 
       if (!initData && !unsafeUser?.id && !sessionToken) {
         await new Promise(resolve => window.setTimeout(resolve, 250));
@@ -53,9 +77,20 @@ function TelegramScannerPage() {
           throw new Error(data?.message || 'Не удалось подготовить Telegram-сессию.');
         }
         setTelegramEmployeeSessionToken(data?.sessionToken || '');
+        setScannerDebug(current => ({
+          ...current,
+          initDataLength: initData.length,
+          unsafeUserId: unsafeUser?.id ? String(unsafeUser.id) : '',
+          sessionTokenPresent: Boolean(data?.sessionToken),
+          lastBootstrapError: '',
+        }));
         return Boolean(data?.sessionToken);
       } catch (sessionError) {
         lastError = sessionError;
+        setScannerDebug(current => ({
+          ...current,
+          lastBootstrapError: sessionError.message || 'Не удалось подготовить Telegram-сессию.',
+        }));
         await new Promise(resolve => window.setTimeout(resolve, 250));
       }
     }
@@ -118,6 +153,38 @@ function TelegramScannerPage() {
           {error}
         </div>
       )}
+
+      <details style={{ marginBottom: 16, borderRadius: 12, background: '#fff7e6', border: '1px solid #f2d6a2', padding: 12, textAlign: 'left' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#8a5a00' }}>
+          Диагностика страницы сканера
+        </summary>
+        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
+            <span style={{ color: '#6b7280' }}>WebApp объект</span>
+            <span>{scannerDebug.webAppPresent ? 'есть' : 'нет'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
+            <span style={{ color: '#6b7280' }}>initData</span>
+            <span>{scannerDebug.initDataLength ? `есть (${scannerDebug.initDataLength} симв.)` : 'нет'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
+            <span style={{ color: '#6b7280' }}>unsafe user</span>
+            <span>{scannerDebug.unsafeUserId || 'нет'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
+            <span style={{ color: '#6b7280' }}>session token</span>
+            <span>{scannerDebug.sessionTokenPresent ? 'есть' : 'нет'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
+            <span style={{ color: '#6b7280' }}>Попытка bootstrap</span>
+            <span>{scannerDebug.bootstrapAttempts || 0}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, alignItems: 'flex-start' }}>
+            <span style={{ color: '#6b7280' }}>Ошибка bootstrap</span>
+            <span style={{ textAlign: 'right', wordBreak: 'break-word' }}>{scannerDebug.lastBootstrapError || 'нет'}</span>
+          </div>
+        </div>
+      </details>
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
         <button className="btn btn-primary" onClick={openScanner}>
