@@ -60,6 +60,30 @@ function getTelegramWebAppUser(token, initData) {
   return user;
 }
 
+function getTelegramWebAppUserFallback(payload) {
+  const unsafeUser = payload?.unsafeUser;
+  if (!unsafeUser || !unsafeUser.id) {
+    throw new Error('Не переданы данные пользователя Telegram Web App.');
+  }
+
+  return {
+    id: unsafeUser.id,
+    username: unsafeUser.username || '',
+    first_name: unsafeUser.first_name || '',
+    last_name: unsafeUser.last_name || '',
+  };
+}
+
+function resolveTelegramWebAppUser(token, payload) {
+  const initData = String(payload?.initData || '').trim();
+  if (initData) {
+    return getTelegramWebAppUser(token, initData);
+  }
+
+  return getTelegramWebAppUserFallback(payload);
+}
+
 module.exports = {
   getTelegramWebAppUser,
+  resolveTelegramWebAppUser,
 };

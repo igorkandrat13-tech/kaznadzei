@@ -3,7 +3,7 @@ const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireWriteAccess } = require('../middleware/security');
 const { getBotInfo, getWebhookInfo, setWebhook, sendMessage } = require('../services/telegramService');
-const { getTelegramWebAppUser } = require('../services/telegramWebAppAuth');
+const { resolveTelegramWebAppUser } = require('../services/telegramWebAppAuth');
 
 const router = express.Router();
 
@@ -206,7 +206,7 @@ router.post('/telegram/webapp/session', async (req, res) => {
   }
 
   try {
-    const telegramUser = getTelegramWebAppUser(token, req.body?.initData);
+    const telegramUser = resolveTelegramWebAppUser(token, req.body || {});
     const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
     if (!employee) {
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });

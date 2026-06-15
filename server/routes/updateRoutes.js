@@ -105,6 +105,25 @@ function getErrorText(error) {
   return [error.message, error.stdout, error.stderr].filter(Boolean).join('\n').trim();
 }
 
+function requiresInteractiveSudo(errorText) {
+  const text = String(errorText || '').toLowerCase();
+  return text.includes('interactive authentication is required')
+    || text.includes('a password is required')
+    || text.includes('sudo:')
+    || text.includes('sudo-rs:');
+}
+
+function getSudoersHint(serviceName) {
+  const sudoUser = process.env.SUDO_USER || process.env.USER || 'www-data';
+  const safeServiceName = serviceName || 'kaznadzei';
+  return [
+    'Для кнопок перезапуска и логов настройте sudoers в режиме NOPASSWD.',
+    `Откройте sudoers командой: sudo visudo`,
+    'Добавьте строку:',
+    `${sudoUser} ALL=(root) NOPASSWD: /usr/bin/systemctl restart --no-block ${safeServiceName}, /usr/bin/systemctl status ${safeServiceName} --no-pager -l, /usr/bin/journalctl -u ${safeServiceName} -n 80 --no-pager -o short-iso`,
+  ].join('\n');
+}
+
 async function hasGit() {
   try {
     const result = await runFile(getGitCommand(), ['--version']);
@@ -482,9 +501,10 @@ router.post('/updates/restart-service', async (req, res) => {
 
   const restartResult = await trySystemctlDetailed(['restart', '--no-block', serviceName]);
   if (!restartResult.ok) {
+    const sudoHint = requiresInteractiveSudo(restartResult.errorText) ? `\n\n${getSudoersHint(serviceName)}` : '';
     return res.status(500).json({
       message: 'Не удалось запустить перезапуск сервиса.',
-      details: restartResult.errorText || 'Проверьте права на systemctl и sudoers.',
+      details: `${restartResult.errorText || 'Проверьте права на systemctl и sudoers.'}${sudoHint}`,
     });
   }
 
@@ -514,9 +534,11 @@ router.get('/updates/service-details', async (req, res) => {
   const logsResult = await tryJournalctlDetailed(['-u', serviceName, '-n', '80', '--no-pager', '-o', 'short-iso']);
 
   if (!statusResult.ok && !logsResult.ok) {
+    const combinedErrorText = [statusResult.errorText, logsResult.errorText].filter(Boolean).join('\n\n');
+    const sudoHint = requiresInteractiveSudo(combinedErrorText) ? `\n\n${getSudoersHint(serviceName)}` : '';
     return res.status(500).json({
       message: 'Не удалось получить статус и логи сервиса.',
-      details: [statusResult.errorText, logsResult.errorText].filter(Boolean).join('\n\n'),
+      details: `${combinedErrorText}${sudoHint}`,
     });
   }
 

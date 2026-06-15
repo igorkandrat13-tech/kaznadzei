@@ -5,11 +5,13 @@ import { getNextStageStatusMeta, getOrderStatusMeta, getStageStatusMeta, STAGE_S
 import {
   closeTelegramWebApp,
   getTelegramInitData,
+  getTelegramUnsafeUser,
   getTelegramWebApp,
   isTelegramWebApp,
   markTelegramWebAppSession,
   openTelegramQrScanner,
   persistTelegramInitData,
+  persistTelegramUnsafeUser,
 } from './telegramWebApp';
 
 const ROLE_LABELS = {
@@ -36,6 +38,7 @@ function OrderDetail() {
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = getTelegramInitData();
+  const telegramUnsafeUser = getTelegramUnsafeUser();
 
   const fetchOrder = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) {
@@ -64,7 +67,7 @@ function OrderDetail() {
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
-    if (!telegramInitData) {
+    if (!telegramInitData && !telegramUnsafeUser?.id) {
       setTelegramEmployee(null);
       setSessionLoading(false);
       setSessionError('Telegram не передал данные сотрудника. Откройте заказ заново через кнопку в боте.');
@@ -76,7 +79,10 @@ function OrderDetail() {
     return apiFetch('/api/telegram/webapp/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData: telegramInitData }),
+      body: JSON.stringify({
+        initData: telegramInitData,
+        unsafeUser: telegramUnsafeUser,
+      }),
     })
       .then(async res => {
         const data = await parseJsonSafely(res);
@@ -91,7 +97,7 @@ function OrderDetail() {
         setSessionError(error.message || 'Не удалось определить сотрудника Telegram.');
       })
       .finally(() => setSessionLoading(false));
-  }, [telegramInitData, telegramMode]);
+  }, [telegramInitData, telegramMode, telegramUnsafeUser]);
 
   useEffect(() => {
     loadTelegramEmployeeSession();
@@ -105,6 +111,7 @@ function OrderDetail() {
 
     markTelegramWebAppSession();
     persistTelegramInitData();
+    persistTelegramUnsafeUser();
 
     if (typeof webApp.ready === 'function') {
       webApp.ready();
@@ -199,6 +206,7 @@ function OrderDetail() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         initData: telegramInitData,
+        unsafeUser: telegramUnsafeUser,
         text,
       }),
     });
@@ -215,7 +223,7 @@ function OrderDetail() {
   };
 
   const updateTelegramStage = async (stage) => {
-    if (!telegramMode || !telegramEmployee || !telegramInitData) {
+    if (!telegramMode || !telegramEmployee || (!telegramInitData && !telegramUnsafeUser?.id)) {
       setStageError('Не удалось определить сотрудника Telegram для смены статуса.');
       return;
     }
@@ -229,6 +237,7 @@ function OrderDetail() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         initData: telegramInitData,
+        unsafeUser: telegramUnsafeUser,
         stepId: stage.stepId,
         status: nextStatus,
       }),

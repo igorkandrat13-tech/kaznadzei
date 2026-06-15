@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { closeTelegramWebApp, getTelegramWebApp, markTelegramWebAppSession, openTelegramQrScanner, persistTelegramInitData } from './telegramWebApp';
+import { closeTelegramWebApp, getTelegramWebApp, markTelegramWebAppSession, openTelegramQrScanner, persistTelegramInitData, persistTelegramUnsafeUser } from './telegramWebApp';
 
 function TelegramScannerPage() {
   const navigate = useNavigate();
@@ -22,6 +22,7 @@ function TelegramScannerPage() {
 
     markTelegramWebAppSession();
     persistTelegramInitData();
+    persistTelegramUnsafeUser();
 
     if (typeof webApp.ready === 'function') {
       webApp.ready();
