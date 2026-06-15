@@ -535,15 +535,16 @@ function Admin() {
     setSettingsError('');
     setSettingsSuccess('');
     const res = await apiFetch(`/api/employees/${id}`, { method: 'DELETE' });
+    const data = await parseJsonSafely(res);
     if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось удалить сотрудника.'));
+      setSettingsError(data?.message || 'Не удалось удалить сотрудника.');
       return false;
     }
     if (editEmployee?._id === id) {
       resetEmployeeForm();
     }
     await fetchEmployees();
-    setSettingsSuccess('Сотрудник удален.');
+    setSettingsSuccess(data?.warning || data?.message || 'Сотрудник удален.');
     return true;
   };
 
@@ -799,6 +800,25 @@ function Admin() {
               {employees.length === 0 && <div className="mobile-empty-state">Сотрудники пока не добавлены</div>}
             </div>
           </div>
+
+          <EmployeeModal
+            mode={employeeModalMode}
+            employeeForm={employeeForm}
+            setEmployeeForm={setEmployeeForm}
+            onAdd={handleAddEmployee}
+            onUpdate={handleUpdateEmployee}
+            onClose={closeEmployeeModal}
+          />
+
+          <ConfirmDialog
+            open={Boolean(confirmAction)}
+            title={confirmAction?.title}
+            message={confirmAction?.message}
+            confirmLabel={confirmAction?.confirmLabel}
+            onConfirm={handleConfirmDelete}
+            onCancel={() => !confirmLoading && setConfirmAction(null)}
+            loading={confirmLoading}
+          />
         </div>
       );
     }

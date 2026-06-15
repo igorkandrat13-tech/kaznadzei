@@ -292,9 +292,11 @@ function Manager() {
                     </button>
                   </td>
                   <td>
-                    <button className="btn btn-primary" style={{ marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => handleEdit(order)}>✎</button>
-                    <button className="btn" style={{ background: '#2c3e50', color: 'white', marginRight: 4, padding: '4px 10px', fontSize: 12 }} onClick={() => setQrOrderId(order._id)}>📱 QR</button>
-                    <button className="btn" style={{ background: '#e74c3c', color: 'white', padding: '4px 10px', fontSize: 12 }} onClick={() => requestDelete(order)}>✕</button>
+                    <div className="manager-actions-cell">
+                      <button className="btn btn-primary manager-action-btn" onClick={() => handleEdit(order)}>✎</button>
+                      <button className="btn manager-action-btn manager-action-btn-secondary" onClick={() => setQrOrderId(order._id)}>QR</button>
+                      <button className="btn manager-action-btn manager-action-btn-danger" onClick={() => requestDelete(order)}>✕</button>
+                    </div>
                   </td>
                 </tr>
               ))}

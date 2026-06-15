@@ -1,6 +1,8 @@
 const express = require('express');
 const EmployeeStore = require('../stores/employeeStore');
+const SettingsStore = require('../stores/settingsStore');
 const { requireWriteAccess } = require('../middleware/security');
+const { sendMessage } = require('../services/telegramService');
 const { sanitizeEmployeeInput } = require('../utils/validators');
 
 const router = express.Router();
@@ -36,11 +38,38 @@ router.put('/employees/:id', requireWriteAccess, (req, res) => {
 });
 
 router.delete('/employees/:id', requireWriteAccess, (req, res) => {
+  const employee = EmployeeStore.findById(req.params.id);
+  if (!employee) {
+    return res.status(404).json({ message: 'Сотрудник не найден.' });
+  }
+
   const deleted = EmployeeStore.delete(req.params.id);
   if (!deleted) {
     return res.status(404).json({ message: 'Сотрудник не найден.' });
   }
-  res.json({ message: 'Сотрудник удален.' });
+
+  const token = String(SettingsStore.get().telegramBotToken || '').trim();
+  const chatId = String(employee.telegramChatId || '').trim();
+
+  const finishResponse = (warningMessage = '') => {
+    res.json({
+      message: 'Сотрудник удален.',
+      warning: warningMessage || '',
+    });
+  };
+
+  if (!token || !chatId) {
+    finishResponse();
+    return;
+  }
+
+  sendMessage(
+    token,
+    chatId,
+    `Ваш доступ к системе Kaznadzei был отключен администратором.\nСотрудник: ${employee.fullName}\nЕсли это ошибка, обратитесь к администратору.`
+  )
+    .then(() => finishResponse())
+    .catch(() => finishResponse('Сотрудник удален, но уведомление в Telegram отправить не удалось.'));
 });
 
 module.exports = router;

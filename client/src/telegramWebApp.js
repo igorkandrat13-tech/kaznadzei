@@ -1,4 +1,5 @@
 const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
+const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 
 export function getTelegramWebApp() {
   return window.Telegram?.WebApp || null;
@@ -10,6 +11,19 @@ export function markTelegramWebAppSession() {
   } catch (error) {
     // Ignore storage issues in restricted webviews.
   }
+}
+
+export function persistTelegramInitData() {
+  const initData = getTelegramWebApp()?.initData || '';
+  if (!initData) return '';
+
+  try {
+    window.sessionStorage?.setItem(TELEGRAM_INIT_DATA_STORAGE_KEY, initData);
+  } catch (error) {
+    // Ignore storage issues in restricted webviews.
+  }
+
+  return initData;
 }
 
 export function hasTelegramWebAppSession() {
@@ -26,7 +40,16 @@ export function isTelegramWebApp() {
 }
 
 export function getTelegramInitData() {
-  return getTelegramWebApp()?.initData || '';
+  const freshInitData = persistTelegramInitData();
+  if (freshInitData) {
+    return freshInitData;
+  }
+
+  try {
+    return window.sessionStorage?.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY) || '';
+  } catch (error) {
+    return '';
+  }
 }
 
 export function getOrderPathFromQr(rawValue) {

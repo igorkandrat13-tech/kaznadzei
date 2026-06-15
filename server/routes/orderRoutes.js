@@ -73,6 +73,65 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
   }
 });
 
+router.post('/orders/:id/telegram-stage-status', (req, res) => {
+  try {
+    const token = String(SettingsStore.get().telegramBotToken || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+    }
+
+    const telegramUser = getTelegramWebAppUser(token, req.body?.initData);
+    const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+    if (!employee) {
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+
+    const order = OrderStore.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const stepId = String(req.body?.stepId || '').trim();
+    const status = String(req.body?.status || '').trim();
+    const allowedStatuses = ['pending', 'in_progress', 'completed'];
+
+    if (!stepId) {
+      return res.status(400).json({ message: 'Не указан этап заказа.' });
+    }
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Некорректный статус этапа.' });
+    }
+
+    const stage = (order.stages || []).find(item => item.stepId === stepId);
+    if (!stage) {
+      return res.status(404).json({ message: 'Этап заказа не найден.' });
+    }
+
+    if (stage.role !== employee.role) {
+      return res.status(403).json({ message: 'Можно менять только статус этапа своей роли.' });
+    }
+
+    const updatedOrder = OrderStore.updateStageStatus(req.params.id, stepId, status);
+    if (!updatedOrder) {
+      return res.status(404).json({ message: 'Не удалось обновить статус этапа.' });
+    }
+
+    res.json({
+      ok: true,
+      order: updatedOrder,
+      stage: (updatedOrder.stages || []).find(item => item.stepId === stepId) || null,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+      },
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить статус этапа из Telegram.' });
+  }
+});
+
 router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
   try {
     const role = String(req.params.role || '').trim();

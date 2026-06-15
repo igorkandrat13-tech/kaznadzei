@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
-import { getOrderStatusMeta } from './statusMeta';
+import { getNextStageStatusMeta, getOrderStatusMeta, getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
 import {
   closeTelegramWebApp,
   getTelegramInitData,
@@ -9,6 +9,7 @@ import {
   isTelegramWebApp,
   markTelegramWebAppSession,
   openTelegramQrScanner,
+  persistTelegramInitData,
 } from './telegramWebApp';
 
 const ROLE_LABELS = {
@@ -30,6 +31,8 @@ function OrderDetail() {
   const [commentDraft, setCommentDraft] = useState('');
   const [commentError, setCommentError] = useState('');
   const [savingComment, setSavingComment] = useState(false);
+  const [savingStageId, setSavingStageId] = useState('');
+  const [stageError, setStageError] = useState('');
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = getTelegramInitData();
@@ -101,6 +104,7 @@ function OrderDetail() {
     if (!webApp) return;
 
     markTelegramWebAppSession();
+    persistTelegramInitData();
 
     if (typeof webApp.ready === 'function') {
       webApp.ready();
@@ -142,6 +146,9 @@ function OrderDetail() {
   const currentRoleComment = telegramEmployee?.role
     ? (order?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
     : '';
+  const roleStages = telegramEmployee?.role
+    ? (order?.stages || []).filter(stage => stage.role === telegramEmployee.role)
+    : [];
   const detailItems = order ? [
     { label: 'Заказчик', value: order.customer || '—' },
     { label: 'Наименование', value: order.name || '—' },
@@ -203,8 +210,38 @@ function OrderDetail() {
     }
 
     await fetchOrder();
-    setCommentDraft('');
+    setCommentDraft(text);
     setSavingComment(false);
+  };
+
+  const updateTelegramStage = async (stage) => {
+    if (!telegramMode || !telegramEmployee || !telegramInitData) {
+      setStageError('Не удалось определить сотрудника Telegram для смены статуса.');
+      return;
+    }
+
+    const nextStatus = STAGE_STATUS_CYCLE[stage.status] || 'pending';
+    setSavingStageId(stage.stepId);
+    setStageError('');
+
+    const res = await apiFetch(`/api/orders/${id}/telegram-stage-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        initData: telegramInitData,
+        stepId: stage.stepId,
+        status: nextStatus,
+      }),
+    });
+
+    if (!res.ok) {
+      setStageError(await getErrorMessage(res, 'Не удалось изменить статус этапа.'));
+      setSavingStageId('');
+      return;
+    }
+
+    await fetchOrder();
+    setSavingStageId('');
   };
 
   const handleScanAnotherQr = () => {
@@ -271,6 +308,55 @@ function OrderDetail() {
             <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>
               Данные заказа обновляются автоматически.
             </div>
+          </div>
+
+          <div className="telegram-stage-section">
+            <div className="telegram-comment-title">Статус по вашей роли</div>
+
+            {stageError && (
+              <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                {stageError}
+              </div>
+            )}
+
+            {!sessionLoading && !telegramEmployee && (
+              <div className="telegram-comment-placeholder">
+                После определения сотрудника здесь появятся кнопки смены статуса.
+              </div>
+            )}
+
+            {telegramEmployee && roleStages.length === 0 && (
+              <div className="telegram-comment-placeholder">
+                Для вашей роли в этом заказе пока нет назначенных этапов.
+              </div>
+            )}
+
+            {telegramEmployee && roleStages.length > 0 && (
+              <div className="telegram-stage-list">
+                {roleStages.map((stage) => {
+                  const stageMeta = getStageStatusMeta(stage.status);
+                  const nextStageMeta = getNextStageStatusMeta(stage.status);
+                  return (
+                    <div key={stage.stepId} className="telegram-stage-card">
+                      <div className="telegram-stage-card-top">
+                        <div>
+                          <div className="telegram-stage-card-title">{stage.stepName}</div>
+                          <div className="telegram-stage-card-subtitle">Текущий статус</div>
+                        </div>
+                        <span className={stageMeta.className}>{stageMeta.label}</span>
+                      </div>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => updateTelegramStage(stage)}
+                        disabled={savingStageId === stage.stepId}
+                      >
+                        {savingStageId === stage.stepId ? 'Обновление...' : `Перевести в "${nextStageMeta.label}"`}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </>
       ) : (
