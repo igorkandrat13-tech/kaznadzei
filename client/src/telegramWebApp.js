@@ -1,6 +1,7 @@
 const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
 const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
+const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
 
 export function getTelegramWebApp() {
   return window.Telegram?.WebApp || null;
@@ -77,6 +78,26 @@ export function getTelegramUnsafeUser() {
     return storedUnsafeUser ? JSON.parse(storedUnsafeUser) : null;
   } catch (error) {
     return null;
+  }
+}
+
+export function setTelegramEmployeeSessionToken(sessionToken) {
+  try {
+    if (sessionToken) {
+      window.sessionStorage?.setItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY, String(sessionToken));
+      return;
+    }
+    window.sessionStorage?.removeItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY);
+  } catch (error) {
+    // Ignore storage issues in restricted webviews.
+  }
+}
+
+export function getTelegramEmployeeSessionToken() {
+  try {
+    return window.sessionStorage?.getItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY) || '';
+  } catch (error) {
+    return '';
   }
 }
 

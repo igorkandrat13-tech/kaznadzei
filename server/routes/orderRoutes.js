@@ -5,8 +5,25 @@ const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireWriteAccess } = require('../middleware/security');
 const { sanitizeCommentInput, sanitizeOrderInput } = require('../utils/validators');
-const { resolveTelegramWebAppUser } = require('../services/telegramWebAppAuth');
+const {
+  resolveTelegramWebAppUser,
+  verifyTelegramEmployeeSessionToken,
+} = require('../services/telegramWebAppAuth');
 const router = express.Router();
+
+function resolveTelegramEmployee(token, payload) {
+  if (payload?.sessionToken) {
+    const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
+    const employeeBySession = EmployeeStore.findById(sessionPayload.employeeId);
+    if (!employeeBySession || String(employeeBySession.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
+      throw new Error('Сотрудник Telegram не найден или session token устарел.');
+    }
+    return employeeBySession;
+  }
+
+  const telegramUser = resolveTelegramWebAppUser(token, payload || {});
+  return EmployeeStore.findByTelegramUserId(telegramUser.id);
+}
 
 router.get('/orders', (req, res) => {
   try {
@@ -45,8 +62,7 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
       return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
     }
 
-    const telegramUser = resolveTelegramWebAppUser(token, req.body || {});
-    const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+    const employee = resolveTelegramEmployee(token, req.body || {});
     if (!employee) {
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
     }
@@ -80,8 +96,7 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
       return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
     }
 
-    const telegramUser = resolveTelegramWebAppUser(token, req.body || {});
-    const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+    const employee = resolveTelegramEmployee(token, req.body || {});
     if (!employee) {
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
     }

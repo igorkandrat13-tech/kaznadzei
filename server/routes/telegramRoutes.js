@@ -3,7 +3,11 @@ const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireWriteAccess } = require('../middleware/security');
 const { getBotInfo, getWebhookInfo, setWebhook, sendMessage } = require('../services/telegramService');
-const { resolveTelegramWebAppUser } = require('../services/telegramWebAppAuth');
+const {
+  createTelegramEmployeeSessionToken,
+  resolveTelegramWebAppUser,
+  verifyTelegramEmployeeSessionToken,
+} = require('../services/telegramWebAppAuth');
 
 const router = express.Router();
 
@@ -206,8 +210,27 @@ router.post('/telegram/webapp/session', async (req, res) => {
   }
 
   try {
-    const telegramUser = resolveTelegramWebAppUser(token, req.body || {});
-    const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+    let employee = null;
+    let telegramUser = null;
+    const payload = req.body || {};
+
+    if (payload.sessionToken) {
+      const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
+      employee = EmployeeStore.findById(sessionPayload.employeeId);
+      if (!employee || String(employee.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
+        return res.status(403).json({ message: 'Сотрудник Telegram не найден или session token устарел.' });
+      }
+      telegramUser = {
+        id: sessionPayload.telegramUserId,
+        username: employee.telegramUsername || '',
+        first_name: employee.telegramFirstName || '',
+        last_name: employee.telegramLastName || '',
+      };
+    } else {
+      telegramUser = resolveTelegramWebAppUser(token, payload);
+      employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+    }
+
     if (!employee) {
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
     }
@@ -220,6 +243,7 @@ router.post('/telegram/webapp/session', async (req, res) => {
 
     res.json({
       ok: true,
+      sessionToken: createTelegramEmployeeSessionToken(token, employee),
       employee: {
         _id: employee._id,
         fullName: employee.fullName,

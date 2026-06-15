@@ -1,12 +1,61 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { closeTelegramWebApp, getTelegramWebApp, markTelegramWebAppSession, openTelegramQrScanner, persistTelegramInitData, persistTelegramUnsafeUser } from './telegramWebApp';
+import { apiFetch, parseJsonSafely } from './api';
+import {
+  closeTelegramWebApp,
+  getTelegramEmployeeSessionToken,
+  getTelegramInitData,
+  getTelegramUnsafeUser,
+  getTelegramWebApp,
+  markTelegramWebAppSession,
+  openTelegramQrScanner,
+  persistTelegramInitData,
+  persistTelegramUnsafeUser,
+  setTelegramEmployeeSessionToken,
+} from './telegramWebApp';
 
 function TelegramScannerPage() {
   const navigate = useNavigate();
   const autoOpenedRef = useRef(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
+  const [bootstrappingSession, setBootstrappingSession] = useState(true);
+
+  const bootstrapTelegramSession = useCallback(async () => {
+    markTelegramWebAppSession();
+    persistTelegramInitData();
+    persistTelegramUnsafeUser();
+
+    const initData = getTelegramInitData();
+    const unsafeUser = getTelegramUnsafeUser();
+    const sessionToken = getTelegramEmployeeSessionToken();
+
+    if (!initData && !unsafeUser?.id && !sessionToken) {
+      setBootstrappingSession(false);
+      return;
+    }
+
+    try {
+      const res = await apiFetch('/api/telegram/webapp/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData,
+          unsafeUser,
+          sessionToken,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось подготовить Telegram-сессию.');
+      }
+      setTelegramEmployeeSessionToken(data?.sessionToken || '');
+    } catch (sessionError) {
+      setError(sessionError.message || 'Не удалось подготовить Telegram-сессию.');
+    } finally {
+      setBootstrappingSession(false);
+    }
+  }, []);
 
   const openScanner = useCallback(() => {
     openTelegramQrScanner({
@@ -20,9 +69,7 @@ function TelegramScannerPage() {
     const webApp = getTelegramWebApp();
     if (!webApp) return;
 
-    markTelegramWebAppSession();
-    persistTelegramInitData();
-    persistTelegramUnsafeUser();
+    bootstrapTelegramSession();
 
     if (typeof webApp.ready === 'function') {
       webApp.ready();
@@ -31,15 +78,15 @@ function TelegramScannerPage() {
     if (typeof webApp.expand === 'function') {
       webApp.expand();
     }
-  }, []);
+  }, [bootstrapTelegramSession]);
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
-    if (!webApp || autoOpenedRef.current) return;
+    if (!webApp || autoOpenedRef.current || bootstrappingSession) return;
 
     autoOpenedRef.current = true;
     openScanner();
-  }, [openScanner]);
+  }, [bootstrappingSession, openScanner]);
 
   return (
     <div className="card" style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
@@ -49,7 +96,7 @@ function TelegramScannerPage() {
       </p>
 
       <div style={{ margin: '20px 0', padding: 16, borderRadius: 10, background: '#f7f8fa', color: '#2c3e50' }}>
-        {status}
+        {bootstrappingSession ? 'Подготавливаю Telegram-сессию сотрудника...' : status}
       </div>
 
       {error && (

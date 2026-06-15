@@ -4,6 +4,7 @@ import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getNextStageStatusMeta, getOrderStatusMeta, getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
 import {
   closeTelegramWebApp,
+  getTelegramEmployeeSessionToken,
   getTelegramInitData,
   getTelegramUnsafeUser,
   getTelegramWebApp,
@@ -12,6 +13,7 @@ import {
   openTelegramQrScanner,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
+  setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
 
 const ROLE_LABELS = {
@@ -37,6 +39,7 @@ function OrderDetail() {
   const [stageError, setStageError] = useState('');
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
+  const [telegramSessionToken, setTelegramSessionTokenState] = useState('');
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
@@ -57,6 +60,10 @@ function OrderDetail() {
         unsafeUser: nextUnsafeUser,
       };
     });
+  }, []);
+
+  useEffect(() => {
+    setTelegramSessionTokenState(getTelegramEmployeeSessionToken());
   }, []);
 
   const fetchOrder = useCallback(async ({ showLoader = false } = {}) => {
@@ -86,7 +93,7 @@ function OrderDetail() {
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
-    if (!telegramInitData && !telegramUnsafeUser?.id) {
+    if (!telegramInitData && !telegramUnsafeUser?.id && !telegramSessionToken) {
       if (!telegramAuthResolved) {
         setSessionLoading(true);
         setSessionError('');
@@ -106,6 +113,7 @@ function OrderDetail() {
       body: JSON.stringify({
         initData: telegramInitData,
         unsafeUser: telegramUnsafeUser,
+        sessionToken: telegramSessionToken,
       }),
     })
       .then(async res => {
@@ -115,13 +123,19 @@ function OrderDetail() {
         }
         return data;
       })
-      .then(data => setTelegramEmployee(data?.employee || null))
+      .then(data => {
+        if (data?.sessionToken) {
+          setTelegramEmployeeSessionToken(data.sessionToken);
+          setTelegramSessionTokenState(data.sessionToken);
+        }
+        setTelegramEmployee(data?.employee || null);
+      })
       .catch(error => {
         setTelegramEmployee(null);
         setSessionError(error.message || 'Не удалось определить сотрудника Telegram.');
       })
       .finally(() => setSessionLoading(false));
-  }, [telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser]);
+  }, [telegramAuthResolved, telegramInitData, telegramMode, telegramSessionToken, telegramUnsafeUser]);
 
   useEffect(() => {
     loadTelegramEmployeeSession();
@@ -222,6 +236,7 @@ function OrderDetail() {
     { label: 'Auth данные считаны', value: telegramAuthResolved ? 'да' : 'ещё читаются' },
     { label: 'initData', value: telegramInitData ? `есть (${telegramInitData.length} симв.)` : 'нет' },
     { label: 'unsafe user', value: telegramUnsafeUser?.id ? `есть (id: ${telegramUnsafeUser.id})` : 'нет' },
+    { label: 'session token', value: telegramSessionToken ? 'есть' : 'нет' },
     { label: 'Определён сотрудник', value: telegramEmployee ? `${telegramEmployee.fullName} (${ROLE_LABELS[telegramEmployee.role] || telegramEmployee.role})` : 'нет' },
     { label: 'Ошибка сессии', value: sessionError || 'нет' },
   ];
@@ -266,6 +281,7 @@ function OrderDetail() {
       body: JSON.stringify({
         initData: telegramInitData,
         unsafeUser: telegramUnsafeUser,
+        sessionToken: telegramSessionToken,
         text,
       }),
     });
@@ -282,7 +298,7 @@ function OrderDetail() {
   };
 
   const updateTelegramStage = async (stage) => {
-    if (!telegramMode || !telegramEmployee || (!telegramInitData && !telegramUnsafeUser?.id)) {
+    if (!telegramMode || !telegramEmployee || (!telegramInitData && !telegramUnsafeUser?.id && !telegramSessionToken)) {
       setStageError('Не удалось определить сотрудника Telegram для смены статуса.');
       return;
     }
@@ -297,6 +313,7 @@ function OrderDetail() {
       body: JSON.stringify({
         initData: telegramInitData,
         unsafeUser: telegramUnsafeUser,
+        sessionToken: telegramSessionToken,
         stepId: stage.stepId,
         status: nextStatus,
       }),
