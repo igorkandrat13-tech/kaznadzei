@@ -35,10 +35,28 @@ function OrderDetail() {
   const [savingComment, setSavingComment] = useState(false);
   const [savingStageId, setSavingStageId] = useState('');
   const [stageError, setStageError] = useState('');
+  const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
+  const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
 
   const telegramMode = isTelegramWebApp();
-  const telegramInitData = getTelegramInitData();
-  const telegramUnsafeUser = getTelegramUnsafeUser();
+  const telegramInitData = telegramAuth.initData;
+  const telegramUnsafeUser = telegramAuth.unsafeUser;
+
+  const refreshTelegramAuth = useCallback(() => {
+    const nextInitData = persistTelegramInitData() || getTelegramInitData();
+    const nextUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
+
+    setTelegramAuth(current => {
+      const sameUnsafeUserId = String(current?.unsafeUser?.id || '') === String(nextUnsafeUser?.id || '');
+      if (current.initData === nextInitData && sameUnsafeUserId) {
+        return current;
+      }
+      return {
+        initData: nextInitData,
+        unsafeUser: nextUnsafeUser,
+      };
+    });
+  }, []);
 
   const fetchOrder = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) {
@@ -68,6 +86,11 @@ function OrderDetail() {
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
     if (!telegramInitData && !telegramUnsafeUser?.id) {
+      if (!telegramAuthResolved) {
+        setSessionLoading(true);
+        setSessionError('');
+        return;
+      }
       setTelegramEmployee(null);
       setSessionLoading(false);
       setSessionError('Telegram не передал данные сотрудника. Откройте заказ заново через кнопку в боте.');
@@ -97,7 +120,7 @@ function OrderDetail() {
         setSessionError(error.message || 'Не удалось определить сотрудника Telegram.');
       })
       .finally(() => setSessionLoading(false));
-  }, [telegramInitData, telegramMode, telegramUnsafeUser]);
+  }, [telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser]);
 
   useEffect(() => {
     loadTelegramEmployeeSession();
@@ -110,8 +133,7 @@ function OrderDetail() {
     if (!webApp) return;
 
     markTelegramWebAppSession();
-    persistTelegramInitData();
-    persistTelegramUnsafeUser();
+    refreshTelegramAuth();
 
     if (typeof webApp.ready === 'function') {
       webApp.ready();
@@ -120,7 +142,34 @@ function OrderDetail() {
     if (typeof webApp.expand === 'function') {
       webApp.expand();
     }
-  }, [telegramMode]);
+
+    const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(refreshTelegramAuth, delay));
+    const finishTimer = window.setTimeout(() => {
+      refreshTelegramAuth();
+      setTelegramAuthResolved(true);
+    }, 1700);
+
+    return () => {
+      retryTimers.forEach(timerId => window.clearTimeout(timerId));
+      window.clearTimeout(finishTimer);
+    };
+  }, [refreshTelegramAuth, telegramMode]);
+
+  useEffect(() => {
+    if (!telegramMode) return undefined;
+
+    const handleVisibilityRefresh = () => {
+      refreshTelegramAuth();
+    };
+
+    window.addEventListener('focus', handleVisibilityRefresh);
+    document.addEventListener('visibilitychange', handleVisibilityRefresh);
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityRefresh);
+      document.removeEventListener('visibilitychange', handleVisibilityRefresh);
+    };
+  }, [refreshTelegramAuth, telegramMode]);
 
   useEffect(() => {
     if (!telegramMode) return undefined;
