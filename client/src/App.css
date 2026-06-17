@@ -87,6 +87,13 @@ body::before {
   gap: 8px;
 }
 
+.App-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .App-header nav a {
   color: #d8ecff;
   text-decoration: none;
@@ -102,6 +109,34 @@ body::before {
   background: rgba(34, 63, 98, 0.94);
   border-color: rgba(143, 205, 255, 0.28);
   transform: translateY(-1px);
+}
+
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(132, 190, 255, 0.12);
+  background: rgba(14, 30, 50, 0.8);
+  box-shadow: 0 10px 24px rgba(2, 8, 16, 0.16);
+  cursor: pointer;
+}
+
+.theme-switch-option {
+  min-width: 84px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.theme-switch-option-active {
+  background: linear-gradient(135deg, #1f90d2, #47b9ff);
+  color: white;
+  box-shadow: 0 10px 22px rgba(39, 131, 202, 0.22);
 }
 
 .container {
@@ -2082,6 +2117,295 @@ table tr:hover td {
   }
 }
 
+body[data-theme='light'] {
+  --app-bg: #eef5fb;
+  --app-bg-soft: #f6faff;
+  --panel-bg: rgba(255, 255, 255, 0.84);
+  --panel-bg-strong: rgba(255, 255, 255, 0.94);
+  --panel-border: rgba(98, 140, 190, 0.16);
+  --panel-border-strong: rgba(84, 132, 190, 0.26);
+  --text-main: #17324d;
+  --text-soft: rgba(45, 76, 108, 0.8);
+  --text-muted: rgba(69, 99, 131, 0.68);
+  --shadow-panel: 0 18px 45px rgba(35, 68, 105, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(101, 195, 255, 0.2), transparent 22%),
+    radial-gradient(circle at 88% 10%, rgba(111, 225, 214, 0.16), transparent 20%),
+    linear-gradient(180deg, #f4f9ff 0%, #edf5fb 38%, #e7f0f7 100%);
+  color: var(--text-main);
+}
+
+body[data-theme='light']::before {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(121, 222, 255, 0.12), transparent 20%),
+    radial-gradient(circle at 80% 10%, rgba(100, 230, 194, 0.09), transparent 18%),
+    radial-gradient(circle at 50% 100%, rgba(106, 183, 255, 0.08), transparent 24%);
+}
+
+body[data-theme='light'] .App-header {
+  background: linear-gradient(135deg, rgba(250, 253, 255, 0.94), rgba(237, 245, 252, 0.9));
+  border-bottom-color: rgba(112, 156, 205, 0.14);
+  box-shadow: 0 14px 34px rgba(45, 78, 114, 0.1);
+}
+
+body[data-theme='light'] .App-header h1,
+body[data-theme='light'] .card h2,
+body[data-theme='light'] .modal-title,
+body[data-theme='light'] .telegram-comment-title,
+body[data-theme='light'] .home-role-panel-title,
+body[data-theme='light'] .home-hero-panel h2,
+body[data-theme='light'] .panel-info-title,
+body[data-theme='light'] .service-details-title {
+  color: #16314b;
+}
+
+body[data-theme='light'] .App-header nav a {
+  color: #23415f;
+  background: rgba(255, 255, 255, 0.76);
+  border-color: rgba(122, 167, 214, 0.16);
+}
+
+body[data-theme='light'] .App-header nav a:hover {
+  background: rgba(239, 247, 255, 0.98);
+  border-color: rgba(99, 159, 221, 0.28);
+}
+
+body[data-theme='light'] .theme-switch {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(122, 167, 214, 0.18);
+  box-shadow: 0 10px 24px rgba(60, 97, 138, 0.1);
+}
+
+body[data-theme='light'] .theme-switch-option {
+  color: rgba(37, 66, 98, 0.72);
+}
+
+body[data-theme='light'] .card,
+body[data-theme='light'] .mobile-order-card,
+body[data-theme='light'] .mobile-settings-card,
+body[data-theme='light'] .overview-stat-card,
+body[data-theme='light'] .telegram-stage-card,
+body[data-theme='light'] .detail-block,
+body[data-theme='light'] .comments-modal-item,
+body[data-theme='light'] .panel-soft,
+body[data-theme='light'] .panel-info,
+body[data-theme='light'] .mobile-order-card-field,
+body[data-theme='light'] .mobile-order-card-note,
+body[data-theme='light'] .mobile-order-stage-row,
+body[data-theme='light'] .mobile-settings-card-note,
+body[data-theme='light'] .comments-modal-body,
+body[data-theme='light'] .telegram-order-summary,
+body[data-theme='light'] .telegram-comment-meta,
+body[data-theme='light'] .telegram-comment-placeholder,
+body[data-theme='light'] .telegram-comment-current,
+body[data-theme='light'] .scanner-status-box,
+body[data-theme='light'] .modal-note-box,
+body[data-theme='light'] .panel-info-code {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 250, 255, 0.88));
+  border-color: rgba(120, 164, 212, 0.16);
+  box-shadow: 0 16px 34px rgba(40, 76, 114, 0.08);
+}
+
+body[data-theme='light'] table th {
+  background: rgba(237, 245, 252, 0.94);
+  color: #557497;
+  border-bottom-color: rgba(126, 165, 208, 0.16);
+}
+
+body[data-theme='light'] table td {
+  color: #1c3956;
+  border-bottom-color: rgba(126, 165, 208, 0.1);
+}
+
+body[data-theme='light'] table tr:hover td {
+  background: rgba(233, 243, 252, 0.72);
+}
+
+body[data-theme='light'] .mobile-order-card-title,
+body[data-theme='light'] .detail-value,
+body[data-theme='light'] .telegram-stage-card-title,
+body[data-theme='light'] .comments-modal-body-text,
+body[data-theme='light'] .mobile-settings-card-meta,
+body[data-theme='light'] .mobile-order-card-value,
+body[data-theme='light'] .home-tech-card h3,
+body[data-theme='light'] .home-tech-card,
+body[data-theme='light'] .comments-modal-item,
+body[data-theme='light'] .badge,
+body[data-theme='light'] .form-group label {
+  color: #1b3956;
+}
+
+body[data-theme='light'] .App-header-subtitle,
+body[data-theme='light'] .card p,
+body[data-theme='light'] .mobile-order-card-subtitle,
+body[data-theme='light'] .mobile-order-card-label,
+body[data-theme='light'] .detail-label,
+body[data-theme='light'] .telegram-comment-label,
+body[data-theme='light'] .telegram-stage-card-subtitle,
+body[data-theme='light'] .text-muted,
+body[data-theme='light'] .settings-hint,
+body[data-theme='light'] .filters-summary,
+body[data-theme='light'] .panel-soft-text,
+body[data-theme='light'] .panel-info-text,
+body[data-theme='light'] .empty-inline,
+body[data-theme='light'] .empty-cell,
+body[data-theme='light'] .text-subtle {
+  color: rgba(61, 91, 121, 0.78);
+}
+
+body[data-theme='light'] .btn {
+  background: linear-gradient(180deg, #ffffff, #f1f7fd);
+  color: #22415f;
+  border-color: rgba(121, 163, 209, 0.16);
+  box-shadow: 0 10px 22px rgba(60, 97, 138, 0.08);
+}
+
+body[data-theme='light'] .btn-primary,
+body[data-theme='light'] .theme-switch-option-active {
+  background: linear-gradient(135deg, #2e98da, #63c7ff);
+  color: white;
+}
+
+body[data-theme='light'] .btn-success {
+  background: linear-gradient(135deg, #1ca184, #4ed8b3);
+  color: white;
+}
+
+body[data-theme='light'] .btn-secondary {
+  background: linear-gradient(135deg, #dfeeff, #eef6ff);
+  color: #244260;
+}
+
+body[data-theme='light'] .btn-danger {
+  background: linear-gradient(135deg, #dd6868, #ff8b8b);
+  color: white;
+}
+
+body[data-theme='light'] .btn-archive {
+  background: linear-gradient(135deg, #8f66db, #b490ff);
+  color: white;
+}
+
+body[data-theme='light'] .manager-comment-trigger,
+body[data-theme='light'] .comments-chip,
+body[data-theme='light'] .tab {
+  background: rgba(255, 255, 255, 0.84);
+  color: #264463;
+  border-color: rgba(121, 163, 209, 0.14);
+}
+
+body[data-theme='light'] .manager-comment-trigger-active,
+body[data-theme='light'] .comments-modal-item-active,
+body[data-theme='light'] .tab-active {
+  background: linear-gradient(135deg, #2e98da, #63c7ff);
+  color: white;
+  border-color: rgba(83, 168, 228, 0.24);
+}
+
+body[data-theme='light'] .badge-neutral {
+  background: rgba(235, 243, 251, 0.94);
+  color: #42617f;
+  border-color: rgba(126, 165, 208, 0.18);
+}
+
+body[data-theme='light'] .badge-progress {
+  background: rgba(255, 241, 214, 0.96);
+  color: #9a6a19;
+  border-color: rgba(231, 188, 110, 0.24);
+}
+
+body[data-theme='light'] .badge-success {
+  background: rgba(224, 249, 238, 0.96);
+  color: #18785d;
+  border-color: rgba(92, 199, 161, 0.24);
+}
+
+body[data-theme='light'] .form-group input,
+body[data-theme='light'] .form-group select,
+body[data-theme='light'] .form-group textarea {
+  background: rgba(255, 255, 255, 0.92);
+  color: #17324d;
+  border-color: rgba(121, 163, 209, 0.16);
+}
+
+body[data-theme='light'] .form-group input::placeholder,
+body[data-theme='light'] .form-group textarea::placeholder {
+  color: rgba(79, 109, 138, 0.5);
+}
+
+body[data-theme='light'] .input-disabled {
+  background: rgba(240, 246, 252, 0.96) !important;
+  color: rgba(65, 96, 125, 0.72);
+}
+
+body[data-theme='light'] .settings-alert-error {
+  background: rgba(255, 239, 239, 0.96);
+  color: #b74d4d;
+  border-color: rgba(230, 127, 127, 0.18);
+}
+
+body[data-theme='light'] .settings-alert-success {
+  background: rgba(233, 250, 242, 0.96);
+  color: #1b7b60;
+  border-color: rgba(106, 214, 176, 0.18);
+}
+
+body[data-theme='light'] .modal-window {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 249, 255, 0.94));
+  border-color: rgba(120, 164, 212, 0.18);
+  box-shadow: 0 20px 48px rgba(40, 76, 114, 0.16);
+}
+
+body[data-theme='light'] .service-details-console-status {
+  background: #f4f8fc;
+  color: #21405e;
+}
+
+body[data-theme='light'] .service-details-console-logs {
+  background: #eef9f5;
+  color: #1d6c57;
+}
+
+body[data-theme='light'] .home-landing {
+  background:
+    radial-gradient(circle at top left, rgba(84, 190, 255, 0.16), transparent 28%),
+    radial-gradient(circle at 85% 15%, rgba(102, 227, 216, 0.14), transparent 26%),
+    linear-gradient(135deg, #f7fbff 0%, #eef5fb 48%, #e8f1f9 100%);
+  border-color: rgba(126, 165, 208, 0.16);
+  box-shadow: 0 24px 60px rgba(40, 76, 114, 0.12);
+}
+
+body[data-theme='light'] .home-landing-grid {
+  background-image:
+    linear-gradient(rgba(118, 158, 201, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(118, 158, 201, 0.12) 1px, transparent 1px);
+}
+
+body[data-theme='light'] .home-hero-panel,
+body[data-theme='light'] .home-role-panel,
+body[data-theme='light'] .home-tech-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 250, 255, 0.86));
+  border-color: rgba(121, 163, 209, 0.14);
+  box-shadow: 0 16px 36px rgba(40, 76, 114, 0.1);
+}
+
+body[data-theme='light'] .home-hero-topline,
+body[data-theme='light'] .home-tech-card-badge,
+body[data-theme='light'] .home-tech-card-icon,
+body[data-theme='light'] .home-hero-tags span,
+body[data-theme='light'] .home-stat-card {
+  background: rgba(239, 247, 255, 0.96);
+  color: #2a587c;
+  border-color: rgba(121, 163, 209, 0.14);
+}
+
+body[data-theme='light'] .home-hero-panel p,
+body[data-theme='light'] .home-role-panel-subtitle,
+body[data-theme='light'] .home-tech-card p,
+body[data-theme='light'] .home-stat-label {
+  color: rgba(61, 91, 121, 0.78);
+}
+
 @media (max-width: 1024px) {
   .App-header {
     padding: 16px 20px;
@@ -2126,9 +2450,17 @@ table tr:hover td {
     justify-content: center;
     gap: 8px;
   }
+  .App-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
   .App-header nav a {
     padding: 6px 12px;
     font-size: 12px;
+  }
+  .theme-switch {
+    align-self: center;
   }
   .container {
     padding: 0 10px;
@@ -2265,6 +2597,17 @@ table tr:hover td {
   .home-landing {
     padding: 12px;
     border-radius: 18px;
+  }
+
+  .theme-switch {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .theme-switch-option {
+    min-width: 0;
+    flex: 1 1 0;
+    text-align: center;
   }
 
   .home-hero-panel,
