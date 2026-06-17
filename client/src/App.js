@@ -24,6 +24,7 @@ function AppLayout() {
     const routeTelegramMode = location.pathname === '/telegram-app';
     const telegramMode = detectTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
     const [theme, setTheme] = useState(() => window.localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     useEffect(() => {
         if (detectTelegramWebApp()) {
@@ -36,31 +37,48 @@ function AppLayout() {
         window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     }, [theme]);
 
+    useEffect(() => {
+        setMobileMenuOpen(false);
+    }, [location.pathname]);
+
     return (
         <>
             {!telegramMode && (
-                <div className="App-header">
-                    <div className="App-header-brand">
-                        <h1>🏭 Мебельная фабрика Kaznadzei</h1>
-                        <div className="App-header-subtitle">Быстрый доступ к ключевым разделам. Рабочие роли остаются на главной странице.</div>
+                <div className={`App-header ${mobileMenuOpen ? 'App-header-mobile-open' : ''}`}>
+                    <div className="App-header-main">
+                        <div className="App-header-brand">
+                            <h1>🏭 Мебельная фабрика Kaznadzei</h1>
+                            <div className="App-header-subtitle">Быстрый доступ к ключевым разделам. Рабочие роли остаются на главной странице.</div>
+                        </div>
+                        <div className="App-header-controls">
+                            <button
+                                className="theme-switch"
+                                type="button"
+                                onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}
+                                aria-label={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
+                                title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
+                            >
+                                <span className={`theme-switch-option ${theme === 'light' ? 'theme-switch-option-active' : ''}`}>Светлая</span>
+                                <span className={`theme-switch-option ${theme === 'dark' ? 'theme-switch-option-active' : ''}`}>Темная</span>
+                            </button>
+                            <button
+                                className="mobile-menu-toggle"
+                                type="button"
+                                onClick={() => setMobileMenuOpen(current => !current)}
+                                aria-expanded={mobileMenuOpen}
+                                aria-label={mobileMenuOpen ? 'Скрыть меню' : 'Показать меню'}
+                            >
+                                {mobileMenuOpen ? 'Закрыть' : 'Меню'}
+                            </button>
+                        </div>
                     </div>
-                    <div className="App-header-actions">
+                    <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
                         <nav>
-                            <Link to="/">Главная</Link>
-                            <Link to="/manager">Менеджер</Link>
-                            <Link to="/archive">Архив</Link>
-                            <Link to="/admin">Админ</Link>
+                            <Link to="/" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
+                            <Link to="/manager" onClick={() => setMobileMenuOpen(false)}>Менеджер</Link>
+                            <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>
+                            <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>Админ</Link>
                         </nav>
-                        <button
-                            className="theme-switch"
-                            type="button"
-                            onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}
-                            aria-label={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
-                            title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
-                        >
-                            <span className={`theme-switch-option ${theme === 'light' ? 'theme-switch-option-active' : ''}`}>Светлая</span>
-                            <span className={`theme-switch-option ${theme === 'dark' ? 'theme-switch-option-active' : ''}`}>Темная</span>
-                        </button>
                     </div>
                 </div>
             )}

@@ -63,6 +63,14 @@ body::before {
   backdrop-filter: blur(18px);
 }
 
+.App-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
 .App-header-brand {
   display: flex;
   flex-direction: column;
@@ -92,6 +100,13 @@ body::before {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.App-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .App-header nav a {
@@ -137,6 +152,29 @@ body::before {
   background: linear-gradient(135deg, #1f90d2, #47b9ff);
   color: white;
   box-shadow: 0 10px 22px rgba(39, 131, 202, 0.22);
+}
+
+.mobile-menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(132, 190, 255, 0.12);
+  background: rgba(20, 42, 69, 0.72);
+  color: #d8ecff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(2, 8, 16, 0.16);
+  transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.mobile-menu-toggle:hover {
+  background: rgba(34, 63, 98, 0.94);
+  border-color: rgba(143, 205, 255, 0.28);
+  transform: translateY(-1px);
 }
 
 .container {
@@ -2180,6 +2218,18 @@ body[data-theme='light'] .theme-switch-option {
   color: rgba(37, 66, 98, 0.72);
 }
 
+body[data-theme='light'] .mobile-menu-toggle {
+  background: rgba(255, 255, 255, 0.78);
+  color: #23415f;
+  border-color: rgba(122, 167, 214, 0.18);
+  box-shadow: 0 10px 24px rgba(60, 97, 138, 0.1);
+}
+
+body[data-theme='light'] .mobile-menu-toggle:hover {
+  background: rgba(239, 247, 255, 0.98);
+  border-color: rgba(99, 159, 221, 0.28);
+}
+
 body[data-theme='light'] .card,
 body[data-theme='light'] .mobile-order-card,
 body[data-theme='light'] .mobile-settings-card,
@@ -2438,29 +2488,56 @@ body[data-theme='light'] .home-stat-label {
 
 @media (max-width: 768px) {
   .App-header {
-    flex-direction: column;
-    gap: 12px;
-    text-align: center;
-    padding: 16px;
+    padding: 12px 14px;
+    gap: 10px;
   }
   .App-header-brand {
+    min-width: 0;
+  }
+  .App-header h1 {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+  .App-header-subtitle {
+    display: none;
+  }
+  .App-header-main {
+    gap: 12px;
     align-items: center;
   }
-  .App-header nav {
-    justify-content: center;
-    gap: 8px;
-  }
   .App-header-actions {
+    display: none;
+    width: 100%;
+    padding-top: 2px;
+  }
+  .App-header-actions.App-header-actions-open {
+    display: flex;
+  }
+  .App-header nav {
     width: 100%;
     flex-direction: column;
-    align-items: stretch;
+    gap: 8px;
   }
   .App-header nav a {
-    padding: 6px 12px;
-    font-size: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    text-align: center;
+  }
+  .App-header-controls {
+    margin-left: auto;
   }
   .theme-switch {
-    align-self: center;
+    min-height: 40px;
+    padding: 3px;
+  }
+  .theme-switch-option {
+    min-width: 64px;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+  .mobile-menu-toggle {
+    display: inline-flex;
   }
   .container {
     padding: 0 10px;
@@ -2548,7 +2625,6 @@ body[data-theme='light'] .home-stat-label {
   }
   .telegram-comment-actions .btn,
   .telegram-order-actions .btn,
-  .App-header nav a,
   .section-header-actions .btn,
   .settings-actions .btn,
   .modal-actions .btn,
@@ -2589,6 +2665,22 @@ body[data-theme='light'] .home-stat-label {
 }
 
 @media (max-width: 480px) {
+  .App-header {
+    padding: 10px 10px;
+  }
+
+  .App-header-main {
+    align-items: flex-start;
+  }
+
+  .App-header h1 {
+    font-size: 16px;
+  }
+
+  .App-header-controls {
+    gap: 8px;
+  }
+
   .container-telegram {
     margin: 8px auto 12px;
     padding: 0 8px;
@@ -2600,14 +2692,18 @@ body[data-theme='light'] .home-stat-label {
   }
 
   .theme-switch {
-    width: 100%;
-    justify-content: center;
+    min-height: 38px;
   }
 
   .theme-switch-option {
-    min-width: 0;
-    flex: 1 1 0;
-    text-align: center;
+    min-width: 54px;
+    padding: 7px 8px;
+  }
+
+  .mobile-menu-toggle {
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 12px;
   }
 
   .home-hero-panel,
