@@ -263,13 +263,13 @@ function Manager() {
             <p>Управление заказами клиентов</p>
           </div>
           <div className="section-header-actions">
-            <button className="btn btn-success" style={{ padding: '10px 24px', fontSize: 14 }} onClick={openNewForm}>➕ Новый заказ</button>
-            <Link to="/archive" className="btn" style={{ background: '#8e44ad', color: 'white', padding: '10px 24px', fontSize: 14, textDecoration: 'none' }}>📦 Архив</Link>
+            <button className="btn btn-success btn-wide" onClick={openNewForm}>➕ Новый заказ</button>
+            <Link to="/archive" className="btn btn-archive btn-wide">📦 Архив</Link>
           </div>
         </div>
-        {error && <div style={{ margin: '16px 0 0', padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{error}</div>}
+        {error && <div className="settings-alert settings-alert-error mt-16">{error}</div>}
         <div className="table-scroll desktop-table-only">
-          <table>
+          <table className="manager-orders-table">
             <thead>
               <tr>
                 <th>Заказчик</th>
@@ -292,16 +292,16 @@ function Manager() {
                   <td><strong>{order.name}</strong></td>
                   <td>{order.quantity || 1}</td>
                   <td>{order.material || '—'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
+                  <td className="date-cell">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td>
+                  <td className="date-cell">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
+                  <td className="date-cell">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
                   <td>{calcDuration(order.startDate, order.endDate) || '—'}</td>
                   <td>
                     <span className={getOrderStatusMeta(order.overallStatus).className}>
                       {getOrderStatusMeta(order.overallStatus).label}
                     </span>
                   </td>
-                  <td style={{ maxWidth: 220, whiteSpace: 'normal', lineHeight: 1.45 }}>
+                  <td className="comment-cell">
                     <button
                       className={`manager-comment-trigger ${String(order.notes || '').trim() ? 'manager-comment-trigger-active' : ''}`}
                       onClick={() => openManagerCommentModal(order)}
@@ -318,7 +318,7 @@ function Manager() {
                   </td>
                 </tr>
               ))}
-              {orders.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}
+              {orders.length === 0 && <tr><td colSpan={11} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
@@ -380,8 +380,8 @@ function Manager() {
 
                 <div className="mobile-order-card-actions">
                   <button className="btn btn-primary" onClick={() => handleEdit(order)}>Редактировать</button>
-                  <button className="btn" style={{ background: '#2c3e50', color: 'white' }} onClick={() => setQrOrderId(order._id)}>QR-код</button>
-                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDelete(order)}>Удалить</button>
+                  <button className="btn btn-secondary" onClick={() => setQrOrderId(order._id)}>QR-код</button>
+                  <button className="btn btn-danger" onClick={() => requestDelete(order)}>Удалить</button>
                 </div>
               </div>
             );
@@ -390,9 +390,9 @@ function Manager() {
         </div>
       </div>
       {showForm && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={handleCancel}>
-          <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 560, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 600, marginBottom: 16, color: '#2c3e50', fontSize: 18 }}>{editingId ? '✏️ Редактировать заказ' : '➕ Новый заказ'}</div>
+        <div className="modal-overlay" onClick={handleCancel}>
+          <div className="modal-window modal-window-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-title mb-16" style={{ fontSize: 18 }}>{editingId ? '✏️ Редактировать заказ' : '➕ Новый заказ'}</div>
             <div className="responsive-form-grid">
               <div className="form-group" style={{ marginBottom: 0 }}><label>Заказчик</label><input value={form.customer} onChange={handleChange('customer')} placeholder="ФИО или название" /></div>
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -417,7 +417,7 @@ function Manager() {
                 {formErrors.quantity ? <div className="field-error">{formErrors.quantity}</div> : null}
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>Материал</label><input value={form.material} onChange={handleChange('material')} placeholder="Например: ЛДСП, массив дуба" /></div>
-              <div className="form-group" style={{ marginBottom: 0 }}><label>Дата заказа</label><input type="date" value={form.orderDate} disabled style={{ background: '#f5f5f5' }} /></div>
+              <div className="form-group" style={{ marginBottom: 0 }}><label>Дата заказа</label><input type="date" value={form.orderDate} disabled className="input-disabled" /></div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>Начало изготовления</label><input type="date" value={form.startDate} onChange={handleChange('startDate')} /></div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Окончание изготовления</label>
@@ -429,30 +429,34 @@ function Manager() {
                 <label>Время изготовления: <strong>{calcDuration(form.startDate, form.endDate) || '—'}</strong></label>
               </div>
             </div>
-            <button className="btn btn-success" style={{ marginRight: 8 }} onClick={handleSubmit} disabled={!isFormValid}>{editingId ? 'Сохранить' : 'Создать заказ'}</button>
-            <button className="btn" onClick={handleCancel}>Отмена</button>
+            <div className="modal-actions">
+              <button className="btn" onClick={handleCancel}>Отмена</button>
+              <button className="btn btn-success" onClick={handleSubmit} disabled={!isFormValid}>{editingId ? 'Сохранить' : 'Создать заказ'}</button>
+            </div>
           </div>
         </div>
       )}
       {qrOrderId && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => setQrOrderId(null)}>
-          <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 400, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 600, marginBottom: 16, color: '#2c3e50' }}>📱 QR-код заказа</div>
-            <img src={`/api/orders/${qrOrderId}/qrcode`} alt="QR Code" style={{ width: 280, height: 280, display: 'block', margin: '0 auto 16px' }} />
-            <button className="btn btn-primary" onClick={handleDownloadQr}>⬇ Скачать</button>
-            <button className="btn" style={{ marginLeft: 8 }} onClick={() => setQrOrderId(null)}>Закрыть</button>
+        <div className="modal-overlay" onClick={() => setQrOrderId(null)}>
+          <div className="modal-window modal-window-sm" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-title mb-16">📱 QR-код заказа</div>
+            <img src={`/api/orders/${qrOrderId}/qrcode`} alt="QR Code" className="qr-image" />
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setQrOrderId(null)}>Закрыть</button>
+              <button className="btn btn-primary" onClick={handleDownloadQr}>⬇ Скачать</button>
+            </div>
           </div>
         </div>
       )}
       {managerCommentModal && (
         <div className="modal-overlay" onClick={closeManagerCommentModal}>
-          <div className="modal-window" style={{ width: 'min(100%, 640px)' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-window modal-window-md" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <div className="modal-title">Комментарий менеджера</div>
                 <div className="modal-subtitle">{managerCommentModal.orderName} · {managerCommentModal.customer}</div>
               </div>
-              <button className="btn" style={{ padding: '6px 10px' }} onClick={closeManagerCommentModal} disabled={savingManagerComment || deletingManagerComment}>
+              <button className="btn btn-small modal-close-btn" onClick={closeManagerCommentModal} disabled={savingManagerComment || deletingManagerComment}>
                 ✕
               </button>
             </div>
@@ -468,18 +472,17 @@ function Manager() {
               />
             </div>
 
-            <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+            <div className="modal-actions modal-actions-between">
               <div>
                 <button
-                  className="btn"
-                  style={{ background: '#e74c3c', color: 'white' }}
+                  className="btn btn-danger"
                   onClick={deleteManagerComment}
                   disabled={savingManagerComment || deletingManagerComment || !String(managerCommentModal.currentNotes || '').trim()}
                 >
                   {deletingManagerComment ? 'Удаление...' : 'Удалить'}
                 </button>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="modal-actions-group">
                 <button className="btn" onClick={closeManagerCommentModal} disabled={savingManagerComment || deletingManagerComment}>
                   Отмена
                 </button>

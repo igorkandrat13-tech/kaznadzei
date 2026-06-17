@@ -16,13 +16,13 @@ function ColorModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-window" style={{ maxWidth: 680 }} onClick={e => e.stopPropagation()}>
+      <div className="modal-window modal-window-md" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <div className="modal-title">{isEdit ? 'Редактировать цвет' : 'Добавить цвет'}</div>
             <div className="modal-subtitle">Настройка палитры для малярного цеха.</div>
           </div>
-          <button className="btn" style={{ padding: '6px 10px' }} onClick={onClose}>✕</button>
+          <button className="btn btn-small modal-close-btn" onClick={onClose}>✕</button>
         </div>
 
         <div className="form-group">

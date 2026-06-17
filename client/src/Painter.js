@@ -24,10 +24,10 @@ function Painter() {
       fetchExtraData={fetchPainterData}
       initialExtraData={{ colors: [] }}
       renderBeforeTable={({ extraData }) => (
-        <div style={{ marginBottom: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div className="color-chip-list">
           {(extraData.colors || []).map(color => (
-            <span key={color._id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, background: '#f5f5f5' }}>
-              <span style={{ width: 16, height: 16, borderRadius: '50%', background: color.hex, border: '1px solid #ddd' }} />
+            <span key={color._id} className="color-chip">
+              <span className="color-dot" style={{ background: color.hex }} />
               {color.name}
             </span>
           ))}
@@ -40,8 +40,8 @@ function Painter() {
           render: (order, { extraData }) => {
             const color = getColorForOrder(extraData.colors || [], order._id);
             return (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 16, height: 16, borderRadius: '50%', background: color.hex, border: '1px solid #ddd' }} />
+              <span className="color-chip">
+                <span className="color-dot" style={{ background: color.hex }} />
                 {color.name}
               </span>
             );

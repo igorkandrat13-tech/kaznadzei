@@ -11,13 +11,13 @@ function CommentsModal({
 
   return (
     <div className="modal-overlay" onClick={closeCommentsModal}>
-      <div className="modal-window" style={{ maxWidth: 900, width: '94%' }} onClick={e => e.stopPropagation()}>
+      <div className="modal-window modal-window-xl" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <div className="modal-title">📝 Примечания по заказу</div>
             <div className="modal-subtitle">{commentsModal.orderName}</div>
           </div>
-          <button className="btn" style={{ padding: '6px 10px' }} onClick={closeCommentsModal}>✕</button>
+          <button className="btn btn-small modal-close-btn" onClick={closeCommentsModal}>✕</button>
         </div>
 
         <div className="comments-modal-layout">
@@ -56,7 +56,7 @@ function CommentsModal({
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+        <div className="modal-actions">
           <button className="btn btn-primary" onClick={closeCommentsModal}>Закрыть</button>
         </div>
       </div>

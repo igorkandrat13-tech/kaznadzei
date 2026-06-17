@@ -21,7 +21,7 @@ function ConfirmDialog({
             <div className="modal-title">{title}</div>
             {message ? <div className="modal-subtitle confirm-dialog-message">{message}</div> : null}
           </div>
-          <button className="btn" style={{ padding: '6px 10px' }} onClick={onCancel} disabled={loading}>
+          <button className="btn btn-small modal-close-btn" onClick={onCancel} disabled={loading}>
             ✕
           </button>
         </div>

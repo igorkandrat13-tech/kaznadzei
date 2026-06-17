@@ -382,7 +382,7 @@ function OrderDetail() {
             <div className="detail-value detail-value-multiline">
               {managerNotes || 'Менеджер пока не добавил примечание.'}
             </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>
+            <div className="mt-8 text-small text-subtle">
               Данные заказа обновляются автоматически.
             </div>
           </div>

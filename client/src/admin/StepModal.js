@@ -16,13 +16,13 @@ function StepModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-window" style={{ maxWidth: 760 }} onClick={e => e.stopPropagation()}>
+      <div className="modal-window modal-window-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <div className="modal-title">{isEdit ? 'Редактировать этап' : 'Добавить этап'}</div>
             <div className="modal-subtitle">Настройка этапа для выбранной производственной роли.</div>
           </div>
-          <button className="btn" style={{ padding: '6px 10px' }} onClick={onClose}>✕</button>
+          <button className="btn btn-small modal-close-btn" onClick={onClose}>✕</button>
         </div>
 
         <div className="form-group">

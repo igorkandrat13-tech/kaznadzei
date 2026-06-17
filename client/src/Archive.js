@@ -38,15 +38,15 @@ function Archive() {
 
   return (
     <div>
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card section-spaced">
         <div className="section-header">
           <div>
             <h2>📦 Архив заказов</h2>
             <p>Фильтрация и просмотр завершенных и текущих заказов без возврата через историю браузера.</p>
           </div>
           <div className="section-header-actions">
-            <Link to="/manager" className="btn" style={{ textDecoration: 'none' }}>К менеджеру</Link>
-            <Link to="/admin" className="btn" style={{ textDecoration: 'none' }}>К админке</Link>
+            <Link to="/manager" className="btn btn-secondary">К менеджеру</Link>
+            <Link to="/admin" className="btn btn-secondary">К админке</Link>
           </div>
         </div>
         <div className="responsive-filters">
@@ -56,7 +56,7 @@ function Archive() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Статус</label>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }}>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="all">Все</option>
               {ORDER_STATUS_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -71,7 +71,7 @@ function Archive() {
             <label>Дата по</label>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
-          <div style={{ color: '#888', fontSize: 13, paddingBottom: 4 }}>Найдено: {filtered.length}</div>
+          <div className="filters-summary">Найдено: {filtered.length}</div>
         </div>
       </div>
 
@@ -98,9 +98,9 @@ function Archive() {
                   <td><strong>{order.name}</strong></td>
                   <td>{order.quantity || 1}</td>
                   <td>{order.material || '—'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
+                  <td className="date-cell">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td>
+                  <td className="date-cell">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
+                  <td className="date-cell">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
                   <td>{calcDuration(order.startDate, order.endDate) || '—'}</td>
                   <td>
                     <span className={getOrderStatusMeta(order.overallStatus).className}>
@@ -109,7 +109,7 @@ function Archive() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={9} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>

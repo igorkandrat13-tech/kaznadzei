@@ -113,27 +113,27 @@ function TelegramScannerPage() {
   }, [bootstrappingSession, openScanner]);
 
   return (
-    <div className="card" style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
+    <div className="card scanner-card">
       <h2>Сканирование QR-кода</h2>
-      <p style={{ color: '#555', lineHeight: 1.6 }}>
+      <p className="text-muted" style={{ lineHeight: 1.6 }}>
         После сканирования откроется страница заказа.
       </p>
 
-      <div style={{ margin: '20px 0', padding: 16, borderRadius: 10, background: '#f7f8fa', color: '#2c3e50' }}>
+      <div className="scanner-status-box">
         {bootstrappingSession ? 'Подготавливаю доступ...' : status}
       </div>
 
       {error && (
-        <div className="settings-alert settings-alert-error" style={{ textAlign: 'left', marginBottom: 16 }}>
+        <div className="settings-alert settings-alert-error mb-16" style={{ textAlign: 'left' }}>
           {error}
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div className="inline-actions-centered">
         <button className="btn btn-primary" onClick={openScanner}>
           Открыть камеру
         </button>
-        <button className="btn" onClick={() => closeTelegramWebApp() || navigate('/')}>
+        <button className="btn btn-secondary" onClick={() => closeTelegramWebApp() || navigate('/')}>
           Закрыть
         </button>
       </div>

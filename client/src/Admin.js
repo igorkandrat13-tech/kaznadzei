@@ -271,14 +271,13 @@ function Admin() {
   const renderOrderComments = (order) => {
     const comments = order.comments || [];
     if (comments.length === 0) {
-      return <span style={{ color: '#ccc' }}>—</span>;
+      return <span className="empty-inline">—</span>;
     }
 
     return (
       <div className="comments-cell">
         <button
-          className="btn"
-          style={{ alignSelf: 'flex-start', padding: '6px 10px', fontSize: 12 }}
+          className="btn btn-small"
           onClick={() => openCommentsModal(order)}
         >
           Открыть все ({comments.length})
@@ -307,7 +306,7 @@ function Admin() {
     return (
       <div>
         <div>{employee.telegramUsername || 'без username'}</div>
-        <div style={{ fontSize: 12, color: '#777' }}>
+        <div className="text-small text-subtle">
           {employee.telegramFirstName || ''} {employee.telegramLastName || ''}
           {employee.telegramFirstName || employee.telegramLastName ? ' ' : ''}ID: {employee.telegramUserId}
         </div>
@@ -675,7 +674,7 @@ function Admin() {
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
 
             <div className="form-group">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label className="helper-label">
                 Публичный адрес проекта
                 <HelpTooltip text="Укажите внешний HTTPS-адрес сайта. Он используется в QR-кодах и для Telegram webhook, поэтому адрес должен открываться из интернета." />
               </label>
@@ -687,7 +686,7 @@ function Admin() {
             </div>
 
             <div className="form-group">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label className="helper-label">
                 Токен Telegram-бота
                 <HelpTooltip text="Вставьте bot token, полученный у BotFather, в формате 123456789:AA.... Этот токен нужен для проверки бота, установки webhook и отправки ответов сотрудникам." />
               </label>
@@ -710,22 +709,22 @@ function Admin() {
             </SettingsActions>
 
             {telegramCheckResult && (
-              <div style={{ marginTop: 16, padding: 16, borderRadius: 10, background: '#f7f8fa' }}>
-                <div style={{ fontWeight: 700, marginBottom: 10, color: '#2c3e50' }}>Telegram-бот подключен</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+              <div className="panel-info">
+                <div className="panel-info-title">Telegram-бот подключен</div>
+                <div className="panel-info-grid">
                   <div><strong>Бот:</strong> {telegramCheckResult?.bot?.firstName || '—'}</div>
                   <div><strong>Username:</strong> {telegramCheckResult?.bot?.username ? `@${telegramCheckResult.bot.username}` : '—'}</div>
                   <div><strong>Webhook:</strong> {telegramCheckResult?.webhook?.url || 'не настроен'}</div>
                   <div><strong>Ожидает обновлений:</strong> {telegramCheckResult?.webhook?.pendingUpdateCount ?? 0}</div>
                 </div>
-                <div style={{ marginTop: 10, fontSize: 13, color: '#555', lineHeight: 1.5 }}>
+                <div className="panel-info-text">
                   Для авторизации сотрудников webhook должен указывать на адрес:
-                  <div style={{ marginTop: 6, padding: '8px 10px', background: 'white', borderRadius: 8, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  <div className="panel-info-code text-mono">
                     {telegramCheckResult.recommendedWebhookUrl}
                   </div>
                 </div>
                 {telegramCheckResult?.webhook?.lastErrorMessage && (
-                  <div style={{ marginTop: 10, color: '#b42318', fontSize: 13 }}>
+                  <div className="mt-10 text-danger text-small-13">
                     Последняя ошибка webhook: {telegramCheckResult.webhook.lastErrorMessage}
                   </div>
                 )}
@@ -790,11 +789,11 @@ function Admin() {
                       <td>{employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</td>
                       <td>
                         <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditEmployeeModal(employee)}>✎</button>
-                        <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteEmployee(employee)}>✕</button>
+                        <button className="btn btn-danger" onClick={() => requestDeleteEmployee(employee)}>✕</button>
                       </td>
                     </tr>
                   ))}
-                  {employees.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: '#999' }}>Сотрудники пока не добавлены</td></tr>}
+                  {employees.length === 0 && <tr><td colSpan={8} className="empty-cell">Сотрудники пока не добавлены</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -820,7 +819,7 @@ function Admin() {
                   ) : null}
                   <div className="mobile-settings-card-actions">
                     <button className="btn btn-primary" onClick={() => openEditEmployeeModal(employee)}>Редактировать</button>
-                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteEmployee(employee)}>Удалить</button>
+                    <button className="btn btn-danger" onClick={() => requestDeleteEmployee(employee)}>Удалить</button>
                   </div>
                 </div>
               ))}
@@ -872,7 +871,7 @@ function Admin() {
                       <td><span className="color-swatch-inline" style={{ background: c.hex }} />{c.hex}</td>
                       <td>
                         <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditColorModal(c)}>✎</button>
-                        <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteColor(c)}>✕</button>
+                        <button className="btn btn-danger" onClick={() => requestDeleteColor(c)}>✕</button>
                       </td>
                     </tr>
                   ))}
@@ -892,7 +891,7 @@ function Admin() {
                   </div>
                   <div className="mobile-settings-card-actions">
                     <button className="btn btn-primary" onClick={() => openEditColorModal(color)}>Редактировать</button>
-                    <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteColor(color)}>Удалить</button>
+                    <button className="btn btn-danger" onClick={() => requestDeleteColor(color)}>Удалить</button>
                   </div>
                 </div>
               ))}
@@ -923,11 +922,11 @@ function Admin() {
                     <td>{s.order}</td><td>{s.stepName}</td><td>{s.description}</td>
                     <td>
                       <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditStepModal(s)}>✎</button>
-                      <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteStep(s)}>✕</button>
+                      <button className="btn btn-danger" onClick={() => requestDeleteStep(s)}>✕</button>
                     </td>
                   </tr>
                 ))}
-                {filteredSteps.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: '#999' }}>Нет этапов</td></tr>}
+                {filteredSteps.length === 0 && <tr><td colSpan={4} className="empty-cell">Нет этапов</td></tr>}
               </tbody>
             </table>
           </div>
@@ -946,7 +945,7 @@ function Admin() {
                 </div>
                 <div className="mobile-settings-card-actions">
                   <button className="btn btn-primary" onClick={() => openEditStepModal(step)}>Редактировать</button>
-                  <button className="btn" style={{ background: '#e74c3c', color: 'white' }} onClick={() => requestDeleteStep(step)}>Удалить</button>
+                  <button className="btn btn-danger" onClick={() => requestDeleteStep(step)}>Удалить</button>
                 </div>
               </div>
             ))}
@@ -968,8 +967,8 @@ function Admin() {
           description="Общая сводка по этапам производства, заказам и обновлениям проекта"
           actions={
             <>
-            <Link to="/archive" className="btn" style={{ background: '#8e44ad', color: 'white', padding: '10px 24px', fontSize: 14, textDecoration: 'none' }}>📦 Архив</Link>
-            <button className="btn" style={{ background: '#2c3e50', color: 'white', padding: '10px 24px', fontSize: 14 }} onClick={() => { setActiveRole('general'); setShowSettings(true); }}>
+            <Link to="/archive" className="btn btn-archive btn-wide">📦 Архив</Link>
+            <button className="btn btn-secondary btn-wide" onClick={() => { setActiveRole('general'); setShowSettings(true); }}>
               ⚙️ Настройки
             </button>
             </>
@@ -983,7 +982,7 @@ function Admin() {
           description="Прогресс каждого изделия по всем этапам производства"
         />
         <div className="table-scroll desktop-table-only">
-          <table className="orders-table">
+          <table className="orders-table admin-overview-table">
             <thead>
               <tr>
                 <th>Изделие</th>
@@ -1020,7 +1019,7 @@ function Admin() {
                   </tr>
                 );
               })}
-              {orders.length === 0 && <tr><td colSpan={sortedSteps.length + 3} style={{ textAlign: 'center', color: '#999' }}>Нет заказов</td></tr>}
+              {orders.length === 0 && <tr><td colSpan={sortedSteps.length + 3} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>

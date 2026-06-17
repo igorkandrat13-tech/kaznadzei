@@ -13,13 +13,13 @@ function EmployeeModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-window" style={{ maxWidth: 760 }} onClick={e => e.stopPropagation()}>
+      <div className="modal-window modal-window-lg" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <div className="modal-title">{mode === 'edit' ? 'Редактировать сотрудника' : 'Добавить сотрудника'}</div>
             <div className="modal-subtitle">Параметры входа в Telegram-бот и роль сотрудника в производстве.</div>
           </div>
-          <button className="btn" style={{ padding: '6px 10px' }} onClick={onClose}>✕</button>
+          <button className="btn btn-small modal-close-btn" onClick={onClose}>✕</button>
         </div>
 
         <div className="form-group">
@@ -36,7 +36,6 @@ function EmployeeModal({
           <select
             value={employeeForm?.role || 'carpenter'}
             onChange={e => setEmployeeForm({ ...employeeForm, role: e.target.value })}
-            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }}
           >
             {roleTabs.map(role => (
               <option key={role.key} value={role.key}>{role.label}</option>
@@ -53,28 +52,28 @@ function EmployeeModal({
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+        <div className="modal-form-grid modal-form-grid-two">
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Пароль</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="modal-actions-group">
               <input
                 value={employeeForm?.password || ''}
                 onChange={e => setEmployeeForm({ ...employeeForm, password: e.target.value })}
                 placeholder="Пароль для первичного входа"
               />
-              <button className="btn" type="button" onClick={() => setEmployeeForm({ ...employeeForm, password: generatePassword() })}>Сгенерировать</button>
+              <button className="btn btn-secondary" type="button" onClick={() => setEmployeeForm({ ...employeeForm, password: generatePassword() })}>Сгенерировать</button>
             </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>PIN-код</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="modal-actions-group">
               <input
                 value={employeeForm?.pinCode || ''}
                 onChange={e => setEmployeeForm({ ...employeeForm, pinCode: e.target.value })}
                 placeholder="Код для Telegram-бота"
               />
-              <button className="btn" type="button" onClick={() => setEmployeeForm({ ...employeeForm, pinCode: generatePinCode() })}>Сгенерировать</button>
+              <button className="btn btn-secondary" type="button" onClick={() => setEmployeeForm({ ...employeeForm, pinCode: generatePinCode() })}>Сгенерировать</button>
             </div>
           </div>
         </div>

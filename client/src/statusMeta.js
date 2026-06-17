@@ -5,15 +5,15 @@ export const STAGE_STATUS_CYCLE = {
 };
 
 export const STAGE_STATUS_META = {
-  pending: { className: 'badge', label: 'Ожидание' },
-  in_progress: { className: 'badge badge-pending', label: 'В работе' },
-  completed: { className: 'badge badge-active', label: 'Готов' },
+  pending: { className: 'badge badge-neutral', label: 'Ожидание' },
+  in_progress: { className: 'badge badge-progress', label: 'В работе' },
+  completed: { className: 'badge badge-success', label: 'Готов' },
 };
 
 export const ORDER_STATUS_META = {
-  pending: { className: 'badge', label: 'Ожидание' },
-  in_progress: { className: 'badge badge-pending', label: 'В работе' },
-  completed: { className: 'badge badge-active', label: 'Завершен' },
+  pending: { className: 'badge badge-neutral', label: 'Ожидание' },
+  in_progress: { className: 'badge badge-progress', label: 'В работе' },
+  completed: { className: 'badge badge-success', label: 'Завершен' },
 };
 
 export const ORDER_STATUS_OPTIONS = [

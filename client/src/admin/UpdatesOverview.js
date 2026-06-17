@@ -96,7 +96,7 @@ function UpdatesOverview({
       {updateError && <div className="settings-alert settings-alert-error" style={{ whiteSpace: 'pre-wrap' }}>{updateError}</div>}
       {updateStatus?.enabled ? (
         <>
-          <div className="overview-stats-grid" style={{ marginTop: 16 }}>
+          <div className="overview-stats-grid mt-16">
             <div className="overview-stat-card"><strong>Git:</strong> {updateStatus?.gitAvailable ? (updateStatus.gitVersion || 'установлен') : 'не найден'}</div>
             <div className="overview-stat-card"><strong>systemd:</strong> {updateStatus?.systemctlAvailable ? 'доступен' : 'недоступен'}</div>
             <div className="overview-stat-card"><strong>Сервис:</strong> {updateStatus?.serviceName || '—'}</div>
@@ -134,20 +134,20 @@ function UpdatesOverview({
             </SettingsHint>
           )}
           {serviceDetails && (
-            <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+            <div className="service-details-grid mt-16">
               <div>
-                <div style={{ fontWeight: 700, marginBottom: 6, color: '#2c3e50' }}>
+                <div className="service-details-title">
                   Статус сервиса {serviceDetails.serviceName}
                 </div>
-                <pre style={{ margin: 0, padding: 12, borderRadius: 10, background: '#0f172a', color: '#e5eefc', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, lineHeight: 1.5, maxHeight: 280, overflow: 'auto' }}>
+                <pre className="service-details-console service-details-console-status">
                   {serviceDetails.statusText}
                 </pre>
               </div>
               <div>
-                <div style={{ fontWeight: 700, marginBottom: 6, color: '#2c3e50' }}>
+                <div className="service-details-title">
                   Последние логи
                 </div>
-                <pre style={{ margin: 0, padding: 12, borderRadius: 10, background: '#111827', color: '#d1fae5', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, lineHeight: 1.5, maxHeight: 320, overflow: 'auto' }}>
+                <pre className="service-details-console service-details-console-logs">
                   {serviceDetails.logsText}
                 </pre>
               </div>

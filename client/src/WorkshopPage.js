@@ -198,7 +198,7 @@ function WorkshopPage({
         </span>
         <span
           onClick={() => openCommentModal(order, text ? 'replace' : 'create')}
-          style={{ cursor: 'pointer', fontSize: 14, color: '#999', userSelect: 'none', flexShrink: 0 }}
+          style={{ cursor: 'pointer', fontSize: 14, color: 'rgba(189, 208, 230, 0.62)', userSelect: 'none', flexShrink: 0 }}
           title={text ? 'Открыть примечание' : 'Добавить примечание'}
         >
           {text ? '✏️' : '📝'}
@@ -247,12 +247,12 @@ function WorkshopPage({
     <div className="card">
       <h2>{title}</h2>
       <p>{description}</p>
-      {error && <div style={{ marginBottom: 16, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{error}</div>}
+      {error && <div className="settings-alert settings-alert-error mb-16">{error}</div>}
 
       {renderBeforeTable ? renderBeforeTable(context) : null}
 
       {steps.length === 0 ? (
-        renderNoSteps ? renderNoSteps(context) : <p style={{ color: '#999' }}>{emptyStepsText}</p>
+        renderNoSteps ? renderNoSteps(context) : <p className="text-subtle">{emptyStepsText}</p>
       ) : (
         <>
           <div className="table-scroll desktop-table-only">
@@ -285,7 +285,7 @@ function WorkshopPage({
                     <td style={{ minWidth: 160, maxWidth: 200 }}>{renderCommentCell(order)}</td>
                   </tr>
                 ))}
-                {orders.length === 0 && <tr><td colSpan={steps.length + extraColumns.length + (renderSummaryCell !== null ? 3 : 2)} style={{ textAlign: 'center', color: '#999' }}>{emptyOrdersText}</td></tr>}
+                {orders.length === 0 && <tr><td colSpan={steps.length + extraColumns.length + (renderSummaryCell !== null ? 3 : 2)} className="empty-cell">{emptyOrdersText}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -337,54 +337,54 @@ function WorkshopPage({
       )}
 
       {popupText && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => setPopupText(null)}>
-          <div style={{ background: 'white', borderRadius: 12, padding: 24, maxWidth: 500, width: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 600, marginBottom: 10, color: '#2c3e50' }}>📝 Примечание</div>
-            <div style={{ fontSize: 14, lineHeight: 1.5 }}>{popupText}</div>
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setPopupText(null)}>Закрыть</button>
+        <div className="modal-overlay" onClick={() => setPopupText(null)}>
+          <div className="modal-window modal-window-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-title mb-10">📝 Примечание</div>
+            <div className="modal-note-box">{popupText}</div>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={() => setPopupText(null)}>Закрыть</button>
+            </div>
           </div>
         </div>
       )}
 
       {commentModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeCommentModal}>
-          <div style={{ background: 'white', borderRadius: 14, padding: 24, maxWidth: 640, width: '92%', boxShadow: '0 12px 44px rgba(0,0,0,0.22)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', marginBottom: 16 }}>
+        <div className="modal-overlay" onClick={closeCommentModal}>
+          <div className="modal-window modal-window-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
               <div>
-                <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: 4 }}>📝 Примечание</div>
-                <div style={{ fontSize: 13, color: '#666' }}>{commentModal.orderName}</div>
+                <div className="modal-title">📝 Примечание</div>
+                <div className="modal-subtitle">{commentModal.orderName}</div>
               </div>
-              <button className="btn" style={{ padding: '6px 10px' }} onClick={closeCommentModal}>✕</button>
+              <button className="btn btn-small modal-close-btn" onClick={closeCommentModal}>✕</button>
             </div>
 
             {commentModal.currentText ? (
               <>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                <div className="modal-actions-group mb-12">
                   <button
-                    className="btn"
-                    style={{ background: commentModal.mode !== 'append' ? '#2c3e50' : '#f3f4f6', color: commentModal.mode !== 'append' ? 'white' : '#2c3e50' }}
+                    className={`btn ${commentModal.mode !== 'append' ? 'btn-secondary' : ''}`}
                     onClick={() => setCommentMode('replace')}
                   >
                     Редактировать
                   </button>
                   <button
-                    className="btn"
-                    style={{ background: commentModal.mode === 'append' ? '#2c3e50' : '#f3f4f6', color: commentModal.mode === 'append' ? 'white' : '#2c3e50' }}
+                    className={`btn ${commentModal.mode === 'append' ? 'btn-secondary' : ''}`}
                     onClick={() => setCommentMode('append')}
                   >
                     Добавить текст
                   </button>
                 </div>
 
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>Текущий комментарий</div>
-                  <div style={{ padding: '12px 14px', background: '#f7f8fa', borderRadius: 10, whiteSpace: 'pre-wrap', lineHeight: 1.5, fontSize: 14 }}>
+                <div className="modal-section">
+                  <div className="modal-text-meta">Текущий комментарий</div>
+                  <div className="modal-note-box">
                     {commentModal.currentText}
                   </div>
                 </div>
               </>
             ) : (
-              <div style={{ marginBottom: 14, padding: '12px 14px', background: '#f7f8fa', borderRadius: 10, color: '#666', fontSize: 14 }}>
+              <div className="modal-note-box modal-note-box-muted mb-14">
                 Комментарий пока не добавлен. Заполните текст ниже и сохраните его.
               </div>
             )}
@@ -404,21 +404,20 @@ function WorkshopPage({
               />
             </div>
 
-            {commentError && <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fdecec', color: '#b42318' }}>{commentError}</div>}
+            {commentError && <div className="settings-alert settings-alert-error">{commentError}</div>}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <div className="modal-actions modal-actions-between">
               <div>
                 {commentModal.currentText && (
                   <button
-                    className="btn"
-                    style={{ background: '#e74c3c', color: 'white' }}
+                    className="btn btn-danger"
                     onClick={() => setConfirmDeleteComment(true)}
                   >
                     Удалить
                   </button>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="modal-actions-group">
                 <button className="btn" onClick={closeCommentModal}>Отмена</button>
                 <button className="btn btn-success" onClick={saveComment}>
                   {commentModal.mode === 'append' && commentModal.currentText
