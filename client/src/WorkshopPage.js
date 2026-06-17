@@ -27,6 +27,8 @@ function WorkshopPage({
   const [error, setError] = useState('');
   const [confirmDeleteComment, setConfirmDeleteComment] = useState(false);
   const [deletingComment, setDeletingComment] = useState(false);
+  const [savingComment, setSavingComment] = useState(false);
+  const [savingStageKey, setSavingStageKey] = useState('');
 
   const fetchOrders = async () => {
     const res = await apiFetch('/api/orders');
@@ -88,6 +90,7 @@ function WorkshopPage({
   };
 
   const closeCommentModal = () => {
+    if (savingComment || deletingComment) return;
     setCommentModal(null);
     setCommentError('');
     setConfirmDeleteComment(false);
@@ -127,8 +130,10 @@ function WorkshopPage({
       setCommentError('Введите текст примечания.');
       return;
     }
+    if (savingComment) return;
     setError('');
     setCommentError('');
+    setSavingComment(true);
     const res = await apiFetch(`/api/orders/${commentModal.orderId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -136,8 +141,10 @@ function WorkshopPage({
     });
     if (!res.ok) {
       setCommentError(await getErrorMessage(res, 'Не удалось сохранить примечание.'));
+      setSavingComment(false);
       return;
     }
+    setSavingComment(false);
     closeCommentModal();
     await fetchOrders();
   };
@@ -162,7 +169,10 @@ function WorkshopPage({
   };
 
   const updateStage = async (orderId, stage) => {
+    const savingKey = `${orderId}:${stage.stepId}`;
+    if (savingStageKey === savingKey) return;
     setError('');
+    setSavingStageKey(savingKey);
     const res = await apiFetch(`/api/orders/${orderId}/stages/${stage.stepId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -170,9 +180,11 @@ function WorkshopPage({
     });
     if (!res.ok) {
       setError(await getErrorMessage(res, 'Не удалось обновить статус этапа.'));
+      setSavingStageKey('');
       return;
     }
     await fetchOrders();
+    setSavingStageKey('');
   };
 
   const renderCommentCell = (order) => {
@@ -214,10 +226,11 @@ function WorkshopPage({
       <button
         className={`${badge.className} stage-status-button`}
         onClick={() => updateStage(order._id, stage)}
+        disabled={savingStageKey === `${order._id}:${stage.stepId}`}
         aria-label={`Статус "${badge.label}". Нажатие переведет этап в "${nextStatusMeta.label}".`}
       >
         <span className="stage-status-button-label">{badge.label}</span>
-        <span className="stage-status-button-next">Нажмите: {nextStatusMeta.label}</span>
+        <span className="stage-status-button-next">{savingStageKey === `${order._id}:${stage.stepId}` ? 'Обновление...' : `Нажмите: ${nextStatusMeta.label}`}</span>
       </button>
     );
   };
@@ -349,14 +362,14 @@ function WorkshopPage({
       )}
 
       {commentModal && (
-        <div className="modal-overlay" onClick={closeCommentModal}>
+        <div className="modal-overlay" onClick={savingComment || deletingComment ? undefined : closeCommentModal}>
           <div className="modal-window modal-window-md" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <div className="modal-title">📝 Примечание</div>
                 <div className="modal-subtitle">{commentModal.orderName}</div>
               </div>
-              <button className="btn btn-small modal-close-btn" onClick={closeCommentModal}>✕</button>
+              <button className="btn btn-small modal-close-btn" onClick={closeCommentModal} disabled={savingComment || deletingComment}>✕</button>
             </div>
 
             {commentModal.currentText ? (
@@ -365,12 +378,14 @@ function WorkshopPage({
                   <button
                     className={`btn ${commentModal.mode !== 'append' ? 'btn-secondary' : ''}`}
                     onClick={() => setCommentMode('replace')}
+                    disabled={savingComment || deletingComment}
                   >
                     Редактировать
                   </button>
                   <button
                     className={`btn ${commentModal.mode === 'append' ? 'btn-secondary' : ''}`}
                     onClick={() => setCommentMode('append')}
+                    disabled={savingComment || deletingComment}
                   >
                     Добавить текст
                   </button>
@@ -401,6 +416,7 @@ function WorkshopPage({
                 placeholder={commentModal.mode === 'append' && commentModal.currentText ? 'Введите дополнение к текущему комментарию' : 'Введите комментарий'}
                 rows={6}
                 autoFocus
+                disabled={savingComment || deletingComment}
               />
             </div>
 
@@ -412,19 +428,20 @@ function WorkshopPage({
                   <button
                     className="btn btn-danger"
                     onClick={() => setConfirmDeleteComment(true)}
+                    disabled={savingComment || deletingComment}
                   >
                     Удалить
                   </button>
                 )}
               </div>
               <div className="modal-actions-group">
-                <button className="btn" onClick={closeCommentModal}>Отмена</button>
-                <button className="btn btn-success" onClick={saveComment}>
+                <button className="btn" onClick={closeCommentModal} disabled={savingComment || deletingComment}>Отмена</button>
+                <button className="btn btn-success" onClick={saveComment} disabled={savingComment || deletingComment}>
                   {commentModal.mode === 'append' && commentModal.currentText
-                    ? 'Добавить в конец'
+                    ? (savingComment ? 'Сохранение...' : 'Добавить в конец')
                     : commentModal.currentText
-                      ? 'Сохранить изменения'
-                      : 'Сохранить комментарий'}
+                      ? (savingComment ? 'Сохранение...' : 'Сохранить изменения')
+                      : (savingComment ? 'Сохранение...' : 'Сохранить комментарий')}
                 </button>
               </div>
             </div>

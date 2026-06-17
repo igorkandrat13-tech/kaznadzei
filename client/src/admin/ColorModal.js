@@ -9,20 +9,21 @@ function ColorModal({
   onAdd,
   onUpdate,
   onClose,
+  saving = false,
 }) {
   if (!mode) return null;
 
   const isEdit = mode === 'edit';
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={saving ? undefined : onClose}>
       <div className="modal-window modal-window-md" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <div className="modal-title">{isEdit ? 'Редактировать цвет' : 'Добавить цвет'}</div>
             <div className="modal-subtitle">Настройка палитры для малярного цеха.</div>
           </div>
-          <button className="btn btn-small modal-close-btn" onClick={onClose}>✕</button>
+          <button className="btn btn-small modal-close-btn" onClick={onClose} disabled={saving}>✕</button>
         </div>
 
         <div className="form-group">
@@ -33,6 +34,7 @@ function ColorModal({
               ? setEditColor({ ...editColor, name: e.target.value })
               : setNewColor({ ...newColor, name: e.target.value }))}
             placeholder="Например: Орех"
+            disabled={saving}
           />
         </div>
 
@@ -45,6 +47,7 @@ function ColorModal({
               onChange={e => (isEdit
                 ? setEditColor({ ...editColor, hex: e.target.value })
                 : setNewColor({ ...newColor, hex: e.target.value }))}
+              disabled={saving}
             />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -54,15 +57,16 @@ function ColorModal({
               onChange={e => (isEdit
                 ? setEditColor({ ...editColor, hex: e.target.value })
                 : setNewColor({ ...newColor, hex: e.target.value }))}
+              disabled={saving}
             />
           </div>
         </div>
 
         <div className="modal-actions">
-          <button className="btn btn-success" onClick={isEdit ? onUpdate : onAdd}>
-            {isEdit ? 'Сохранить цвет' : 'Добавить цвет'}
+          <button className="btn btn-success" onClick={isEdit ? onUpdate : onAdd} disabled={saving}>
+            {saving ? (isEdit ? 'Сохранение...' : 'Добавление...') : (isEdit ? 'Сохранить цвет' : 'Добавить цвет')}
           </button>
-          <button className="btn" onClick={onClose}>Отмена</button>
+          <button className="btn" onClick={onClose} disabled={saving}>Отмена</button>
         </div>
       </div>
     </div>

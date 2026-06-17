@@ -987,10 +987,17 @@ table tr:hover td {
 
 .btn {
   padding: 8px 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: none;
   border-radius: 10px;
   cursor: pointer;
   font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
   transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
   min-height: 40px;
   line-height: 1.2;
@@ -1348,6 +1355,35 @@ table tr:hover td {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.section-toolbar-btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 14px 28px rgba(2, 8, 16, 0.18);
+}
+
+.section-toolbar-btn.btn-primary {
+  background: linear-gradient(135deg, #1f90d2, #4ec5ff);
+  border-color: rgba(115, 203, 255, 0.28);
+}
+
+.section-toolbar-btn.btn-primary:hover {
+  background: linear-gradient(135deg, #2495da, #58cbff);
+}
+
+.section-toolbar-btn.btn-secondary {
+  background: linear-gradient(135deg, rgba(22, 42, 66, 0.96), rgba(33, 58, 89, 0.94));
+  border-color: rgba(144, 199, 255, 0.16);
+  color: #eaf5ff;
+}
+
+.section-toolbar-btn.btn-secondary:hover {
+  background: linear-gradient(135deg, rgba(29, 52, 79, 0.98), rgba(41, 70, 106, 0.96));
 }
 
 .overview-stats-grid {
@@ -2324,6 +2360,16 @@ body[data-theme='light'] .btn-success {
 body[data-theme='light'] .btn-secondary {
   background: linear-gradient(135deg, #dfeeff, #eef6ff);
   color: #244260;
+}
+
+body[data-theme='light'] .section-toolbar-btn.btn-secondary {
+  background: linear-gradient(135deg, #f8fbff, #edf5fc);
+  color: #244260;
+  border-color: rgba(121, 163, 209, 0.18);
+}
+
+body[data-theme='light'] .section-toolbar-btn.btn-secondary:hover {
+  background: linear-gradient(135deg, #f2f8ff, #e7f1fb);
 }
 
 body[data-theme='light'] .btn-danger {

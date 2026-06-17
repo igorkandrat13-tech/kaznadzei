@@ -17,6 +17,7 @@ function UpdatesOverview({
   onRestartService,
   onShowServiceDetails,
   onSaveUpdateSettings,
+  savingUpdateSettings,
 }) {
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -65,6 +66,7 @@ function UpdatesOverview({
             value={appSettings?.updateBranch || ''}
             onChange={e => onSettingsChange(current => ({ ...current, updateBranch: e.target.value }))}
             placeholder="main"
+            disabled={savingUpdateSettings}
           />
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -76,6 +78,7 @@ function UpdatesOverview({
             value={appSettings?.updateRepositoryUrl || ''}
             onChange={e => onSettingsChange(current => ({ ...current, updateRepositoryUrl: e.target.value }))}
             placeholder="https://github.com/igorkandrat13-tech/kaznadzei.git"
+            disabled={savingUpdateSettings}
           />
         </div>
       </div>
@@ -85,11 +88,12 @@ function UpdatesOverview({
             type="checkbox"
             checked={Boolean(appSettings?.selfUpdateEnabled)}
             onChange={e => onSettingsChange(current => ({ ...current, selfUpdateEnabled: e.target.checked }))}
+            disabled={savingUpdateSettings}
           />
           Разрешить self-update из интерфейса
         </label>
-        <button className="btn btn-success" onClick={onSaveUpdateSettings}>
-          Сохранить настройки обновления
+        <button className="btn btn-success" onClick={onSaveUpdateSettings} disabled={savingUpdateSettings}>
+          {savingUpdateSettings ? 'Сохранение...' : 'Сохранить настройки обновления'}
         </button>
       </div>
       {updateMessage && <div className="settings-alert settings-alert-success">{updateMessage}</div>}

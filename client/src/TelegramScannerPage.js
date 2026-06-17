@@ -21,6 +21,7 @@ function TelegramScannerPage() {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
+  const [openingScanner, setOpeningScanner] = useState(false);
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
     markTelegramWebAppSession();
@@ -68,16 +69,31 @@ function TelegramScannerPage() {
   }, []);
 
   const openScanner = useCallback(() => {
-    openTelegramQrScanner({
-      onSuccess: async (orderPath) => {
-        setStatus('Подготавливаю доступ к заказу...');
-        await bootstrapTelegramSession({ retries: 6 });
-        navigate(orderPath);
-      },
-      onError: setError,
-      onStatusChange: setStatus,
-    });
-  }, [bootstrapTelegramSession, navigate]);
+    if (bootstrappingSession || openingScanner) return;
+    setError('');
+    setOpeningScanner(true);
+    try {
+      openTelegramQrScanner({
+        onSuccess: async (orderPath) => {
+          try {
+            setStatus('Подготавливаю доступ к заказу...');
+            await bootstrapTelegramSession({ retries: 6 });
+            navigate(orderPath);
+          } finally {
+            setOpeningScanner(false);
+          }
+        },
+        onError: (nextError) => {
+          setError(nextError);
+          setOpeningScanner(false);
+        },
+        onStatusChange: setStatus,
+      });
+    } catch (scannerError) {
+      setError(scannerError.message || 'Не удалось открыть камеру.');
+      setOpeningScanner(false);
+    }
+  }, [bootstrapTelegramSession, bootstrappingSession, navigate, openingScanner]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -130,8 +146,8 @@ function TelegramScannerPage() {
       )}
 
       <div className="inline-actions-centered">
-        <button className="btn btn-primary" onClick={openScanner}>
-          Открыть камеру
+        <button className="btn btn-primary" onClick={openScanner} disabled={bootstrappingSession || openingScanner}>
+          {bootstrappingSession ? 'Подготовка...' : openingScanner ? 'Открываю...' : 'Открыть камеру'}
         </button>
         <button className="btn btn-secondary" onClick={() => closeTelegramWebApp() || navigate('/')}>
           Закрыть

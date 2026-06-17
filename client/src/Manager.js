@@ -51,6 +51,8 @@ function Manager() {
   const [managerCommentModal, setManagerCommentModal] = useState(null);
   const [savingManagerComment, setSavingManagerComment] = useState(false);
   const [deletingManagerComment, setDeletingManagerComment] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [downloadingQr, setDownloadingQr] = useState(false);
 
   const formErrors = validateManagerForm(form);
   const isFormValid = Object.keys(formErrors).length === 0;
@@ -103,30 +105,36 @@ function Manager() {
       setError(formErrors.name || formErrors.quantity || formErrors.endDate || 'Проверьте заполнение формы.');
       return;
     }
+    if (savingOrder) return;
     setError('');
-    const body = { ...form, quantity: Number(form.quantity) || 1 };
-    let res;
-    if (editingId) {
-      res = await apiFetch('/api/orders/' + editingId, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } else {
-      res = await apiFetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+    setSavingOrder(true);
+    try {
+      const body = { ...form, quantity: Number(form.quantity) || 1 };
+      let res;
+      if (editingId) {
+        res = await apiFetch('/api/orders/' + editingId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } else {
+        res = await apiFetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      }
+      if (!res.ok) {
+        setError(await getErrorMessage(res, editingId ? 'Не удалось сохранить заказ.' : 'Не удалось создать заказ.'));
+        return;
+      }
+      setForm(EMPTY_FORM);
+      setEditingId(null);
+      setShowForm(false);
+      await fetchOrders();
+    } finally {
+      setSavingOrder(false);
     }
-    if (!res.ok) {
-      setError(await getErrorMessage(res, editingId ? 'Не удалось сохранить заказ.' : 'Не удалось создать заказ.'));
-      return;
-    }
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setShowForm(false);
-    fetchOrders();
   };
 
   const handleEdit = (order) => {
@@ -156,37 +164,57 @@ function Manager() {
 
   const handleDelete = async () => {
     if (!confirmDelete?.id) return;
+    if (deletingOrder) return;
     setDeletingOrder(true);
     setError('');
-    const res = await apiFetch('/api/orders/' + confirmDelete.id, { method: 'DELETE' });
-    if (!res.ok) {
-      setError(await getErrorMessage(res, 'Не удалось удалить заказ.'));
+    try {
+      const res = await apiFetch('/api/orders/' + confirmDelete.id, { method: 'DELETE' });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось удалить заказ.'));
+        return;
+      }
+      if (editingId === confirmDelete.id) {
+        setEditingId(null);
+        setForm(EMPTY_FORM);
+      }
+      setConfirmDelete(null);
+      await fetchOrders();
+    } catch (requestError) {
+      setError(requestError.message || 'Не удалось удалить заказ.');
+    } finally {
       setDeletingOrder(false);
-      return;
     }
-    if (editingId === confirmDelete.id) {
-      setEditingId(null);
-      setForm(EMPTY_FORM);
-    }
-    setConfirmDelete(null);
-    setDeletingOrder(false);
-    fetchOrders();
   };
 
   const handleDownloadQr = async () => {
-    const res = await apiFetch(`/api/orders/${qrOrderId}/qrcode`);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `order-${qrOrderId}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (!qrOrderId) return;
+    if (downloadingQr) return;
+    setError('');
+    setDownloadingQr(true);
+    try {
+      const res = await apiFetch(`/api/orders/${qrOrderId}/qrcode`);
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось скачать QR-код.'));
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `order-${qrOrderId}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setError(requestError.message || 'Не удалось скачать QR-код.');
+    } finally {
+      setDownloadingQr(false);
+    }
   };
 
   const handleCancel = () => {
+    if (savingOrder) return;
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(false);
@@ -218,40 +246,50 @@ function Manager() {
 
   const saveManagerComment = async () => {
     if (!managerCommentModal?.orderId) return;
+    if (savingManagerComment || deletingManagerComment) return;
     setSavingManagerComment(true);
     setError('');
-    const res = await apiFetch(`/api/orders/${managerCommentModal.orderId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes: managerCommentModal.draftNotes }),
-    });
-    if (!res.ok) {
-      setError(await getErrorMessage(res, 'Не удалось сохранить комментарий менеджера.'));
+    try {
+      const res = await apiFetch(`/api/orders/${managerCommentModal.orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: managerCommentModal.draftNotes }),
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось сохранить комментарий менеджера.'));
+        return;
+      }
+      setManagerCommentModal(null);
+      await fetchOrders();
+    } catch (requestError) {
+      setError(requestError.message || 'Не удалось сохранить комментарий менеджера.');
+    } finally {
       setSavingManagerComment(false);
-      return;
     }
-    setSavingManagerComment(false);
-    setManagerCommentModal(null);
-    fetchOrders();
   };
 
   const deleteManagerComment = async () => {
     if (!managerCommentModal?.orderId) return;
+    if (savingManagerComment || deletingManagerComment) return;
     setDeletingManagerComment(true);
     setError('');
-    const res = await apiFetch(`/api/orders/${managerCommentModal.orderId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes: '' }),
-    });
-    if (!res.ok) {
-      setError(await getErrorMessage(res, 'Не удалось удалить комментарий менеджера.'));
+    try {
+      const res = await apiFetch(`/api/orders/${managerCommentModal.orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: '' }),
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось удалить комментарий менеджера.'));
+        return;
+      }
+      setManagerCommentModal(null);
+      await fetchOrders();
+    } catch (requestError) {
+      setError(requestError.message || 'Не удалось удалить комментарий менеджера.');
+    } finally {
       setDeletingManagerComment(false);
-      return;
     }
-    setDeletingManagerComment(false);
-    setManagerCommentModal(null);
-    fetchOrders();
   };
 
   return (
@@ -263,8 +301,8 @@ function Manager() {
             <p>Управление заказами клиентов</p>
           </div>
           <div className="section-header-actions">
-            <button className="btn btn-success btn-wide" onClick={openNewForm}>➕ Новый заказ</button>
-            <Link to="/archive" className="btn btn-archive btn-wide">📦 Архив</Link>
+            <button className="btn btn-primary section-toolbar-btn" onClick={openNewForm}>➕ Новый заказ</button>
+            <Link to="/archive" className="btn btn-secondary section-toolbar-btn">📦 Архив</Link>
           </div>
         </div>
         {error && <div className="settings-alert settings-alert-error mt-16">{error}</div>}
@@ -390,7 +428,7 @@ function Manager() {
         </div>
       </div>
       {showForm && (
-        <div className="modal-overlay" onClick={handleCancel}>
+        <div className="modal-overlay" onClick={savingOrder ? undefined : handleCancel}>
           <div className="modal-window modal-window-md" onClick={e => e.stopPropagation()}>
             <div className="modal-title mb-16" style={{ fontSize: 18 }}>{editingId ? '✏️ Редактировать заказ' : '➕ Новый заказ'}</div>
             <div className="responsive-form-grid">
@@ -430,20 +468,20 @@ function Manager() {
               </div>
             </div>
             <div className="modal-actions">
-              <button className="btn" onClick={handleCancel}>Отмена</button>
-              <button className="btn btn-success" onClick={handleSubmit} disabled={!isFormValid}>{editingId ? 'Сохранить' : 'Создать заказ'}</button>
+              <button className="btn" onClick={handleCancel} disabled={savingOrder}>Отмена</button>
+              <button className="btn btn-success" onClick={handleSubmit} disabled={!isFormValid || savingOrder}>{savingOrder ? (editingId ? 'Сохранение...' : 'Создание...') : (editingId ? 'Сохранить' : 'Создать заказ')}</button>
             </div>
           </div>
         </div>
       )}
       {qrOrderId && (
-        <div className="modal-overlay" onClick={() => setQrOrderId(null)}>
+        <div className="modal-overlay" onClick={downloadingQr ? undefined : () => setQrOrderId(null)}>
           <div className="modal-window modal-window-sm" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <div className="modal-title mb-16">📱 QR-код заказа</div>
             <img src={`/api/orders/${qrOrderId}/qrcode`} alt="QR Code" className="qr-image" />
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setQrOrderId(null)}>Закрыть</button>
-              <button className="btn btn-primary" onClick={handleDownloadQr}>⬇ Скачать</button>
+              <button className="btn btn-secondary" onClick={() => setQrOrderId(null)} disabled={downloadingQr}>Закрыть</button>
+              <button className="btn btn-primary" onClick={handleDownloadQr} disabled={downloadingQr}>{downloadingQr ? 'Скачивание...' : '⬇ Скачать'}</button>
             </div>
           </div>
         </div>
@@ -469,6 +507,7 @@ function Manager() {
                 placeholder="Введите комментарий менеджера для сотрудника"
                 rows={8}
                 autoFocus
+                disabled={savingManagerComment || deletingManagerComment}
               />
             </div>
 

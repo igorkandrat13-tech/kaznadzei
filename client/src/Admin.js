@@ -53,6 +53,11 @@ function Admin() {
   const [colorModalMode, setColorModalMode] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [savingEmployee, setSavingEmployee] = useState(false);
+  const [savingStep, setSavingStep] = useState(false);
+  const [savingColor, setSavingColor] = useState(false);
+  const [savingAppSettings, setSavingAppSettings] = useState(false);
+  const [savingUpdateSettings, setSavingUpdateSettings] = useState(false);
 
   const [editStep, setEditStep] = useState(null);
   const [editColor, setEditColor] = useState(null);
@@ -230,8 +235,10 @@ function Admin() {
   };
 
   const saveUpdateSettings = async () => {
+    if (savingUpdateSettings) return;
     setUpdateError('');
     setUpdateMessage('');
+    setSavingUpdateSettings(true);
     try {
       const res = await apiFetch('/api/settings', {
         method: 'PUT',
@@ -248,9 +255,11 @@ function Admin() {
         updateRepositoryUrl: data?.updateRepositoryUrl || '',
       });
       setUpdateMessage('Настройки обновления сохранены.');
-      fetchUpdateStatus();
+      await fetchUpdateStatus();
     } catch (error) {
       setUpdateError(error.message || 'Не удалось сохранить настройки обновления');
+    } finally {
+      setSavingUpdateSettings(false);
     }
   };
 
@@ -330,27 +339,35 @@ function Admin() {
   };
 
   const saveAppSettings = async () => {
+    if (savingAppSettings) return;
     setSettingsError('');
     setSettingsSuccess('');
-    const res = await apiFetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appSettings),
-    });
-    const data = await parseJsonSafely(res);
-    if (!res.ok) {
-      setSettingsError(data?.message || 'Не удалось сохранить настройки.');
-      return;
+    setSavingAppSettings(true);
+    try {
+      const res = await apiFetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appSettings),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setSettingsError(data?.message || 'Не удалось сохранить настройки.');
+        return;
+      }
+      setAppSettings({
+        publicBaseUrl: data?.publicBaseUrl || '',
+        telegramBotToken: data?.telegramBotToken || '',
+        selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
+        updateBranch: data?.updateBranch || 'main',
+        updateRepositoryUrl: data?.updateRepositoryUrl || '',
+      });
+      setSettingsSuccess('Настройки сохранены.');
+      await fetchUpdateStatus();
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось сохранить настройки.');
+    } finally {
+      setSavingAppSettings(false);
     }
-    setAppSettings({
-      publicBaseUrl: data?.publicBaseUrl || '',
-      telegramBotToken: data?.telegramBotToken || '',
-      selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
-      updateBranch: data?.updateBranch || 'main',
-      updateRepositoryUrl: data?.updateRepositoryUrl || '',
-    });
-    setSettingsSuccess('Настройки сохранены.');
-    fetchUpdateStatus();
   };
 
   const checkTelegramBot = async () => {
@@ -412,6 +429,7 @@ function Admin() {
   };
 
   const closeEmployeeModal = () => {
+    if (savingEmployee) return;
     setEmployeeModalMode('');
     resetEmployeeForm();
   };
@@ -432,6 +450,7 @@ function Admin() {
   };
 
   const closeStepModal = () => {
+    if (savingStep) return;
     setStepModalMode('');
     setEditStep(null);
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
@@ -453,6 +472,7 @@ function Admin() {
   };
 
   const closeColorModal = () => {
+    if (savingColor) return;
     setColorModalMode('');
     setEditColor(null);
     setNewColor({ name: '', hex: '#000000' });
@@ -496,20 +516,20 @@ function Admin() {
 
   const handleConfirmDelete = async () => {
     if (!confirmAction) return;
+    if (confirmLoading) return;
     setConfirmLoading(true);
     let success = false;
-
-    if (confirmAction.type === 'employee') {
-      success = await handleDeleteEmployee(confirmAction.id);
+    try {
+      if (confirmAction.type === 'employee') {
+        success = await handleDeleteEmployee(confirmAction.id);
+      } else if (confirmAction.type === 'step') {
+        success = await handleDeleteStep(confirmAction.id);
+      } else if (confirmAction.type === 'color') {
+        success = await handleDeleteColor(confirmAction.id);
+      }
+    } finally {
+      setConfirmLoading(false);
     }
-    if (confirmAction.type === 'step') {
-      success = await handleDeleteStep(confirmAction.id);
-    }
-    if (confirmAction.type === 'color') {
-      success = await handleDeleteColor(confirmAction.id);
-    }
-
-    setConfirmLoading(false);
     if (success) {
       setConfirmAction(null);
     }
@@ -518,149 +538,264 @@ function Admin() {
   const handleAddEmployee = async () => {
     setSettingsError('');
     setSettingsSuccess('');
-    const res = await apiFetch('/api/employees', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newEmployee),
-    });
-    if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось добавить сотрудника.'));
-      return;
+    setSavingEmployee(true);
+    try {
+      const res = await apiFetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEmployee),
+      });
+      if (!res.ok) {
+        setSettingsError(await getErrorMessage(res, 'Не удалось добавить сотрудника.'));
+        return;
+      }
+      resetEmployeeForm();
+      setEmployeeModalMode('');
+      await fetchEmployees();
+      setSettingsSuccess('Сотрудник добавлен.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось добавить сотрудника.');
+    } finally {
+      setSavingEmployee(false);
     }
-    resetEmployeeForm();
-    setEmployeeModalMode('');
-    await fetchEmployees();
-    setSettingsSuccess('Сотрудник добавлен.');
   };
 
   const handleUpdateEmployee = async () => {
     if (!editEmployee) return;
     setSettingsError('');
     setSettingsSuccess('');
-    const res = await apiFetch(`/api/employees/${editEmployee._id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editEmployee),
-    });
-    if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось обновить сотрудника.'));
-      return;
+    setSavingEmployee(true);
+    try {
+      const res = await apiFetch(`/api/employees/${editEmployee._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editEmployee),
+      });
+      if (!res.ok) {
+        setSettingsError(await getErrorMessage(res, 'Не удалось обновить сотрудника.'));
+        return;
+      }
+      resetEmployeeForm();
+      setEmployeeModalMode('');
+      await fetchEmployees();
+      setSettingsSuccess('Данные сотрудника обновлены.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось обновить сотрудника.');
+    } finally {
+      setSavingEmployee(false);
     }
-    resetEmployeeForm();
-    setEmployeeModalMode('');
-    await fetchEmployees();
-    setSettingsSuccess('Данные сотрудника обновлены.');
   };
 
   const handleDeleteEmployee = async (id) => {
     setSettingsError('');
     setSettingsSuccess('');
-    const res = await apiFetch(`/api/employees/${id}`, { method: 'DELETE' });
-    const data = await parseJsonSafely(res);
-    if (!res.ok) {
-      setSettingsError(data?.message || 'Не удалось удалить сотрудника.');
+    try {
+      const res = await apiFetch(`/api/employees/${id}`, { method: 'DELETE' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setSettingsError(data?.message || 'Не удалось удалить сотрудника.');
+        return false;
+      }
+      if (editEmployee?._id === id) {
+        resetEmployeeForm();
+      }
+      await fetchEmployees();
+      setSettingsSuccess(data?.warning || data?.message || 'Сотрудник удален.');
+      return true;
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось удалить сотрудника.');
       return false;
     }
-    if (editEmployee?._id === id) {
-      resetEmployeeForm();
-    }
-    await fetchEmployees();
-    setSettingsSuccess(data?.warning || data?.message || 'Сотрудник удален.');
-    return true;
   };
 
   // Settings
   const handleAddStep = async () => {
     if (!newStep.stepName || !newStep.description) return;
     setSettingsError('');
-    const res = await apiFetch('/api/processSteps', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newStep, role: activeRole }),
-    });
-    if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось добавить этап.'));
-      return;
+    setSettingsSuccess('');
+    setSavingStep(true);
+    try {
+      const res = await apiFetch('/api/processSteps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newStep, role: activeRole }),
+      });
+      if (!res.ok) {
+        setSettingsError(await getErrorMessage(res, 'Не удалось добавить этап.'));
+        return;
+      }
+      setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
+      setStepModalMode('');
+      await fetchSteps();
+      setSettingsSuccess('Этап добавлен.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось добавить этап.');
+    } finally {
+      setSavingStep(false);
     }
-    setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
-    setStepModalMode('');
-    fetchSteps();
   };
 
   const handleUpdateStep = async () => {
     if (!editStep) return;
     setSettingsError('');
-    const res = await apiFetch(`/api/processSteps/${editStep._id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stepName: editStep.stepName, description: editStep.description, order: editStep.order }),
-    });
-    if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось обновить этап.'));
-      return;
+    setSettingsSuccess('');
+    setSavingStep(true);
+    try {
+      const res = await apiFetch(`/api/processSteps/${editStep._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stepName: editStep.stepName, description: editStep.description, order: editStep.order }),
+      });
+      if (!res.ok) {
+        setSettingsError(await getErrorMessage(res, 'Не удалось обновить этап.'));
+        return;
+      }
+      setEditStep(null);
+      setStepModalMode('');
+      await fetchSteps();
+      setSettingsSuccess('Этап обновлен.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось обновить этап.');
+    } finally {
+      setSavingStep(false);
     }
-    setEditStep(null);
-    setStepModalMode('');
-    fetchSteps();
   };
 
   const handleDeleteStep = async (id) => {
     setSettingsError('');
-    const res = await apiFetch(`/api/processSteps/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось удалить этап.'));
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch(`/api/processSteps/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        setSettingsError(await getErrorMessage(res, 'Не удалось удалить этап.'));
+        return false;
+      }
+      await fetchSteps();
+      setSettingsSuccess('Этап удален.');
+      return true;
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось удалить этап.');
       return false;
     }
-    await fetchSteps();
-    setSettingsSuccess('Этап удален.');
-    return true;
   };
 
   const handleAddColor = async () => {
     if (!newColor.name) return;
     setSettingsError('');
-    const res = await apiFetch('/api/colors', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newColor),
-    });
-    if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось добавить цвет.'));
-      return;
+    setSettingsSuccess('');
+    setSavingColor(true);
+    try {
+      const res = await apiFetch('/api/colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newColor),
+      });
+      if (!res.ok) {
+        setSettingsError(await getErrorMessage(res, 'Не удалось добавить цвет.'));
+        return;
+      }
+      setNewColor({ name: '', hex: '#000000' });
+      setColorModalMode('');
+      await fetchColors();
+      setSettingsSuccess('Цвет добавлен.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось добавить цвет.');
+    } finally {
+      setSavingColor(false);
     }
-    setNewColor({ name: '', hex: '#000000' });
-    setColorModalMode('');
-    fetchColors();
   };
 
   const handleUpdateColor = async () => {
     if (!editColor) return;
     setSettingsError('');
-    const res = await apiFetch(`/api/colors/${editColor._id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editColor.name, hex: editColor.hex }),
-    });
-    if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось обновить цвет.'));
-      return;
+    setSettingsSuccess('');
+    setSavingColor(true);
+    try {
+      const res = await apiFetch(`/api/colors/${editColor._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editColor.name, hex: editColor.hex }),
+      });
+      if (!res.ok) {
+        setSettingsError(await getErrorMessage(res, 'Не удалось обновить цвет.'));
+        return;
+      }
+      setEditColor(null);
+      setColorModalMode('');
+      await fetchColors();
+      setSettingsSuccess('Цвет обновлен.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось обновить цвет.');
+    } finally {
+      setSavingColor(false);
     }
-    setEditColor(null);
-    setColorModalMode('');
-    fetchColors();
   };
 
   const handleDeleteColor = async (id) => {
     setSettingsError('');
-    const res = await apiFetch(`/api/colors/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      setSettingsError(await getErrorMessage(res, 'Не удалось удалить цвет.'));
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch(`/api/colors/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        setSettingsError(await getErrorMessage(res, 'Не удалось удалить цвет.'));
+        return false;
+      }
+      await fetchColors();
+      setSettingsSuccess('Цвет удален.');
+      return true;
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось удалить цвет.');
       return false;
     }
-    await fetchColors();
-    setSettingsSuccess('Цвет удален.');
-    return true;
   };
+
+  const settingsCrudModals = (
+    <>
+      <EmployeeModal
+        mode={employeeModalMode}
+        employeeForm={employeeForm}
+        setEmployeeForm={setEmployeeForm}
+        onAdd={handleAddEmployee}
+        onUpdate={handleUpdateEmployee}
+        onClose={closeEmployeeModal}
+        saving={savingEmployee}
+      />
+
+      <StepModal
+        mode={stepModalMode}
+        editStep={editStep}
+        newStep={newStep}
+        setEditStep={setEditStep}
+        setNewStep={setNewStep}
+        onAdd={handleAddStep}
+        onUpdate={handleUpdateStep}
+        onClose={closeStepModal}
+        saving={savingStep}
+      />
+
+      <ColorModal
+        mode={colorModalMode}
+        editColor={editColor}
+        newColor={newColor}
+        setEditColor={setEditColor}
+        setNewColor={setNewColor}
+        onAdd={handleAddColor}
+        onUpdate={handleUpdateColor}
+        onClose={closeColorModal}
+        saving={savingColor}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        confirmLabel={confirmAction?.confirmLabel}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => !confirmLoading && setConfirmAction(null)}
+        loading={confirmLoading}
+      />
+    </>
+  );
 
   // ===== SETTINGS VIEW =====
   if (showSettings) {
@@ -699,11 +834,13 @@ function Admin() {
             </div>
 
             <SettingsActions>
-              <button className="btn btn-success" onClick={saveAppSettings}>Сохранить настройки</button>
-              <button className="btn btn-primary" onClick={checkTelegramBot} disabled={checkingTelegramBot}>
+              <button className="btn btn-success" onClick={saveAppSettings} disabled={savingAppSettings}>
+                {savingAppSettings ? 'Сохранение...' : 'Сохранить настройки'}
+              </button>
+              <button className="btn btn-primary" onClick={checkTelegramBot} disabled={checkingTelegramBot || savingAppSettings}>
                 {checkingTelegramBot ? 'Проверка...' : 'Проверить бота'}
               </button>
-              <button className="btn" onClick={setupTelegramWebhook} disabled={settingTelegramWebhook}>
+              <button className="btn" onClick={setupTelegramWebhook} disabled={settingTelegramWebhook || savingAppSettings}>
                 {settingTelegramWebhook ? 'Установка...' : 'Установить webhook'}
               </button>
             </SettingsActions>
@@ -750,6 +887,7 @@ function Admin() {
             onRestartService={restartService}
             onShowServiceDetails={fetchServiceDetails}
             onSaveUpdateSettings={saveUpdateSettings}
+            savingUpdateSettings={savingUpdateSettings}
           />
         </div>
       );
@@ -827,24 +965,7 @@ function Admin() {
             </div>
           </div>
 
-          <EmployeeModal
-            mode={employeeModalMode}
-            employeeForm={employeeForm}
-            setEmployeeForm={setEmployeeForm}
-            onAdd={handleAddEmployee}
-            onUpdate={handleUpdateEmployee}
-            onClose={closeEmployeeModal}
-          />
-
-          <ConfirmDialog
-            open={Boolean(confirmAction)}
-            title={confirmAction?.title}
-            message={confirmAction?.message}
-            confirmLabel={confirmAction?.confirmLabel}
-            onConfirm={handleConfirmDelete}
-            onCancel={() => !confirmLoading && setConfirmAction(null)}
-            loading={confirmLoading}
-          />
+          {settingsCrudModals}
         </div>
       );
     }
@@ -898,6 +1019,7 @@ function Admin() {
               {colors.length === 0 && <div className="mobile-empty-state">Цвета пока не добавлены</div>}
             </div>
           </div>
+          {settingsCrudModals}
         </div>
       );
     }
@@ -952,6 +1074,7 @@ function Admin() {
             {filteredSteps.length === 0 && <div className="mobile-empty-state">Нет этапов</div>}
           </div>
         </div>
+        {settingsCrudModals}
       </div>
     );
   }
@@ -967,8 +1090,8 @@ function Admin() {
           description="Общая сводка по этапам производства, заказам и обновлениям проекта"
           actions={
             <>
-            <Link to="/archive" className="btn btn-archive btn-wide">📦 Архив</Link>
-            <button className="btn btn-secondary btn-wide" onClick={() => { setActiveRole('general'); setShowSettings(true); }}>
+            <Link to="/archive" className="btn btn-secondary section-toolbar-btn">📦 Архив</Link>
+            <button className="btn btn-secondary section-toolbar-btn" onClick={() => { setActiveRole('general'); setShowSettings(true); }}>
               ⚙️ Настройки
             </button>
             </>

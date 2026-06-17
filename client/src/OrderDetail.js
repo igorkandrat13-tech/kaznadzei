@@ -265,28 +265,29 @@ function OrderDetail() {
 
     setSavingComment(true);
     setCommentError('');
+    try {
+      const res = await apiFetch(`/api/orders/${id}/telegram-comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken: telegramSessionToken,
+          text,
+        }),
+      });
 
-    const res = await apiFetch(`/api/orders/${id}/telegram-comment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        initData: telegramInitData,
-        unsafeUser: telegramUnsafeUser,
-        sessionToken: telegramSessionToken,
-        text,
-      }),
-    });
+      if (!res.ok) {
+        setCommentError(await getErrorMessage(res, 'Не удалось сохранить комментарий.'));
+        return;
+      }
 
-    if (!res.ok) {
-      setCommentError(await getErrorMessage(res, 'Не удалось сохранить комментарий.'));
+      await fetchOrder();
+      setCommentDraft(text);
+      setCommentEditing(false);
+    } finally {
       setSavingComment(false);
-      return;
     }
-
-    await fetchOrder();
-    setCommentDraft(text);
-    setCommentEditing(false);
-    setSavingComment(false);
   };
 
   const updateTelegramStage = async (stage) => {
@@ -298,27 +299,28 @@ function OrderDetail() {
     const nextStatus = STAGE_STATUS_CYCLE[stage.status] || 'pending';
     setSavingStageId(stage.stepId);
     setStageError('');
+    try {
+      const res = await apiFetch(`/api/orders/${id}/telegram-stage-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken: telegramSessionToken,
+          stepId: stage.stepId,
+          status: nextStatus,
+        }),
+      });
 
-    const res = await apiFetch(`/api/orders/${id}/telegram-stage-status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        initData: telegramInitData,
-        unsafeUser: telegramUnsafeUser,
-        sessionToken: telegramSessionToken,
-        stepId: stage.stepId,
-        status: nextStatus,
-      }),
-    });
+      if (!res.ok) {
+        setStageError(await getErrorMessage(res, 'Не удалось изменить статус этапа.'));
+        return;
+      }
 
-    if (!res.ok) {
-      setStageError(await getErrorMessage(res, 'Не удалось изменить статус этапа.'));
+      await fetchOrder();
+    } finally {
       setSavingStageId('');
-      return;
     }
-
-    await fetchOrder();
-    setSavingStageId('');
   };
 
   const handleScanAnotherQr = () => {
@@ -476,7 +478,7 @@ function OrderDetail() {
               Комментарий пока недоступен.
               <div style={{ marginTop: 10 }}>
                 <button className="btn btn-primary" onClick={loadTelegramEmployeeSession}>
-                  Повторить проверку
+                  {sessionLoading ? 'Проверка...' : 'Повторить проверку'}
                 </button>
               </div>
             </div>
@@ -509,6 +511,7 @@ function OrderDetail() {
                   rows={5}
                   placeholder="Введите комментарий по заказу"
                   style={{ fontSize: 16 }}
+                  disabled={savingComment}
                 />
               </div>
 
