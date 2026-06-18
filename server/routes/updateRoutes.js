@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const SettingsStore = require('../stores/settingsStore');
-const { isSelfUpdateEnabled } = require('../middleware/security');
+const { isSelfUpdateEnabled, requireAdminAccess } = require('../middleware/security');
 
 const router = express.Router();
 
@@ -390,7 +390,7 @@ async function getUpdateStatus() {
   return status;
 }
 
-router.get('/updates/status', async (req, res) => {
+router.get('/updates/status', requireAdminAccess(), async (req, res) => {
   if (!isSelfUpdateEnabled()) {
     return res.json({
       enabled: false,
@@ -424,7 +424,7 @@ router.get('/updates/status', async (req, res) => {
   }
 });
 
-router.post('/updates/install', async (req, res) => {
+router.post('/updates/install', requireAdminAccess(), async (req, res) => {
   if (!isSelfUpdateEnabled()) {
     return res.status(403).json({ message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true в .env.' });
   }
@@ -484,7 +484,7 @@ router.post('/updates/install', async (req, res) => {
   }
 });
 
-router.post('/updates/restart-service', async (req, res) => {
+router.post('/updates/restart-service', requireAdminAccess(), async (req, res) => {
   const systemctlVersion = await hasSystemctl();
   if (!systemctlVersion) {
     return res.status(400).json({
@@ -515,7 +515,7 @@ router.post('/updates/restart-service', async (req, res) => {
   });
 });
 
-router.get('/updates/service-details', async (req, res) => {
+router.get('/updates/service-details', requireAdminAccess(), async (req, res) => {
   const systemctlVersion = await hasSystemctl();
   if (!systemctlVersion) {
     return res.status(400).json({

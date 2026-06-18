@@ -1,6 +1,7 @@
 const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const UNSAFE_ADMIN_TOKENS = new Set(['change-me']);
 const SettingsStore = require('../stores/settingsStore');
+const { canAccessRole, verifyAppSessionToken } = require('../services/appAuth');
 
 function getConfiguredAdminToken() {
   const token = (process.env.ADMIN_TOKEN || '').trim();
@@ -16,6 +17,14 @@ function getRequestToken(req) {
     return bearer.slice(7).trim();
   }
   return (req.get('x-admin-token') || '').trim();
+}
+
+function getRequestSessionToken(req) {
+  const bearer = req.get('authorization') || '';
+  if (bearer.toLowerCase().startsWith('bearer ')) {
+    return bearer.slice(7).trim();
+  }
+  return '';
 }
 
 function getClientIp(req) {
@@ -61,11 +70,45 @@ function checkAdminAccess(req, options = {}) {
 
 function requireAdminAccess(options = {}) {
   return (req, res, next) => {
+    try {
+      const sessionToken = getRequestSessionToken(req);
+      if (sessionToken) {
+        const session = verifyAppSessionToken(sessionToken);
+        if (canAccessRole(session.role, 'admin')) {
+          req.auth = session;
+          return next();
+        }
+      }
+    } catch (error) {
+      return res.status(401).json({
+        message: options.invalidTokenMessage || error.message || 'Требуется доступ администратора.',
+      });
+    }
+
     const error = checkAdminAccess(req, options);
     if (error) {
       return res.status(error.status).json(error.body);
     }
     next();
+  };
+}
+
+function requireManagerAccess(options = {}) {
+  return (req, res, next) => {
+    try {
+      const session = verifyAppSessionToken(getRequestSessionToken(req));
+      if (canAccessRole(session.role, 'manager')) {
+        req.auth = session;
+        return next();
+      }
+      return res.status(403).json({
+        message: options.invalidTokenMessage || 'Требуется доступ менеджера.',
+      });
+    } catch (error) {
+      return res.status(401).json({
+        message: options.invalidTokenMessage || error.message || 'Требуется вход по паролю.',
+      });
+    }
   };
 }
 
@@ -90,5 +133,6 @@ module.exports = {
   getConfiguredAdminToken,
   isSelfUpdateEnabled,
   requireAdminAccess,
+  requireManagerAccess,
   requireWriteAccess,
 };

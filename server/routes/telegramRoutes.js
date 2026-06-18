@@ -1,7 +1,7 @@
 const express = require('express');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
-const { requireWriteAccess } = require('../middleware/security');
+const { requireAdminAccess } = require('../middleware/security');
 const { getBotInfo, getWebhookInfo, setWebhook, sendMessage } = require('../services/telegramService');
 const {
   createTelegramEmployeeSessionToken,
@@ -140,7 +140,7 @@ async function processTelegramMessage(token, message) {
   );
 }
 
-router.post('/telegram/check', requireWriteAccess, async (req, res) => {
+router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
   const token = getConfiguredBotToken();
   if (!token) {
     return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
@@ -175,7 +175,7 @@ router.post('/telegram/check', requireWriteAccess, async (req, res) => {
   }
 });
 
-router.post('/telegram/webhook/setup', requireWriteAccess, async (req, res) => {
+router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) => {
   const token = getConfiguredBotToken();
   if (!token) {
     return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });

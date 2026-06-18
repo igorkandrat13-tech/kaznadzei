@@ -1,3 +1,5 @@
+import { getAppAuthToken } from './appAuth';
+
 const ADMIN_TOKEN_KEY = 'kaznadzei_admin_token';
 
 export function getAdminToken() {
@@ -19,6 +21,10 @@ export function clearAdminToken() {
 
 function withAdminHeaders(headers = {}) {
   const nextHeaders = new Headers(headers);
+  const authToken = getAppAuthToken();
+  if (authToken) {
+    nextHeaders.set('Authorization', `Bearer ${authToken}`);
+  }
   const token = getAdminToken();
   if (token) {
     nextHeaders.set('X-Admin-Token', token);

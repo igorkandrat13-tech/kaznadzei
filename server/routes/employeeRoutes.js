@@ -1,13 +1,13 @@
 const express = require('express');
 const EmployeeStore = require('../stores/employeeStore');
 const SettingsStore = require('../stores/settingsStore');
-const { requireWriteAccess } = require('../middleware/security');
+const { requireAdminAccess } = require('../middleware/security');
 const { sendMessage } = require('../services/telegramService');
 const { sanitizeEmployeeInput } = require('../utils/validators');
 
 const router = express.Router();
 
-router.get('/employees', requireWriteAccess, (req, res) => {
+router.get('/employees', requireAdminAccess(), (req, res) => {
   const employees = EmployeeStore.findAll().sort((a, b) => {
     const roleDiff = String(a.role || '').localeCompare(String(b.role || ''), 'ru');
     if (roleDiff !== 0) return roleDiff;
@@ -16,7 +16,7 @@ router.get('/employees', requireWriteAccess, (req, res) => {
   res.json(employees);
 });
 
-router.post('/employees', requireWriteAccess, (req, res) => {
+router.post('/employees', requireAdminAccess(), (req, res) => {
   try {
     const employee = EmployeeStore.create(sanitizeEmployeeInput(req.body || {}));
     res.status(201).json(employee);
@@ -25,7 +25,7 @@ router.post('/employees', requireWriteAccess, (req, res) => {
   }
 });
 
-router.put('/employees/:id', requireWriteAccess, (req, res) => {
+router.put('/employees/:id', requireAdminAccess(), (req, res) => {
   try {
     const employee = EmployeeStore.update(req.params.id, sanitizeEmployeeInput(req.body || {}, { partial: true }));
     if (!employee) {
@@ -37,7 +37,7 @@ router.put('/employees/:id', requireWriteAccess, (req, res) => {
   }
 });
 
-router.delete('/employees/:id', requireWriteAccess, (req, res) => {
+router.delete('/employees/:id', requireAdminAccess(), (req, res) => {
   const employee = EmployeeStore.findById(req.params.id);
   if (!employee) {
     return res.status(404).json({ message: 'Сотрудник не найден.' });

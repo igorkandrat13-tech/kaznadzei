@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import Admin from './Admin';
 import Manager from './Manager';
 import Archive from './Archive';
@@ -15,9 +15,25 @@ import {
     isTelegramWebApp as detectTelegramWebApp,
     markTelegramWebAppSession,
 } from './telegramWebApp';
+import { apiFetch } from './api';
+import { canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
 import './App.css';
 
 const THEME_STORAGE_KEY = 'kaznadzei.theme';
+
+function ProtectedRoute({ requiredRole, children }) {
+    const authRole = getAppAuthRole();
+    if (!canAccessRole(requiredRole, authRole)) {
+        return <Navigate to="/" replace />;
+    }
+    return children;
+}
+
+function getAuthRoleLabel(role) {
+    if (role === 'admin') return 'Администратор';
+    if (role === 'manager') return 'Менеджер';
+    return '';
+}
 
 function AppLayout() {
     const location = useLocation();
@@ -25,6 +41,7 @@ function AppLayout() {
     const telegramMode = detectTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
     const [theme, setTheme] = useState(() => window.localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [authRole, setAuthRole] = useState(() => getAppAuthRole());
 
     useEffect(() => {
         if (detectTelegramWebApp()) {
@@ -40,6 +57,48 @@ function AppLayout() {
     useEffect(() => {
         setMobileMenuOpen(false);
     }, [location.pathname]);
+
+    useEffect(() => {
+        const syncAuth = () => {
+            setAuthRole(getAppAuthRole());
+        };
+        return subscribeToAppAuth(syncAuth);
+    }, []);
+
+    useEffect(() => {
+        const token = getAppAuthToken();
+        if (!token) {
+            setAuthRole('');
+            return undefined;
+        }
+
+        let cancelled = false;
+        apiFetch('/api/auth/session')
+            .then(async (res) => {
+                if (!res.ok) {
+                    clearAppAuthSession();
+                    return;
+                }
+                if (!cancelled) {
+                    setAuthRole(getAppAuthRole());
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    clearAppAuthSession();
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const handleLogout = () => {
+        clearAppAuthSession();
+        setAuthRole('');
+        setMobileMenuOpen(false);
+    };
 
     return (
         <>
@@ -75,18 +134,26 @@ function AppLayout() {
                     <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
                         <nav>
                             <Link to="/" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
-                            <Link to="/manager" onClick={() => setMobileMenuOpen(false)}>Менеджер</Link>
-                            <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>
-                            <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>Админ</Link>
+                            {canAccessRole('manager', authRole) && <Link to="/manager" onClick={() => setMobileMenuOpen(false)}>Менеджер</Link>}
+                            {canAccessRole('manager', authRole) && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
+                            {canAccessRole('admin', authRole) && <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>Админ</Link>}
                         </nav>
+                        {authRole ? (
+                            <div className="App-header-session">
+                                <span className="App-header-session-badge">{getAuthRoleLabel(authRole)}</span>
+                                <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
+                                    Выйти
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
             )}
             <div className={telegramMode ? 'container container-telegram' : 'container'}>
                 <Routes>
-                    <Route path='/admin' element={<Admin />} />
-                    <Route path='/manager' element={<Manager />} />
-                    <Route path='/archive' element={<Archive />} />
+                    <Route path='/admin' element={<ProtectedRoute requiredRole='admin'><Admin /></ProtectedRoute>} />
+                    <Route path='/manager' element={<ProtectedRoute requiredRole='manager'><Manager /></ProtectedRoute>} />
+                    <Route path='/archive' element={<ProtectedRoute requiredRole='manager'><Archive /></ProtectedRoute>} />
                     <Route path='/order/:id' element={<OrderDetail />} />
                     <Route path='/carpenter' element={<Carpenter />} />
                     <Route path='/designer' element={<Designer />} />

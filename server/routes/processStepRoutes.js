@@ -1,7 +1,7 @@
 const express = require('express');
 const ProcessStepStore = require('../stores/processStepStore');
 const OrderStore = require('../stores/orderStore');
-const { requireWriteAccess } = require('../middleware/security');
+const { requireAdminAccess } = require('../middleware/security');
 const { sanitizeProcessStepInput } = require('../utils/validators');
 const router = express.Router();
 
@@ -23,7 +23,7 @@ router.get('/processSteps', (req, res) => {
   }
 });
 
-router.post('/processSteps', requireWriteAccess, (req, res) => {
+router.post('/processSteps', requireAdminAccess(), (req, res) => {
   try {
     const step = ProcessStepStore.create(sanitizeProcessStepInput(req.body || {}));
     OrderStore.syncStagesWithProcessSteps();
@@ -33,7 +33,7 @@ router.post('/processSteps', requireWriteAccess, (req, res) => {
   }
 });
 
-router.patch('/processSteps/:id', requireWriteAccess, (req, res) => {
+router.patch('/processSteps/:id', requireAdminAccess(), (req, res) => {
   try {
     const updated = ProcessStepStore.update(req.params.id, sanitizeProcessStepInput(req.body || {}, { partial: true }));
     if (!updated) return res.status(404).json({ message: 'Not found' });
@@ -44,7 +44,7 @@ router.patch('/processSteps/:id', requireWriteAccess, (req, res) => {
   }
 });
 
-router.delete('/processSteps/:id', requireWriteAccess, (req, res) => {
+router.delete('/processSteps/:id', requireAdminAccess(), (req, res) => {
   try {
     const deleted = ProcessStepStore.deleteOne(req.params.id);
     if (!deleted) return res.status(404).json({ message: 'Not found' });

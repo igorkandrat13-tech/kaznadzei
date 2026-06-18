@@ -1,6 +1,6 @@
 const express = require('express');
 const ColorStore = require('../stores/colorStore');
-const { requireWriteAccess } = require('../middleware/security');
+const { requireAdminAccess } = require('../middleware/security');
 const { sanitizeColorInput } = require('../utils/validators');
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.get('/colors', (req, res) => {
   }
 });
 
-router.post('/colors', requireWriteAccess, (req, res) => {
+router.post('/colors', requireAdminAccess(), (req, res) => {
   try {
     const color = ColorStore.create(sanitizeColorInput(req.body || {}));
     res.status(201).json(color);
@@ -21,7 +21,7 @@ router.post('/colors', requireWriteAccess, (req, res) => {
   }
 });
 
-router.put('/colors/:id', requireWriteAccess, (req, res) => {
+router.put('/colors/:id', requireAdminAccess(), (req, res) => {
   try {
     const updated = ColorStore.update(req.params.id, sanitizeColorInput(req.body || {}, { partial: true }));
     if (!updated) return res.status(404).json({ message: 'Not found' });
@@ -31,7 +31,7 @@ router.put('/colors/:id', requireWriteAccess, (req, res) => {
   }
 });
 
-router.delete('/colors/:id', requireWriteAccess, (req, res) => {
+router.delete('/colors/:id', requireAdminAccess(), (req, res) => {
   try {
     ColorStore.deleteOne(req.params.id);
     res.json({ ok: true });

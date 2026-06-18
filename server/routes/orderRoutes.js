@@ -3,7 +3,7 @@ const QRCode = require('qrcode');
 const OrderStore = require('../stores/orderStore');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
-const { requireWriteAccess } = require('../middleware/security');
+const { requireManagerAccess, requireWriteAccess } = require('../middleware/security');
 const { sanitizeCommentInput, sanitizeOrderInput } = require('../utils/validators');
 const {
   resolveTelegramWebAppUser,
@@ -169,7 +169,7 @@ router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
   }
 });
 
-router.post('/orders', requireWriteAccess, (req, res) => {
+router.post('/orders', requireManagerAccess(), (req, res) => {
   try {
     const { customer, name, quantity, material, notes, startDate, endDate } = sanitizeOrderInput(req.body || {});
     const stages = OrderStore.buildInitialStages();
@@ -192,7 +192,7 @@ router.post('/orders', requireWriteAccess, (req, res) => {
   }
 });
 
-router.put('/orders/:id', requireWriteAccess, (req, res) => {
+router.put('/orders/:id', requireManagerAccess(), (req, res) => {
   try {
     const db = require('../stores/store');
     const data = db.load();
@@ -207,7 +207,7 @@ router.put('/orders/:id', requireWriteAccess, (req, res) => {
   }
 });
 
-router.delete('/orders/:id', requireWriteAccess, (req, res) => {
+router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
   try {
     const db = require('../stores/store');
     const data = db.load();

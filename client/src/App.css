@@ -102,6 +102,31 @@ body::before {
   flex-wrap: wrap;
 }
 
+.App-header-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.App-header-session-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(16, 36, 58, 0.92);
+  border: 1px solid rgba(132, 190, 255, 0.18);
+  color: #dff2ff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(2, 8, 16, 0.18);
+}
+
+.App-header-logout {
+  min-height: 38px;
+}
+
 .App-header-controls {
   display: flex;
   align-items: center;
@@ -886,6 +911,105 @@ table tr:hover td {
   font-size: 13px;
   font-weight: 700;
   color: #8fe4ff;
+}
+
+.home-auth-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.home-auth-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-auth-card .form-group {
+  position: relative;
+  z-index: 1;
+}
+
+.home-auth-card .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.home-auth-card .home-tech-card-footer {
+  margin-top: auto;
+  align-items: center;
+}
+
+.home-auth-hint {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 14px;
+  color: rgba(217, 231, 248, 0.7);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.home-auth-status {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  width: fit-content;
+  padding: 0 12px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.home-auth-status-ready {
+  background: rgba(18, 83, 67, 0.9);
+  border: 1px solid rgba(100, 230, 194, 0.24);
+  color: #a9f5dd;
+}
+
+.home-auth-status-pending {
+  background: rgba(78, 56, 18, 0.88);
+  border: 1px solid rgba(255, 211, 140, 0.22);
+  color: #ffdca0;
+}
+
+.home-auth-session {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.home-auth-setup {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 18px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(11, 29, 45, 0.92), rgba(10, 21, 36, 0.84));
+  border: 1px solid rgba(123, 197, 255, 0.18);
+}
+
+.home-auth-note {
+  position: relative;
+  z-index: 1;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(12, 26, 45, 0.74);
+  border: 1px solid rgba(142, 194, 255, 0.12);
+  color: rgba(217, 231, 248, 0.72);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .home-tech-card-arrow {
@@ -2502,6 +2626,26 @@ body[data-theme='light'] .home-stat-label {
   color: rgba(61, 91, 121, 0.78);
 }
 
+body[data-theme='light'] .App-header-session-badge,
+body[data-theme='light'] .home-auth-setup,
+body[data-theme='light'] .home-auth-note {
+  background: rgba(243, 248, 255, 0.94);
+  border-color: rgba(121, 163, 209, 0.16);
+  color: #2c597d;
+}
+
+body[data-theme='light'] .home-auth-status-ready {
+  background: rgba(229, 248, 240, 0.96);
+  border-color: rgba(104, 184, 150, 0.24);
+  color: #25735d;
+}
+
+body[data-theme='light'] .home-auth-status-pending {
+  background: rgba(255, 247, 229, 0.96);
+  border-color: rgba(214, 186, 116, 0.24);
+  color: #8f651d;
+}
+
 @media (max-width: 1024px) {
   .App-header {
     padding: 16px 20px;
@@ -2573,6 +2717,16 @@ body[data-theme='light'] .home-stat-label {
   .App-header-controls {
     margin-left: auto;
   }
+  .App-header-session {
+    width: 100%;
+    justify-content: stretch;
+    margin-left: 0;
+  }
+  .App-header-session-badge,
+  .App-header-logout {
+    width: 100%;
+    justify-content: center;
+  }
   .theme-switch {
     min-height: 40px;
     padding: 3px;
@@ -2602,8 +2756,17 @@ body[data-theme='light'] .home-stat-label {
     font-size: 28px;
   }
   .home-stats-grid,
+  .home-auth-grid,
   .home-role-grid {
     grid-template-columns: 1fr;
+  }
+  .home-auth-session {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .home-auth-card .home-tech-card-footer {
+    flex-direction: column;
+    align-items: stretch;
   }
   .card {
     padding: 15px;

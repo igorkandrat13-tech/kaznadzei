@@ -181,6 +181,8 @@ const updateRoutes = require('./server/routes/updateRoutes');
 const settingsRoutes = require('./server/routes/settingsRoutes');
 const employeeRoutes = require('./server/routes/employeeRoutes');
 const telegramRoutes = require('./server/routes/telegramRoutes');
+const authRoutes = require('./server/routes/authRoutes');
+app.use('/api', authRoutes);
 app.use('/api', processStepRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', colorRoutes);
