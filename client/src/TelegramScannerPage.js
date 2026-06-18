@@ -33,6 +33,7 @@ function TelegramScannerPage() {
     markTelegramWebAppSession();
     let lastError = null;
     let currentSessionToken = getTelegramEmployeeSessionToken();
+    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 250));
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
@@ -41,9 +42,18 @@ function TelegramScannerPage() {
       const initData = getTelegramInitData();
       const unsafeUser = getTelegramUnsafeUser();
       const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
+      const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
 
-      if (!initData && !unsafeUser?.id && !sessionToken) {
-        await new Promise(resolve => window.setTimeout(resolve, 250));
+      // In Telegram Web App the signed auth payload may appear a bit later than the
+      // URL query token. Give it a chance to arrive before trusting a stale token.
+      if (!hasTelegramAuthPayload) {
+        if (attempt < retries - 1) {
+          await waitForTelegramAuth();
+          continue;
+        }
+      }
+
+      if (!hasTelegramAuthPayload && !sessionToken) {
         continue;
       }
 
@@ -60,9 +70,12 @@ function TelegramScannerPage() {
         const data = await parseJsonSafely(res);
         if (!res.ok) {
           const errorMessage = data?.message || 'Не удалось подготовить доступ к заказу.';
-          if (sessionToken && (initData || unsafeUser?.id) && isExpiredTelegramSessionMessage(errorMessage)) {
+          if (sessionToken && isExpiredTelegramSessionMessage(errorMessage)) {
             currentSessionToken = '';
             setTelegramEmployeeSessionToken('');
+            if (attempt < retries - 1) {
+              await waitForTelegramAuth();
+            }
             continue;
           }
           throw new Error(errorMessage);
@@ -72,7 +85,7 @@ function TelegramScannerPage() {
         return Boolean(currentSessionToken);
       } catch (sessionError) {
         lastError = sessionError;
-        await new Promise(resolve => window.setTimeout(resolve, 250));
+        await waitForTelegramAuth();
       }
     }
 
