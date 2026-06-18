@@ -223,17 +223,26 @@ router.post('/telegram/webapp/session', async (req, res) => {
     const payload = req.body || {};
 
     if (payload.sessionToken) {
-      const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
-      employee = EmployeeStore.findById(sessionPayload.employeeId);
-      if (!employee || String(employee.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
-        return res.status(403).json({ message: 'Сотрудник Telegram не найден или session token устарел.' });
+      try {
+        const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
+        employee = EmployeeStore.findById(sessionPayload.employeeId);
+        if (!employee || String(employee.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
+          return res.status(403).json({ message: 'Сотрудник Telegram не найден или session token устарел.' });
+        }
+        telegramUser = {
+          id: sessionPayload.telegramUserId,
+          username: employee.telegramUsername || '',
+          first_name: employee.telegramFirstName || '',
+          last_name: employee.telegramLastName || '',
+        };
+      } catch (sessionError) {
+        const hasTelegramAuthPayload = Boolean(String(payload.initData || '').trim() || payload.unsafeUser?.id);
+        if (!hasTelegramAuthPayload) {
+          throw sessionError;
+        }
+        telegramUser = resolveTelegramWebAppUser(token, payload);
+        employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
       }
-      telegramUser = {
-        id: sessionPayload.telegramUserId,
-        username: employee.telegramUsername || '',
-        first_name: employee.telegramFirstName || '',
-        last_name: employee.telegramLastName || '',
-      };
     } else {
       telegramUser = resolveTelegramWebAppUser(token, payload);
       employee = EmployeeStore.findByTelegramUserId(telegramUser.id);

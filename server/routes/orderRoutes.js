@@ -13,12 +13,19 @@ const router = express.Router();
 
 function resolveTelegramEmployee(token, payload) {
   if (payload?.sessionToken) {
-    const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
-    const employeeBySession = EmployeeStore.findById(sessionPayload.employeeId);
-    if (!employeeBySession || String(employeeBySession.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
-      throw new Error('Сотрудник Telegram не найден или session token устарел.');
+    try {
+      const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
+      const employeeBySession = EmployeeStore.findById(sessionPayload.employeeId);
+      if (!employeeBySession || String(employeeBySession.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
+        throw new Error('Сотрудник Telegram не найден или session token устарел.');
+      }
+      return employeeBySession;
+    } catch (sessionError) {
+      const hasTelegramAuthPayload = Boolean(String(payload?.initData || '').trim() || payload?.unsafeUser?.id);
+      if (!hasTelegramAuthPayload) {
+        throw sessionError;
+      }
     }
-    return employeeBySession;
   }
 
   const telegramUser = resolveTelegramWebAppUser(token, payload || {});
