@@ -103,12 +103,8 @@ function TelegramScannerPage() {
       openTelegramQrScanner({
         onSuccess: async (orderPath) => {
           try {
-            setStatus('Подготавливаю доступ к заказу...');
-            const sessionReady = await bootstrapTelegramSession({ retries: 6 });
-            if (!sessionReady) {
-              setStatus('Не удалось подтвердить доступ к заказу.');
-              return;
-            }
+            setError('');
+            setStatus('Открываю страницу заказа...');
             navigate(orderPath);
           } finally {
             setOpeningScanner(false);
