@@ -14,6 +14,12 @@ import {
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
 
+function isExpiredTelegramSessionMessage(message) {
+  const normalized = String(message || '').toLowerCase();
+  return normalized.includes('session token telegram web app')
+    && (normalized.includes('истек') || normalized.includes('истёк') || normalized.includes('устарел'));
+}
+
 function TelegramScannerPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,6 +32,7 @@ function TelegramScannerPage() {
   const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
     markTelegramWebAppSession();
     let lastError = null;
+    let currentSessionToken = getTelegramEmployeeSessionToken();
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
@@ -33,7 +40,7 @@ function TelegramScannerPage() {
 
       const initData = getTelegramInitData();
       const unsafeUser = getTelegramUnsafeUser();
-      const sessionToken = getTelegramEmployeeSessionToken();
+      const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
 
       if (!initData && !unsafeUser?.id && !sessionToken) {
         await new Promise(resolve => window.setTimeout(resolve, 250));
@@ -52,10 +59,17 @@ function TelegramScannerPage() {
         });
         const data = await parseJsonSafely(res);
         if (!res.ok) {
-          throw new Error(data?.message || 'Не удалось подготовить доступ к заказу.');
+          const errorMessage = data?.message || 'Не удалось подготовить доступ к заказу.';
+          if (sessionToken && (initData || unsafeUser?.id) && isExpiredTelegramSessionMessage(errorMessage)) {
+            currentSessionToken = '';
+            setTelegramEmployeeSessionToken('');
+            continue;
+          }
+          throw new Error(errorMessage);
         }
-        setTelegramEmployeeSessionToken(data?.sessionToken || '');
-        return Boolean(data?.sessionToken);
+        currentSessionToken = data?.sessionToken || '';
+        setTelegramEmployeeSessionToken(currentSessionToken);
+        return Boolean(currentSessionToken);
       } catch (sessionError) {
         lastError = sessionError;
         await new Promise(resolve => window.setTimeout(resolve, 250));
@@ -77,7 +91,11 @@ function TelegramScannerPage() {
         onSuccess: async (orderPath) => {
           try {
             setStatus('Подготавливаю доступ к заказу...');
-            await bootstrapTelegramSession({ retries: 6 });
+            const sessionReady = await bootstrapTelegramSession({ retries: 6 });
+            if (!sessionReady) {
+              setStatus('Не удалось подтвердить доступ к заказу.');
+              return;
+            }
             navigate(orderPath);
           } finally {
             setOpeningScanner(false);

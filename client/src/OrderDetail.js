@@ -23,6 +23,12 @@ const ROLE_LABELS = {
   designer: 'Дизайнер',
 };
 
+function isExpiredTelegramSessionMessage(message) {
+  const normalized = String(message || '').toLowerCase();
+  return normalized.includes('session token telegram web app')
+    && (normalized.includes('истек') || normalized.includes('истёк') || normalized.includes('устарел'));
+}
+
 function OrderDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -107,28 +113,41 @@ function OrderDetail() {
     setSessionLoading(true);
     setSessionError('');
 
-    return apiFetch('/api/telegram/webapp/session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        initData: telegramInitData,
-        unsafeUser: telegramUnsafeUser,
-        sessionToken: telegramSessionToken,
-      }),
-    })
-      .then(async res => {
-        const data = await parseJsonSafely(res);
-        if (!res.ok) {
-          throw new Error(data?.message || 'Не удалось определить ваш профиль.');
+    const resolveSession = async (sessionTokenOverride = telegramSessionToken) => {
+      const res = await apiFetch('/api/telegram/webapp/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken: sessionTokenOverride,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось определить ваш профиль.');
+      }
+      return data;
+    };
+
+    return resolveSession()
+      .catch(async (error) => {
+        const canRetryWithoutToken = telegramSessionToken
+          && (telegramInitData || telegramUnsafeUser?.id)
+          && isExpiredTelegramSessionMessage(error.message);
+        if (!canRetryWithoutToken) {
+          throw error;
         }
-        return data;
+        setTelegramEmployeeSessionToken('');
+        setTelegramSessionTokenState('');
+        return resolveSession('');
       })
       .then(data => {
-        if (data?.sessionToken) {
-          setTelegramEmployeeSessionToken(data.sessionToken);
-          setTelegramSessionTokenState(data.sessionToken);
-        }
+        const nextSessionToken = data?.sessionToken || '';
+        setTelegramEmployeeSessionToken(nextSessionToken);
+        setTelegramSessionTokenState(nextSessionToken);
         setTelegramEmployee(data?.employee || null);
+        setSessionError('');
       })
       .catch(error => {
         setTelegramEmployee(null);
