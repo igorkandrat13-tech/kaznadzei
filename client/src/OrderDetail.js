@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getNextStageStatusMeta, getOrderStatusMeta, getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
@@ -46,7 +46,7 @@ function OrderDetail() {
   const [stageError, setStageError] = useState('');
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
-  const [telegramSessionToken, setTelegramSessionTokenState] = useState('');
+  const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
@@ -68,8 +68,14 @@ function OrderDetail() {
     });
   }, []);
 
-  useEffect(() => {
-    setTelegramSessionTokenState(getTelegramEmployeeSessionToken());
+  const updateTelegramSessionToken = useCallback((nextToken = '') => {
+    const normalizedToken = String(nextToken || '');
+    telegramSessionTokenRef.current = normalizedToken;
+    setTelegramEmployeeSessionToken(normalizedToken);
+  }, []);
+
+  const getActiveTelegramSessionToken = useCallback(() => {
+    return telegramSessionTokenRef.current || getTelegramEmployeeSessionToken();
   }, []);
 
   const fetchOrder = useCallback(async ({ showLoader = false } = {}) => {
@@ -99,7 +105,8 @@ function OrderDetail() {
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
-    if (!telegramInitData && !telegramUnsafeUser?.id && !telegramSessionToken) {
+    const currentSessionToken = getActiveTelegramSessionToken();
+    if (!telegramInitData && !telegramUnsafeUser?.id && !currentSessionToken) {
       if (!telegramAuthResolved) {
         setSessionLoading(true);
         setSessionError('');
@@ -113,7 +120,7 @@ function OrderDetail() {
     setSessionLoading(true);
     setSessionError('');
 
-    const resolveSession = async (sessionTokenOverride = telegramSessionToken) => {
+    const resolveSession = async (sessionTokenOverride = currentSessionToken) => {
       const res = await apiFetch('/api/telegram/webapp/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -132,20 +139,18 @@ function OrderDetail() {
 
     return resolveSession()
       .catch(async (error) => {
-        const canRetryWithoutToken = telegramSessionToken
+        const canRetryWithoutToken = currentSessionToken
           && (telegramInitData || telegramUnsafeUser?.id)
           && isExpiredTelegramSessionMessage(error.message);
         if (!canRetryWithoutToken) {
           throw error;
         }
-        setTelegramEmployeeSessionToken('');
-        setTelegramSessionTokenState('');
+        updateTelegramSessionToken('');
         return resolveSession('');
       })
       .then(data => {
         const nextSessionToken = data?.sessionToken || '';
-        setTelegramEmployeeSessionToken(nextSessionToken);
-        setTelegramSessionTokenState(nextSessionToken);
+        updateTelegramSessionToken(nextSessionToken);
         setTelegramEmployee(data?.employee || null);
         setSessionError('');
       })
@@ -154,7 +159,7 @@ function OrderDetail() {
         setSessionError(error.message || 'Не удалось определить ваш профиль.');
       })
       .finally(() => setSessionLoading(false));
-  }, [telegramAuthResolved, telegramInitData, telegramMode, telegramSessionToken, telegramUnsafeUser]);
+  }, [getActiveTelegramSessionToken, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
 
   useEffect(() => {
     loadTelegramEmployeeSession();
@@ -193,6 +198,7 @@ function OrderDetail() {
     if (!telegramMode) return undefined;
 
     const handleVisibilityRefresh = () => {
+      if (document.visibilityState === 'hidden') return;
       if (commentEditing) return;
       refreshTelegramAuth();
     };
@@ -210,6 +216,7 @@ function OrderDetail() {
     if (!telegramMode) return undefined;
 
     const refreshOrder = () => {
+      if (document.visibilityState === 'hidden') return;
       if (commentEditing) return;
       fetchOrder();
     };
@@ -285,13 +292,14 @@ function OrderDetail() {
     setSavingComment(true);
     setCommentError('');
     try {
+      const sessionToken = getActiveTelegramSessionToken();
       const res = await apiFetch(`/api/orders/${id}/telegram-comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           initData: telegramInitData,
           unsafeUser: telegramUnsafeUser,
-          sessionToken: telegramSessionToken,
+          sessionToken,
           text,
         }),
       });
@@ -310,7 +318,8 @@ function OrderDetail() {
   };
 
   const updateTelegramStage = async (stage) => {
-    if (!telegramMode || !telegramEmployee || (!telegramInitData && !telegramUnsafeUser?.id && !telegramSessionToken)) {
+    const sessionToken = getActiveTelegramSessionToken();
+    if (!telegramMode || !telegramEmployee || (!telegramInitData && !telegramUnsafeUser?.id && !sessionToken)) {
       setStageError('Не удалось определить ваш профиль для смены статуса.');
       return;
     }
@@ -325,7 +334,7 @@ function OrderDetail() {
         body: JSON.stringify({
           initData: telegramInitData,
           unsafeUser: telegramUnsafeUser,
-          sessionToken: telegramSessionToken,
+          sessionToken,
           stepId: stage.stepId,
           status: nextStatus,
         }),
