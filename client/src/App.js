@@ -132,20 +132,22 @@ function AppLayout() {
                         </div>
                     </div>
                     <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
-                        <nav>
+                        <nav className="App-header-nav">
                             <Link to="/" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
                             {canAccessRole('manager', authRole) && <Link to="/manager" onClick={() => setMobileMenuOpen(false)}>Менеджер</Link>}
                             {canAccessRole('manager', authRole) && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
                             {canAccessRole('admin', authRole) && <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>Админ</Link>}
                         </nav>
-                        {authRole ? (
-                            <div className="App-header-session">
-                                <span className="App-header-session-badge">{getAuthRoleLabel(authRole)}</span>
-                                <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
-                                    Выйти
-                                </button>
-                            </div>
-                        ) : null}
+                        <div className="App-header-actions-right">
+                            {authRole ? (
+                                <div className="App-header-session">
+                                    <span className="App-header-session-badge">{getAuthRoleLabel(authRole)}</span>
+                                    <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
+                                        Выйти
+                                    </button>
+                                </div>
+                            ) : null}
+                        </div>
                     </div>
                 </div>
             )}

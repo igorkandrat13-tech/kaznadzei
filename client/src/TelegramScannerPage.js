@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
+  buildTelegramOrderPath,
   closeTelegramWebApp,
   getTelegramEmployeeSessionToken,
   getTelegramInitData,
@@ -105,7 +106,7 @@ function TelegramScannerPage() {
           try {
             setError('');
             setStatus('Открываю страницу заказа...');
-            navigate(orderPath);
+            navigate(buildTelegramOrderPath(orderPath));
           } finally {
             setOpeningScanner(false);
           }
@@ -120,7 +121,7 @@ function TelegramScannerPage() {
       setError(scannerError.message || 'Не удалось открыть камеру.');
       setOpeningScanner(false);
     }
-  }, [bootstrapTelegramSession, bootstrappingSession, navigate, openingScanner]);
+  }, [bootstrappingSession, navigate, openingScanner]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

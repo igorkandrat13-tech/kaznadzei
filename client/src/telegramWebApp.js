@@ -117,6 +117,19 @@ export function getOrderPathFromQr(rawValue) {
   return '';
 }
 
+export function buildTelegramOrderPath(orderPath, sessionToken = getTelegramEmployeeSessionToken()) {
+  const normalizedPath = String(orderPath || '').trim();
+  if (!normalizedPath) return '';
+
+  const [pathWithoutHash, hashPart = ''] = normalizedPath.split('#', 2);
+  const url = new URL(pathWithoutHash, window.location.origin);
+  if (sessionToken) {
+    url.searchParams.set('employeeSessionToken', String(sessionToken));
+  }
+
+  return `${url.pathname}${url.search}${hashPart ? `#${hashPart}` : ''}`;
+}
+
 export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {}) {
   const webApp = getTelegramWebApp();
   if (!webApp || typeof webApp.showScanQrPopup !== 'function') {

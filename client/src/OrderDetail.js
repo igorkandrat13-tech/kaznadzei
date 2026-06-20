@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getNextStageStatusMeta, getOrderStatusMeta, getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
 import {
+  buildTelegramOrderPath,
   closeTelegramWebApp,
   getTelegramEmployeeSessionToken,
   getTelegramInitData,
@@ -30,6 +31,7 @@ function isExpiredTelegramSessionMessage(message) {
 }
 
 function OrderDetail() {
+  const location = useLocation();
   const navigate = useNavigate();
   const { id } = useParams();
   const [order, setOrder] = useState(null);
@@ -160,6 +162,22 @@ function OrderDetail() {
       })
       .finally(() => setSessionLoading(false));
   }, [getActiveTelegramSessionToken, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
+
+  useEffect(() => {
+    if (!telegramMode) return;
+
+    const params = new URLSearchParams(location.search);
+    const sessionTokenFromUrl = params.get('employeeSessionToken');
+    if (!sessionTokenFromUrl) return;
+
+    updateTelegramSessionToken(sessionTokenFromUrl);
+    params.delete('employeeSessionToken');
+
+    navigate({
+      pathname: location.pathname,
+      search: params.toString() ? `?${params.toString()}` : '',
+    }, { replace: true });
+  }, [location.pathname, location.search, navigate, telegramMode, updateTelegramSessionToken]);
 
   useEffect(() => {
     loadTelegramEmployeeSession();
@@ -354,7 +372,7 @@ function OrderDetail() {
   const handleScanAnotherQr = () => {
     setTelegramActionError('');
     openTelegramQrScanner({
-      onSuccess: (orderPath) => navigate(orderPath),
+      onSuccess: (orderPath) => navigate(buildTelegramOrderPath(orderPath)),
       onError: setTelegramActionError,
     });
   };

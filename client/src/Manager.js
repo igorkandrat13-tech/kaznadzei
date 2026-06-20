@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
-import { getOrderStatusMeta } from './statusMeta';
+import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 import ConfirmDialog from './ConfirmDialog';
+import { roleTabs } from './adminUI';
 
 const EMPTY_FORM = {
   customer: '',
@@ -39,9 +40,16 @@ function getManagerCommentPreview(notes) {
   return text.length > 90 ? `${text.slice(0, 90)}...` : text;
 }
 
+function getInitialStageRoleTab(stages = []) {
+  const firstRoleWithStage = roleTabs.find(tab => stages.some(stage => stage.role === tab.key));
+  return firstRoleWithStage?.key || roleTabs[0]?.key || 'carpenter';
+}
+
 function Manager() {
   const [orders, setOrders] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [formStages, setFormStages] = useState([]);
+  const [activeStageRole, setActiveStageRole] = useState(() => roleTabs[0]?.key || 'carpenter');
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [qrOrderId, setQrOrderId] = useState(null);
@@ -56,6 +64,7 @@ function Manager() {
 
   const formErrors = validateManagerForm(form);
   const isFormValid = Object.keys(formErrors).length === 0;
+  const activeRoleStages = formStages.filter(stage => stage.role === activeStageRole);
 
   useEffect(() => {
     fetchOrders();
@@ -149,6 +158,9 @@ function Manager() {
       startDate: order.startDate || '',
       endDate: order.endDate || '',
     });
+    const nextStages = Array.isArray(order.stages) ? order.stages : [];
+    setFormStages(nextStages);
+    setActiveStageRole(getInitialStageRoleTab(nextStages));
     setEditingId(order._id);
     setShowForm(true);
   };
@@ -216,6 +228,8 @@ function Manager() {
   const handleCancel = () => {
     if (savingOrder) return;
     setForm(EMPTY_FORM);
+    setFormStages([]);
+    setActiveStageRole(roleTabs[0]?.key || 'carpenter');
     setEditingId(null);
     setShowForm(false);
     setError('');
@@ -224,6 +238,8 @@ function Manager() {
   const openNewForm = () => {
     setError('');
     setForm({ ...EMPTY_FORM, orderDate: new Date().toISOString().split('T')[0] });
+    setFormStages([]);
+    setActiveStageRole(roleTabs[0]?.key || 'carpenter');
     setEditingId(null);
     setShowForm(true);
   };
@@ -466,6 +482,59 @@ function Manager() {
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Время изготовления: <strong>{calcDuration(form.startDate, form.endDate) || '—'}</strong></label>
               </div>
+            </div>
+            <div className="manager-stage-panel">
+              <div className="manager-stage-panel-header">
+                <div className="manager-stage-panel-title">Этапы по специалистам</div>
+                <div className="manager-stage-panel-subtitle">
+                  {editingId
+                    ? 'Следите за статусами этапов по каждому специалисту.'
+                    : 'После создания заказа здесь появятся этапы специалистов и их текущие статусы.'}
+                </div>
+              </div>
+              <div className="tabs manager-stage-tabs">
+                {roleTabs.map(tab => {
+                  const roleCount = formStages.filter(stage => stage.role === tab.key).length;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      className={`tab ${activeStageRole === tab.key ? 'tab-active' : ''}`}
+                      onClick={() => setActiveStageRole(tab.key)}
+                    >
+                      {tab.label} {roleCount ? `(${roleCount})` : ''}
+                    </button>
+                  );
+                })}
+              </div>
+              {editingId ? (
+                activeRoleStages.length > 0 ? (
+                  <div className="mobile-order-stage-list">
+                    {activeRoleStages.map(stage => {
+                      const stageStatusMeta = getStageStatusMeta(stage.status);
+                      return (
+                        <div key={`${stage.stepId || stage._id || stage.stepName}-${stage.role}`} className="mobile-order-stage-row">
+                          <div>
+                            <div className="manager-stage-name">{stage.stepName || 'Этап без названия'}</div>
+                            <div className="manager-stage-description">{stage.description || 'Описание этапа не задано.'}</div>
+                          </div>
+                          <span className={stageStatusMeta.className}>
+                            {stageStatusMeta.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="manager-stage-empty">
+                    Для выбранного специалиста этапы пока не настроены.
+                  </div>
+                )
+              ) : (
+                <div className="manager-stage-empty">
+                  Сначала сохраните заказ. После этого в форме появятся этапы специалистов для отслеживания статусов.
+                </div>
+              )}
             </div>
             <div className="modal-actions">
               <button className="btn" onClick={handleCancel} disabled={savingOrder}>Отмена</button>

@@ -98,15 +98,24 @@ body::before {
 .App-header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 20px;
   flex-wrap: wrap;
+  width: 100%;
+}
+
+.App-header-actions-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  padding-left: 18px;
+  border-left: 1px solid rgba(138, 194, 255, 0.14);
 }
 
 .App-header-session {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-left: auto;
 }
 
 .App-header-session-badge {
@@ -449,6 +458,51 @@ table tr:hover td {
 .manager-action-btn-danger {
   background: #e74c3c;
   color: white;
+}
+
+.manager-stage-panel {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(132, 186, 248, 0.12);
+  background: rgba(10, 24, 40, 0.74);
+}
+
+.manager-stage-panel-header {
+  margin-bottom: 14px;
+}
+
+.manager-stage-panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #eef8ff;
+}
+
+.manager-stage-panel-subtitle,
+.manager-stage-description,
+.manager-stage-empty {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.manager-stage-tabs {
+  margin-top: 0;
+  margin-bottom: 14px;
+}
+
+.manager-stage-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.manager-stage-empty {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(132, 186, 248, 0.16);
+  background: rgba(17, 32, 51, 0.72);
 }
 
 .mobile-order-card-summary {
@@ -2346,6 +2400,10 @@ body[data-theme='light'] .App-header {
   box-shadow: 0 14px 34px rgba(45, 78, 114, 0.1);
 }
 
+body[data-theme='light'] .App-header-actions-right {
+  border-left-color: rgba(112, 156, 205, 0.14);
+}
+
 body[data-theme='light'] .App-header h1,
 body[data-theme='light'] .card h2,
 body[data-theme='light'] .modal-title,
@@ -2520,6 +2578,17 @@ body[data-theme='light'] .tab-active {
   background: linear-gradient(135deg, #2e98da, #63c7ff);
   color: white;
   border-color: rgba(83, 168, 228, 0.24);
+}
+
+body[data-theme='light'] .manager-stage-panel,
+body[data-theme='light'] .manager-stage-empty {
+  background: rgba(247, 251, 255, 0.92);
+  border-color: rgba(120, 164, 212, 0.16);
+}
+
+body[data-theme='light'] .manager-stage-panel-title,
+body[data-theme='light'] .manager-stage-name {
+  color: #1c3956;
 }
 
 body[data-theme='light'] .badge-neutral {
@@ -2707,6 +2776,13 @@ body[data-theme='light'] .home-auth-status-pending {
     width: 100%;
     flex-direction: column;
     gap: 8px;
+  }
+  .App-header-actions-right {
+    width: 100%;
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid rgba(138, 194, 255, 0.14);
+    padding-top: 10px;
   }
   .App-header nav a {
     width: 100%;

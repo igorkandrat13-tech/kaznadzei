@@ -89,6 +89,11 @@ function Home() {
         setAuthSuccess('');
     };
 
+    const handleSetupSubmit = (event) => {
+        event.preventDefault();
+        handleInitialSetup();
+    };
+
     const handleInitialSetup = async () => {
         if (!setupForm.adminPassword.trim() || !setupForm.managerPassword.trim()) {
             setAuthError('Заполните новый пароль администратора и пароль менеджера.');
@@ -173,6 +178,11 @@ function Home() {
         }
     };
 
+    const handleLoginSubmit = (role) => (event) => {
+        event.preventDefault();
+        handleLogin(role);
+    };
+
     const handleLogout = () => {
         clearAppAuthSession();
         setAuthRole('');
@@ -242,33 +252,35 @@ function Home() {
                                 После обновления сразу задайте пароль администратора и пароль менеджера.
                                 Они сохранятся в хэш и будут использоваться для всех следующих входов.
                             </div>
-                            <div className="responsive-form-grid" style={{ marginBottom: 16 }}>
-                                <div className="form-group" style={{ marginBottom: 0 }}>
-                                    <label>Пароль администратора</label>
-                                    <input
-                                        type="password"
-                                        value={setupForm.adminPassword}
-                                        onChange={handleSetupChange('adminPassword')}
-                                        placeholder="Введите пароль администратора"
-                                        disabled={setupLoading}
-                                    />
+                            <form onSubmit={handleSetupSubmit}>
+                                <div className="responsive-form-grid" style={{ marginBottom: 16 }}>
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <label>Пароль администратора</label>
+                                        <input
+                                            type="password"
+                                            value={setupForm.adminPassword}
+                                            onChange={handleSetupChange('adminPassword')}
+                                            placeholder="Введите пароль администратора"
+                                            disabled={setupLoading}
+                                        />
+                                    </div>
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <label>Пароль менеджера</label>
+                                        <input
+                                            type="password"
+                                            value={setupForm.managerPassword}
+                                            onChange={handleSetupChange('managerPassword')}
+                                            placeholder="Введите пароль менеджера"
+                                            disabled={setupLoading}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="form-group" style={{ marginBottom: 0 }}>
-                                    <label>Пароль менеджера</label>
-                                    <input
-                                        type="password"
-                                        value={setupForm.managerPassword}
-                                        onChange={handleSetupChange('managerPassword')}
-                                        placeholder="Введите пароль менеджера"
-                                        disabled={setupLoading}
-                                    />
+                                <div className="modal-actions-group">
+                                    <button className="btn btn-success" type="submit" disabled={setupLoading}>
+                                        {setupLoading ? 'Сохранение...' : 'Сохранить пароли и включить вход'}
+                                    </button>
                                 </div>
-                            </div>
-                            <div className="modal-actions-group">
-                                <button className="btn btn-success" onClick={handleInitialSetup} disabled={setupLoading}>
-                                    {setupLoading ? 'Сохранение...' : 'Сохранить пароли и включить вход'}
-                                </button>
-                            </div>
+                            </form>
                         </div>
                     ) : null}
 
@@ -301,30 +313,32 @@ function Home() {
                                     {card.statusLabel}
                                 </div>
                                 <div className="home-auth-hint">{card.helper}</div>
-                                <div className="form-group" style={{ marginBottom: 12 }}>
-                                    <label>{card.role === 'admin' ? 'Пароль администратора' : 'Пароль менеджера'}</label>
-                                    <input
-                                        type="password"
-                                        value={authForm[card.role]}
-                                        onChange={handleAuthChange(card.role)}
-                                        placeholder={card.role === 'admin' ? 'Введите пароль администратора' : 'Введите пароль менеджера'}
-                                        disabled={authLoading || !card.configured}
-                                    />
-                                </div>
-                                <div className="home-tech-card-footer">
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={() => handleLogin(card.role)}
-                                        disabled={authLoading || !card.configured}
-                                    >
-                                        {authLoading ? 'Вход...' : 'Войти'}
-                                    </button>
-                                    {card.configured && canAccessRole(card.role, authRole) ? (
-                                        <Link to={card.route} className="btn btn-secondary">
-                                            Открыть
-                                        </Link>
-                                    ) : null}
-                                </div>
+                                <form onSubmit={handleLoginSubmit(card.role)}>
+                                    <div className="form-group" style={{ marginBottom: 12 }}>
+                                        <label>{card.role === 'admin' ? 'Пароль администратора' : 'Пароль менеджера'}</label>
+                                        <input
+                                            type="password"
+                                            value={authForm[card.role]}
+                                            onChange={handleAuthChange(card.role)}
+                                            placeholder={card.role === 'admin' ? 'Введите пароль администратора' : 'Введите пароль менеджера'}
+                                            disabled={authLoading || !card.configured}
+                                        />
+                                    </div>
+                                    <div className="home-tech-card-footer">
+                                        <button
+                                            className="btn btn-primary"
+                                            type="submit"
+                                            disabled={authLoading || !card.configured}
+                                        >
+                                            {authLoading ? 'Вход...' : 'Войти'}
+                                        </button>
+                                        {card.configured && canAccessRole(card.role, authRole) ? (
+                                            <Link to={card.route} className="btn btn-secondary">
+                                                Открыть
+                                            </Link>
+                                        ) : null}
+                                    </div>
+                                </form>
                             </div>
                         ))}
                     </div>
