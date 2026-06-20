@@ -45,6 +45,60 @@ function getInitialStageRoleTab(stages = []) {
   return firstRoleWithStage?.key || roleTabs[0]?.key || 'carpenter';
 }
 
+function ManagerStagePanel({
+  stages,
+  activeRole,
+  onRoleChange,
+  emptyMessage,
+  subtitle,
+}) {
+  const activeRoleStages = stages.filter(stage => stage.role === activeRole);
+
+  return (
+    <div className="manager-stage-panel">
+      <div className="manager-stage-panel-header">
+        <div className="manager-stage-panel-title">Этапы по специалистам</div>
+        <div className="manager-stage-panel-subtitle">{subtitle}</div>
+      </div>
+      <div className="tabs manager-stage-tabs">
+        {roleTabs.map(tab => {
+          const roleCount = stages.filter(stage => stage.role === tab.key).length;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`}
+              onClick={() => onRoleChange(tab.key)}
+            >
+              {tab.label} {roleCount ? `(${roleCount})` : ''}
+            </button>
+          );
+        })}
+      </div>
+      {activeRoleStages.length > 0 ? (
+        <div className="mobile-order-stage-list">
+          {activeRoleStages.map(stage => {
+            const stageStatusMeta = getStageStatusMeta(stage.status);
+            return (
+              <div key={`${stage.stepId || stage._id || stage.stepName}-${stage.role}`} className="mobile-order-stage-row">
+                <div>
+                  <div className="manager-stage-name">{stage.stepName || 'Этап без названия'}</div>
+                  <div className="manager-stage-description">{stage.description || 'Описание этапа не задано.'}</div>
+                </div>
+                <span className={stageStatusMeta.className}>
+                  {stageStatusMeta.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="manager-stage-empty">{emptyMessage}</div>
+      )}
+    </div>
+  );
+}
+
 function Manager() {
   const [orders, setOrders] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -64,8 +118,6 @@ function Manager() {
 
   const formErrors = validateManagerForm(form);
   const isFormValid = Object.keys(formErrors).length === 0;
-  const activeRoleStages = formStages.filter(stage => stage.role === activeStageRole);
-
   useEffect(() => {
     fetchOrders();
   }, []);
@@ -483,59 +535,27 @@ function Manager() {
                 <label>Время изготовления: <strong>{calcDuration(form.startDate, form.endDate) || '—'}</strong></label>
               </div>
             </div>
-            <div className="manager-stage-panel">
-              <div className="manager-stage-panel-header">
-                <div className="manager-stage-panel-title">Этапы по специалистам</div>
-                <div className="manager-stage-panel-subtitle">
-                  {editingId
-                    ? 'Следите за статусами этапов по каждому специалисту.'
-                    : 'После создания заказа здесь появятся этапы специалистов и их текущие статусы.'}
+            {editingId ? (
+              <ManagerStagePanel
+                stages={formStages}
+                activeRole={activeStageRole}
+                onRoleChange={setActiveStageRole}
+                subtitle="Следите за статусами этапов по каждому специалисту."
+                emptyMessage="Для выбранного специалиста этапы пока не настроены."
+              />
+            ) : (
+              <div className="manager-stage-panel">
+                <div className="manager-stage-panel-header">
+                  <div className="manager-stage-panel-title">Этапы по специалистам</div>
+                  <div className="manager-stage-panel-subtitle">
+                    После создания заказа здесь появятся этапы специалистов и их текущие статусы.
+                  </div>
                 </div>
-              </div>
-              <div className="tabs manager-stage-tabs">
-                {roleTabs.map(tab => {
-                  const roleCount = formStages.filter(stage => stage.role === tab.key).length;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      className={`tab ${activeStageRole === tab.key ? 'tab-active' : ''}`}
-                      onClick={() => setActiveStageRole(tab.key)}
-                    >
-                      {tab.label} {roleCount ? `(${roleCount})` : ''}
-                    </button>
-                  );
-                })}
-              </div>
-              {editingId ? (
-                activeRoleStages.length > 0 ? (
-                  <div className="mobile-order-stage-list">
-                    {activeRoleStages.map(stage => {
-                      const stageStatusMeta = getStageStatusMeta(stage.status);
-                      return (
-                        <div key={`${stage.stepId || stage._id || stage.stepName}-${stage.role}`} className="mobile-order-stage-row">
-                          <div>
-                            <div className="manager-stage-name">{stage.stepName || 'Этап без названия'}</div>
-                            <div className="manager-stage-description">{stage.description || 'Описание этапа не задано.'}</div>
-                          </div>
-                          <span className={stageStatusMeta.className}>
-                            {stageStatusMeta.label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="manager-stage-empty">
-                    Для выбранного специалиста этапы пока не настроены.
-                  </div>
-                )
-              ) : (
                 <div className="manager-stage-empty">
                   Сначала сохраните заказ. После этого в форме появятся этапы специалистов для отслеживания статусов.
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             <div className="modal-actions">
               <button className="btn" onClick={handleCancel} disabled={savingOrder}>Отмена</button>
               <button className="btn btn-success" onClick={handleSubmit} disabled={!isFormValid || savingOrder}>{savingOrder ? (editingId ? 'Сохранение...' : 'Создание...') : (editingId ? 'Сохранить' : 'Создать заказ')}</button>

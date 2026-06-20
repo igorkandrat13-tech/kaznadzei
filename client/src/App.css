@@ -89,7 +89,7 @@ body::before {
   color: var(--text-soft);
 }
 
-.App-header nav {
+.App-header-nav {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -102,6 +102,15 @@ body::before {
   gap: 20px;
   flex-wrap: wrap;
   width: 100%;
+}
+
+.App-header-nav-primary {
+  flex: 0 1 auto;
+}
+
+.App-header-nav-specialists {
+  flex: 1 1 320px;
+  justify-content: center;
 }
 
 .App-header-actions-right {
@@ -143,7 +152,7 @@ body::before {
   flex-shrink: 0;
 }
 
-.App-header nav a {
+.App-header-nav a {
   color: #d8ecff;
   text-decoration: none;
   font-size: 14px;
@@ -154,7 +163,7 @@ body::before {
   border: 1px solid rgba(132, 190, 255, 0.12);
 }
 
-.App-header nav a:hover {
+.App-header-nav a:hover {
   background: rgba(34, 63, 98, 0.94);
   border-color: rgba(143, 205, 255, 0.28);
   transform: translateY(-1px);
@@ -2415,13 +2424,13 @@ body[data-theme='light'] .service-details-title {
   color: #16314b;
 }
 
-body[data-theme='light'] .App-header nav a {
+body[data-theme='light'] .App-header-nav a {
   color: #23415f;
   background: rgba(255, 255, 255, 0.76);
   border-color: rgba(122, 167, 214, 0.16);
 }
 
-body[data-theme='light'] .App-header nav a:hover {
+body[data-theme='light'] .App-header-nav a:hover {
   background: rgba(239, 247, 255, 0.98);
   border-color: rgba(99, 159, 221, 0.28);
 }
@@ -2772,10 +2781,13 @@ body[data-theme='light'] .home-auth-status-pending {
   .App-header-actions.App-header-actions-open {
     display: flex;
   }
-  .App-header nav {
+  .App-header-nav {
     width: 100%;
     flex-direction: column;
     gap: 8px;
+  }
+  .App-header-nav-specialists {
+    justify-content: flex-start;
   }
   .App-header-actions-right {
     width: 100%;
@@ -2784,7 +2796,7 @@ body[data-theme='light'] .home-auth-status-pending {
     border-top: 1px solid rgba(138, 194, 255, 0.14);
     padding-top: 10px;
   }
-  .App-header nav a {
+  .App-header-nav a {
     width: 100%;
     padding: 10px 12px;
     font-size: 13px;

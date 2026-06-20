@@ -2,7 +2,7 @@ const express = require('express');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireAdminAccess } = require('../middleware/security');
-const { getBotInfo, getWebhookInfo, setWebhook, sendMessage } = require('../services/telegramService');
+const { getBotInfo, getWebhookInfo, setWebhook, setChatMenuButton, sendMessage } = require('../services/telegramService');
 const {
   createTelegramEmployeeSessionToken,
   resolveTelegramWebAppUser,
@@ -20,16 +20,12 @@ function getRecommendedWebhookUrl() {
   return new URL('/api/telegram/webhook', baseUrl).toString();
 }
 
-function getTelegramWebAppUrl(employeeSessionToken = '') {
+function getTelegramWebAppUrl() {
   const baseUrl = String(SettingsStore.get().publicBaseUrl || '').trim();
   if (!baseUrl) return '';
 
   try {
-    const url = new URL('/telegram-app', baseUrl);
-    if (employeeSessionToken) {
-      url.searchParams.set('employeeSessionToken', employeeSessionToken);
-    }
-    return url.toString();
+    return new URL('/telegram-app', baseUrl).toString();
   } catch (error) {
     return '';
   }
@@ -45,14 +41,13 @@ function getEmployeeRoleLabel(role) {
   return labels[role] || role;
 }
 
-function getAuthorizedReplyMarkup(token, employee) {
-  const employeeSessionToken = employee ? createTelegramEmployeeSessionToken(token, employee) : '';
-  const webAppUrl = getTelegramWebAppUrl(employeeSessionToken);
+function getAuthorizedReplyMarkup() {
+  const webAppUrl = getTelegramWebAppUrl();
   if (!webAppUrl) return null;
 
   return {
     keyboard: [[{
-      text: 'Сканировать QR-код',
+      text: '📷 Сканировать QR-код',
       web_app: { url: webAppUrl },
     }]],
     resize_keyboard: true,
@@ -60,8 +55,24 @@ function getAuthorizedReplyMarkup(token, employee) {
   };
 }
 
+async function syncTelegramMenuButton(token, chatId) {
+  const webAppUrl = getTelegramWebAppUrl();
+  if (!webAppUrl) return;
+
+  const menuButton = {
+    text: '📷 Сканер',
+    url: webAppUrl,
+  };
+
+  await setChatMenuButton(token, menuButton).catch(() => null);
+  if (chatId) {
+    await setChatMenuButton(token, { ...menuButton, chatId }).catch(() => null);
+  }
+}
+
 async function sendAuthorizedMessage(token, chatId, text, employee) {
-  const replyMarkup = getAuthorizedReplyMarkup(token, employee);
+  const replyMarkup = getAuthorizedReplyMarkup();
+  await syncTelegramMenuButton(token, chatId);
   await sendMessage(
     token,
     chatId,
@@ -78,6 +89,7 @@ async function processTelegramMessage(token, message) {
   if (!chatId || !from) return;
 
   const existingEmployee = EmployeeStore.findByTelegramUserId(from.id);
+  await syncTelegramMenuButton(token, chatId);
   if (existingEmployee) {
     EmployeeStore.touchTelegramUser(existingEmployee._id, {
       telegramUsername: from.username ? `@${String(from.username).replace(/^@+/, '')}` : existingEmployee.telegramUsername || '',
@@ -151,6 +163,7 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
       getBotInfo(token),
       getWebhookInfo(token).catch(() => null),
     ]);
+    await syncTelegramMenuButton(token);
 
     res.json({
       ok: true,
@@ -184,6 +197,7 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
   try {
     const webhookUrl = getRecommendedWebhookUrl();
     await setWebhook(token, webhookUrl);
+    await syncTelegramMenuButton(token);
     const [bot, webhook] = await Promise.all([
       getBotInfo(token),
       getWebhookInfo(token),

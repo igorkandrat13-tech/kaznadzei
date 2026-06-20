@@ -24,10 +24,17 @@ const ROLE_LABELS = {
   designer: 'Дизайнер',
 };
 
-function isExpiredTelegramSessionMessage(message) {
+function isRecoverableTelegramSessionMessage(message) {
   const normalized = String(message || '').toLowerCase();
   return normalized.includes('session token telegram web app')
-    && (normalized.includes('истек') || normalized.includes('истёк') || normalized.includes('устарел'));
+    && (
+      normalized.includes('истек')
+      || normalized.includes('истёк')
+      || normalized.includes('устарел')
+      || normalized.includes('не прош')
+      || normalized.includes('некоррект')
+      || normalized.includes('непол')
+    );
 }
 
 function OrderDetail() {
@@ -143,7 +150,7 @@ function OrderDetail() {
       .catch(async (error) => {
         const canRetryWithoutToken = currentSessionToken
           && (telegramInitData || telegramUnsafeUser?.id)
-          && isExpiredTelegramSessionMessage(error.message);
+          && isRecoverableTelegramSessionMessage(error.message);
         if (!canRetryWithoutToken) {
           throw error;
         }

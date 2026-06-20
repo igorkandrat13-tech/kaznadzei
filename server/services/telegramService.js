@@ -60,9 +60,25 @@ async function sendMessage(token, chatId, text, extra = {}) {
   });
 }
 
+async function setChatMenuButton(token, { chatId, text, url } = {}) {
+  const payload = {};
+  if (chatId) {
+    payload.chat_id = chatId;
+  }
+  if (text && url) {
+    payload.menu_button = {
+      type: 'web_app',
+      text,
+      web_app: { url },
+    };
+  }
+  return telegramRequest(token, 'setChatMenuButton', payload);
+}
+
 module.exports = {
   getBotInfo,
   getWebhookInfo,
   setWebhook,
+  setChatMenuButton,
   sendMessage,
 };

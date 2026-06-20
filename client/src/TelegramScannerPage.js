@@ -15,10 +15,17 @@ import {
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
 
-function isExpiredTelegramSessionMessage(message) {
+function isRecoverableTelegramSessionMessage(message) {
   const normalized = String(message || '').toLowerCase();
   return normalized.includes('session token telegram web app')
-    && (normalized.includes('истек') || normalized.includes('истёк') || normalized.includes('устарел'));
+    && (
+      normalized.includes('истек')
+      || normalized.includes('истёк')
+      || normalized.includes('устарел')
+      || normalized.includes('не прош')
+      || normalized.includes('некоррект')
+      || normalized.includes('непол')
+    );
 }
 
 function TelegramScannerPage() {
@@ -71,7 +78,7 @@ function TelegramScannerPage() {
         const data = await parseJsonSafely(res);
         if (!res.ok) {
           const errorMessage = data?.message || 'Не удалось подготовить доступ к заказу.';
-          if (sessionToken && isExpiredTelegramSessionMessage(errorMessage)) {
+          if (sessionToken && isRecoverableTelegramSessionMessage(errorMessage)) {
             currentSessionToken = '';
             setTelegramEmployeeSessionToken('');
             if (attempt < retries - 1) {

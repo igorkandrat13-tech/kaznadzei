@@ -16,6 +16,7 @@ import {
     markTelegramWebAppSession,
 } from './telegramWebApp';
 import { apiFetch } from './api';
+import { roleTabs } from './adminUI';
 import { canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
 import './App.css';
 
@@ -34,6 +35,13 @@ function getAuthRoleLabel(role) {
     if (role === 'manager') return 'Менеджер';
     return '';
 }
+
+const specialistRoutes = {
+    carpenter: '/carpenter',
+    assembler: '/assembler',
+    painter: '/painter',
+    designer: '/designer',
+};
 
 function AppLayout() {
     const location = useLocation();
@@ -132,12 +140,25 @@ function AppLayout() {
                         </div>
                     </div>
                     <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
-                        <nav className="App-header-nav">
+                        <nav className="App-header-nav App-header-nav-primary">
                             <Link to="/" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
                             {canAccessRole('manager', authRole) && <Link to="/manager" onClick={() => setMobileMenuOpen(false)}>Менеджер</Link>}
                             {canAccessRole('manager', authRole) && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
                             {canAccessRole('admin', authRole) && <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>Админ</Link>}
                         </nav>
+                        {canAccessRole('manager', authRole) ? (
+                            <nav className="App-header-nav App-header-nav-specialists">
+                                {roleTabs.map(tab => (
+                                    <Link
+                                        key={tab.key}
+                                        to={specialistRoutes[tab.key] || '/manager'}
+                                        onClick={() => setMobileMenuOpen(false)}
+                                    >
+                                        {tab.label.replace(/^[^\s]+\s+/, '')}
+                                    </Link>
+                                ))}
+                            </nav>
+                        ) : null}
                         <div className="App-header-actions-right">
                             {authRole ? (
                                 <div className="App-header-session">
@@ -157,10 +178,10 @@ function AppLayout() {
                     <Route path='/manager' element={<ProtectedRoute requiredRole='manager'><Manager /></ProtectedRoute>} />
                     <Route path='/archive' element={<ProtectedRoute requiredRole='manager'><Archive /></ProtectedRoute>} />
                     <Route path='/order/:id' element={<OrderDetail />} />
-                    <Route path='/carpenter' element={<Carpenter />} />
-                    <Route path='/designer' element={<Designer />} />
-                    <Route path='/assembler' element={<Assembler />} />
-                    <Route path='/painter' element={<Painter />} />
+                    <Route path='/carpenter' element={<ProtectedRoute requiredRole='manager'><Carpenter /></ProtectedRoute>} />
+                    <Route path='/designer' element={<ProtectedRoute requiredRole='manager'><Designer /></ProtectedRoute>} />
+                    <Route path='/assembler' element={<ProtectedRoute requiredRole='manager'><Assembler /></ProtectedRoute>} />
+                    <Route path='/painter' element={<ProtectedRoute requiredRole='manager'><Painter /></ProtectedRoute>} />
                     <Route path='/telegram-app' element={<TelegramScannerPage />} />
                     <Route path='/' element={<Home />} />
                 </Routes>
