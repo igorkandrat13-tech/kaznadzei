@@ -8,6 +8,7 @@ import {
   getTelegramInitData,
   getTelegramUnsafeUser,
   getTelegramWebApp,
+  isTelegramEmployeeSessionTokenExpired,
   markTelegramWebAppSession,
   openTelegramQrScanner,
   persistTelegramInitData,
@@ -135,7 +136,9 @@ function TelegramScannerPage() {
     const sessionTokenFromUrl = params.get('employeeSessionToken');
     if (!sessionTokenFromUrl) return;
 
-    setTelegramEmployeeSessionToken(sessionTokenFromUrl);
+    if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
+      setTelegramEmployeeSessionToken(sessionTokenFromUrl);
+    }
     navigate('/telegram-app', { replace: true });
   }, [location.search, navigate]);
 

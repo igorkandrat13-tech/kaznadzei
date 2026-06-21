@@ -9,6 +9,7 @@ import {
   getTelegramInitData,
   getTelegramUnsafeUser,
   getTelegramWebApp,
+  isTelegramEmployeeSessionTokenExpired,
   isTelegramWebApp,
   markTelegramWebAppSession,
   openTelegramQrScanner,
@@ -177,7 +178,11 @@ function OrderDetail() {
     const sessionTokenFromUrl = params.get('employeeSessionToken');
     if (!sessionTokenFromUrl) return;
 
-    updateTelegramSessionToken(sessionTokenFromUrl);
+    if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
+      updateTelegramSessionToken(sessionTokenFromUrl);
+    } else {
+      updateTelegramSessionToken('');
+    }
     params.delete('employeeSessionToken');
 
     navigate({

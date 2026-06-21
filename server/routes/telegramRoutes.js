@@ -82,6 +82,41 @@ async function sendAuthorizedMessage(token, chatId, text, employee) {
   );
 }
 
+async function refreshAuthorizedEmployeeAccess(token) {
+  const employees = EmployeeStore.findAll().filter(employee =>
+    String(employee.telegramUserId || '').trim()
+    && String(employee.telegramChatId || '').trim()
+  );
+
+  let refreshedCount = 0;
+  const errors = [];
+
+  for (const employee of employees) {
+    try {
+      await sendAuthorizedMessage(
+        token,
+        employee.telegramChatId,
+        `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку "Сканировать QR-код" ниже или кнопку меню "📷 Сканер QR".`,
+        employee
+      );
+      refreshedCount += 1;
+    } catch (error) {
+      errors.push({
+        employeeId: employee._id,
+        fullName: employee.fullName,
+        message: error.message || 'Не удалось обновить кнопку в Telegram.',
+      });
+    }
+  }
+
+  return {
+    total: employees.length,
+    refreshedCount,
+    failedCount: errors.length,
+    errors,
+  };
+}
+
 async function processTelegramMessage(token, message) {
   const text = typeof message?.text === 'string' ? message.text.trim() : '';
   const chatId = message?.chat?.id;
@@ -165,6 +200,7 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
       getWebhookInfo(token).catch(() => null),
     ]);
     await syncTelegramMenuButton(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token);
 
     res.json({
       ok: true,
@@ -183,6 +219,7 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
       } : null,
       recommendedWebhookUrl: getRecommendedWebhookUrl(),
       telegramWebAppUrl: getTelegramWebAppUrl(),
+      refreshedAuthorizedEmployees: refreshResult,
     });
   } catch (error) {
     res.status(400).json({ message: error.message || 'Не удалось проверить Telegram-бота.' });
@@ -199,6 +236,7 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
     const webhookUrl = getRecommendedWebhookUrl();
     await setWebhook(token, webhookUrl);
     await syncTelegramMenuButton(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token);
     const [bot, webhook] = await Promise.all([
       getBotInfo(token),
       getWebhookInfo(token),
@@ -220,9 +258,32 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
       },
       recommendedWebhookUrl: webhookUrl,
       telegramWebAppUrl: getTelegramWebAppUrl(),
+      refreshedAuthorizedEmployees: refreshResult,
     });
   } catch (error) {
     res.status(400).json({ message: error.message || 'Не удалось установить webhook Telegram-бота.' });
+  }
+});
+
+router.post('/telegram/refresh-authorized', requireAdminAccess(), async (req, res) => {
+  const token = getConfiguredBotToken();
+  if (!token) {
+    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
+  }
+
+  try {
+    await syncTelegramMenuButton(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token);
+    res.json({
+      ok: true,
+      message: refreshResult.refreshedCount > 0
+        ? 'Кнопки Telegram для авторизованных сотрудников обновлены.'
+        : 'Не найдено сотрудников с привязанным Telegram chat id.',
+      telegramWebAppUrl: getTelegramWebAppUrl(),
+      refreshedAuthorizedEmployees: refreshResult,
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Не удалось обновить кнопки Telegram для сотрудников.' });
   }
 });
 
