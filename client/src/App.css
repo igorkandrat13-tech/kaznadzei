@@ -446,18 +446,18 @@ table tr:hover td {
 .manager-actions-cell {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: nowrap;
 }
 
 .manager-action-btn {
-  min-width: 42px;
-  height: 40px;
-  padding: 0 12px;
+  min-width: 36px;
+  height: 34px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .manager-action-btn-secondary {
@@ -1337,6 +1337,12 @@ table tr:hover td {
   min-width: 170px;
 }
 
+.manager-orders-table th:nth-child(12),
+.manager-orders-table td:nth-child(12) {
+  min-width: 120px;
+  width: 120px;
+}
+
 .manager-orders-table {
   min-width: 1480px;
   table-layout: auto;
@@ -1382,6 +1388,10 @@ table tr:hover td {
 .manager-orders-table td:nth-child(10),
 .manager-orders-table td:nth-child(11) {
   vertical-align: top;
+}
+
+.manager-orders-table td:nth-child(12) {
+  vertical-align: middle;
 }
 
 .admin-overview-table {
@@ -3166,6 +3176,19 @@ body[data-theme='light'] .home-auth-status-pending {
 
   .order-role-progress-label {
     font-size: 12px;
+  }
+
+  .manager-action-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .manager-orders-table th:nth-child(12),
+  .manager-orders-table td:nth-child(12) {
+    min-width: 108px;
+    width: 108px;
   }
 }
 
