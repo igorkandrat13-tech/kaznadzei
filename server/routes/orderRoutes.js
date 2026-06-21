@@ -5,6 +5,7 @@ const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireManagerAccess, requireWriteAccess } = require('../middleware/security');
 const { sanitizeCommentInput, sanitizeOrderInput } = require('../utils/validators');
+const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
@@ -35,6 +36,7 @@ function getTelegramPayloadDebug(payload = {}) {
 }
 
 function logTelegramOrderDebug(event, details = {}) {
+  addTelegramDiagnosticLog('telegram-order', event, details);
   console.log(`[telegram-order] ${event}`, JSON.stringify(details));
 }
 

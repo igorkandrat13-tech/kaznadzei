@@ -4,6 +4,11 @@ const EmployeeStore = require('../stores/employeeStore');
 const { requireAdminAccess } = require('../middleware/security');
 const { getBotInfo, getWebhookInfo, setWebhook, setChatMenuButton, sendMessage } = require('../services/telegramService');
 const {
+  addTelegramDiagnosticLog,
+  clearTelegramDiagnosticLogs,
+  getTelegramDiagnosticLogs,
+} = require('../services/telegramDiagnostics');
+const {
   createTelegramEmployeeSessionToken,
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
@@ -65,6 +70,7 @@ function getTelegramPayloadDebug(payload = {}) {
 }
 
 function logTelegramWebAppDebug(event, details = {}) {
+  addTelegramDiagnosticLog('telegram-webapp', event, details);
   console.log(`[telegram-webapp] ${event}`, JSON.stringify(details));
 }
 
@@ -312,6 +318,25 @@ router.post('/telegram/refresh-authorized', requireAdminAccess(), async (req, re
   } catch (error) {
     res.status(400).json({ message: error.message || 'Не удалось обновить кнопки Telegram для сотрудников.' });
   }
+});
+
+router.get('/telegram/logs', requireAdminAccess(), (req, res) => {
+  const limit = Math.max(1, Math.min(Number(req.query?.limit) || 200, 400));
+  const logs = getTelegramDiagnosticLogs({ limit });
+  res.json({
+    ok: true,
+    logs,
+    limit,
+    count: logs.length,
+  });
+});
+
+router.delete('/telegram/logs', requireAdminAccess(), (req, res) => {
+  clearTelegramDiagnosticLogs();
+  res.json({
+    ok: true,
+    message: 'Логи ТГ бота очищены.',
+  });
 });
 
 router.post('/telegram/webapp/session', async (req, res) => {

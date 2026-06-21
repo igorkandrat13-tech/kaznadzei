@@ -47,6 +47,10 @@ function Admin() {
   const [telegramCheckResult, setTelegramCheckResult] = useState(null);
   const [checkingTelegramBot, setCheckingTelegramBot] = useState(false);
   const [settingTelegramWebhook, setSettingTelegramWebhook] = useState(false);
+  const [showTelegramLogs, setShowTelegramLogs] = useState(false);
+  const [telegramLogs, setTelegramLogs] = useState([]);
+  const [telegramLogsLoading, setTelegramLogsLoading] = useState(false);
+  const [clearingTelegramLogs, setClearingTelegramLogs] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [employeeModalMode, setEmployeeModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
@@ -407,6 +411,60 @@ function Admin() {
     } finally {
       setSettingTelegramWebhook(false);
     }
+  };
+
+  const fetchTelegramLogs = async ({ openModal = false } = {}) => {
+    setTelegramLogsLoading(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/logs?limit=200');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось загрузить логи ТГ бота.');
+      }
+      setTelegramLogs(Array.isArray(data?.logs) ? data.logs : []);
+      if (openModal) {
+        setShowTelegramLogs(true);
+      }
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось загрузить логи ТГ бота.');
+      if (openModal) {
+        setShowTelegramLogs(true);
+      }
+    } finally {
+      setTelegramLogsLoading(false);
+    }
+  };
+
+  const clearTelegramLogs = async () => {
+    if (clearingTelegramLogs) return;
+    setClearingTelegramLogs(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/logs', { method: 'DELETE' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось очистить логи ТГ бота.');
+      }
+      setTelegramLogs([]);
+      setSettingsSuccess(data?.message || 'Логи ТГ бота очищены.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось очистить логи ТГ бота.');
+    } finally {
+      setClearingTelegramLogs(false);
+    }
+  };
+
+  const formatTelegramLogEntry = (entry) => {
+    const timestamp = entry?.createdAt ? new Date(entry.createdAt).toLocaleString() : 'Без времени';
+    const scope = entry?.scope || 'telegram';
+    const event = entry?.event || 'event';
+    const details = entry?.details && typeof entry.details === 'object'
+      ? JSON.stringify(entry.details, null, 2)
+      : String(entry?.details || '');
+    return `[${timestamp}] [${scope}] ${event}\n${details}`;
   };
 
   const resetEmployeeForm = () => {
@@ -843,6 +901,9 @@ function Admin() {
               <button className="btn" onClick={setupTelegramWebhook} disabled={settingTelegramWebhook || savingAppSettings}>
                 {settingTelegramWebhook ? 'Установка...' : 'Установить webhook'}
               </button>
+              <button className="btn btn-secondary" onClick={() => fetchTelegramLogs({ openModal: true })} disabled={telegramLogsLoading}>
+                {telegramLogsLoading ? 'Загрузка логов...' : 'Логи ТГ бота'}
+              </button>
             </SettingsActions>
 
             {telegramCheckResult && (
@@ -870,6 +931,52 @@ function Admin() {
 
             <AdminTokenControls />
           </div>
+
+          {showTelegramLogs && (
+            <div className="modal-overlay" onClick={() => setShowTelegramLogs(false)}>
+              <div className="modal-window modal-window-xl" onClick={(event) => event.stopPropagation()}>
+                <div className="modal-header">
+                  <div>
+                    <div className="modal-title">Логи ТГ бота</div>
+                    <div className="modal-subtitle">
+                      Здесь сохраняются диагностические события Telegram Web App и Telegram-заказов.
+                    </div>
+                  </div>
+                  <button className="btn btn-small modal-close-btn" onClick={() => setShowTelegramLogs(false)}>
+                    ✕
+                  </button>
+                </div>
+
+                <div className="modal-actions modal-actions-between">
+                  <div className="modal-actions-group">
+                    <button className="btn btn-secondary" onClick={() => fetchTelegramLogs()} disabled={telegramLogsLoading}>
+                      {telegramLogsLoading ? 'Обновление...' : 'Обновить'}
+                    </button>
+                    <button className="btn btn-danger" onClick={clearTelegramLogs} disabled={clearingTelegramLogs}>
+                      {clearingTelegramLogs ? 'Очистка...' : 'Очистить лог'}
+                    </button>
+                  </div>
+                  <div className="text-small text-subtle">
+                    Записей: {telegramLogs.length}
+                  </div>
+                </div>
+
+                {telegramLogs.length > 0 ? (
+                  <div className="telegram-log-list">
+                    {telegramLogs.map((entry) => (
+                      <pre key={entry.id || `${entry.createdAt}-${entry.event}`} className="service-details-console service-details-console-status telegram-log-entry">
+                        {formatTelegramLogEntry(entry)}
+                      </pre>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mobile-empty-state">
+                    {telegramLogsLoading ? 'Загружаю логи ТГ бота...' : 'Логи пока пусты.'}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <UpdatesOverview
             updateStatus={updateStatus}

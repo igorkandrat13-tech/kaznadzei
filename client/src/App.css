@@ -1740,6 +1740,18 @@ table tr:hover td {
   color: #b6f5de;
 }
 
+.telegram-log-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.telegram-log-entry {
+  max-height: 220px;
+  background: #0b1626;
+  color: #dcecff;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -2662,6 +2674,11 @@ body[data-theme='light'] .service-details-console-status {
 body[data-theme='light'] .service-details-console-logs {
   background: #eef9f5;
   color: #1d6c57;
+}
+
+body[data-theme='light'] .telegram-log-entry {
+  background: #f4f8fc;
+  color: #21405e;
 }
 
 body[data-theme='light'] .home-landing {
