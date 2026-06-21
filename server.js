@@ -1,6 +1,7 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 const ProcessStepStore = require('./server/stores/processStepStore');
 const OrderStore = require('./server/stores/orderStore');
 const ColorStore = require('./server/stores/colorStore');
@@ -195,14 +196,33 @@ app.get('/api/roles', (req, res) => {
   res.json(roles);
 });
 
-const buildPath = path.join(__dirname, 'client', 'build');
+function resolveClientBuildPath() {
+  const candidates = [
+    path.join(__dirname, 'client', 'build'),
+    path.join(process.cwd(), 'client', 'build'),
+    path.join(__dirname, 'build'),
+    path.join(process.cwd(), 'build'),
+  ];
+
+  return candidates.find(candidate => fs.existsSync(path.join(candidate, 'index.html'))) || candidates[0];
+}
+
+const buildPath = resolveClientBuildPath();
 app.use(express.static(buildPath));
 app.get('*', (req, res) => {
   const indexPath = path.join(buildPath, 'index.html');
-  if (require('fs').existsSync(indexPath)) {
+  if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
-    res.status(200).json({ message: 'API server running. Frontend: cd client && npm start' });
+    res.status(200).json({
+      message: 'API server running. Frontend build not found.',
+      expectedBuildPath: buildPath,
+      hints: [
+        'Run: cd client && npm run build',
+        'Make sure the deployed server contains client/build/index.html',
+        'Restart the service after updating the frontend build',
+      ],
+    });
   }
 });
 
