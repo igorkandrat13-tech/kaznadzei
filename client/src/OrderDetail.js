@@ -115,8 +115,9 @@ function OrderDetail() {
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
-    const currentSessionToken = getActiveTelegramSessionToken();
-    if (!telegramInitData && !telegramUnsafeUser?.id && !currentSessionToken) {
+    const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
+    const currentSessionToken = hasTelegramAuthPayload ? '' : getActiveTelegramSessionToken();
+    if (!hasTelegramAuthPayload && !currentSessionToken) {
       if (!telegramAuthResolved) {
         setSessionLoading(true);
         setSessionError('');
@@ -150,7 +151,7 @@ function OrderDetail() {
     return resolveSession()
       .catch(async (error) => {
         const canRetryWithoutToken = currentSessionToken
-          && (telegramInitData || telegramUnsafeUser?.id)
+          && hasTelegramAuthPayload
           && isRecoverableTelegramSessionMessage(error.message);
         if (!canRetryWithoutToken) {
           throw error;

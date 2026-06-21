@@ -42,7 +42,7 @@ function TelegramScannerPage() {
     markTelegramWebAppSession();
     let lastError = null;
     let currentSessionToken = getTelegramEmployeeSessionToken();
-    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 250));
+    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 350));
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
@@ -50,8 +50,8 @@ function TelegramScannerPage() {
 
       const initData = getTelegramInitData();
       const unsafeUser = getTelegramUnsafeUser();
-      const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
       const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
+      const sessionToken = hasTelegramAuthPayload ? '' : (currentSessionToken || getTelegramEmployeeSessionToken());
 
       // In Telegram Web App the signed auth payload may appear a bit later than the
       // URL query token. Give it a chance to arrive before trusting a stale token.
