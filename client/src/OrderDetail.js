@@ -56,6 +56,7 @@ function OrderDetail() {
   const [stageError, setStageError] = useState('');
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
+  const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
 
   const telegramMode = isTelegramWebApp();
@@ -184,6 +185,7 @@ function OrderDetail() {
     } else {
       updateTelegramSessionToken('');
     }
+    setTelegramSessionBootstrapKey(current => current + 1);
     params.delete('employeeSessionToken');
 
     navigate({
@@ -194,7 +196,7 @@ function OrderDetail() {
 
   useEffect(() => {
     loadTelegramEmployeeSession();
-  }, [loadTelegramEmployeeSession]);
+  }, [loadTelegramEmployeeSession, telegramSessionBootstrapKey]);
 
   useEffect(() => {
     if (!telegramMode) return;
