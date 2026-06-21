@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import ConfirmDialog from './ConfirmDialog';
-import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
+import { getOrderStatusMeta } from './statusMeta';
 import {
   HelpTooltip,
   SectionHeader,
@@ -19,7 +19,6 @@ import CommentsModal from './admin/CommentsModal';
 import EmployeeModal from './admin/EmployeeModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
-import { renderOrderRoleSummary } from './orderStageSummary';
 
 function Admin() {
   const [showSettings, setShowSettings] = useState(false);
@@ -279,12 +278,12 @@ function Admin() {
   };
 
   // Admin overview
-  const findStage = (order, stepId) => {
-    return (order.stages || []).find(stage => stage.stepId === stepId);
-  };
-
   const getRoleLabel = (role) => {
     return roleTabs.find(item => item.key === role)?.label || role;
+  };
+
+  const getRoleShortLabel = (role) => {
+    return getRoleLabel(role).replace(/^[^\s]+\s+/, '');
   };
 
   const getCommentPreview = (text) => {
@@ -297,6 +296,45 @@ function Admin() {
     const activeStage = stages.find(stage => stage.status === 'in_progress')
       || stages.find(stage => stage.status !== 'completed');
     return activeStage?.role || '';
+  };
+
+  const getRoleProgressInfo = (order, role) => {
+    const stages = Array.isArray(order?.stages) ? order.stages : [];
+    const roleStages = stages.filter(stage => stage.role === role);
+    const total = roleStages.length;
+    const roleLabel = getRoleShortLabel(role);
+
+    if (total === 0) {
+      return {
+        total,
+        text: '—',
+        title: `${roleLabel}: этапы не настроены`,
+        className: 'role-progress-badge',
+      };
+    }
+
+    const completed = roleStages.filter(stage => stage.status === 'completed').length;
+    const activeIndex = roleStages.findIndex(stage => stage.status === 'in_progress');
+    const firstPendingIndex = roleStages.findIndex(stage => stage.status !== 'completed');
+
+    if (completed === total) {
+      return {
+        total,
+        text: `Готово ${total} из ${total}`,
+        title: `${roleLabel}: все этапы завершены`,
+        className: 'role-progress-badge role-progress-badge-completed',
+      };
+    }
+
+    const currentStageIndex = activeIndex !== -1 ? activeIndex : (firstPendingIndex === -1 ? total - 1 : firstPendingIndex);
+    const isWaiting = activeIndex === -1 && completed === 0;
+
+    return {
+      total,
+      text: `Этап ${currentStageIndex + 1} из ${total}`,
+      title: `${roleLabel}: завершено ${completed} из ${total}`,
+      className: `role-progress-badge ${isWaiting ? 'role-progress-badge-pending' : 'role-progress-badge-active'}`,
+    };
   };
 
   const renderOrderComments = (order) => {
@@ -1393,7 +1431,6 @@ function Admin() {
   }
 
   // ===== OVERVIEW VIEW =====
-  const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
   const filteredOverviewOrders = orders.filter(order => {
     if (adminStatusFilter !== 'all' && order.overallStatus !== adminStatusFilter) return false;
     if (adminRoleFilter !== 'all' && getCurrentResponsibleRole(order) !== adminRoleFilter) return false;
@@ -1467,8 +1504,9 @@ function Admin() {
             <thead>
               <tr>
                 <th>Изделие</th>
-                {sortedSteps.map(s => <th key={s._id} title={s.description}>{s.stepName}</th>)}
-                <th>По ролям</th>
+                {roleTabs.map(tab => (
+                  <th key={tab.key}>{getRoleShortLabel(tab.key)}</th>
+                ))}
                 <th>Общий статус</th>
                 <th>Примечания</th>
               </tr>
@@ -1479,18 +1517,16 @@ function Admin() {
                 return (
                   <tr key={order._id}>
                     <td><strong>{order.name}</strong></td>
-                    {sortedSteps.map(s => {
-                      const st = findStage(order, s._id);
-                      const stageMeta = st ? getStageStatusMeta(st.status) : null;
+                    {roleTabs.map(tab => {
+                      const progress = getRoleProgressInfo(order, tab.key);
                       return (
-                        <td key={s._id} style={{ textAlign: 'center' }}>
-                          {stageMeta ? (
-                            <span className={stageMeta.className}>{stageMeta.label}</span>
-                          ) : '—'}
+                        <td key={tab.key}>
+                          <span className={progress.className} title={progress.title}>
+                            {progress.text}
+                          </span>
                         </td>
                       );
                     })}
-                    <td>{renderOrderRoleSummary(order)}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className={overallStatusMeta.className}>
                         {overallStatusMeta.label}
@@ -1502,7 +1538,7 @@ function Admin() {
                   </tr>
                 );
               })}
-              {filteredOverviewOrders.length === 0 && <tr><td colSpan={sortedSteps.length + 4} className="empty-cell">Нет заказов</td></tr>}
+              {filteredOverviewOrders.length === 0 && <tr><td colSpan={roleTabs.length + 3} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1517,24 +1553,22 @@ function Admin() {
                   <span className={overallStatusMeta.className}>{overallStatusMeta.label}</span>
                 </div>
 
-                <div className="mobile-order-stage-list">
-                  {sortedSteps.map(step => {
-                    const stage = findStage(order, step._id);
-                    const stageMeta = stage ? getStageStatusMeta(stage.status) : null;
-                    return (
-                      <div key={step._id} className="mobile-order-stage-row">
-                        <div className="mobile-order-card-label">{step.stepName}</div>
-                        <div className="mobile-order-stage-action">
-                          {stageMeta ? <span className={stageMeta.className}>{stageMeta.label}</span> : '—'}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
                 <div className="mobile-order-card-note">
-                  <div className="mobile-order-card-label">По специалистам</div>
-                  <div>{renderOrderRoleSummary(order)}</div>
+                  <div className="mobile-order-card-label">Прогресс по ролям</div>
+                  <div className="order-role-progress-list">
+                    {roleTabs.map(tab => {
+                      const progress = getRoleProgressInfo(order, tab.key);
+                      if (!progress.total) return null;
+                      return (
+                        <div key={tab.key} className="order-role-progress-row">
+                          <span className="order-role-progress-label">{getRoleShortLabel(tab.key)}</span>
+                          <span className={progress.className} title={progress.title}>
+                            {progress.text}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="mobile-order-card-note">
