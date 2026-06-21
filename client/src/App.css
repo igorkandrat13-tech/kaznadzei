@@ -2621,12 +2621,12 @@ body[data-theme='light'] {
   --app-bg-soft: #f6faff;
   --panel-bg: rgba(255, 255, 255, 0.84);
   --panel-bg-strong: rgba(255, 255, 255, 0.94);
-  --panel-border: rgba(98, 140, 190, 0.16);
-  --panel-border-strong: rgba(84, 132, 190, 0.26);
-  --text-main: #17324d;
-  --text-soft: rgba(45, 76, 108, 0.8);
-  --text-muted: rgba(69, 99, 131, 0.68);
-  --shadow-panel: 0 18px 45px rgba(35, 68, 105, 0.12);
+  --panel-border: rgba(88, 132, 184, 0.24);
+  --panel-border-strong: rgba(72, 120, 178, 0.34);
+  --text-main: #102b45;
+  --text-soft: rgba(32, 63, 96, 0.88);
+  --text-muted: rgba(50, 79, 110, 0.8);
+  --shadow-panel: 0 18px 45px rgba(35, 68, 105, 0.14);
   background:
     radial-gradient(circle at top left, rgba(101, 195, 255, 0.2), transparent 22%),
     radial-gradient(circle at 88% 10%, rgba(111, 225, 214, 0.16), transparent 20%),
@@ -2643,8 +2643,8 @@ body[data-theme='light']::before {
 
 body[data-theme='light'] .App-header {
   background: linear-gradient(135deg, rgba(250, 253, 255, 0.94), rgba(237, 245, 252, 0.9));
-  border-bottom-color: rgba(112, 156, 205, 0.14);
-  box-shadow: 0 14px 34px rgba(45, 78, 114, 0.1);
+  border-bottom-color: rgba(112, 156, 205, 0.22);
+  box-shadow: 0 14px 34px rgba(45, 78, 114, 0.14);
 }
 
 body[data-theme='light'] .App-header-actions-right {
@@ -2663,14 +2663,14 @@ body[data-theme='light'] .service-details-title {
 }
 
 body[data-theme='light'] .App-header-nav a {
-  color: #23415f;
-  background: rgba(255, 255, 255, 0.76);
-  border-color: rgba(122, 167, 214, 0.16);
+  color: #173857;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(113, 158, 207, 0.24);
 }
 
 body[data-theme='light'] .App-header-nav a:hover {
-  background: rgba(239, 247, 255, 0.98);
-  border-color: rgba(99, 159, 221, 0.28);
+  background: rgba(232, 242, 252, 0.98);
+  border-color: rgba(86, 149, 214, 0.34);
 }
 
 body[data-theme='light'] .theme-switch {
@@ -2717,23 +2717,23 @@ body[data-theme='light'] .scanner-status-box,
 body[data-theme='light'] .modal-note-box,
 body[data-theme='light'] .panel-info-code {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 250, 255, 0.88));
-  border-color: rgba(120, 164, 212, 0.16);
-  box-shadow: 0 16px 34px rgba(40, 76, 114, 0.08);
+  border-color: rgba(113, 158, 207, 0.22);
+  box-shadow: 0 16px 34px rgba(40, 76, 114, 0.1);
 }
 
 body[data-theme='light'] table th {
-  background: rgba(237, 245, 252, 0.94);
-  color: #557497;
-  border-bottom-color: rgba(126, 165, 208, 0.16);
+  background: rgba(228, 239, 249, 0.98);
+  color: #365777;
+  border-bottom-color: rgba(111, 156, 203, 0.24);
 }
 
 body[data-theme='light'] table td {
   color: #1c3956;
-  border-bottom-color: rgba(126, 165, 208, 0.1);
+  border-bottom-color: rgba(126, 165, 208, 0.16);
 }
 
 body[data-theme='light'] table tr:hover td {
-  background: rgba(233, 243, 252, 0.72);
+  background: rgba(225, 238, 250, 0.92);
 }
 
 body[data-theme='light'] .admin-overview-table th:first-child {
@@ -2756,7 +2756,7 @@ body[data-theme='light'] .home-tech-card,
 body[data-theme='light'] .comments-modal-item,
 body[data-theme='light'] .badge,
 body[data-theme='light'] .form-group label {
-  color: #1b3956;
+  color: #143553;
 }
 
 body[data-theme='light'] .App-header-subtitle,
@@ -2774,14 +2774,14 @@ body[data-theme='light'] .panel-info-text,
 body[data-theme='light'] .empty-inline,
 body[data-theme='light'] .empty-cell,
 body[data-theme='light'] .text-subtle {
-  color: rgba(61, 91, 121, 0.78);
+  color: rgba(45, 75, 105, 0.9);
 }
 
 body[data-theme='light'] .btn {
   background: linear-gradient(180deg, #ffffff, #f1f7fd);
-  color: #22415f;
-  border-color: rgba(121, 163, 209, 0.16);
-  box-shadow: 0 10px 22px rgba(60, 97, 138, 0.08);
+  color: #173857;
+  border-color: rgba(111, 156, 203, 0.22);
+  box-shadow: 0 10px 22px rgba(60, 97, 138, 0.1);
 }
 
 body[data-theme='light'] .btn-primary,
@@ -2796,8 +2796,8 @@ body[data-theme='light'] .btn-success {
 }
 
 body[data-theme='light'] .btn-secondary {
-  background: linear-gradient(135deg, #dfeeff, #eef6ff);
-  color: #244260;
+  background: linear-gradient(135deg, #d9ebff, #eef6ff);
+  color: #173857;
 }
 
 body[data-theme='light'] .section-toolbar-btn.btn-secondary {
@@ -2823,9 +2823,9 @@ body[data-theme='light'] .btn-archive {
 body[data-theme='light'] .manager-comment-trigger,
 body[data-theme='light'] .comments-chip,
 body[data-theme='light'] .tab {
-  background: rgba(255, 255, 255, 0.84);
-  color: #264463;
-  border-color: rgba(121, 163, 209, 0.14);
+  background: rgba(255, 255, 255, 0.94);
+  color: #173857;
+  border-color: rgba(111, 156, 203, 0.22);
 }
 
 body[data-theme='light'] .manager-comment-trigger-active,
@@ -2838,8 +2838,8 @@ body[data-theme='light'] .tab-active {
 
 body[data-theme='light'] .manager-stage-panel,
 body[data-theme='light'] .manager-stage-empty {
-  background: rgba(247, 251, 255, 0.92);
-  border-color: rgba(120, 164, 212, 0.16);
+  background: rgba(245, 250, 255, 0.98);
+  border-color: rgba(111, 156, 203, 0.22);
 }
 
 body[data-theme='light'] .manager-stage-panel-title,
@@ -2872,29 +2872,29 @@ body[data-theme='light'] .role-progress-badge-pending {
 }
 
 body[data-theme='light'] .badge-neutral {
-  background: rgba(235, 243, 251, 0.94);
-  color: #42617f;
-  border-color: rgba(126, 165, 208, 0.18);
+  background: rgba(225, 237, 249, 0.98);
+  color: #284967;
+  border-color: rgba(111, 156, 203, 0.24);
 }
 
 body[data-theme='light'] .badge-progress {
-  background: rgba(255, 241, 214, 0.96);
-  color: #9a6a19;
-  border-color: rgba(231, 188, 110, 0.24);
+  background: rgba(255, 233, 186, 0.98);
+  color: #7b5208;
+  border-color: rgba(212, 165, 74, 0.34);
 }
 
 body[data-theme='light'] .badge-success {
-  background: rgba(224, 249, 238, 0.96);
-  color: #18785d;
-  border-color: rgba(92, 199, 161, 0.24);
+  background: rgba(209, 245, 229, 0.98);
+  color: #0d674f;
+  border-color: rgba(83, 195, 153, 0.32);
 }
 
 body[data-theme='light'] .form-group input,
 body[data-theme='light'] .form-group select,
 body[data-theme='light'] .form-group textarea {
-  background: rgba(255, 255, 255, 0.92);
-  color: #17324d;
-  border-color: rgba(121, 163, 209, 0.16);
+  background: rgba(255, 255, 255, 0.98);
+  color: #102b45;
+  border-color: rgba(111, 156, 203, 0.24);
 }
 
 body[data-theme='light'] .form-group input::placeholder,
