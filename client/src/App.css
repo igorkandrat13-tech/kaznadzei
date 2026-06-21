@@ -221,7 +221,7 @@ body::before {
 }
 
 .container {
-  max-width: 1400px;
+  max-width: 1680px;
   margin: 30px auto;
   padding: 0 20px;
   position: relative;
@@ -303,6 +303,7 @@ table tr:hover td {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
 }
 
 .table-scroll table {
@@ -1338,6 +1339,7 @@ table tr:hover td {
 
 .manager-orders-table {
   min-width: 1480px;
+  table-layout: auto;
 }
 
 .manager-orders-table th,
@@ -1345,11 +1347,16 @@ table tr:hover td {
   padding: 10px 12px;
   vertical-align: middle;
   line-height: 1.4;
+  word-break: normal;
+  overflow-wrap: break-word;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
 }
 
 .manager-orders-table th {
   font-size: 12px;
   white-space: normal;
+  overflow-wrap: normal;
 }
 
 .manager-orders-table td {
@@ -1379,7 +1386,7 @@ table tr:hover td {
 
 .admin-overview-table {
   border-spacing: 0;
-  min-width: 1280px;
+  min-width: 1680px;
   table-layout: auto;
 }
 
@@ -1393,12 +1400,16 @@ table tr:hover td {
   padding: 10px 12px;
   vertical-align: middle;
   line-height: 1.4;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .admin-overview-table th {
   font-size: 11px;
   white-space: normal;
   writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  overflow-wrap: normal;
 }
 
 .admin-overview-table td {
@@ -1411,7 +1422,7 @@ table tr:hover td {
 
 .admin-overview-table th:not(:first-child):not(:nth-last-child(3)):not(:nth-last-child(2)):not(:last-child),
 .admin-overview-table td:not(:first-child):not(:nth-last-child(3)):not(:nth-last-child(2)):not(:last-child) {
-  min-width: 112px;
+  min-width: 132px;
   text-align: center;
 }
 
@@ -1428,7 +1439,7 @@ table tr:hover td {
 
 .admin-overview-table th:nth-last-child(3),
 .admin-overview-table td:nth-last-child(3) {
-  min-width: 210px;
+  min-width: 250px;
 }
 
 .orders-table th {
@@ -1461,6 +1472,14 @@ table tr:hover td {
 
 .admin-overview-table.orders-table td {
   font-size: 13px;
+}
+
+.admin-overview-table .order-role-summary {
+  min-width: 220px;
+}
+
+.admin-overview-table .comments-cell {
+  min-width: 240px;
 }
 
 .badge {
