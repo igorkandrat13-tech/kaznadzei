@@ -1329,7 +1329,7 @@ table tr:hover td {
 
 .manager-orders-table th:nth-child(10),
 .manager-orders-table td:nth-child(10) {
-  min-width: 180px;
+  min-width: 250px;
 }
 
 .manager-orders-table th:nth-child(11),
@@ -1551,6 +1551,18 @@ table tr:hover td {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-main);
+}
+
+.manager-orders-table .order-role-progress-list {
+  min-width: 220px;
+}
+
+.manager-orders-table .order-role-progress-row {
+  flex-wrap: nowrap;
+}
+
+.manager-orders-table .order-role-progress-label {
+  min-width: 108px;
 }
 
 .badge {

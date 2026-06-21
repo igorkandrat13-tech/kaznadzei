@@ -4,7 +4,6 @@ import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 import ConfirmDialog from './ConfirmDialog';
 import { roleTabs } from './adminUI';
-import { renderOrderRoleSummary } from './orderStageSummary';
 
 const EMPTY_FORM = {
   customer: '',
@@ -44,6 +43,57 @@ function getManagerCommentPreview(notes) {
 function getInitialStageRoleTab(stages = []) {
   const firstRoleWithStage = roleTabs.find(tab => stages.some(stage => stage.role === tab.key));
   return firstRoleWithStage?.key || roleTabs[0]?.key || 'carpenter';
+}
+
+function getRoleShortLabel(role) {
+  return (roleTabs.find(tab => tab.key === role)?.label || role).replace(/^[^\s]+\s+/, '');
+}
+
+function getRoleProgressInfo(order, role) {
+  const stages = Array.isArray(order?.stages) ? order.stages : [];
+  const roleStages = stages.filter(stage => stage.role === role);
+  const total = roleStages.length;
+  const roleLabel = getRoleShortLabel(role);
+
+  if (total === 0) {
+    return {
+      total,
+      text: '—',
+      title: `${roleLabel}: этапы не настроены`,
+      className: 'role-progress-badge',
+    };
+  }
+
+  const completed = roleStages.filter(stage => stage.status === 'completed').length;
+  const activeIndex = roleStages.findIndex(stage => stage.status === 'in_progress');
+  const firstPendingIndex = roleStages.findIndex(stage => stage.status !== 'completed');
+  const lastCompletedStage = completed > 0 ? roleStages[completed - 1] : null;
+
+  if (completed === total) {
+    return {
+      total,
+      text: `Готово ${total} из ${total}`,
+      title: `${roleLabel}: все этапы завершены${lastCompletedStage?.stepName ? `\nПоследний этап: ${lastCompletedStage.stepName}` : ''}`,
+      className: 'role-progress-badge role-progress-badge-completed',
+    };
+  }
+
+  const currentStageIndex = activeIndex !== -1 ? activeIndex : (firstPendingIndex === -1 ? total - 1 : firstPendingIndex);
+  const isWaiting = activeIndex === -1 && completed === 0;
+  const currentStage = roleStages[currentStageIndex] || null;
+  const progressTitle = [
+    `${roleLabel}: завершено ${completed} из ${total}`,
+    currentStage?.stepName
+      ? `${isWaiting ? 'Ближайший этап' : 'Текущий этап'}: ${currentStage.stepName}`
+      : '',
+  ].filter(Boolean).join('\n');
+
+  return {
+    total,
+    text: `Этап ${currentStageIndex + 1} из ${total}`,
+    title: progressTitle,
+    className: `role-progress-badge ${isWaiting ? 'role-progress-badge-pending' : 'role-progress-badge-active'}`,
+  };
 }
 
 function ManagerStagePanel({
@@ -163,6 +213,29 @@ function Manager() {
     const activeStage = stages.find(stage => stage.status === 'in_progress')
       || stages.find(stage => stage.status !== 'completed');
     return activeStage?.role || '';
+  };
+
+  const renderManagerRoleProgress = (order) => {
+    const roleProgress = roleTabs
+      .map(tab => ({ ...tab, progress: getRoleProgressInfo(order, tab.key) }))
+      .filter(item => item.progress.total > 0);
+
+    if (roleProgress.length === 0) {
+      return <span className="empty-inline">—</span>;
+    }
+
+    return (
+      <div className="order-role-progress-list">
+        {roleProgress.map(item => (
+          <div key={item.key} className="order-role-progress-row">
+            <span className="order-role-progress-label">{getRoleShortLabel(item.key)}</span>
+            <span className={item.progress.className} title={item.progress.title}>
+              {item.progress.text}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const filteredOrders = orders.filter(order => {
@@ -468,7 +541,7 @@ function Manager() {
                       {getOrderStatusMeta(order.overallStatus).label}
                     </span>
                   </td>
-                  <td>{renderOrderRoleSummary(order)}</td>
+                  <td>{renderManagerRoleProgress(order)}</td>
                   <td className="comment-cell">
                     <button
                       className={`manager-comment-trigger ${String(order.notes || '').trim() ? 'manager-comment-trigger-active' : ''}`}
@@ -533,7 +606,7 @@ function Manager() {
 
                 <div className="mobile-order-card-note">
                   <div className="mobile-order-card-label">По специалистам</div>
-                  <div>{renderOrderRoleSummary(order)}</div>
+                  <div>{renderManagerRoleProgress(order)}</div>
                 </div>
 
                 <div className="mobile-order-card-note">
