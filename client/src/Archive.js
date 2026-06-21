@@ -2,7 +2,57 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getOrderStatusMeta, ORDER_STATUS_OPTIONS } from './statusMeta';
 import { roleTabs } from './adminUI';
-import { renderOrderRoleSummary } from './orderStageSummary';
+
+function getRoleShortLabel(role) {
+  return (roleTabs.find(tab => tab.key === role)?.label || role).replace(/^[^\s]+\s+/, '');
+}
+
+function getRoleProgressInfo(order, role) {
+  const stages = Array.isArray(order?.stages) ? order.stages : [];
+  const roleStages = stages.filter(stage => stage.role === role);
+  const total = roleStages.length;
+  const roleLabel = getRoleShortLabel(role);
+
+  if (total === 0) {
+    return {
+      total,
+      text: '—',
+      title: `${roleLabel}: этапы не настроены`,
+      className: 'role-progress-badge',
+    };
+  }
+
+  const completed = roleStages.filter(stage => stage.status === 'completed').length;
+  const activeIndex = roleStages.findIndex(stage => stage.status === 'in_progress');
+  const firstPendingIndex = roleStages.findIndex(stage => stage.status !== 'completed');
+  const lastCompletedStage = completed > 0 ? roleStages[completed - 1] : null;
+
+  if (completed === total) {
+    return {
+      total,
+      text: `Готово ${total} из ${total}`,
+      title: `${roleLabel}: все этапы завершены${lastCompletedStage?.stepName ? `\nПоследний этап: ${lastCompletedStage.stepName}` : ''}`,
+      className: 'role-progress-badge role-progress-badge-completed',
+    };
+  }
+
+  const currentStageIndex = activeIndex !== -1 ? activeIndex : (firstPendingIndex === -1 ? total - 1 : firstPendingIndex);
+  const isWaiting = activeIndex === -1 && completed === 0;
+  const currentStage = roleStages[currentStageIndex] || null;
+  const progressTitle = [
+    `${roleLabel}: завершено ${completed} из ${total}`,
+    currentStage?.stepName
+      ? `${isWaiting ? 'Ближайший этап' : 'Текущий этап'}: ${currentStage.stepName}`
+      : '',
+  ].filter(Boolean).join('\n');
+
+  return {
+    total,
+    text: `Этап ${currentStageIndex + 1} из ${total}`,
+    title: progressTitle,
+    className: `role-progress-badge ${isWaiting ? 'role-progress-badge-pending' : 'role-progress-badge-active'}`,
+  };
+}
 
 function Archive() {
   const [orders, setOrders] = useState([]);
@@ -43,6 +93,29 @@ function Archive() {
     if (dateTo && o.endDate && new Date(o.endDate) > new Date(dateTo)) return false;
     return true;
   });
+
+  const renderArchiveRoleProgress = (order) => {
+    const roleProgress = roleTabs
+      .map(tab => ({ ...tab, progress: getRoleProgressInfo(order, tab.key) }))
+      .filter(item => item.progress.total > 0);
+
+    if (roleProgress.length === 0) {
+      return <span className="empty-inline">—</span>;
+    }
+
+    return (
+      <div className="order-role-progress-list">
+        {roleProgress.map(item => (
+          <div key={item.key} className="order-role-progress-row">
+            <span className="order-role-progress-label">{getRoleShortLabel(item.key)}</span>
+            <span className={item.progress.className} title={item.progress.title}>
+              {item.progress.text}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -94,7 +167,7 @@ function Archive() {
 
       <div className="card">
         <div className="table-scroll desktop-table-only">
-          <table>
+          <table className="archive-table">
             <thead>
               <tr>
                 <th>Заказчик</th>
@@ -125,7 +198,7 @@ function Archive() {
                       {getOrderStatusMeta(order.overallStatus).label}
                     </span>
                   </td>
-                  <td>{renderOrderRoleSummary(order)}</td>
+                  <td>{renderArchiveRoleProgress(order)}</td>
                 </tr>
               ))}
               {filtered.length === 0 && <tr><td colSpan={10} className="empty-cell">Нет заказов</td></tr>}
@@ -175,7 +248,7 @@ function Archive() {
 
                 <div className="mobile-order-card-note">
                   <div className="mobile-order-card-label">По специалистам</div>
-                  <div>{renderOrderRoleSummary(order)}</div>
+                  <div>{renderArchiveRoleProgress(order)}</div>
                 </div>
               </div>
             );
