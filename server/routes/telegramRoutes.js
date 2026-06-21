@@ -51,7 +51,8 @@ function getAuthorizedReplyMarkup() {
       web_app: { url: webAppUrl },
     }]],
     resize_keyboard: true,
-    persistent: true,
+    is_persistent: true,
+    one_time_keyboard: false,
   };
 }
 
@@ -60,7 +61,7 @@ async function syncTelegramMenuButton(token, chatId) {
   if (!webAppUrl) return;
 
   const menuButton = {
-    text: '📷 Сканер',
+    text: '📷 Сканер QR',
     url: webAppUrl,
   };
 
