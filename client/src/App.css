@@ -448,6 +448,7 @@ table tr:hover td {
   align-items: center;
   gap: 4px;
   flex-wrap: nowrap;
+  position: relative;
 }
 
 .manager-action-btn {
@@ -468,6 +469,48 @@ table tr:hover td {
 .manager-action-btn-danger {
   background: #e74c3c;
   color: white;
+}
+
+.manager-actions-menu {
+  position: relative;
+}
+
+.manager-actions-menu summary {
+  list-style: none;
+}
+
+.manager-actions-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.manager-action-menu-toggle {
+  min-width: 32px;
+  padding: 0 8px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.manager-actions-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 132px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(10, 21, 36, 0.98);
+  border: 1px solid rgba(132, 186, 248, 0.16);
+  box-shadow: 0 16px 30px rgba(2, 8, 16, 0.24);
+}
+
+.manager-actions-dropdown-btn {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 .manager-stage-panel {
@@ -2910,6 +2953,12 @@ body[data-theme='light'] .tab {
   background: rgba(255, 255, 255, 0.94);
   color: #173857;
   border-color: rgba(111, 156, 203, 0.22);
+}
+
+body[data-theme='light'] .manager-actions-dropdown {
+  background: rgba(255, 255, 255, 0.99);
+  border-color: rgba(111, 156, 203, 0.24);
+  box-shadow: 0 16px 30px rgba(40, 76, 114, 0.12);
 }
 
 body[data-theme='light'] .manager-comment-trigger-active,

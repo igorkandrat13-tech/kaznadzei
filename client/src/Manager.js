@@ -462,6 +462,10 @@ function Manager() {
     }
   };
 
+  const closeManagerActionMenu = (event) => {
+    event?.currentTarget?.closest('details')?.removeAttribute('open');
+  };
+
   return (
     <div>
       <div className="card">
@@ -553,8 +557,33 @@ function Manager() {
                   <td>
                     <div className="manager-actions-cell">
                       <button className="btn btn-primary manager-action-btn" onClick={() => handleEdit(order)}>✎</button>
-                      <button className="btn manager-action-btn manager-action-btn-secondary" onClick={() => setQrOrderId(order._id)}>QR</button>
-                      <button className="btn manager-action-btn manager-action-btn-danger" onClick={() => requestDelete(order)}>✕</button>
+                      <details className="manager-actions-menu">
+                        <summary className="btn manager-action-btn manager-action-btn-secondary manager-action-menu-toggle" aria-label="Еще действия">
+                          ⋯
+                        </summary>
+                        <div className="manager-actions-dropdown">
+                          <button
+                            className="btn manager-actions-dropdown-btn"
+                            type="button"
+                            onClick={(event) => {
+                              setQrOrderId(order._id);
+                              closeManagerActionMenu(event);
+                            }}
+                          >
+                            QR-код
+                          </button>
+                          <button
+                            className="btn btn-danger manager-actions-dropdown-btn"
+                            type="button"
+                            onClick={(event) => {
+                              requestDelete(order);
+                              closeManagerActionMenu(event);
+                            }}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </details>
                     </div>
                   </td>
                 </tr>
