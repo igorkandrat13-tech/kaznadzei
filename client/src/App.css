@@ -2854,21 +2854,21 @@ body[data-theme='light'] .role-progress-badge {
 }
 
 body[data-theme='light'] .role-progress-badge-active {
-  color: #0e2238;
-  background: linear-gradient(135deg, rgba(124, 209, 255, 0.98), rgba(123, 240, 203, 0.94));
-  border-color: rgba(98, 191, 214, 0.3);
+  color: #12415e;
+  background: linear-gradient(135deg, rgba(211, 241, 255, 0.98), rgba(211, 250, 238, 0.96));
+  border-color: rgba(98, 191, 214, 0.34);
 }
 
 body[data-theme='light'] .role-progress-badge-completed {
-  color: #ffffff;
-  background: linear-gradient(135deg, rgba(32, 158, 116, 0.96), rgba(72, 196, 145, 0.94));
-  border-color: rgba(83, 195, 153, 0.3);
+  color: #115642;
+  background: linear-gradient(135deg, rgba(217, 248, 235, 0.98), rgba(201, 243, 226, 0.96));
+  border-color: rgba(83, 195, 153, 0.34);
 }
 
 body[data-theme='light'] .role-progress-badge-pending {
-  color: #fffaf0;
-  background: linear-gradient(135deg, rgba(198, 147, 43, 0.96), rgba(227, 177, 68, 0.94));
-  border-color: rgba(216, 168, 70, 0.3);
+  color: #7a510d;
+  background: linear-gradient(135deg, rgba(255, 244, 214, 0.98), rgba(255, 236, 186, 0.96));
+  border-color: rgba(216, 168, 70, 0.34);
 }
 
 body[data-theme='light'] .badge-neutral {
@@ -2878,15 +2878,30 @@ body[data-theme='light'] .badge-neutral {
 }
 
 body[data-theme='light'] .badge-progress {
-  background: rgba(255, 233, 186, 0.98);
-  color: #7b5208;
+  background: rgba(255, 242, 208, 0.98);
+  color: #7a510d;
   border-color: rgba(212, 165, 74, 0.34);
 }
 
 body[data-theme='light'] .badge-success {
-  background: rgba(209, 245, 229, 0.98);
-  color: #0d674f;
+  background: rgba(218, 248, 236, 0.98);
+  color: #115642;
   border-color: rgba(83, 195, 153, 0.32);
+}
+
+body[data-theme='light'] .color-chip {
+  background: linear-gradient(180deg, rgba(250, 253, 255, 0.98), rgba(241, 247, 255, 0.96));
+  color: #143553;
+  border-color: rgba(111, 156, 203, 0.22);
+}
+
+body[data-theme='light'] .mobile-settings-color-row {
+  color: #143553;
+}
+
+body[data-theme='light'] .color-swatch-inline,
+body[data-theme='light'] .color-dot {
+  border-color: rgba(62, 95, 130, 0.28);
 }
 
 body[data-theme='light'] .form-group input,
