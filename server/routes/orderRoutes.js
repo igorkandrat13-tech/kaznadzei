@@ -11,17 +11,65 @@ const {
 } = require('../services/telegramWebAppAuth');
 const router = express.Router();
 
-function resolveTelegramEmployee(token, payload) {
+function maskTelegramValue(value, { tail = 6 } = {}) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  if (normalized.length <= tail) return normalized;
+  return `...${normalized.slice(-tail)}`;
+}
+
+function getTelegramPayloadDebug(payload = {}) {
+  const initData = String(payload.initData || '').trim();
+  const unsafeUserId = String(payload.unsafeUser?.id || '').trim();
+  const sessionToken = String(payload.sessionToken || '').trim();
+
+  return {
+    hasInitData: Boolean(initData),
+    initDataLength: initData.length,
+    hasUnsafeUser: Boolean(unsafeUserId),
+    unsafeUserId: unsafeUserId || '',
+    hasSessionToken: Boolean(sessionToken),
+    sessionTokenLength: sessionToken.length,
+    sessionTokenTail: maskTelegramValue(sessionToken),
+  };
+}
+
+function logTelegramOrderDebug(event, details = {}) {
+  console.log(`[telegram-order] ${event}`, JSON.stringify(details));
+}
+
+function resolveTelegramEmployee(token, payload, context = {}) {
+  const payloadDebug = getTelegramPayloadDebug(payload);
   if (payload?.sessionToken) {
     try {
       const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
       const employeeBySession = EmployeeStore.findById(sessionPayload.employeeId);
       if (!employeeBySession || String(employeeBySession.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
+        logTelegramOrderDebug('resolve.session-mismatch', {
+          ...context,
+          ...payloadDebug,
+          employeeId: sessionPayload.employeeId,
+          telegramUserId: String(sessionPayload.telegramUserId || ''),
+          employeeFound: Boolean(employeeBySession),
+          employeeTelegramUserId: String(employeeBySession?.telegramUserId || ''),
+        });
         throw new Error('Сотрудник Telegram не найден или session token устарел.');
       }
+      logTelegramOrderDebug('resolve.session-token-ok', {
+        ...context,
+        ...payloadDebug,
+        employeeId: employeeBySession._id,
+        employeeRole: employeeBySession.role,
+      });
       return employeeBySession;
     } catch (sessionError) {
       const hasTelegramAuthPayload = Boolean(String(payload?.initData || '').trim() || payload?.unsafeUser?.id);
+      logTelegramOrderDebug('resolve.session-token-failed', {
+        ...context,
+        ...payloadDebug,
+        hasTelegramAuthPayload,
+        message: sessionError.message || 'Session token validation failed.',
+      });
       if (!hasTelegramAuthPayload) {
         throw sessionError;
       }
@@ -29,7 +77,16 @@ function resolveTelegramEmployee(token, payload) {
   }
 
   const telegramUser = resolveTelegramWebAppUser(token, payload || {});
-  return EmployeeStore.findByTelegramUserId(telegramUser.id);
+  const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+  logTelegramOrderDebug('resolve.payload', {
+    ...context,
+    ...payloadDebug,
+    resolvedTelegramUserId: String(telegramUser?.id || ''),
+    employeeFound: Boolean(employee),
+    employeeId: employee?._id || '',
+    employeeRole: employee?.role || '',
+  });
+  return employee;
 }
 
 router.get('/orders', (req, res) => {
@@ -69,8 +126,13 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
       return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
     }
 
-    const employee = resolveTelegramEmployee(token, req.body || {});
+    const context = {
+      route: 'telegram-comment',
+      orderId: String(req.params.id || ''),
+    };
+    const employee = resolveTelegramEmployee(token, req.body || {}, context);
     if (!employee) {
+      logTelegramOrderDebug('telegram-comment.reject.employee-not-found', context);
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
     }
 
@@ -82,6 +144,12 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
     const comments = OrderStore.addComment(req.params.id, role, text);
     if (!comments) return res.status(404).json({ message: 'Order not found' });
 
+    logTelegramOrderDebug('telegram-comment.success', {
+      ...context,
+      employeeId: employee._id,
+      employeeRole: employee.role,
+    });
+
     res.status(201).json({
       ok: true,
       comments,
@@ -92,6 +160,12 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
       },
     });
   } catch (error) {
+    logTelegramOrderDebug('telegram-comment.error', {
+      route: 'telegram-comment',
+      orderId: String(req.params.id || ''),
+      ...getTelegramPayloadDebug(req.body || {}),
+      message: error.message || 'Не удалось сохранить комментарий из Telegram.',
+    });
     res.status(error.status || 400).json({ message: error.message || 'Не удалось сохранить комментарий из Telegram.' });
   }
 });
@@ -103,8 +177,15 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
       return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
     }
 
-    const employee = resolveTelegramEmployee(token, req.body || {});
+    const context = {
+      route: 'telegram-stage-status',
+      orderId: String(req.params.id || ''),
+      stepId: String(req.body?.stepId || '').trim(),
+      requestedStatus: String(req.body?.status || '').trim(),
+    };
+    const employee = resolveTelegramEmployee(token, req.body || {}, context);
     if (!employee) {
+      logTelegramOrderDebug('telegram-stage-status.reject.employee-not-found', context);
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
     }
 
@@ -139,6 +220,12 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
       return res.status(404).json({ message: 'Не удалось обновить статус этапа.' });
     }
 
+    logTelegramOrderDebug('telegram-stage-status.success', {
+      ...context,
+      employeeId: employee._id,
+      employeeRole: employee.role,
+    });
+
     res.json({
       ok: true,
       order: updatedOrder,
@@ -150,6 +237,14 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
       },
     });
   } catch (error) {
+    logTelegramOrderDebug('telegram-stage-status.error', {
+      route: 'telegram-stage-status',
+      orderId: String(req.params.id || ''),
+      stepId: String(req.body?.stepId || '').trim(),
+      requestedStatus: String(req.body?.status || '').trim(),
+      ...getTelegramPayloadDebug(req.body || {}),
+      message: error.message || 'Не удалось обновить статус этапа из Telegram.',
+    });
     res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить статус этапа из Telegram.' });
   }
 });
