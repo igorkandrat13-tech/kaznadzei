@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 
+const TELEGRAM_EMPLOYEE_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 function getTelegramWebAppUser(token, initData) {
   const normalizedToken = String(token || '').trim();
   const normalizedInitData = String(initData || '').trim();
@@ -104,7 +106,7 @@ function createTelegramEmployeeSessionToken(token, employee) {
     employeeId: employee._id,
     telegramUserId: String(employee.telegramUserId || ''),
     role: employee.role || '',
-    exp: Date.now() + 12 * 60 * 60 * 1000,
+    exp: Date.now() + TELEGRAM_EMPLOYEE_SESSION_TTL_MS,
   };
   const payloadPart = encodeBase64Url(JSON.stringify(payload));
   const signaturePart = crypto

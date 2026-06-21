@@ -3,6 +3,36 @@ const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
 const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
 
+function decodeBase64Url(value) {
+  const normalized = String(value || '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
+  return window.atob(padded);
+}
+
+function parseTelegramEmployeeSessionToken(sessionToken) {
+  const normalizedSessionToken = String(sessionToken || '').trim();
+  if (!normalizedSessionToken) return null;
+
+  const [payloadPart] = normalizedSessionToken.split('.');
+  if (!payloadPart) return null;
+
+  try {
+    return JSON.parse(decodeBase64Url(payloadPart));
+  } catch (error) {
+    return null;
+  }
+}
+
+export function isTelegramEmployeeSessionTokenExpired(sessionToken) {
+  const payload = parseTelegramEmployeeSessionToken(sessionToken);
+  if (!payload?.exp) {
+    return Boolean(String(sessionToken || '').trim());
+  }
+  return Number(payload.exp) <= Date.now();
+}
+
 export function getTelegramWebApp() {
   return window.Telegram?.WebApp || null;
 }
@@ -95,7 +125,12 @@ export function setTelegramEmployeeSessionToken(sessionToken) {
 
 export function getTelegramEmployeeSessionToken() {
   try {
-    return window.sessionStorage?.getItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY) || '';
+    const storedToken = window.sessionStorage?.getItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY) || '';
+    if (storedToken && isTelegramEmployeeSessionTokenExpired(storedToken)) {
+      window.sessionStorage?.removeItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY);
+      return '';
+    }
+    return storedToken;
   } catch (error) {
     return '';
   }
