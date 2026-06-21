@@ -1395,6 +1395,13 @@ table tr:hover td {
   min-width: 220px;
 }
 
+.admin-overview-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: rgba(16, 33, 54, 0.98);
+}
+
 .admin-overview-table th,
 .admin-overview-table td {
   padding: 10px 12px;
@@ -1418,6 +1425,11 @@ table tr:hover td {
 
 .admin-overview-table td:first-child {
   font-size: 14px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: rgba(10, 21, 36, 0.98);
+  box-shadow: 10px 0 18px rgba(2, 8, 16, 0.16);
 }
 
 .admin-overview-table th:not(:first-child):not(:nth-last-child(3)):not(:nth-last-child(2)):not(:last-child),
@@ -1495,26 +1507,30 @@ table tr:hover td {
   line-height: 1.2;
   text-align: center;
   color: #d8ecff;
-  background: rgba(18, 34, 54, 0.88);
-  border: 1px solid rgba(132, 186, 248, 0.14);
+  background: linear-gradient(180deg, rgba(21, 39, 62, 0.96), rgba(16, 31, 51, 0.94));
+  border: 1px solid rgba(132, 186, 248, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .role-progress-badge-active {
   color: #0e2238;
-  background: linear-gradient(135deg, rgba(123, 211, 255, 0.96), rgba(111, 244, 201, 0.9));
-  border-color: rgba(147, 238, 223, 0.3);
+  background: linear-gradient(135deg, rgba(135, 220, 255, 0.98), rgba(112, 248, 204, 0.94));
+  border-color: rgba(147, 238, 223, 0.38);
+  box-shadow: 0 10px 22px rgba(63, 180, 205, 0.22);
 }
 
 .role-progress-badge-completed {
-  color: #a9f5dd;
-  background: rgba(20, 70, 56, 0.92);
-  border-color: rgba(100, 230, 194, 0.22);
+  color: #dffff1;
+  background: linear-gradient(135deg, rgba(24, 120, 90, 0.96), rgba(43, 164, 120, 0.92));
+  border-color: rgba(110, 231, 191, 0.34);
+  box-shadow: 0 10px 22px rgba(22, 110, 83, 0.22);
 }
 
 .role-progress-badge-pending {
-  color: #ffd891;
-  background: rgba(72, 54, 16, 0.92);
-  border-color: rgba(255, 204, 111, 0.24);
+  color: #fff0bf;
+  background: linear-gradient(135deg, rgba(129, 92, 20, 0.96), rgba(182, 133, 31, 0.92));
+  border-color: rgba(255, 210, 116, 0.34);
+  box-shadow: 0 10px 22px rgba(116, 85, 21, 0.22);
 }
 
 .order-role-progress-list {
@@ -2708,6 +2724,15 @@ body[data-theme='light'] table tr:hover td {
   background: rgba(233, 243, 252, 0.72);
 }
 
+body[data-theme='light'] .admin-overview-table th:first-child {
+  background: rgba(237, 245, 252, 0.98);
+}
+
+body[data-theme='light'] .admin-overview-table td:first-child {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 10px 0 18px rgba(40, 76, 114, 0.08);
+}
+
 body[data-theme='light'] .mobile-order-card-title,
 body[data-theme='light'] .detail-value,
 body[data-theme='light'] .telegram-stage-card-title,
@@ -2808,6 +2833,30 @@ body[data-theme='light'] .manager-stage-empty {
 body[data-theme='light'] .manager-stage-panel-title,
 body[data-theme='light'] .manager-stage-name {
   color: #1c3956;
+}
+
+body[data-theme='light'] .role-progress-badge {
+  color: #244260;
+  background: linear-gradient(180deg, rgba(251, 253, 255, 0.98), rgba(241, 247, 255, 0.96));
+  border-color: rgba(120, 164, 212, 0.2);
+}
+
+body[data-theme='light'] .role-progress-badge-active {
+  color: #0e2238;
+  background: linear-gradient(135deg, rgba(124, 209, 255, 0.98), rgba(123, 240, 203, 0.94));
+  border-color: rgba(98, 191, 214, 0.3);
+}
+
+body[data-theme='light'] .role-progress-badge-completed {
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(32, 158, 116, 0.96), rgba(72, 196, 145, 0.94));
+  border-color: rgba(83, 195, 153, 0.3);
+}
+
+body[data-theme='light'] .role-progress-badge-pending {
+  color: #fffaf0;
+  background: linear-gradient(135deg, rgba(198, 147, 43, 0.96), rgba(227, 177, 68, 0.94));
+  border-color: rgba(216, 168, 70, 0.3);
 }
 
 body[data-theme='light'] .badge-neutral {

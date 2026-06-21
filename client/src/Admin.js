@@ -316,23 +316,31 @@ function Admin() {
     const completed = roleStages.filter(stage => stage.status === 'completed').length;
     const activeIndex = roleStages.findIndex(stage => stage.status === 'in_progress');
     const firstPendingIndex = roleStages.findIndex(stage => stage.status !== 'completed');
+    const lastCompletedStage = completed > 0 ? roleStages[completed - 1] : null;
 
     if (completed === total) {
       return {
         total,
         text: `Готово ${total} из ${total}`,
-        title: `${roleLabel}: все этапы завершены`,
+        title: `${roleLabel}: все этапы завершены${lastCompletedStage?.stepName ? `\nПоследний этап: ${lastCompletedStage.stepName}` : ''}`,
         className: 'role-progress-badge role-progress-badge-completed',
       };
     }
 
     const currentStageIndex = activeIndex !== -1 ? activeIndex : (firstPendingIndex === -1 ? total - 1 : firstPendingIndex);
     const isWaiting = activeIndex === -1 && completed === 0;
+    const currentStage = roleStages[currentStageIndex] || null;
+    const progressTitle = [
+      `${roleLabel}: завершено ${completed} из ${total}`,
+      currentStage?.stepName
+        ? `${isWaiting ? 'Ближайший этап' : 'Текущий этап'}: ${currentStage.stepName}`
+        : '',
+    ].filter(Boolean).join('\n');
 
     return {
       total,
       text: `Этап ${currentStageIndex + 1} из ${total}`,
-      title: `${roleLabel}: завершено ${completed} из ${total}`,
+      title: progressTitle,
       className: `role-progress-badge ${isWaiting ? 'role-progress-badge-pending' : 'role-progress-badge-active'}`,
     };
   };
