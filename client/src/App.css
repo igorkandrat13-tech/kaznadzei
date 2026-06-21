@@ -657,6 +657,31 @@ table tr:hover td {
   margin-top: 16px;
 }
 
+.order-role-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.order-role-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d7e9fb;
+  background: rgba(16, 34, 56, 0.9);
+  border: 1px solid rgba(132, 186, 248, 0.14);
+}
+
+.order-role-summary-chip-active {
+  color: #0e2238;
+  background: linear-gradient(135deg, rgba(123, 211, 255, 0.96), rgba(111, 244, 201, 0.9));
+  border-color: rgba(147, 238, 223, 0.3);
+}
+
 .home-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -2679,6 +2704,17 @@ body[data-theme='light'] .service-details-console-logs {
 body[data-theme='light'] .telegram-log-entry {
   background: #f4f8fc;
   color: #21405e;
+}
+
+body[data-theme='light'] .order-role-summary-chip {
+  color: #295072;
+  background: rgba(241, 247, 255, 0.96);
+  border-color: rgba(120, 164, 212, 0.18);
+}
+
+body[data-theme='light'] .order-role-summary-chip-active {
+  color: #0e2238;
+  background: linear-gradient(135deg, rgba(135, 214, 255, 0.96), rgba(126, 237, 205, 0.92));
 }
 
 body[data-theme='light'] .home-landing {

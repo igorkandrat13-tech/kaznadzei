@@ -6,6 +6,8 @@ const EmployeeStore = require('../stores/employeeStore');
 const { requireManagerAccess, requireWriteAccess } = require('../middleware/security');
 const { sanitizeCommentInput, sanitizeOrderInput } = require('../utils/validators');
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
+const { addActivityLog, getRequestActor } = require('../services/activityLog');
+const { notifyOrderCreated, notifyNextStage, notifyOrderCompleted } = require('../services/orderNotifications');
 const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
@@ -115,6 +117,16 @@ router.post('/orders/:id/comments', requireWriteAccess, (req, res) => {
     const { role, text } = sanitizeCommentInput(req.body || {});
     const comments = OrderStore.addComment(req.params.id, role, text);
     if (!comments) return res.status(404).json({ message: 'Order not found' });
+    const order = OrderStore.findById(req.params.id);
+    addActivityLog({
+      action: 'order.comment.upsert',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: order?.name || '',
+      actor: getRequestActor(req, { label: 'Сотрудник' }),
+      message: `Комментарий по роли "${role}" сохранен.`,
+      details: { role, textLength: text.length },
+    });
     res.status(201).json(comments);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -150,6 +162,21 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
       ...context,
       employeeId: employee._id,
       employeeRole: employee.role,
+    });
+
+    addActivityLog({
+      action: 'order.comment.telegram',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: OrderStore.findById(req.params.id)?.name || '',
+      actor: {
+        type: 'telegram',
+        role: employee.role,
+        name: employee.fullName,
+        label: `TG: ${employee.fullName}`,
+      },
+      message: 'Комментарий сохранен из Telegram.',
+      details: { role: employee.role, textLength: text.length },
     });
 
     res.status(201).json({
@@ -228,6 +255,28 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
       employeeRole: employee.role,
     });
 
+    addActivityLog({
+      action: 'order.stage.telegram',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: updatedOrder.name || '',
+      actor: {
+        type: 'telegram',
+        role: employee.role,
+        name: employee.fullName,
+        label: `TG: ${employee.fullName}`,
+      },
+      message: `Статус этапа "${stage.stepName || stepId}" изменен из Telegram.`,
+      details: { stepId, stepName: stage.stepName || '', status },
+    });
+
+    if (status === 'completed') {
+      notifyNextStage(updatedOrder, stepId).catch(() => {});
+      if (updatedOrder.overallStatus === 'completed') {
+        notifyOrderCompleted(updatedOrder).catch(() => {});
+      }
+    }
+
     res.json({
       ok: true,
       order: updatedOrder,
@@ -260,6 +309,16 @@ router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
     const comments = OrderStore.deleteComment(req.params.id, role);
     if (comments === null) return res.status(404).json({ message: 'Order not found' });
     if (comments === false) return res.status(404).json({ message: 'Comment not found' });
+    const order = OrderStore.findById(req.params.id);
+    addActivityLog({
+      action: 'order.comment.delete',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: order?.name || '',
+      actor: getRequestActor(req, { label: 'Сотрудник' }),
+      message: `Комментарий по роли "${role}" удален.`,
+      details: { role },
+    });
     res.json(comments);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -283,6 +342,20 @@ router.post('/orders', requireManagerAccess(), (req, res) => {
       stages,
       overallStatus: OrderStore.calculateOverallStatus(stages),
     });
+    addActivityLog({
+      action: 'order.create',
+      entityType: 'order',
+      entityId: order._id,
+      entityName: order.name || '',
+      actor: getRequestActor(req),
+      message: 'Создан новый заказ.',
+      details: {
+        customer: order.customer || '',
+        quantity: order.quantity || 1,
+        material: order.material || '',
+      },
+    });
+    notifyOrderCreated(order).catch(() => {});
     res.status(201).json(order);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -296,8 +369,21 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
     const idx = data.orders.findIndex(o => o._id === req.params.id);
     if (idx === -1) return res.status(404).json({ message: 'Order not found' });
     const updates = sanitizeOrderInput(req.body || {}, { partial: true });
+    const previousOrder = { ...data.orders[idx] };
     data.orders[idx] = { ...data.orders[idx], ...updates };
     db.save();
+    addActivityLog({
+      action: 'order.update',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: data.orders[idx].name || '',
+      actor: getRequestActor(req),
+      message: 'Заказ обновлен.',
+      details: {
+        changedFields: Object.keys(updates),
+        notesChanged: previousOrder.notes !== data.orders[idx].notes,
+      },
+    });
     res.json(data.orders[idx]);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -310,8 +396,20 @@ router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
     const data = db.load();
     const idx = data.orders.findIndex(o => o._id === req.params.id);
     if (idx === -1) return res.status(404).json({ message: 'Order not found' });
+    const deletedOrder = data.orders[idx];
     data.orders.splice(idx, 1);
     db.save();
+    addActivityLog({
+      action: 'order.delete',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: deletedOrder?.name || '',
+      actor: getRequestActor(req),
+      message: 'Заказ удален.',
+      details: {
+        customer: deletedOrder?.customer || '',
+      },
+    });
     res.json({ message: 'Deleted' });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -328,6 +426,27 @@ router.patch('/orders/:id/stages/:stepId', requireWriteAccess, (req, res) => {
     const order = OrderStore.updateStageStatus(req.params.id, req.params.stepId, status);
     if (order === null) return res.status(404).json({ message: 'Order not found' });
     if (order === false) return res.status(404).json({ message: 'Stage not found' });
+    const stage = (order.stages || []).find(item => item.stepId === req.params.stepId);
+    addActivityLog({
+      action: 'order.stage.update',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: order.name || '',
+      actor: getRequestActor(req, { label: 'Сотрудник' }),
+      message: `Статус этапа "${stage?.stepName || req.params.stepId}" изменен.`,
+      details: {
+        stepId: req.params.stepId,
+        stepName: stage?.stepName || '',
+        role: stage?.role || '',
+        status,
+      },
+    });
+    if (status === 'completed') {
+      notifyNextStage(order, req.params.stepId).catch(() => {});
+      if (order.overallStatus === 'completed') {
+        notifyOrderCompleted(order).catch(() => {});
+      }
+    }
     res.json(order);
   } catch (error) {
     res.status(400).json({ message: error.message });

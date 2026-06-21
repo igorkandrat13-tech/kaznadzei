@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
@@ -19,6 +19,7 @@ import CommentsModal from './admin/CommentsModal';
 import EmployeeModal from './admin/EmployeeModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
+import { renderOrderRoleSummary } from './orderStageSummary';
 
 function Admin() {
   const [showSettings, setShowSettings] = useState(false);
@@ -51,6 +52,15 @@ function Admin() {
   const [telegramLogs, setTelegramLogs] = useState([]);
   const [telegramLogsLoading, setTelegramLogsLoading] = useState(false);
   const [clearingTelegramLogs, setClearingTelegramLogs] = useState(false);
+  const [showActivityLogs, setShowActivityLogs] = useState(false);
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [activityLogsLoading, setActivityLogsLoading] = useState(false);
+  const [clearingActivityLogs, setClearingActivityLogs] = useState(false);
+  const [exportingBackup, setExportingBackup] = useState(false);
+  const [importingBackup, setImportingBackup] = useState(false);
+  const [adminSearch, setAdminSearch] = useState('');
+  const [adminStatusFilter, setAdminStatusFilter] = useState('all');
+  const [adminRoleFilter, setAdminRoleFilter] = useState('all');
   const [employees, setEmployees] = useState([]);
   const [employeeModalMode, setEmployeeModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
@@ -69,6 +79,7 @@ function Admin() {
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
   const [newColor, setNewColor] = useState({ name: '', hex: '#000000' });
   const [newEmployee, setNewEmployee] = useState(emptyEmployeeForm);
+  const backupImportInputRef = useRef(null);
 
   const filteredSteps = steps.filter(s => s.role === activeRole).sort((a, b) => a.order - b.order);
   const employeeForm = employeeModalMode === 'edit' ? editEmployee : newEmployee;
@@ -281,6 +292,13 @@ function Admin() {
     return text.length > 80 ? `${text.slice(0, 80)}...` : text;
   };
 
+  const getCurrentResponsibleRole = (order) => {
+    const stages = Array.isArray(order?.stages) ? order.stages : [];
+    const activeStage = stages.find(stage => stage.status === 'in_progress')
+      || stages.find(stage => stage.status !== 'completed');
+    return activeStage?.role || '';
+  };
+
   const renderOrderComments = (order) => {
     const comments = order.comments || [];
     if (comments.length === 0) {
@@ -325,6 +343,16 @@ function Admin() {
         </div>
       </div>
     );
+  };
+
+  const formatActivityLogEntry = (entry) => {
+    const timestamp = entry?.createdAt ? new Date(entry.createdAt).toLocaleString() : 'Без времени';
+    const actor = entry?.actor?.label || 'Система';
+    const message = entry?.message || entry?.action || 'Событие';
+    const details = entry?.details && typeof entry.details === 'object'
+      ? JSON.stringify(entry.details, null, 2)
+      : String(entry?.details || '');
+    return `[${timestamp}] ${actor}\n${message}\n${details}`;
   };
 
   const openCommentsModal = (order, initialRole) => {
@@ -454,6 +482,122 @@ function Admin() {
       setSettingsError(error.message || 'Не удалось очистить логи ТГ бота.');
     } finally {
       setClearingTelegramLogs(false);
+    }
+  };
+
+  const fetchActivityLogs = async ({ openModal = false } = {}) => {
+    setActivityLogsLoading(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/activity-logs?limit=200');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось загрузить журнал действий.');
+      }
+      setActivityLogs(Array.isArray(data?.logs) ? data.logs : []);
+      if (openModal) {
+        setShowActivityLogs(true);
+      }
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось загрузить журнал действий.');
+      if (openModal) {
+        setShowActivityLogs(true);
+      }
+    } finally {
+      setActivityLogsLoading(false);
+    }
+  };
+
+  const clearActivityLogs = async () => {
+    if (clearingActivityLogs) return;
+    setClearingActivityLogs(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/activity-logs', { method: 'DELETE' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось очистить журнал действий.');
+      }
+      setActivityLogs([]);
+      setSettingsSuccess(data?.message || 'Журнал действий очищен.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось очистить журнал действий.');
+    } finally {
+      setClearingActivityLogs(false);
+    }
+  };
+
+  const exportBackup = async () => {
+    if (exportingBackup) return;
+    setExportingBackup(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/backup/export');
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, 'Не удалось экспортировать резервную копию.'));
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition') || '';
+      const fileNameMatch = disposition.match(/filename="([^"]+)"/i);
+      const fileName = fileNameMatch?.[1] || `kaznadzei-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setSettingsSuccess('Резервная копия экспортирована.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось экспортировать резервную копию.');
+    } finally {
+      setExportingBackup(false);
+    }
+  };
+
+  const openBackupImportPicker = () => {
+    if (importingBackup) return;
+    backupImportInputRef.current?.click();
+  };
+
+  const handleBackupImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const confirmed = window.confirm(`Импортировать резервную копию "${file.name}"? Текущие данные проекта будут заменены.`);
+    if (!confirmed) return;
+
+    setImportingBackup(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const fileText = await file.text();
+      const payload = JSON.parse(fileText);
+      const res = await apiFetch('/api/backup/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось импортировать резервную копию.');
+      }
+      await Promise.all([
+        fetchOrders(),
+        fetchSteps(),
+        fetchColors(),
+        fetchEmployees().catch(() => {}),
+        fetchAppSettings().catch(() => {}),
+      ]);
+      setSettingsSuccess(data?.message || 'Резервная копия импортирована.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось импортировать резервную копию.');
+    } finally {
+      setImportingBackup(false);
     }
   };
 
@@ -865,6 +1009,13 @@ function Admin() {
           <div className="card">
             <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
+            <input
+              ref={backupImportInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleBackupImport}
+              style={{ display: 'none' }}
+            />
 
             <div className="form-group">
               <label className="helper-label">
@@ -903,6 +1054,15 @@ function Admin() {
               </button>
               <button className="btn btn-secondary" onClick={() => fetchTelegramLogs({ openModal: true })} disabled={telegramLogsLoading}>
                 {telegramLogsLoading ? 'Загрузка логов...' : 'Логи ТГ бота'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => fetchActivityLogs({ openModal: true })} disabled={activityLogsLoading}>
+                {activityLogsLoading ? 'Загрузка журнала...' : 'Журнал действий'}
+              </button>
+              <button className="btn btn-secondary" onClick={exportBackup} disabled={exportingBackup}>
+                {exportingBackup ? 'Экспорт...' : 'Экспорт данных'}
+              </button>
+              <button className="btn btn-secondary" onClick={openBackupImportPicker} disabled={importingBackup}>
+                {importingBackup ? 'Импорт...' : 'Импорт данных'}
               </button>
             </SettingsActions>
 
@@ -972,6 +1132,52 @@ function Admin() {
                 ) : (
                   <div className="mobile-empty-state">
                     {telegramLogsLoading ? 'Загружаю логи ТГ бота...' : 'Логи пока пусты.'}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {showActivityLogs && (
+            <div className="modal-overlay" onClick={() => setShowActivityLogs(false)}>
+              <div className="modal-window modal-window-xl" onClick={(event) => event.stopPropagation()}>
+                <div className="modal-header">
+                  <div>
+                    <div className="modal-title">Журнал действий</div>
+                    <div className="modal-subtitle">
+                      Здесь сохраняются изменения по заказам, сотрудникам, настройкам и справочникам.
+                    </div>
+                  </div>
+                  <button className="btn btn-small modal-close-btn" onClick={() => setShowActivityLogs(false)}>
+                    ✕
+                  </button>
+                </div>
+
+                <div className="modal-actions modal-actions-between">
+                  <div className="modal-actions-group">
+                    <button className="btn btn-secondary" onClick={() => fetchActivityLogs()} disabled={activityLogsLoading}>
+                      {activityLogsLoading ? 'Обновление...' : 'Обновить'}
+                    </button>
+                    <button className="btn btn-danger" onClick={clearActivityLogs} disabled={clearingActivityLogs}>
+                      {clearingActivityLogs ? 'Очистка...' : 'Очистить журнал'}
+                    </button>
+                  </div>
+                  <div className="text-small text-subtle">
+                    Записей: {activityLogs.length}
+                  </div>
+                </div>
+
+                {activityLogs.length > 0 ? (
+                  <div className="telegram-log-list">
+                    {activityLogs.map((entry) => (
+                      <pre key={entry._id || `${entry.createdAt}-${entry.action}`} className="service-details-console service-details-console-status telegram-log-entry">
+                        {formatActivityLogEntry(entry)}
+                      </pre>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mobile-empty-state">
+                    {activityLogsLoading ? 'Загружаю журнал действий...' : 'Журнал действий пока пуст.'}
                   </div>
                 )}
               </div>
@@ -1188,6 +1394,22 @@ function Admin() {
 
   // ===== OVERVIEW VIEW =====
   const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
+  const filteredOverviewOrders = orders.filter(order => {
+    if (adminStatusFilter !== 'all' && order.overallStatus !== adminStatusFilter) return false;
+    if (adminRoleFilter !== 'all' && getCurrentResponsibleRole(order) !== adminRoleFilter) return false;
+    if (adminSearch.trim()) {
+      const query = adminSearch.trim().toLowerCase();
+      const haystack = [
+        order.name,
+        order.customer,
+        order.material,
+        order.notes,
+        ...(order.comments || []).map(comment => comment.text),
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
 
   return (
     <div>
@@ -1211,18 +1433,48 @@ function Admin() {
           title="📊 Сводка по всем заказам"
           description="Прогресс каждого изделия по всем этапам производства"
         />
+        <div className="responsive-filters">
+          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 220 }}>
+            <label>Поиск</label>
+            <input
+              value={adminSearch}
+              onChange={e => setAdminSearch(e.target.value)}
+              placeholder="Изделие, заказчик, материал, комментарий"
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Статус</label>
+            <select value={adminStatusFilter} onChange={e => setAdminStatusFilter(e.target.value)}>
+              <option value="all">Все</option>
+              <option value="pending">Ожидает</option>
+              <option value="in_progress">В работе</option>
+              <option value="completed">Завершен</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Ответственный</label>
+            <select value={adminRoleFilter} onChange={e => setAdminRoleFilter(e.target.value)}>
+              <option value="all">Все</option>
+              {roleTabs.map(tab => (
+                <option key={tab.key} value={tab.key}>{tab.label.replace(/^[^\s]+\s+/, '')}</option>
+              ))}
+            </select>
+          </div>
+          <div className="filters-summary">Найдено: {filteredOverviewOrders.length}</div>
+        </div>
         <div className="table-scroll desktop-table-only">
           <table className="orders-table admin-overview-table">
             <thead>
               <tr>
                 <th>Изделие</th>
                 {sortedSteps.map(s => <th key={s._id} title={s.description}>{s.stepName}</th>)}
+                <th>По ролям</th>
                 <th>Общий статус</th>
                 <th>Примечания</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map(order => {
+              {filteredOverviewOrders.map(order => {
                 const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
                 return (
                   <tr key={order._id}>
@@ -1238,6 +1490,7 @@ function Admin() {
                         </td>
                       );
                     })}
+                    <td>{renderOrderRoleSummary(order)}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className={overallStatusMeta.className}>
                         {overallStatusMeta.label}
@@ -1249,13 +1502,13 @@ function Admin() {
                   </tr>
                 );
               })}
-              {orders.length === 0 && <tr><td colSpan={sortedSteps.length + 3} className="empty-cell">Нет заказов</td></tr>}
+              {filteredOverviewOrders.length === 0 && <tr><td colSpan={sortedSteps.length + 4} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
 
         <div className="mobile-card-list">
-          {orders.map(order => {
+          {filteredOverviewOrders.map(order => {
             const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
             return (
               <div key={order._id} className="mobile-order-card">
@@ -1280,13 +1533,18 @@ function Admin() {
                 </div>
 
                 <div className="mobile-order-card-note">
+                  <div className="mobile-order-card-label">По специалистам</div>
+                  <div>{renderOrderRoleSummary(order)}</div>
+                </div>
+
+                <div className="mobile-order-card-note">
                   <div className="mobile-order-card-label">Примечания</div>
                   <div>{renderOrderComments(order)}</div>
                 </div>
               </div>
             );
           })}
-          {orders.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
+          {filteredOverviewOrders.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
         </div>
       </div>
 

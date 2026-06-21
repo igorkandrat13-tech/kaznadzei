@@ -2,6 +2,7 @@ const express = require('express');
 const EmployeeStore = require('../stores/employeeStore');
 const SettingsStore = require('../stores/settingsStore');
 const { requireAdminAccess } = require('../middleware/security');
+const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { sendMessage } = require('../services/telegramService');
 const { sanitizeEmployeeInput } = require('../utils/validators');
 
@@ -19,6 +20,15 @@ router.get('/employees', requireAdminAccess(), (req, res) => {
 router.post('/employees', requireAdminAccess(), (req, res) => {
   try {
     const employee = EmployeeStore.create(sanitizeEmployeeInput(req.body || {}));
+    addActivityLog({
+      action: 'employee.create',
+      entityType: 'employee',
+      entityId: employee._id,
+      entityName: employee.fullName || '',
+      actor: getRequestActor(req),
+      message: 'Добавлен сотрудник.',
+      details: { role: employee.role || '' },
+    });
     res.status(201).json(employee);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -27,10 +37,20 @@ router.post('/employees', requireAdminAccess(), (req, res) => {
 
 router.put('/employees/:id', requireAdminAccess(), (req, res) => {
   try {
-    const employee = EmployeeStore.update(req.params.id, sanitizeEmployeeInput(req.body || {}, { partial: true }));
+    const updates = sanitizeEmployeeInput(req.body || {}, { partial: true });
+    const employee = EmployeeStore.update(req.params.id, updates);
     if (!employee) {
       return res.status(404).json({ message: 'Сотрудник не найден.' });
     }
+    addActivityLog({
+      action: 'employee.update',
+      entityType: 'employee',
+      entityId: employee._id,
+      entityName: employee.fullName || '',
+      actor: getRequestActor(req),
+      message: 'Данные сотрудника обновлены.',
+      details: { changedFields: Object.keys(updates) },
+    });
     res.json(employee);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -47,6 +67,16 @@ router.delete('/employees/:id', requireAdminAccess(), (req, res) => {
   if (!deleted) {
     return res.status(404).json({ message: 'Сотрудник не найден.' });
   }
+
+  addActivityLog({
+    action: 'employee.delete',
+    entityType: 'employee',
+    entityId: employee._id,
+    entityName: employee.fullName || '',
+    actor: getRequestActor(req),
+    message: 'Сотрудник удален.',
+    details: { role: employee.role || '' },
+  });
 
   const token = String(SettingsStore.get().telegramBotToken || '').trim();
   const chatId = String(employee.telegramChatId || '').trim();

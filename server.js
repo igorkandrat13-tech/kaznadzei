@@ -14,7 +14,7 @@ dotenv.config();
 const app = express();
 app.disable('x-powered-by');
 app.use(buildSecurityHeaders);
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '5mb' }));
 
 const roles = {
   carpenter: { label: 'Столяр', icon: '🪚' },
@@ -183,6 +183,7 @@ const settingsRoutes = require('./server/routes/settingsRoutes');
 const employeeRoutes = require('./server/routes/employeeRoutes');
 const telegramRoutes = require('./server/routes/telegramRoutes');
 const authRoutes = require('./server/routes/authRoutes');
+const adminToolsRoutes = require('./server/routes/adminToolsRoutes');
 app.use('/api', authRoutes);
 app.use('/api', processStepRoutes);
 app.use('/api', orderRoutes);
@@ -191,6 +192,7 @@ app.use('/api', updateRoutes);
 app.use('/api', settingsRoutes);
 app.use('/api', employeeRoutes);
 app.use('/api', telegramRoutes);
+app.use('/api', adminToolsRoutes);
 
 app.get('/api/roles', (req, res) => {
   res.json(roles);

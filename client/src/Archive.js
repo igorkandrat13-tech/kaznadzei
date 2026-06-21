@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getOrderStatusMeta, ORDER_STATUS_OPTIONS } from './statusMeta';
+import { roleTabs } from './adminUI';
+import { renderOrderRoleSummary } from './orderStageSummary';
 
 function Archive() {
   const [orders, setOrders] = useState([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -26,6 +29,11 @@ function Archive() {
 
   const filtered = orders.filter(o => {
     if (statusFilter !== 'all' && o.overallStatus !== statusFilter) return false;
+    if (roleFilter !== 'all') {
+      const activeStage = (o.stages || []).find(stage => stage.status === 'in_progress')
+        || (o.stages || []).find(stage => stage.status !== 'completed');
+      if ((activeStage?.role || '') !== roleFilter) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       const match = (o.name + ' ' + (o.customer || '') + ' ' + (o.material || '')).toLowerCase();
@@ -68,6 +76,15 @@ function Archive() {
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Ответственный</label>
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+              <option value="all">Все</option>
+              {roleTabs.map(tab => (
+                <option key={tab.key} value={tab.key}>{tab.label.replace(/^[^\s]+\s+/, '')}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Дата по</label>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
@@ -89,6 +106,7 @@ function Archive() {
                 <th>Окончание</th>
                 <th>Время</th>
                 <th>Статус</th>
+                <th>По специалистам</th>
               </tr>
             </thead>
             <tbody>
@@ -107,9 +125,10 @@ function Archive() {
                       {getOrderStatusMeta(order.overallStatus).label}
                     </span>
                   </td>
+                  <td>{renderOrderRoleSummary(order)}</td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={9} className="empty-cell">Нет заказов</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={10} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
@@ -152,6 +171,11 @@ function Archive() {
                     <div className="mobile-order-card-label">Время</div>
                     <div className="mobile-order-card-value">{calcDuration(order.startDate, order.endDate) || '—'}</div>
                   </div>
+                </div>
+
+                <div className="mobile-order-card-note">
+                  <div className="mobile-order-card-label">По специалистам</div>
+                  <div>{renderOrderRoleSummary(order)}</div>
                 </div>
               </div>
             );

@@ -4,6 +4,7 @@ import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 import ConfirmDialog from './ConfirmDialog';
 import { roleTabs } from './adminUI';
+import { renderOrderRoleSummary } from './orderStageSummary';
 
 const EMPTY_FORM = {
   customer: '',
@@ -115,6 +116,10 @@ function Manager() {
   const [deletingManagerComment, setDeletingManagerComment] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
   const [downloadingQr, setDownloadingQr] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [lastRefreshedAt, setLastRefreshedAt] = useState('');
 
   const formErrors = validateManagerForm(form);
   const isFormValid = Object.keys(formErrors).length === 0;
@@ -142,6 +147,7 @@ function Manager() {
     const res = await apiFetch('/api/orders');
     const data = await parseJsonSafely(res);
     setOrders(Array.isArray(data) ? data : []);
+    setLastRefreshedAt(new Date().toISOString());
   };
 
   const calcDuration = (start, end) => {
@@ -151,6 +157,29 @@ function Manager() {
     const diff = Math.round((e - s) / (1000 * 60 * 60 * 24));
     return diff >= 0 ? diff + ' дн.' : '';
   };
+
+  const getCurrentResponsibleRole = (order) => {
+    const stages = Array.isArray(order?.stages) ? order.stages : [];
+    const activeStage = stages.find(stage => stage.status === 'in_progress')
+      || stages.find(stage => stage.status !== 'completed');
+    return activeStage?.role || '';
+  };
+
+  const filteredOrders = orders.filter(order => {
+    if (statusFilter !== 'all' && order.overallStatus !== statusFilter) return false;
+    if (roleFilter !== 'all' && getCurrentResponsibleRole(order) !== roleFilter) return false;
+    if (search.trim()) {
+      const query = search.trim().toLowerCase();
+      const haystack = [
+        order.customer,
+        order.name,
+        order.material,
+        order.notes,
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
 
   const handleChange = (field) => (e) => {
     const val = e.target.value;
@@ -374,6 +403,37 @@ function Manager() {
           </div>
         </div>
         {error && <div className="settings-alert settings-alert-error mt-16">{error}</div>}
+        <div className="responsive-filters">
+          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 220 }}>
+            <label>Поиск</label>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Заказчик, изделие, материал, комментарий"
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Статус</label>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="all">Все</option>
+              <option value="pending">Ожидает</option>
+              <option value="in_progress">В работе</option>
+              <option value="completed">Завершен</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Ответственный</label>
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+              <option value="all">Все</option>
+              {roleTabs.map(tab => (
+                <option key={tab.key} value={tab.key}>{tab.label.replace(/^[^\s]+\s+/, '')}</option>
+              ))}
+            </select>
+          </div>
+          <div className="filters-summary">
+            Найдено: {filteredOrders.length}{lastRefreshedAt ? ` · Обновлено ${new Date(lastRefreshedAt).toLocaleTimeString()}` : ''}
+          </div>
+        </div>
         <div className="table-scroll desktop-table-only">
           <table className="manager-orders-table">
             <thead>
@@ -387,12 +447,13 @@ function Manager() {
                 <th>Окончание</th>
                 <th>Время</th>
                 <th>Статус</th>
+                <th>По специалистам</th>
                 <th>Комментарий менеджера</th>
                 <th>Действия</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map(order => (
+              {filteredOrders.map(order => (
                 <tr key={order._id}>
                   <td>{order.customer || '—'}</td>
                   <td><strong>{order.name}</strong></td>
@@ -407,6 +468,7 @@ function Manager() {
                       {getOrderStatusMeta(order.overallStatus).label}
                     </span>
                   </td>
+                  <td>{renderOrderRoleSummary(order)}</td>
                   <td className="comment-cell">
                     <button
                       className={`manager-comment-trigger ${String(order.notes || '').trim() ? 'manager-comment-trigger-active' : ''}`}
@@ -424,13 +486,13 @@ function Manager() {
                   </td>
                 </tr>
               ))}
-              {orders.length === 0 && <tr><td colSpan={11} className="empty-cell">Нет заказов</td></tr>}
+              {filteredOrders.length === 0 && <tr><td colSpan={12} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
 
         <div className="mobile-card-list">
-          {orders.map(order => {
+          {filteredOrders.map(order => {
             const statusMeta = getOrderStatusMeta(order.overallStatus);
             return (
               <div key={order._id} className="mobile-order-card">
@@ -470,6 +532,11 @@ function Manager() {
                 </div>
 
                 <div className="mobile-order-card-note">
+                  <div className="mobile-order-card-label">По специалистам</div>
+                  <div>{renderOrderRoleSummary(order)}</div>
+                </div>
+
+                <div className="mobile-order-card-note">
                   <div className="mobile-order-card-label">Комментарий менеджера</div>
                   <button
                     className={`manager-comment-trigger ${String(order.notes || '').trim() ? 'manager-comment-trigger-active' : ''}`}
@@ -492,7 +559,7 @@ function Manager() {
               </div>
             );
           })}
-          {orders.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
+          {filteredOrders.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
         </div>
       </div>
       {showForm && (

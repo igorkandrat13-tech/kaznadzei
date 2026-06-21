@@ -1,6 +1,7 @@
 const express = require('express');
 const SettingsStore = require('../stores/settingsStore');
 const { requireAdminAccess } = require('../middleware/security');
+const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { sanitizeSettingsInput } = require('../utils/validators');
 
 const router = express.Router();
@@ -13,6 +14,14 @@ router.put('/settings', requireAdminAccess(), (req, res) => {
   try {
     const updates = sanitizeSettingsInput(req.body || {});
     const settings = SettingsStore.update(updates);
+    addActivityLog({
+      action: 'settings.update',
+      entityType: 'settings',
+      entityName: 'Общие настройки',
+      actor: getRequestActor(req),
+      message: 'Общие настройки проекта обновлены.',
+      details: { changedFields: Object.keys(updates) },
+    });
     res.json(settings);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });

@@ -2,6 +2,7 @@ const express = require('express');
 const ProcessStepStore = require('../stores/processStepStore');
 const OrderStore = require('../stores/orderStore');
 const { requireAdminAccess } = require('../middleware/security');
+const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { sanitizeProcessStepInput } = require('../utils/validators');
 const router = express.Router();
 
@@ -27,6 +28,15 @@ router.post('/processSteps', requireAdminAccess(), (req, res) => {
   try {
     const step = ProcessStepStore.create(sanitizeProcessStepInput(req.body || {}));
     OrderStore.syncStagesWithProcessSteps();
+    addActivityLog({
+      action: 'process-step.create',
+      entityType: 'processStep',
+      entityId: step._id,
+      entityName: step.stepName || '',
+      actor: getRequestActor(req),
+      message: 'Добавлен этап производства.',
+      details: { role: step.role || '', order: step.order || 0 },
+    });
     res.status(201).json(step);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -35,9 +45,19 @@ router.post('/processSteps', requireAdminAccess(), (req, res) => {
 
 router.patch('/processSteps/:id', requireAdminAccess(), (req, res) => {
   try {
-    const updated = ProcessStepStore.update(req.params.id, sanitizeProcessStepInput(req.body || {}, { partial: true }));
+    const updates = sanitizeProcessStepInput(req.body || {}, { partial: true });
+    const updated = ProcessStepStore.update(req.params.id, updates);
     if (!updated) return res.status(404).json({ message: 'Not found' });
     OrderStore.syncStagesWithProcessSteps();
+    addActivityLog({
+      action: 'process-step.update',
+      entityType: 'processStep',
+      entityId: updated._id,
+      entityName: updated.stepName || '',
+      actor: getRequestActor(req),
+      message: 'Этап производства обновлен.',
+      details: { changedFields: Object.keys(updates) },
+    });
     res.json(updated);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -46,9 +66,19 @@ router.patch('/processSteps/:id', requireAdminAccess(), (req, res) => {
 
 router.delete('/processSteps/:id', requireAdminAccess(), (req, res) => {
   try {
+    const existingStep = ProcessStepStore.findAll().find(item => item._id === req.params.id);
     const deleted = ProcessStepStore.deleteOne(req.params.id);
     if (!deleted) return res.status(404).json({ message: 'Not found' });
     OrderStore.syncStagesWithProcessSteps();
+    addActivityLog({
+      action: 'process-step.delete',
+      entityType: 'processStep',
+      entityId: req.params.id,
+      entityName: existingStep?.stepName || '',
+      actor: getRequestActor(req),
+      message: 'Этап производства удален.',
+      details: { role: existingStep?.role || '' },
+    });
     res.json({ ok: true });
   } catch (error) {
     res.status(400).json({ message: error.message });
