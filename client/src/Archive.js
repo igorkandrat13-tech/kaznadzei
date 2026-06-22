@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { apiFetch, parseJsonSafely } from './api';
 import { getOrderStatusMeta, ORDER_STATUS_OPTIONS } from './statusMeta';
-import { roleTabs } from './adminUI';
+import { useRoleConfig } from './RoleConfigContext';
 
-function getRoleShortLabel(role) {
-  return (roleTabs.find(tab => tab.key === role)?.label || role).replace(/^[^\s]+\s+/, '');
+function getRoleShortLabel(role, roleTabs = []) {
+  return roleTabs.find(tab => tab.key === role)?.plainLabel || role;
 }
 
-function getRoleProgressInfo(order, role) {
+function getRoleProgressInfo(order, role, roleTabs = []) {
   const stages = Array.isArray(order?.stages) ? order.stages : [];
   const roleStages = stages.filter(stage => stage.role === role);
   const total = roleStages.length;
-  const roleLabel = getRoleShortLabel(role);
+  const roleLabel = getRoleShortLabel(role, roleTabs);
 
   if (total === 0) {
     return {
@@ -46,6 +47,15 @@ function getRoleProgressInfo(order, role) {
       : '',
   ].filter(Boolean).join('\n');
 
+  if (isWaiting) {
+    return {
+      total,
+      text: 'Ожидание',
+      title: progressTitle,
+      className: 'role-progress-badge role-progress-badge-pending',
+    };
+  }
+
   return {
     total,
     text: `Этап ${currentStageIndex + 1} из ${total}`,
@@ -55,6 +65,7 @@ function getRoleProgressInfo(order, role) {
 }
 
 function Archive() {
+  const { roleTabs, allRoleTabs } = useRoleConfig();
   const [orders, setOrders] = useState([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -63,8 +74,8 @@ function Archive() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetch('/api/orders')
-      .then(res => res.json())
+    apiFetch('/api/orders')
+      .then(res => parseJsonSafely(res))
       .then(data => setOrders(Array.isArray(data) ? data : []))
       .catch(() => setOrders([]));
   }, []);
@@ -86,7 +97,12 @@ function Archive() {
     }
     if (search) {
       const q = search.toLowerCase();
-      const match = (o.name + ' ' + (o.customer || '') + ' ' + (o.material || '')).toLowerCase();
+      const match = [
+        o.orderNumber,
+        o.name,
+        o.customer,
+        o.material,
+      ].join(' ').toLowerCase();
       if (!match.includes(q)) return false;
     }
     if (dateFrom && o.startDate && new Date(o.startDate) < new Date(dateFrom)) return false;
@@ -95,8 +111,8 @@ function Archive() {
   });
 
   const renderArchiveRoleProgress = (order) => {
-    const roleProgress = roleTabs
-      .map(tab => ({ ...tab, progress: getRoleProgressInfo(order, tab.key) }))
+    const roleProgress = allRoleTabs
+      .map(tab => ({ ...tab, progress: getRoleProgressInfo(order, tab.key, allRoleTabs) }))
       .filter(item => item.progress.total > 0);
 
     if (roleProgress.length === 0) {
@@ -107,7 +123,7 @@ function Archive() {
       <div className="order-role-progress-list">
         {roleProgress.map(item => (
           <div key={item.key} className="order-role-progress-row">
-            <span className="order-role-progress-label">{getRoleShortLabel(item.key)}</span>
+            <span className="order-role-progress-label">{getRoleShortLabel(item.key, allRoleTabs)}</span>
             <span className={item.progress.className} title={item.progress.title}>
               {item.progress.text}
             </span>
@@ -133,7 +149,7 @@ function Archive() {
         <div className="responsive-filters">
           <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
             <label>Поиск</label>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Название, заказчик, материал" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Номер, название, заказчик, материал" />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Статус</label>
@@ -152,7 +168,7 @@ function Archive() {
             <label>Ответственный</label>
             <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
               <option value="all">Все</option>
-              {roleTabs.map(tab => (
+              {allRoleTabs.map(tab => (
                 <option key={tab.key} value={tab.key}>{tab.label.replace(/^[^\s]+\s+/, '')}</option>
               ))}
             </select>
@@ -170,6 +186,7 @@ function Archive() {
           <table className="archive-table">
             <thead>
               <tr>
+                <th>Номер заказа</th>
                 <th>Заказчик</th>
                 <th>Наименование</th>
                 <th>Кол-во</th>
@@ -185,6 +202,7 @@ function Archive() {
             <tbody>
               {filtered.map(order => (
                 <tr key={order._id}>
+                  <td><strong>{order.orderNumber || '—'}</strong></td>
                   <td>{order.customer || '—'}</td>
                   <td><strong>{order.name}</strong></td>
                   <td>{order.quantity || 1}</td>
@@ -201,7 +219,7 @@ function Archive() {
                   <td>{renderArchiveRoleProgress(order)}</td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={10} className="empty-cell">Нет заказов</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={11} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
@@ -214,12 +232,18 @@ function Archive() {
                 <div className="mobile-order-card-header">
                   <div>
                     <div className="mobile-order-card-title">{order.name}</div>
-                    <div className="mobile-order-card-subtitle">{order.customer || 'Заказчик не указан'}</div>
+                    <div className="mobile-order-card-subtitle">
+                      {order.orderNumber || 'Без номера'} · {order.customer || 'Заказчик не указан'}
+                    </div>
                   </div>
                   <span className={statusMeta.className}>{statusMeta.label}</span>
                 </div>
 
                 <div className="mobile-order-card-grid">
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Номер заказа</div>
+                    <div className="mobile-order-card-value">{order.orderNumber || '—'}</div>
+                  </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Количество</div>
                     <div className="mobile-order-card-value">{order.quantity || 1}</div>

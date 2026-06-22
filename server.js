@@ -7,7 +7,9 @@ const OrderStore = require('./server/stores/orderStore');
 const ColorStore = require('./server/stores/colorStore');
 const EmployeeStore = require('./server/stores/employeeStore');
 const SettingsStore = require('./server/stores/settingsStore');
+const RoleStore = require('./server/stores/roleStore');
 const { buildSecurityHeaders } = require('./server/middleware/security');
+const { getDefaultRoleLabels, getDefaultRoles } = require('./server/config/roles');
 
 dotenv.config();
 
@@ -15,13 +17,6 @@ const app = express();
 app.disable('x-powered-by');
 app.use(buildSecurityHeaders);
 app.use(express.json({ limit: '5mb' }));
-
-const roles = {
-  carpenter: { label: 'Столяр', icon: '🪚' },
-  designer: { label: 'Дизайнер', icon: '📐' },
-  assembler: { label: 'Комплектовщик', icon: '🔧' },
-  painter: { label: 'Маляр', icon: '🎨' },
-};
 
 const seedSteps = [
   { stepName: 'Подготовка древесины', description: 'Выбор и подготовка пиломатериала', order: 1, role: 'carpenter' },
@@ -58,6 +53,12 @@ const products = [
   { name: 'Кресло "Классик"', customer: 'Тихонов Д.П.', quantity: 2, material: 'Массив дуба', stageProgress: 4 },
 ];
 
+function buildFallbackOrderNumber(order, index) {
+  const numericPart = String(index + 1).padStart(4, '0');
+  const datePart = String(order?.orderDate || order?.createdAt || '').slice(0, 10).replace(/-/g, '');
+  return datePart ? `ORD-${datePart}-${numericPart}` : `ORD-${numericPart}`;
+}
+
 function seed() {
   if (ProcessStepStore.count() === 0) {
     ProcessStepStore.insertMany(seedSteps);
@@ -69,7 +70,7 @@ function seed() {
   }
   if (OrderStore.count() > 0) return;
   const steps = ProcessStepStore.findAll().sort((a, b) => a.order - b.order);
-  for (const p of products) {
+  for (const [index, p] of products.entries()) {
     const completedCount = Math.min(p.stageProgress, steps.length);
     const base = new Date();
     base.setDate(base.getDate() - Math.floor(Math.random() * 80) - 10);
@@ -79,6 +80,7 @@ function seed() {
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + Math.floor(Math.random() * 30) + 10);
     OrderStore.create({
+      orderNumber: `ORD-${String(index + 1).padStart(4, '0')}`,
       name: p.name,
       customer: p.customer || '',
       quantity: p.quantity || 1,
@@ -110,7 +112,8 @@ seed();
   const steps = ProcessStepStore.findAll();
   const settings = SettingsStore.get();
   let changed = false;
-  for (const o of orders) {
+  for (const [index, o] of orders.entries()) {
+    if (!o.orderNumber) { o.orderNumber = buildFallbackOrderNumber(o, index); changed = true; }
     if (!o.customer) { o.customer = ''; changed = true; }
     if (!o.quantity) { o.quantity = 1; changed = true; }
     if (!o.material) { o.material = ''; changed = true; }
@@ -156,6 +159,8 @@ seed();
     selfUpdateEnabled: Boolean(settings.selfUpdateEnabled),
     updateBranch: settings.updateBranch || 'main',
     updateRepositoryUrl: settings.updateRepositoryUrl || process.env.UPDATE_REPOSITORY_URL || process.env.GIT_REMOTE_URL || '',
+    roleLabels: settings.roleLabels || getDefaultRoleLabels(),
+    roles: settings.roles || getDefaultRoles(),
   };
   const settingsChanged = JSON.stringify(settings) !== JSON.stringify(nextSettings);
 
@@ -184,7 +189,9 @@ const employeeRoutes = require('./server/routes/employeeRoutes');
 const telegramRoutes = require('./server/routes/telegramRoutes');
 const authRoutes = require('./server/routes/authRoutes');
 const adminToolsRoutes = require('./server/routes/adminToolsRoutes');
+const roleRoutes = require('./server/routes/roleRoutes');
 app.use('/api', authRoutes);
+app.use('/api', roleRoutes);
 app.use('/api', processStepRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', colorRoutes);
@@ -193,10 +200,6 @@ app.use('/api', settingsRoutes);
 app.use('/api', employeeRoutes);
 app.use('/api', telegramRoutes);
 app.use('/api', adminToolsRoutes);
-
-app.get('/api/roles', (req, res) => {
-  res.json(roles);
-});
 
 function resolveClientBuildPath() {
   const candidates = [

@@ -1,10 +1,12 @@
 const { load, save, id } = require('./store');
 const ProcessStepStore = require('./processStepStore');
-
-const ROLE_ORDER = ['carpenter', 'assembler', 'painter', 'designer'];
+const RoleStore = require('./roleStore');
 
 function compareSteps(a, b) {
-  const roleDiff = ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role);
+  const roleOrder = RoleStore.findAll({ includeDeleted: true }).map(role => role.key);
+  const aIndex = roleOrder.indexOf(a.role);
+  const bIndex = roleOrder.indexOf(b.role);
+  const roleDiff = (aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex);
   if (roleDiff !== 0) return roleDiff;
   return a.order - b.order;
 }

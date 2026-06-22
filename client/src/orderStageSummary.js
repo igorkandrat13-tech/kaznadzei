@@ -1,5 +1,7 @@
 import React from 'react';
-import { roleTabs } from './adminUI';
+import { buildRoleTabs } from './roleConfig';
+
+const roleTabs = buildRoleTabs();
 
 export function getOrderRoleSummary(order) {
   const stages = Array.isArray(order?.stages) ? order.stages : [];

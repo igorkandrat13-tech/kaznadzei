@@ -282,7 +282,10 @@ function WorkshopPage({
               <tbody>
                 {orders.map(order => (
                   <tr key={order._id}>
-                    <td><strong>{order.name}</strong></td>
+                    <td>
+                      <div className="order-primary-title"><strong>{order.name}</strong></div>
+                      <div className="order-primary-subtitle">№ {order.orderNumber || '—'}</div>
+                    </td>
                     {steps.map(step => {
                       const stage = findStage(order, step);
                       return <td key={step._id} style={{ textAlign: 'center' }}>{stage ? renderStageButton(order, stage) : '—'}</td>;
@@ -307,7 +310,10 @@ function WorkshopPage({
             {orders.map(order => (
               <div key={order._id} className="mobile-order-card">
                 <div className="mobile-order-card-header">
-                  <div className="mobile-order-card-title">{order.name}</div>
+                  <div>
+                    <div className="mobile-order-card-title">{order.name}</div>
+                    <div className="mobile-order-card-subtitle">№ {order.orderNumber || '—'}</div>
+                  </div>
                   {renderSummaryCell !== null && (
                     <div className="mobile-order-card-summary">{getSummaryCell(order)}</div>
                   )}

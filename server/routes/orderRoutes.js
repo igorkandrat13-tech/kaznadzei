@@ -327,9 +327,10 @@ router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
 
 router.post('/orders', requireManagerAccess(), (req, res) => {
   try {
-    const { customer, name, quantity, material, notes, startDate, endDate } = sanitizeOrderInput(req.body || {});
+    const { orderNumber, customer, name, quantity, material, notes, startDate, endDate } = sanitizeOrderInput(req.body || {});
     const stages = OrderStore.buildInitialStages();
     const order = OrderStore.create({
+      orderNumber,
       customer,
       name,
       quantity,
@@ -350,6 +351,7 @@ router.post('/orders', requireManagerAccess(), (req, res) => {
       actor: getRequestActor(req),
       message: 'Создан новый заказ.',
       details: {
+        orderNumber: order.orderNumber || '',
         customer: order.customer || '',
         quantity: order.quantity || 1,
         material: order.material || '',
@@ -381,6 +383,7 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
       message: 'Заказ обновлен.',
       details: {
         changedFields: Object.keys(updates),
+        orderNumber: data.orders[idx].orderNumber || '',
         notesChanged: previousOrder.notes !== data.orders[idx].notes,
       },
     });
@@ -407,6 +410,7 @@ router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
       actor: getRequestActor(req),
       message: 'Заказ удален.',
       details: {
+        orderNumber: deletedOrder?.orderNumber || '',
         customer: deletedOrder?.customer || '',
       },
     });

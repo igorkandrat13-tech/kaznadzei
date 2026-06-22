@@ -1,22 +1,9 @@
 import React from 'react';
-
-export const roleTabs = [
-  { key: 'carpenter', label: '🪚 Столяр' },
-  { key: 'assembler', label: '🔧 Комплектовщик' },
-  { key: 'painter', label: '🎨 Маляр' },
-  { key: 'designer', label: '📐 Дизайнер' },
-];
-
-export const settingsTabs = [
-  { key: 'general', label: '⚙️ Общие' },
-  { key: 'employees', label: '👥 Сотрудники' },
-  ...roleTabs,
-  { key: 'colors', label: '🎨 Цвета' },
-];
+import { buildRoleTabs } from './roleConfig';
 
 export const emptyEmployeeForm = {
   fullName: '',
-  role: 'carpenter',
+  role: '',
   telegramUsername: '',
   password: '',
   pinCode: '',
@@ -31,7 +18,7 @@ export function HelpTooltip({ text }) {
   );
 }
 
-export function SettingsHeader({ title, onBack, activeRole, onTabChange }) {
+export function SettingsHeader({ title, onBack, activeRole, onTabChange, tabs = [] }) {
   return (
     <div className="card settings-header-card">
       <div className="settings-header-top">
@@ -39,7 +26,7 @@ export function SettingsHeader({ title, onBack, activeRole, onTabChange }) {
         <button className="btn" onClick={onBack}>← Назад к обзору</button>
       </div>
       <div className="tabs">
-        {settingsTabs.map(tab => (
+        {tabs.map(tab => (
           <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => onTabChange(tab.key)}>
             {tab.label}
           </button>
@@ -84,4 +71,14 @@ export function generatePassword() {
 
 export function generatePinCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+export function buildSettingsTabs(roles = []) {
+  return [
+    { key: 'general', label: '⚙️ Общие' },
+    { key: 'roles', label: '🧩 Роли' },
+    { key: 'employees', label: '👥 Сотрудники' },
+    ...buildRoleTabs(roles),
+    { key: 'colors', label: '🎨 Цвета' },
+  ];
 }

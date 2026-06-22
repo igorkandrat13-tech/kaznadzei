@@ -1,13 +1,16 @@
 import React from 'react';
 import WorkshopPage from './WorkshopPage';
 import { getOrderStatusMeta } from './statusMeta';
+import { useRoleConfig } from './RoleConfigContext';
 
 function Designer() {
+  const { getRoleMetaByKey } = useRoleConfig();
+  const roleMeta = getRoleMetaByKey('designer');
   return (
     <WorkshopPage
       role="designer"
-      title="📐 Дизайнерский отдел"
-      description="Разработка дизайна, чертежей и спецификаций"
+      title={`${roleMeta?.icon || '📐'} ${roleMeta?.shortTitle || 'Дизайнерский отдел'}`}
+      description={roleMeta?.description || 'Разработка дизайна, чертежей и спецификаций'}
       summaryColumnTitle="Статус"
       emptyOrdersText="Нет заказов"
       renderSummaryCell={(order, { steps, findStage }) => {
@@ -23,14 +26,17 @@ function Designer() {
       }}
       renderNoSteps={({ orders, renderCommentCell }) => (
         <>
-          <p className="text-subtle">Нет настроенных этапов для дизайнера</p>
+          <p className="text-subtle">{roleMeta?.noStepsText || 'Нет настроенных этапов для дизайнера'}</p>
           <div className="table-scroll desktop-table-only">
             <table>
               <thead><tr><th>Изделие</th><th>Статус</th><th>Примечание</th></tr></thead>
               <tbody>
                 {orders.map(order => (
                   <tr key={order._id}>
-                    <td><strong>{order.name}</strong></td>
+                    <td>
+                      <div className="order-primary-title"><strong>{order.name}</strong></div>
+                      <div className="order-primary-subtitle">№ {order.orderNumber || '—'}</div>
+                    </td>
                     <td><span className="badge badge-neutral">{getOrderStatusMeta('pending').label}</span></td>
                     <td style={{ minWidth: 160, maxWidth: 200 }}>{renderCommentCell(order)}</td>
                   </tr>
@@ -42,7 +48,10 @@ function Designer() {
             {orders.map(order => (
               <div key={order._id} className="mobile-order-card">
                 <div className="mobile-order-card-header">
-                  <div className="mobile-order-card-title">{order.name}</div>
+                  <div>
+                    <div className="mobile-order-card-title">{order.name}</div>
+                    <div className="mobile-order-card-subtitle">№ {order.orderNumber || '—'}</div>
+                  </div>
                   <span className="badge badge-neutral">{getOrderStatusMeta('pending').label}</span>
                 </div>
                 <div className="mobile-order-card-note">

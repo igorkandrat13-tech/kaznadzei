@@ -1,5 +1,5 @@
 import React from 'react';
-import { generatePassword, generatePinCode, roleTabs } from '../adminUI';
+import { generatePassword, generatePinCode } from '../adminUI';
 
 function EmployeeModal({
   mode,
@@ -9,6 +9,7 @@ function EmployeeModal({
   onUpdate,
   onClose,
   saving = false,
+  roleTabs = [],
 }) {
   if (!mode) return null;
 
@@ -36,12 +37,17 @@ function EmployeeModal({
         <div className="form-group">
           <label>Должность</label>
           <select
-            value={employeeForm?.role || 'carpenter'}
+            value={employeeForm?.role || roleTabs[0]?.key || ''}
             onChange={e => setEmployeeForm({ ...employeeForm, role: e.target.value })}
             disabled={saving}
           >
+            {roleTabs.length === 0 ? (
+              <option value="">Нет доступных ролей</option>
+            ) : null}
             {roleTabs.map(role => (
-              <option key={role.key} value={role.key}>{role.label}</option>
+              <option key={role.key} value={role.key}>
+                {role.label}{role.isDeleted ? ' (удалена)' : ''}
+              </option>
             ))}
           </select>
         </div>

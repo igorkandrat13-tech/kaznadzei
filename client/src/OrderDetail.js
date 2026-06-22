@@ -17,13 +17,7 @@ import {
   persistTelegramUnsafeUser,
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
-
-const ROLE_LABELS = {
-  carpenter: 'Столяр',
-  assembler: 'Комплектовщик',
-  painter: 'Маляр',
-  designer: 'Дизайнер',
-};
+import { useRoleConfig } from './RoleConfigContext';
 
 function isRecoverableTelegramSessionMessage(message) {
   const normalized = String(message || '').toLowerCase();
@@ -39,6 +33,7 @@ function isRecoverableTelegramSessionMessage(message) {
 }
 
 function OrderDetail() {
+  const { getRoleShortLabel } = useRoleConfig();
   const location = useLocation();
   const navigate = useNavigate();
   const { id } = useParams();
@@ -282,6 +277,7 @@ function OrderDetail() {
     ? (order?.stages || []).filter(stage => stage.role === telegramEmployee.role)
     : [];
   const detailItems = order ? [
+    { label: 'Номер заказа', value: order.orderNumber || '—' },
     { label: 'Заказчик', value: order.customer || '—' },
     { label: 'Наименование', value: order.name || '—' },
     { label: 'Кол-во изделий', value: order.quantity || 1 },
@@ -503,6 +499,7 @@ function OrderDetail() {
         <div className="table-scroll">
           <table>
             <tbody>
+              <tr><td><strong>Номер заказа</strong></td><td>{order.orderNumber || '—'}</td></tr>
               <tr><td><strong>Заказчик</strong></td><td>{order.customer || '—'}</td></tr>
               <tr><td><strong>Наименование</strong></td><td>{order.name}</td></tr>
               <tr><td><strong>Кол-во изделий</strong></td><td>{order.quantity || 1}</td></tr>
@@ -549,7 +546,7 @@ function OrderDetail() {
             <>
               <div className="telegram-comment-meta">
                 <div><strong>Сотрудник:</strong> {telegramEmployee.fullName}</div>
-                <div><strong>Роль:</strong> {ROLE_LABELS[telegramEmployee.role] || telegramEmployee.role}</div>
+                <div><strong>Роль:</strong> {getRoleShortLabel(telegramEmployee.role)}</div>
               </div>
 
               <div className="telegram-comment-label">

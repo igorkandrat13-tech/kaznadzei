@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 import ConfirmDialog from './ConfirmDialog';
-import { roleTabs } from './adminUI';
+import { useRoleConfig } from './RoleConfigContext';
 
 const EMPTY_FORM = {
+  orderNumber: '',
   customer: '',
   name: '',
   quantity: 1,
@@ -18,6 +19,10 @@ const EMPTY_FORM = {
 
 function validateManagerForm(form) {
   const errors = {};
+
+  if (!form.orderNumber.trim()) {
+    errors.orderNumber = 'Укажите номер заказа.';
+  }
 
   if (!form.name.trim()) {
     errors.name = 'Укажите наименование изделия.';
@@ -40,20 +45,20 @@ function getManagerCommentPreview(notes) {
   return text.length > 90 ? `${text.slice(0, 90)}...` : text;
 }
 
-function getInitialStageRoleTab(stages = []) {
+function getInitialStageRoleTab(stages = [], roleTabs = []) {
   const firstRoleWithStage = roleTabs.find(tab => stages.some(stage => stage.role === tab.key));
-  return firstRoleWithStage?.key || roleTabs[0]?.key || 'carpenter';
+  return firstRoleWithStage?.key || roleTabs[0]?.key || '';
 }
 
-function getRoleShortLabel(role) {
-  return (roleTabs.find(tab => tab.key === role)?.label || role).replace(/^[^\s]+\s+/, '');
+function getRoleShortLabel(role, roleTabs = []) {
+  return roleTabs.find(tab => tab.key === role)?.plainLabel || role;
 }
 
-function getRoleProgressInfo(order, role) {
+function getRoleProgressInfo(order, role, roleTabs = []) {
   const stages = Array.isArray(order?.stages) ? order.stages : [];
   const roleStages = stages.filter(stage => stage.role === role);
   const total = roleStages.length;
-  const roleLabel = getRoleShortLabel(role);
+  const roleLabel = getRoleShortLabel(role, roleTabs);
 
   if (total === 0) {
     return {
@@ -88,6 +93,15 @@ function getRoleProgressInfo(order, role) {
       : '',
   ].filter(Boolean).join('\n');
 
+  if (isWaiting) {
+    return {
+      total,
+      text: 'Ожидание',
+      title: progressTitle,
+      className: 'role-progress-badge role-progress-badge-pending',
+    };
+  }
+
   return {
     total,
     text: `Этап ${currentStageIndex + 1} из ${total}`,
@@ -102,6 +116,7 @@ function ManagerStagePanel({
   onRoleChange,
   emptyMessage,
   subtitle,
+  roleTabs,
 }) {
   const activeRoleStages = stages.filter(stage => stage.role === activeRole);
 
@@ -151,10 +166,11 @@ function ManagerStagePanel({
 }
 
 function Manager() {
+  const { roleTabs, allRoleTabs } = useRoleConfig();
   const [orders, setOrders] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formStages, setFormStages] = useState([]);
-  const [activeStageRole, setActiveStageRole] = useState(() => roleTabs[0]?.key || 'carpenter');
+  const [activeStageRole, setActiveStageRole] = useState(() => roleTabs[0]?.key || allRoleTabs[0]?.key || '');
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [qrOrderId, setQrOrderId] = useState(null);
@@ -193,6 +209,16 @@ function Manager() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeStageRole && (roleTabs[0]?.key || allRoleTabs[0]?.key)) {
+      setActiveStageRole(roleTabs[0]?.key || allRoleTabs[0]?.key || '');
+      return;
+    }
+    if (activeStageRole && allRoleTabs.length > 0 && !allRoleTabs.some(tab => tab.key === activeStageRole)) {
+      setActiveStageRole(roleTabs[0]?.key || allRoleTabs[0]?.key || '');
+    }
+  }, [activeStageRole, roleTabs, allRoleTabs]);
+
   const fetchOrders = async () => {
     const res = await apiFetch('/api/orders');
     const data = await parseJsonSafely(res);
@@ -216,8 +242,8 @@ function Manager() {
   };
 
   const renderManagerRoleProgress = (order) => {
-    const roleProgress = roleTabs
-      .map(tab => ({ ...tab, progress: getRoleProgressInfo(order, tab.key) }))
+    const roleProgress = allRoleTabs
+      .map(tab => ({ ...tab, progress: getRoleProgressInfo(order, tab.key, allRoleTabs) }))
       .filter(item => item.progress.total > 0);
 
     if (roleProgress.length === 0) {
@@ -228,7 +254,7 @@ function Manager() {
       <div className="order-role-progress-list">
         {roleProgress.map(item => (
           <div key={item.key} className="order-role-progress-row">
-            <span className="order-role-progress-label">{getRoleShortLabel(item.key)}</span>
+            <span className="order-role-progress-label">{getRoleShortLabel(item.key, allRoleTabs)}</span>
             <span className={item.progress.className} title={item.progress.title}>
               {item.progress.text}
             </span>
@@ -244,6 +270,7 @@ function Manager() {
     if (search.trim()) {
       const query = search.trim().toLowerCase();
       const haystack = [
+        order.orderNumber,
         order.customer,
         order.name,
         order.material,
@@ -265,7 +292,7 @@ function Manager() {
 
   const handleSubmit = async () => {
     if (!isFormValid) {
-      setError(formErrors.name || formErrors.quantity || formErrors.endDate || 'Проверьте заполнение формы.');
+      setError(formErrors.orderNumber || formErrors.name || formErrors.quantity || formErrors.endDate || 'Проверьте заполнение формы.');
       return;
     }
     if (savingOrder) return;
@@ -303,6 +330,7 @@ function Manager() {
   const handleEdit = (order) => {
     setError('');
     setForm({
+      orderNumber: order.orderNumber || '',
       customer: order.customer || '',
       name: order.name || '',
       quantity: order.quantity || 1,
@@ -314,7 +342,7 @@ function Manager() {
     });
     const nextStages = Array.isArray(order.stages) ? order.stages : [];
     setFormStages(nextStages);
-    setActiveStageRole(getInitialStageRoleTab(nextStages));
+    setActiveStageRole(getInitialStageRoleTab(nextStages, allRoleTabs));
     setEditingId(order._id);
     setShowForm(true);
   };
@@ -366,8 +394,10 @@ function Manager() {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
+      const qrOrder = orders.find(order => order._id === qrOrderId);
+      const safeOrderNumber = String(qrOrder?.orderNumber || qrOrderId).replace(/[^\w-]+/g, '_');
       a.href = url;
-      a.download = `order-${qrOrderId}.png`;
+      a.download = `order-${safeOrderNumber}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -383,7 +413,7 @@ function Manager() {
     if (savingOrder) return;
     setForm(EMPTY_FORM);
     setFormStages([]);
-    setActiveStageRole(roleTabs[0]?.key || 'carpenter');
+    setActiveStageRole(roleTabs[0]?.key || allRoleTabs[0]?.key || '');
     setEditingId(null);
     setShowForm(false);
     setError('');
@@ -393,7 +423,7 @@ function Manager() {
     setError('');
     setForm({ ...EMPTY_FORM, orderDate: new Date().toISOString().split('T')[0] });
     setFormStages([]);
-    setActiveStageRole(roleTabs[0]?.key || 'carpenter');
+    setActiveStageRole(roleTabs[0]?.key || allRoleTabs[0]?.key || '');
     setEditingId(null);
     setShowForm(true);
   };
@@ -466,6 +496,61 @@ function Manager() {
     event?.currentTarget?.closest('details')?.removeAttribute('open');
   };
 
+  const qrOrder = orders.find(order => order._id === qrOrderId) || null;
+
+  const renderOrderActionMenu = (order, options = {}) => {
+    const triggerClassName = [
+      'order-number-action-trigger',
+      options.mobile ? 'order-number-action-trigger-mobile' : '',
+    ].filter(Boolean).join(' ');
+
+    const menuClassName = [
+      'manager-actions-dropdown',
+      options.mobile ? 'manager-actions-dropdown-mobile' : '',
+    ].filter(Boolean).join(' ');
+
+    return (
+      <details className="manager-actions-menu order-number-action-menu">
+        <summary className={triggerClassName} aria-label={`Действия для заказа ${order.orderNumber || order.name || ''}`}>
+          <span className="order-number-action-label">{order.orderNumber || '—'}</span>
+          <span className="order-number-action-caret">▾</span>
+        </summary>
+        <div className={menuClassName}>
+          <button
+            className="btn manager-actions-dropdown-btn"
+            type="button"
+            onClick={(event) => {
+              handleEdit(order);
+              closeManagerActionMenu(event);
+            }}
+          >
+            Редактировать
+          </button>
+          <button
+            className="btn manager-actions-dropdown-btn"
+            type="button"
+            onClick={(event) => {
+              setQrOrderId(order._id);
+              closeManagerActionMenu(event);
+            }}
+          >
+            QR-код
+          </button>
+          <button
+            className="btn btn-danger manager-actions-dropdown-btn"
+            type="button"
+            onClick={(event) => {
+              requestDelete(order);
+              closeManagerActionMenu(event);
+            }}
+          >
+            Удалить
+          </button>
+        </div>
+      </details>
+    );
+  };
+
   return (
     <div>
       <div className="card">
@@ -486,7 +571,7 @@ function Manager() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Заказчик, изделие, материал, комментарий"
+              placeholder="Номер, заказчик, изделие, материал, комментарий"
             />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -502,7 +587,7 @@ function Manager() {
             <label>Ответственный</label>
             <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
               <option value="all">Все</option>
-              {roleTabs.map(tab => (
+              {allRoleTabs.map(tab => (
                 <option key={tab.key} value={tab.key}>{tab.label.replace(/^[^\s]+\s+/, '')}</option>
               ))}
             </select>
@@ -515,6 +600,7 @@ function Manager() {
           <table className="manager-orders-table">
             <thead>
               <tr>
+                <th>Номер заказа</th>
                 <th>Заказчик</th>
                 <th>Наименование</th>
                 <th>Кол-во</th>
@@ -523,15 +609,14 @@ function Manager() {
                 <th>Начало</th>
                 <th>Окончание</th>
                 <th>Время</th>
-                <th>Статус</th>
                 <th>По специалистам</th>
                 <th>Комментарий менеджера</th>
-                <th>Действия</th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.map(order => (
                 <tr key={order._id}>
+                  <td>{renderOrderActionMenu(order)}</td>
                   <td>{order.customer || '—'}</td>
                   <td><strong>{order.name}</strong></td>
                   <td>{order.quantity || 1}</td>
@@ -540,11 +625,6 @@ function Manager() {
                   <td className="date-cell">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
                   <td className="date-cell">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
                   <td>{calcDuration(order.startDate, order.endDate) || '—'}</td>
-                  <td>
-                    <span className={getOrderStatusMeta(order.overallStatus).className}>
-                      {getOrderStatusMeta(order.overallStatus).label}
-                    </span>
-                  </td>
                   <td>{renderManagerRoleProgress(order)}</td>
                   <td className="comment-cell">
                     <button
@@ -554,41 +634,9 @@ function Manager() {
                       {String(order.notes || '').trim() ? 'Есть комментарий' : 'Нет комментария'}
                     </button>
                   </td>
-                  <td>
-                    <div className="manager-actions-cell">
-                      <button className="btn btn-primary manager-action-btn" onClick={() => handleEdit(order)}>✎</button>
-                      <details className="manager-actions-menu">
-                        <summary className="btn manager-action-btn manager-action-btn-secondary manager-action-menu-toggle" aria-label="Еще действия">
-                          ⋯
-                        </summary>
-                        <div className="manager-actions-dropdown">
-                          <button
-                            className="btn manager-actions-dropdown-btn"
-                            type="button"
-                            onClick={(event) => {
-                              setQrOrderId(order._id);
-                              closeManagerActionMenu(event);
-                            }}
-                          >
-                            QR-код
-                          </button>
-                          <button
-                            className="btn btn-danger manager-actions-dropdown-btn"
-                            type="button"
-                            onClick={(event) => {
-                              requestDelete(order);
-                              closeManagerActionMenu(event);
-                            }}
-                          >
-                            Удалить
-                          </button>
-                        </div>
-                      </details>
-                    </div>
-                  </td>
                 </tr>
               ))}
-              {filteredOrders.length === 0 && <tr><td colSpan={12} className="empty-cell">Нет заказов</td></tr>}
+              {filteredOrders.length === 0 && <tr><td colSpan={11} className="empty-cell">Нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
@@ -601,12 +649,18 @@ function Manager() {
                 <div className="mobile-order-card-header">
                   <div>
                     <div className="mobile-order-card-title">{order.name}</div>
-                    <div className="mobile-order-card-subtitle">{order.customer || 'Заказчик не указан'}</div>
+                    <div className="mobile-order-card-subtitle">
+                      {order.orderNumber || 'Без номера'} · {order.customer || 'Заказчик не указан'}
+                    </div>
                   </div>
                   <span className={statusMeta.className}>{statusMeta.label}</span>
                 </div>
 
                 <div className="mobile-order-card-grid">
+                  <div className="mobile-order-card-field">
+                    <div className="mobile-order-card-label">Номер заказа</div>
+                    <div className="mobile-order-card-value">{renderOrderActionMenu(order, { mobile: true })}</div>
+                  </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Количество</div>
                     <div className="mobile-order-card-value">{order.quantity || 1}</div>
@@ -652,12 +706,6 @@ function Manager() {
                     </div>
                   ) : null}
                 </div>
-
-                <div className="mobile-order-card-actions">
-                  <button className="btn btn-primary" onClick={() => handleEdit(order)}>Редактировать</button>
-                  <button className="btn btn-secondary" onClick={() => setQrOrderId(order._id)}>QR-код</button>
-                  <button className="btn btn-danger" onClick={() => requestDelete(order)}>Удалить</button>
-                </div>
               </div>
             );
           })}
@@ -669,6 +717,16 @@ function Manager() {
           <div className="modal-window modal-window-md" onClick={e => e.stopPropagation()}>
             <div className="modal-title mb-16" style={{ fontSize: 18 }}>{editingId ? '✏️ Редактировать заказ' : '➕ Новый заказ'}</div>
             <div className="responsive-form-grid">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Номер заказа *</label>
+                <input
+                  value={form.orderNumber}
+                  onChange={handleChange('orderNumber')}
+                  placeholder="Например: 2026-015"
+                  className={formErrors.orderNumber ? 'input-invalid' : ''}
+                />
+                {formErrors.orderNumber ? <div className="field-error">{formErrors.orderNumber}</div> : null}
+              </div>
               <div className="form-group" style={{ marginBottom: 0 }}><label>Заказчик</label><input value={form.customer} onChange={handleChange('customer')} placeholder="ФИО или название" /></div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Наименование изделия *</label>
@@ -711,6 +769,7 @@ function Manager() {
                 onRoleChange={setActiveStageRole}
                 subtitle="Следите за статусами этапов по каждому специалисту."
                 emptyMessage="Для выбранного специалиста этапы пока не настроены."
+                roleTabs={allRoleTabs}
               />
             ) : (
               <div className="manager-stage-panel">
@@ -735,7 +794,7 @@ function Manager() {
       {qrOrderId && (
         <div className="modal-overlay" onClick={downloadingQr ? undefined : () => setQrOrderId(null)}>
           <div className="modal-window modal-window-sm" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-title mb-16">📱 QR-код заказа</div>
+            <div className="modal-title mb-16">📱 QR-код заказа {qrOrder?.orderNumber ? `№ ${qrOrder.orderNumber}` : ''}</div>
             <img src={`/api/orders/${qrOrderId}/qrcode`} alt="QR Code" className="qr-image" />
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setQrOrderId(null)} disabled={downloadingQr}>Закрыть</button>

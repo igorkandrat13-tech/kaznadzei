@@ -1,6 +1,7 @@
 const express = require('express');
 const ProcessStepStore = require('../stores/processStepStore');
 const OrderStore = require('../stores/orderStore');
+const RoleStore = require('../stores/roleStore');
 const { requireAdminAccess } = require('../middleware/security');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { sanitizeProcessStepInput } = require('../utils/validators');
@@ -12,7 +13,7 @@ router.get('/processSteps', (req, res) => {
     const steps = role
       ? ProcessStepStore.findByRole(role)
       : ProcessStepStore.findAll().sort((a, b) => {
-          const roles = ['carpenter', 'assembler', 'painter', 'designer'];
+          const roles = RoleStore.findAll({ includeDeleted: true }).map(item => item.key);
           const oa = roles.indexOf(a.role);
           const ob = roles.indexOf(b.role);
           if (oa !== ob) return oa - ob;

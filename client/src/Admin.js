@@ -11,16 +11,23 @@ import {
   SettingsFeedback,
   SettingsHeader,
   SettingsHint,
+  buildSettingsTabs,
   emptyEmployeeForm,
-  roleTabs,
 } from './adminUI';
 import ColorModal from './admin/ColorModal';
 import CommentsModal from './admin/CommentsModal';
 import EmployeeModal from './admin/EmployeeModal';
+import RoleModal from './admin/RoleModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
+import { useRoleConfig } from './RoleConfigContext';
 
 function Admin() {
+  const { roleTabs, allRoleTabs, refreshRoleConfig } = useRoleConfig();
+  const getDefaultEmployeeForm = (role = '') => ({
+    ...emptyEmployeeForm,
+    role: role || roleTabs[0]?.key || '',
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [activeRole, setActiveRole] = useState('general');
   const [steps, setSteps] = useState([]);
@@ -43,6 +50,7 @@ function Admin() {
     selfUpdateEnabled: false,
     updateBranch: 'main',
     updateRepositoryUrl: '',
+    roleLabels: {},
   });
   const [telegramCheckResult, setTelegramCheckResult] = useState(null);
   const [checkingTelegramBot, setCheckingTelegramBot] = useState(false);
@@ -61,11 +69,15 @@ function Admin() {
   const [adminStatusFilter, setAdminStatusFilter] = useState('all');
   const [adminRoleFilter, setAdminRoleFilter] = useState('all');
   const [employees, setEmployees] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [showDeletedRoles, setShowDeletedRoles] = useState(false);
   const [employeeModalMode, setEmployeeModalMode] = useState('');
+  const [roleModalMode, setRoleModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
   const [colorModalMode, setColorModalMode] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [savingStep, setSavingStep] = useState(false);
   const [savingColor, setSavingColor] = useState(false);
@@ -75,13 +87,26 @@ function Admin() {
   const [editStep, setEditStep] = useState(null);
   const [editColor, setEditColor] = useState(null);
   const [editEmployee, setEditEmployee] = useState(null);
+  const [editRole, setEditRole] = useState(null);
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
   const [newColor, setNewColor] = useState({ name: '', hex: '#000000' });
-  const [newEmployee, setNewEmployee] = useState(emptyEmployeeForm);
+  const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
+  const [newRole, setNewRole] = useState({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
   const backupImportInputRef = useRef(null);
-
+  const settingsTabs = buildSettingsTabs(roleTabs);
   const filteredSteps = steps.filter(s => s.role === activeRole).sort((a, b) => a.order - b.order);
   const employeeForm = employeeModalMode === 'edit' ? editEmployee : newEmployee;
+  const roleForm = roleModalMode === 'edit' ? editRole : newRole;
+  const employeeRoleTabs = (() => {
+    if (!employeeForm?.role) {
+      return roleTabs;
+    }
+    const currentRole = allRoleTabs.find(role => role.key === employeeForm.role);
+    if (!currentRole || !currentRole.isDeleted || roleTabs.some(role => role.key === currentRole.key)) {
+      return roleTabs;
+    }
+    return [...roleTabs, currentRole].sort((a, b) => a.order - b.order || a.plainLabel.localeCompare(b.plainLabel, 'ru'));
+  })();
   const setEmployeeForm = (nextValue) => {
     if (employeeModalMode === 'edit') {
       setEditEmployee(nextValue);
@@ -89,18 +114,28 @@ function Admin() {
     }
     setNewEmployee(nextValue);
   };
+  const setRoleForm = (nextValue) => {
+    if (roleModalMode === 'edit') {
+      setEditRole(nextValue);
+      return;
+    }
+    setNewRole(nextValue);
+  };
 
   useEffect(() => {
     if (!showSettings) return;
     setEditStep(null);
     setEditColor(null);
     setEditEmployee(null);
+    setEditRole(null);
     setEmployeeModalMode('');
+    setRoleModalMode('');
     setStepModalMode('');
     setColorModalMode('');
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
-    setNewEmployee(emptyEmployeeForm);
+    setNewEmployee(getDefaultEmployeeForm());
     setNewColor({ name: '', hex: '#000000' });
+    setNewRole({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
     setSettingsError('');
     setSettingsSuccess('');
   }, [activeRole, showSettings, filteredSteps.length]);
@@ -109,6 +144,7 @@ function Admin() {
     if (!showSettings) return;
     fetchAppSettings().catch(error => setSettingsError(error.message || 'Не удалось загрузить настройки.'));
     fetchEmployees().catch(error => setSettingsError(error.message || 'Не удалось загрузить сотрудников.'));
+    fetchRoles({ includeDeleted: true }).catch(error => setSettingsError(error.message || 'Не удалось загрузить роли.'));
   }, [showSettings]);
 
   useEffect(() => {
@@ -160,6 +196,18 @@ function Admin() {
     } catch { setOrders([]); }
   };
 
+  const fetchRoles = async ({ includeDeleted = false } = {}) => {
+    const res = await apiFetch(`/api/roles${includeDeleted ? '?includeDeleted=1' : ''}`);
+    const data = await parseJsonSafely(res);
+    if (!res.ok) {
+      throw new Error(data?.message || 'Не удалось загрузить роли.');
+    }
+    if (includeDeleted) {
+      setRoles(Array.isArray(data) ? data : []);
+    }
+    return Array.isArray(data) ? data : [];
+  };
+
   const fetchAppSettings = async () => {
     const res = await apiFetch('/api/settings');
     const data = await parseJsonSafely(res);
@@ -172,6 +220,7 @@ function Admin() {
       selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
       updateBranch: data?.updateBranch || 'main',
       updateRepositoryUrl: data?.updateRepositoryUrl || '',
+      roleLabels: data?.roleLabels || {},
     });
   };
 
@@ -267,7 +316,9 @@ function Admin() {
         selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
         updateBranch: data?.updateBranch || 'main',
         updateRepositoryUrl: data?.updateRepositoryUrl || '',
+        roleLabels: data?.roleLabels || {},
       });
+      await refreshRoleConfig();
       setUpdateMessage('Настройки обновления сохранены.');
       await fetchUpdateStatus();
     } catch (error) {
@@ -279,11 +330,11 @@ function Admin() {
 
   // Admin overview
   const getRoleLabel = (role) => {
-    return roleTabs.find(item => item.key === role)?.label || role;
+    return allRoleTabs.find(item => item.key === role)?.label || role;
   };
 
   const getRoleShortLabel = (role) => {
-    return getRoleLabel(role).replace(/^[^\s]+\s+/, '');
+    return allRoleTabs.find(item => item.key === role)?.plainLabel || role;
   };
 
   const getCommentPreview = (text) => {
@@ -336,6 +387,15 @@ function Admin() {
         ? `${isWaiting ? 'Ближайший этап' : 'Текущий этап'}: ${currentStage.stepName}`
         : '',
     ].filter(Boolean).join('\n');
+
+    if (isWaiting) {
+      return {
+        total,
+        text: 'Ожидание',
+        title: progressTitle,
+        className: 'role-progress-badge role-progress-badge-pending',
+      };
+    }
 
     return {
       total,
@@ -438,7 +498,9 @@ function Admin() {
         selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
         updateBranch: data?.updateBranch || 'main',
         updateRepositoryUrl: data?.updateRepositoryUrl || '',
+        roleLabels: data?.roleLabels || {},
       });
+      await refreshRoleConfig();
       setSettingsSuccess('Настройки сохранены.');
       await fetchUpdateStatus();
     } catch (error) {
@@ -659,7 +721,12 @@ function Admin() {
 
   const resetEmployeeForm = () => {
     setEditEmployee(null);
-    setNewEmployee(emptyEmployeeForm);
+    setNewEmployee(getDefaultEmployeeForm());
+  };
+
+  const resetRoleForm = () => {
+    setEditRole(null);
+    setNewRole({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
   };
 
   const openCreateEmployeeModal = () => {
@@ -670,7 +737,7 @@ function Admin() {
   };
 
   const openEditEmployeeModal = (employee) => {
-    setEditEmployee({ ...employee });
+    setEditEmployee({ ...getDefaultEmployeeForm(employee.role), ...employee });
     setEmployeeModalMode('edit');
     setSettingsError('');
     setSettingsSuccess('');
@@ -680,6 +747,33 @@ function Admin() {
     if (savingEmployee) return;
     setEmployeeModalMode('');
     resetEmployeeForm();
+  };
+
+  const openCreateRoleModal = () => {
+    resetRoleForm();
+    setRoleModalMode('create');
+    setSettingsError('');
+    setSettingsSuccess('');
+  };
+
+  const openEditRoleModal = (role) => {
+    setEditRole({
+      key: role.key,
+      label: role.plainLabel || role.label || '',
+      icon: role.icon || '🧩',
+      shortTitle: role.shortTitle || '',
+      description: role.description || '',
+      noStepsText: role.noStepsText || '',
+    });
+    setRoleModalMode('edit');
+    setSettingsError('');
+    setSettingsSuccess('');
+  };
+
+  const closeRoleModal = () => {
+    if (savingRole) return;
+    setRoleModalMode('');
+    resetRoleForm();
   };
 
   const openCreateStepModal = () => {
@@ -762,6 +856,16 @@ function Admin() {
     });
   };
 
+  const requestDeleteRole = (role) => {
+    requestDeleteAction({
+      type: 'role',
+      id: role.key,
+      title: 'Удалить роль?',
+      message: `Роль "${role.plainLabel || role.label}" будет скрыта из рабочих экранов, но останется в истории и сможет быть восстановлена.`,
+      confirmLabel: 'Пометить удаленной',
+    });
+  };
+
   const handleConfirmDelete = async () => {
     if (!confirmAction) return;
     if (confirmLoading) return;
@@ -770,6 +874,8 @@ function Admin() {
     try {
       if (confirmAction.type === 'employee') {
         success = await handleDeleteEmployee(confirmAction.id);
+      } else if (confirmAction.type === 'role') {
+        success = await handleDeleteRole(confirmAction.id);
       } else if (confirmAction.type === 'step') {
         success = await handleDeleteStep(confirmAction.id);
       } else if (confirmAction.type === 'color') {
@@ -853,6 +959,103 @@ function Admin() {
     } catch (error) {
       setSettingsError(error.message || 'Не удалось удалить сотрудника.');
       return false;
+    }
+  };
+
+  const handleAddRole = async () => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    setSavingRole(true);
+    try {
+      const res = await apiFetch('/api/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRole),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setSettingsError(data?.message || 'Не удалось добавить роль.');
+        return;
+      }
+      closeRoleModal();
+      await fetchRoles({ includeDeleted: true });
+      await refreshRoleConfig();
+      setSettingsSuccess('Роль добавлена.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось добавить роль.');
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
+  const handleUpdateRole = async () => {
+    if (!editRole?.key) return;
+    setSettingsError('');
+    setSettingsSuccess('');
+    setSavingRole(true);
+    try {
+      const res = await apiFetch(`/api/roles/${editRole.key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editRole),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setSettingsError(data?.message || 'Не удалось обновить роль.');
+        return;
+      }
+      closeRoleModal();
+      await fetchRoles({ includeDeleted: true });
+      await refreshRoleConfig();
+      setSettingsSuccess('Роль обновлена.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось обновить роль.');
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
+  const handleDeleteRole = async (roleKey) => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch(`/api/roles/${roleKey}`, { method: 'DELETE' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setSettingsError(data?.message || 'Не удалось удалить роль.');
+        return false;
+      }
+      if (activeRole === roleKey) {
+        setActiveRole('roles');
+      }
+      if (editRole?.key === roleKey) {
+        closeRoleModal();
+      }
+      await fetchRoles({ includeDeleted: true });
+      await refreshRoleConfig();
+      setSettingsSuccess('Роль помечена удаленной.');
+      return true;
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось удалить роль.');
+      return false;
+    }
+  };
+
+  const handleRestoreRole = async (roleKey) => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch(`/api/roles/${roleKey}/restore`, { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setSettingsError(data?.message || 'Не удалось восстановить роль.');
+        return;
+      }
+      await fetchRoles({ includeDeleted: true });
+      await refreshRoleConfig();
+      setSettingsSuccess('Роль восстановлена.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось восстановить роль.');
     }
   };
 
@@ -999,6 +1202,15 @@ function Admin() {
 
   const settingsCrudModals = (
     <>
+      <RoleModal
+        mode={roleModalMode}
+        roleForm={roleForm}
+        setRoleForm={setRoleForm}
+        onAdd={handleAddRole}
+        onUpdate={handleUpdateRole}
+        onClose={closeRoleModal}
+        saving={savingRole}
+      />
       <EmployeeModal
         mode={employeeModalMode}
         employeeForm={employeeForm}
@@ -1007,6 +1219,7 @@ function Admin() {
         onUpdate={handleUpdateEmployee}
         onClose={closeEmployeeModal}
         saving={savingEmployee}
+        roleTabs={employeeRoleTabs}
       />
 
       <StepModal
@@ -1050,7 +1263,7 @@ function Admin() {
     if (activeRole === 'general') {
       return (
         <div>
-          <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} />
+          <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card">
             <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
@@ -1088,6 +1301,20 @@ function Admin() {
               />
             </div>
 
+            <div className="form-group">
+              <label className="helper-label">
+                Названия ролей
+                <HelpTooltip text="Названия берутся из вкладки 'Роли'. Здесь они отображаются для контроля и всегда синхронизированы с рабочими экранами." />
+              </label>
+              <div className="order-role-summary">
+                {roleTabs.map(role => (
+                  <span key={role.key} className="order-role-summary-chip">
+                    {role.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
             <SettingsActions>
               <button className="btn btn-success" onClick={saveAppSettings} disabled={savingAppSettings}>
                 {savingAppSettings ? 'Сохранение...' : 'Сохранить настройки'}
@@ -1103,6 +1330,9 @@ function Admin() {
               </button>
               <button className="btn btn-secondary" onClick={() => fetchActivityLogs({ openModal: true })} disabled={activityLogsLoading}>
                 {activityLogsLoading ? 'Загрузка журнала...' : 'Журнал действий'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setActiveRole('roles')}>
+                Управление ролями
               </button>
               <button className="btn btn-secondary" onClick={exportBackup} disabled={exportingBackup}>
                 {exportingBackup ? 'Экспорт...' : 'Экспорт данных'}
@@ -1255,7 +1485,7 @@ function Admin() {
     if (activeRole === 'employees') {
       return (
         <div>
-          <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} />
+          <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card" style={{ marginBottom: 20 }}>
             <p>Список сотрудников для входа в Telegram-бот и работы с заказами по ролям.</p>
@@ -1329,10 +1559,102 @@ function Admin() {
       );
     }
 
+    if (activeRole === 'roles') {
+      const visibleRoles = roles.filter(role => showDeletedRoles || !role.isDeleted);
+      return (
+        <div>
+          <SettingsHeader title="⚙️ Настройки — Роли" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+
+          <div className="card" style={{ marginBottom: 20 }}>
+            <p>Здесь настраиваются производственные роли, которые используются в этапах, сотрудниках, таблицах и рабочих экранах.</p>
+            <SettingsHint>
+              <div><strong>Удаление:</strong> роль не удаляется физически, а помечается как удаленная и скрывается из рабочих разделов.</div>
+              <div><strong>Восстановление:</strong> включите показ удаленных ролей и нажмите "Восстановить".</div>
+              <div><strong>Синхронизация:</strong> названия ролей из этого списка автоматически отображаются в "Общих параметрах", таблицах, карточках сотрудников и Telegram.</div>
+            </SettingsHint>
+            <SettingsFeedback error={settingsError} success={settingsSuccess} />
+
+            <SettingsActions>
+              <button className="btn btn-success" onClick={openCreateRoleModal}>Добавить роль</button>
+              <button className="btn" onClick={() => fetchRoles({ includeDeleted: true })}>Обновить список</button>
+              <label className="checkbox-inline" style={{ marginLeft: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={showDeletedRoles}
+                  onChange={event => setShowDeletedRoles(event.target.checked)}
+                />
+                Показывать удаленные
+              </label>
+            </SettingsActions>
+
+            <div className="table-scroll desktop-table-only">
+              <table>
+                <thead><tr><th>Название</th><th>Заголовок страницы</th><th>Описание</th><th>Статус</th><th>Действия</th></tr></thead>
+                <tbody>
+                  {visibleRoles.map(role => (
+                    <tr key={role.key}>
+                      <td>
+                        <strong>{role.icon} {role.label}</strong>
+                        <div className="text-small text-subtle text-mono">{role.key}</div>
+                      </td>
+                      <td>{role.shortTitle || '—'}</td>
+                      <td>{role.description || '—'}</td>
+                      <td>{role.isDeleted ? 'Удалена' : 'Активна'}</td>
+                      <td>
+                        {role.isDeleted ? (
+                          <button className="btn btn-secondary" onClick={() => handleRestoreRole(role.key)}>Восстановить</button>
+                        ) : (
+                          <>
+                            <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditRoleModal(role)}>✎</button>
+                            <button className="btn btn-danger" onClick={() => requestDeleteRole(role)}>✕</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {visibleRoles.length === 0 && <tr><td colSpan={5} className="empty-cell">Роли не найдены</td></tr>}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mobile-card-list">
+              {visibleRoles.map(role => (
+                <div key={role.key} className="mobile-settings-card">
+                  <div className="mobile-settings-card-header">
+                    <div>
+                      <div className="mobile-order-card-title">{role.icon} {role.label}</div>
+                      <div className="mobile-order-card-subtitle">{role.shortTitle || role.key}</div>
+                    </div>
+                    <div className="mobile-order-card-subtitle">{role.isDeleted ? 'Удалена' : 'Активна'}</div>
+                  </div>
+                  <div className="mobile-settings-card-note">
+                    {role.description || 'Описание не задано'}
+                  </div>
+                  <div className="mobile-settings-card-actions">
+                    {role.isDeleted ? (
+                      <button className="btn btn-secondary" onClick={() => handleRestoreRole(role.key)}>Восстановить</button>
+                    ) : (
+                      <>
+                        <button className="btn btn-primary" onClick={() => openEditRoleModal(role)}>Редактировать</button>
+                        <button className="btn btn-danger" onClick={() => requestDeleteRole(role)}>Удалить</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {visibleRoles.length === 0 && <div className="mobile-empty-state">Роли не найдены</div>}
+            </div>
+          </div>
+
+          {settingsCrudModals}
+        </div>
+      );
+    }
+
     if (activeRole === 'colors') {
       return (
         <div>
-          <SettingsHeader title="⚙️ Настройки — Цвета покраски" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} />
+          <SettingsHeader title="⚙️ Настройки — Цвета покраски" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card">
             <p>Список доступных цветов для малярного цеха</p>
@@ -1385,7 +1707,7 @@ function Admin() {
 
     return (
       <div>
-        <SettingsHeader title={`⚙️ Настройки — ${roleTabs.find(t => t.key === activeRole)?.label}`} onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} />
+        <SettingsHeader title={`⚙️ Настройки — ${settingsTabs.find(t => t.key === activeRole)?.label}`} onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
         <div className="card">
           <p>Настройка этапов для данной роли</p>
@@ -1445,6 +1767,7 @@ function Admin() {
     if (adminSearch.trim()) {
       const query = adminSearch.trim().toLowerCase();
       const haystack = [
+        order.orderNumber,
         order.name,
         order.customer,
         order.material,
@@ -1484,7 +1807,7 @@ function Admin() {
             <input
               value={adminSearch}
               onChange={e => setAdminSearch(e.target.value)}
-              placeholder="Изделие, заказчик, материал, комментарий"
+              placeholder="Номер, изделие, заказчик, материал, комментарий"
             />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1524,7 +1847,10 @@ function Admin() {
                 const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
                 return (
                   <tr key={order._id}>
-                    <td><strong>{order.name}</strong></td>
+                    <td>
+                      <div className="order-primary-title"><strong>{order.name}</strong></div>
+                      <div className="order-primary-subtitle">№ {order.orderNumber || '—'}</div>
+                    </td>
                     {roleTabs.map(tab => {
                       const progress = getRoleProgressInfo(order, tab.key);
                       return (
@@ -1557,7 +1883,10 @@ function Admin() {
             return (
               <div key={order._id} className="mobile-order-card">
                 <div className="mobile-order-card-header">
-                  <div className="mobile-order-card-title">{order.name}</div>
+                  <div>
+                    <div className="mobile-order-card-title">{order.name}</div>
+                    <div className="mobile-order-card-subtitle">№ {order.orderNumber || '—'}</div>
+                  </div>
                   <span className={overallStatusMeta.className}>{overallStatusMeta.label}</span>
                 </div>
 
@@ -1605,6 +1934,7 @@ function Admin() {
         onAdd={handleAddEmployee}
         onUpdate={handleUpdateEmployee}
         onClose={closeEmployeeModal}
+        roleTabs={employeeRoleTabs}
       />
 
       <StepModal

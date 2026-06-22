@@ -134,10 +134,18 @@ function normalizeGitRemote(value, fieldName, options = {}) {
   }
 }
 
+function getKnownRoleKeys() {
+  const RoleStore = require('../stores/roleStore');
+  return new Set(RoleStore.findAll({ includeDeleted: true }).map(role => role.key));
+}
+
 function sanitizeOrderInput(payload, options = {}) {
   const partial = options.partial === true;
   const data = {};
 
+  if (!partial || payload.orderNumber !== undefined) {
+    data.orderNumber = normalizeString(payload.orderNumber, 'orderNumber', { required: !partial, maxLength: 80 });
+  }
   if (!partial || payload.name !== undefined) {
     data.name = normalizeString(payload.name, 'name', { required: !partial, maxLength: 120 });
   }
@@ -177,6 +185,7 @@ function sanitizeCommentInput(payload) {
 function sanitizeProcessStepInput(payload, options = {}) {
   const partial = options.partial === true;
   const data = {};
+  const allowedRoles = getKnownRoleKeys();
 
   if (!partial || payload.stepName !== undefined) {
     data.stepName = normalizeString(payload.stepName, 'stepName', { required: !partial, maxLength: 120 });
@@ -185,7 +194,11 @@ function sanitizeProcessStepInput(payload, options = {}) {
     data.description = normalizeString(payload.description, 'description', { required: !partial, maxLength: 500 });
   }
   if (!partial || payload.role !== undefined) {
-    data.role = normalizeString(payload.role, 'role', { required: !partial, maxLength: 40 });
+    const role = normalizeString(payload.role, 'role', { required: !partial, maxLength: 40 });
+    if (role && !allowedRoles.has(role)) {
+      fail('Поле "role" содержит недопустимую роль.');
+    }
+    data.role = role;
   }
   if (!partial || payload.order !== undefined) {
     data.order = normalizePositiveInt(payload.order, 'order', { required: !partial, min: 1 });
@@ -234,7 +247,7 @@ function sanitizeSettingsInput(payload, options = {}) {
 function sanitizeEmployeeInput(payload, options = {}) {
   const partial = options.partial === true;
   const data = {};
-  const allowedRoles = new Set(['carpenter', 'assembler', 'painter', 'designer']);
+  const allowedRoles = getKnownRoleKeys();
 
   if (!partial || payload.fullName !== undefined) {
     data.fullName = normalizeString(payload.fullName, 'fullName', { required: !partial, maxLength: 160 });
@@ -264,11 +277,35 @@ function sanitizeEmployeeInput(payload, options = {}) {
   return data;
 }
 
+function sanitizeRoleInput(payload, options = {}) {
+  const partial = options.partial === true;
+  const data = {};
+
+  if (!partial || payload.label !== undefined) {
+    data.label = normalizeString(payload.label, 'label', { required: !partial, maxLength: 80 });
+  }
+  if (!partial || payload.icon !== undefined) {
+    data.icon = normalizeString(payload.icon, 'icon', { maxLength: 8 });
+  }
+  if (!partial || payload.shortTitle !== undefined) {
+    data.shortTitle = normalizeString(payload.shortTitle, 'shortTitle', { maxLength: 120 });
+  }
+  if (!partial || payload.description !== undefined) {
+    data.description = normalizeString(payload.description, 'description', { maxLength: 500 });
+  }
+  if (!partial || payload.noStepsText !== undefined) {
+    data.noStepsText = normalizeString(payload.noStepsText, 'noStepsText', { maxLength: 160 });
+  }
+
+  return data;
+}
+
 module.exports = {
   sanitizeColorInput,
   sanitizeCommentInput,
   sanitizeEmployeeInput,
   sanitizeOrderInput,
   sanitizeProcessStepInput,
+  sanitizeRoleInput,
   sanitizeSettingsInput,
 };

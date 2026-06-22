@@ -1,16 +1,7 @@
 const EmployeeStore = require('../stores/employeeStore');
 const SettingsStore = require('../stores/settingsStore');
 const { sendMessage } = require('./telegramService');
-
-function getRoleLabel(role) {
-  const labels = {
-    carpenter: 'Столяр',
-    assembler: 'Комплектовщик',
-    painter: 'Маляр',
-    designer: 'Дизайнер',
-  };
-  return labels[role] || role;
-}
+const { getRoleLabel } = require('../config/roles');
 
 function getTelegramReadyEmployeesByRole(role) {
   return EmployeeStore.findAll().filter(employee => (
@@ -38,6 +29,7 @@ async function notifyOrderCreated(order) {
     firstActiveStage.role,
     [
       'Новый заказ в работе.',
+      `Номер заказа: ${order.orderNumber || 'не указан'}`,
       `Изделие: ${order.name}`,
       `Заказчик: ${order.customer || 'не указан'}`,
       `Количество: ${order.quantity || 1}`,
@@ -59,9 +51,10 @@ async function notifyNextStage(order, completedStepId) {
     nextStage.role,
     [
       'Заказ готов к следующему этапу.',
+      `Номер заказа: ${order.orderNumber || 'не указан'}`,
       `Изделие: ${order.name}`,
       `Заказчик: ${order.customer || 'не указан'}`,
-      `Следующий специалист: ${getRoleLabel(nextStage.role)}`,
+      `Следующий специалист: ${getRoleLabel(nextStage.role, SettingsStore.get().roles || SettingsStore.get().roleLabels || {})}`,
       `Этап: ${nextStage.stepName || 'без названия'}`,
     ].join('\n')
   );
@@ -74,6 +67,7 @@ async function notifyOrderCompleted(order) {
   const employees = EmployeeStore.findAll().filter(employee => String(employee.telegramChatId || '').trim());
   const text = [
     'Заказ завершен.',
+    `Номер заказа: ${order.orderNumber || 'не указан'}`,
     `Изделие: ${order.name}`,
     `Заказчик: ${order.customer || 'не указан'}`,
     `Количество: ${order.quantity || 1}`,

@@ -4,10 +4,7 @@ import Admin from './Admin';
 import Manager from './Manager';
 import Archive from './Archive';
 import OrderDetail from './OrderDetail';
-import Carpenter from './Carpenter';
-import Designer from './Designer';
-import Assembler from './Assembler';
-import Painter from './Painter';
+import RoleWorkspacePage from './RoleWorkspacePage';
 import Home from './Home';
 import TelegramScannerPage from './TelegramScannerPage';
 import {
@@ -16,8 +13,8 @@ import {
     markTelegramWebAppSession,
 } from './telegramWebApp';
 import { apiFetch } from './api';
-import { roleTabs } from './adminUI';
 import { canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
+import { RoleConfigProvider, useRoleConfig } from './RoleConfigContext';
 import './App.css';
 
 const THEME_STORAGE_KEY = 'kaznadzei.theme';
@@ -36,13 +33,6 @@ function getAuthRoleLabel(role) {
     return '';
 }
 
-const specialistRoutes = {
-    carpenter: '/carpenter',
-    assembler: '/assembler',
-    painter: '/painter',
-    designer: '/designer',
-};
-
 function AppLayout() {
     const location = useLocation();
     const routeTelegramMode = location.pathname === '/telegram-app';
@@ -50,6 +40,7 @@ function AppLayout() {
     const [theme, setTheme] = useState(() => window.localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
+    const { roleTabs } = useRoleConfig();
 
     useEffect(() => {
         if (detectTelegramWebApp()) {
@@ -151,10 +142,10 @@ function AppLayout() {
                                 {roleTabs.map(tab => (
                                     <Link
                                         key={tab.key}
-                                        to={specialistRoutes[tab.key] || '/manager'}
+                                        to={tab.route || '/manager'}
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
-                                        {tab.label.replace(/^[^\s]+\s+/, '')}
+                                        {tab.plainLabel || tab.label}
                                     </Link>
                                 ))}
                             </nav>
@@ -178,10 +169,11 @@ function AppLayout() {
                     <Route path='/manager' element={<ProtectedRoute requiredRole='manager'><Manager /></ProtectedRoute>} />
                     <Route path='/archive' element={<ProtectedRoute requiredRole='manager'><Archive /></ProtectedRoute>} />
                     <Route path='/order/:id' element={<OrderDetail />} />
-                    <Route path='/carpenter' element={<ProtectedRoute requiredRole='manager'><Carpenter /></ProtectedRoute>} />
-                    <Route path='/designer' element={<ProtectedRoute requiredRole='manager'><Designer /></ProtectedRoute>} />
-                    <Route path='/assembler' element={<ProtectedRoute requiredRole='manager'><Assembler /></ProtectedRoute>} />
-                    <Route path='/painter' element={<ProtectedRoute requiredRole='manager'><Painter /></ProtectedRoute>} />
+                    <Route path='/role/:roleKey' element={<ProtectedRoute requiredRole='manager'><RoleWorkspacePage /></ProtectedRoute>} />
+                    <Route path='/carpenter' element={<Navigate to='/role/carpenter' replace />} />
+                    <Route path='/designer' element={<Navigate to='/role/designer' replace />} />
+                    <Route path='/assembler' element={<Navigate to='/role/assembler' replace />} />
+                    <Route path='/painter' element={<Navigate to='/role/painter' replace />} />
                     <Route path='/telegram-app' element={<TelegramScannerPage />} />
                     <Route path='/' element={<Home />} />
                 </Routes>
@@ -192,9 +184,11 @@ function AppLayout() {
 
 function App() {
     return (
-        <Router>
-            <AppLayout />
-        </Router>
+        <RoleConfigProvider>
+            <Router>
+                <AppLayout />
+            </Router>
+        </RoleConfigProvider>
     );
 }
 

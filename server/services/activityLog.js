@@ -1,4 +1,6 @@
 const { id, load, save } = require('../stores/store');
+const SettingsStore = require('../stores/settingsStore');
+const { getRoleLabel } = require('../config/roles');
 
 const MAX_ACTIVITY_LOGS = 1000;
 
@@ -10,15 +12,12 @@ function buildActor(actor = {}) {
   const type = String(actor.type || '').trim() || 'system';
   const role = String(actor.role || '').trim();
   const name = String(actor.name || '').trim();
+  const settings = SettingsStore.get();
   const label = String(actor.label || '').trim()
     || name
     || (role === 'admin' ? 'Администратор'
       : role === 'manager' ? 'Менеджер'
-        : role === 'carpenter' ? 'Столяр'
-          : role === 'assembler' ? 'Комплектовщик'
-            : role === 'painter' ? 'Маляр'
-              : role === 'designer' ? 'Дизайнер'
-                : (type === 'system' ? 'Система' : type));
+        : (role ? getRoleLabel(role, settings.roles || settings.roleLabels || {}) : (type === 'system' ? 'Система' : type)));
 
   return {
     type,

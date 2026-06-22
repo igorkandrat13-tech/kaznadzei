@@ -13,6 +13,7 @@ const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
 } = require('../services/telegramWebAppAuth');
+const { getRoleLabel } = require('../config/roles');
 
 const router = express.Router();
 
@@ -37,13 +38,7 @@ function getTelegramWebAppUrl() {
 }
 
 function getEmployeeRoleLabel(role) {
-  const labels = {
-    carpenter: 'Столяр',
-    assembler: 'Комплектовщик',
-    painter: 'Маляр',
-    designer: 'Дизайнер',
-  };
-  return labels[role] || role;
+  return getRoleLabel(role, SettingsStore.get().roles || SettingsStore.get().roleLabels || {});
 }
 
 function maskTelegramValue(value, { tail = 6 } = {}) {

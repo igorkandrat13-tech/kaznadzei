@@ -1,5 +1,6 @@
 import React from 'react';
 import WorkshopPage from './WorkshopPage';
+import { useRoleConfig } from './RoleConfigContext';
 
 const fetchPainterData = async () => {
   const res = await fetch('/api/colors');
@@ -14,11 +15,13 @@ const getColorForOrder = (colors, orderId) => {
 };
 
 function Painter() {
+  const { getRoleMetaByKey } = useRoleConfig();
+  const roleMeta = getRoleMetaByKey('painter');
   return (
     <WorkshopPage
       role="painter"
-      title="🎨 Малярный цех"
-      description="Покраска и финишная обработка изделий"
+      title={`${roleMeta?.icon || '🎨'} ${roleMeta?.shortTitle || 'Малярный цех'}`}
+      description={roleMeta?.description || 'Покраска и финишная обработка изделий'}
       summaryColumnTitle={null}
       renderSummaryCell={null}
       fetchExtraData={fetchPainterData}

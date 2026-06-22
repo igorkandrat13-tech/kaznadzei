@@ -444,11 +444,14 @@ table tr:hover td {
 }
 
 .manager-actions-cell {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 0;
   flex-wrap: nowrap;
   position: relative;
+  width: 100%;
+  min-height: 34px;
 }
 
 .manager-action-btn {
@@ -462,8 +465,8 @@ table tr:hover td {
 }
 
 .manager-action-btn-secondary {
-  background: #2c3e50;
-  color: white;
+  background: linear-gradient(135deg, #213a59, #2d527c);
+  color: #edf6ff;
 }
 
 .manager-action-btn-danger {
@@ -473,10 +476,23 @@ table tr:hover td {
 
 .manager-actions-menu {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.order-number-action-menu {
+  width: 100%;
+  justify-content: flex-start;
+  margin: 0;
 }
 
 .manager-actions-menu summary {
   list-style: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .manager-actions-menu summary::-webkit-details-marker {
@@ -511,6 +527,61 @@ table tr:hover td {
   min-height: 34px;
   padding: 8px 10px;
   font-size: 12px;
+}
+
+.manager-actions-dropdown-mobile {
+  right: auto;
+  left: 0;
+}
+
+.order-number-action-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(132, 186, 248, 0.16);
+  background: rgba(18, 34, 54, 0.88);
+  color: #e7f3ff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.order-number-action-trigger:hover {
+  background: rgba(26, 47, 74, 0.96);
+  border-color: rgba(146, 207, 255, 0.28);
+}
+
+.order-number-action-trigger-mobile {
+  justify-content: space-between;
+}
+
+.order-number-action-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.order-number-action-caret {
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.86;
+}
+
+.order-primary-title {
+  line-height: 1.35;
+}
+
+.order-primary-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 .manager-stage-panel {
@@ -1352,22 +1423,22 @@ table tr:hover td {
 
 .manager-orders-table th:nth-child(1),
 .manager-orders-table td:nth-child(1) {
-  min-width: 170px;
+  min-width: 150px;
 }
 
 .manager-orders-table th:nth-child(2),
 .manager-orders-table td:nth-child(2) {
+  min-width: 170px;
+}
+
+.manager-orders-table th:nth-child(3),
+.manager-orders-table td:nth-child(3) {
   min-width: 220px;
 }
 
-.manager-orders-table th:nth-child(4),
-.manager-orders-table td:nth-child(4) {
+.manager-orders-table th:nth-child(5),
+.manager-orders-table td:nth-child(5) {
   min-width: 150px;
-}
-
-.manager-orders-table th:nth-child(9),
-.manager-orders-table td:nth-child(9) {
-  min-width: 120px;
 }
 
 .manager-orders-table th:nth-child(10),
@@ -1380,14 +1451,8 @@ table tr:hover td {
   min-width: 170px;
 }
 
-.manager-orders-table th:nth-child(12),
-.manager-orders-table td:nth-child(12) {
-  min-width: 120px;
-  width: 120px;
-}
-
 .manager-orders-table {
-  min-width: 1480px;
+  min-width: 1400px;
   table-layout: auto;
 }
 
@@ -1414,27 +1479,22 @@ table tr:hover td {
 
 .manager-orders-table td:nth-child(1),
 .manager-orders-table td:nth-child(2),
-.manager-orders-table td:nth-child(4) {
+.manager-orders-table td:nth-child(3),
+.manager-orders-table td:nth-child(5) {
   font-size: 14px;
 }
 
-.manager-orders-table td:nth-child(3),
-.manager-orders-table td:nth-child(5),
+.manager-orders-table td:nth-child(4),
 .manager-orders-table td:nth-child(6),
 .manager-orders-table td:nth-child(7),
 .manager-orders-table td:nth-child(8),
-.manager-orders-table td:nth-child(9),
-.manager-orders-table td:nth-child(12) {
+.manager-orders-table td:nth-child(9) {
   text-align: center;
 }
 
 .manager-orders-table td:nth-child(10),
 .manager-orders-table td:nth-child(11) {
   vertical-align: top;
-}
-
-.manager-orders-table td:nth-child(12) {
-  vertical-align: middle;
 }
 
 .admin-overview-table {
@@ -1632,21 +1692,26 @@ table tr:hover td {
 
 .archive-table th:nth-child(1),
 .archive-table td:nth-child(1) {
-  min-width: 170px;
+  min-width: 150px;
 }
 
 .archive-table th:nth-child(2),
 .archive-table td:nth-child(2) {
+  min-width: 170px;
+}
+
+.archive-table th:nth-child(3),
+.archive-table td:nth-child(3) {
   min-width: 210px;
 }
 
-.archive-table th:nth-child(4),
-.archive-table td:nth-child(4) {
+.archive-table th:nth-child(5),
+.archive-table td:nth-child(5) {
   min-width: 150px;
 }
 
-.archive-table th:nth-child(10),
-.archive-table td:nth-child(10) {
+.archive-table th:nth-child(11),
+.archive-table td:nth-child(11) {
   min-width: 220px;
 }
 
@@ -2961,6 +3026,23 @@ body[data-theme='light'] .manager-actions-dropdown {
   box-shadow: 0 16px 30px rgba(40, 76, 114, 0.12);
 }
 
+body[data-theme='light'] .manager-action-btn-secondary {
+  background: linear-gradient(135deg, #eef5fd, #ddeafb);
+  color: #173857;
+  border-color: rgba(111, 156, 203, 0.24);
+}
+
+body[data-theme='light'] .order-number-action-trigger {
+  background: rgba(255, 255, 255, 0.96);
+  color: #173857;
+  border-color: rgba(111, 156, 203, 0.22);
+}
+
+body[data-theme='light'] .order-number-action-trigger:hover {
+  background: rgba(240, 247, 255, 0.98);
+  border-color: rgba(99, 159, 221, 0.28);
+}
+
 body[data-theme='light'] .manager-comment-trigger-active,
 body[data-theme='light'] .comments-modal-item-active,
 body[data-theme='light'] .tab-active {
@@ -3210,10 +3292,12 @@ body[data-theme='light'] .home-auth-status-pending {
   .admin-overview-table td:first-child,
   .manager-orders-table td:nth-child(1),
   .manager-orders-table td:nth-child(2),
-  .manager-orders-table td:nth-child(4),
+  .manager-orders-table td:nth-child(3),
+  .manager-orders-table td:nth-child(5),
   .archive-table td:nth-child(1),
   .archive-table td:nth-child(2),
-  .archive-table td:nth-child(4) {
+  .archive-table td:nth-child(3),
+  .archive-table td:nth-child(5) {
     font-size: 13px;
   }
 
@@ -3234,11 +3318,6 @@ body[data-theme='light'] .home-auth-status-pending {
     font-size: 10px;
   }
 
-  .manager-orders-table th:nth-child(12),
-  .manager-orders-table td:nth-child(12) {
-    min-width: 108px;
-    width: 108px;
-  }
 }
 
 @media (max-width: 768px) {

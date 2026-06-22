@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { load, save } = require('./store');
+const { getDefaultRoleLabels, getDefaultRoles, normalizeRoleLabels, normalizeRoles } = require('../config/roles');
 
 function getDefaultSettings() {
   return {
@@ -11,11 +12,14 @@ function getDefaultSettings() {
     adminPasswordHash: '',
     managerPasswordHash: '',
     authSessionSecret: (process.env.APP_AUTH_SECRET || '').trim() || crypto.randomBytes(32).toString('hex'),
+    roleLabels: getDefaultRoleLabels(),
+    roles: getDefaultRoles(),
   };
 }
 
 function normalizeSettings(source = {}) {
   const defaults = getDefaultSettings();
+  const roles = normalizeRoles(source.roles ?? defaults.roles);
   return {
     publicBaseUrl: source.publicBaseUrl ?? defaults.publicBaseUrl,
     telegramBotToken: source.telegramBotToken ?? defaults.telegramBotToken,
@@ -25,6 +29,11 @@ function normalizeSettings(source = {}) {
     adminPasswordHash: source.adminPasswordHash ?? defaults.adminPasswordHash,
     managerPasswordHash: source.managerPasswordHash ?? defaults.managerPasswordHash,
     authSessionSecret: source.authSessionSecret ?? defaults.authSessionSecret,
+    roleLabels: roles.reduce((acc, role) => {
+      acc[role.key] = role.label;
+      return acc;
+    }, normalizeRoleLabels(source.roleLabels ?? defaults.roleLabels)),
+    roles,
   };
 }
 
@@ -35,6 +44,8 @@ function toPublicSettings(source = {}) {
     selfUpdateEnabled: Boolean(source.selfUpdateEnabled),
     updateBranch: source.updateBranch || 'main',
     updateRepositoryUrl: source.updateRepositoryUrl || '',
+    roleLabels: normalizeRoleLabels(source.roleLabels || {}),
+    roles: normalizeRoles(source.roles || []),
   };
 }
 
