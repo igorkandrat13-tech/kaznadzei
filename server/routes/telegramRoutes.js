@@ -69,21 +69,6 @@ function logTelegramWebAppDebug(event, details = {}) {
   console.log(`[telegram-webapp] ${event}`, JSON.stringify(details));
 }
 
-function getAuthorizedReplyMarkup() {
-  const webAppUrl = getTelegramWebAppUrl();
-  if (!webAppUrl) return null;
-
-  return {
-    keyboard: [[{
-      text: '📷 Сканировать QR-код',
-      web_app: { url: webAppUrl },
-    }]],
-    resize_keyboard: true,
-    is_persistent: true,
-    one_time_keyboard: false,
-  };
-}
-
 async function syncTelegramMenuButton(token, chatId) {
   const webAppUrl = getTelegramWebAppUrl();
   if (!webAppUrl) return;
@@ -100,14 +85,8 @@ async function syncTelegramMenuButton(token, chatId) {
 }
 
 async function sendAuthorizedMessage(token, chatId, text, employee) {
-  const replyMarkup = getAuthorizedReplyMarkup();
   await syncTelegramMenuButton(token, chatId);
-  await sendMessage(
-    token,
-    chatId,
-    text,
-    replyMarkup ? { reply_markup: replyMarkup } : {}
-  );
+  await sendMessage(token, chatId, text);
 }
 
 async function refreshAuthorizedEmployeeAccess(token) {
@@ -124,7 +103,7 @@ async function refreshAuthorizedEmployeeAccess(token) {
       await sendAuthorizedMessage(
         token,
         employee.telegramChatId,
-        `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку "Сканировать QR-код" ниже или кнопку меню "📷 Сканер QR".`,
+        `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку меню "📷 Сканер QR".`,
         employee
       );
       refreshedCount += 1;
@@ -170,7 +149,7 @@ async function processTelegramMessage(token, message) {
       await sendAuthorizedMessage(
         token,
         chatId,
-        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку "Сканировать QR-код", чтобы открыть камеру и перейти к заказу.`,
+        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку меню "📷 Сканер QR", чтобы открыть камеру и перейти к заказу.`,
         existingEmployee
       );
       return;
@@ -183,7 +162,7 @@ async function processTelegramMessage(token, message) {
     await sendAuthorizedMessage(
       token,
       chatId,
-      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку "Сканировать QR-код" для открытия камеры в Telegram Web App.`,
+      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку меню "📷 Сканер QR" для открытия камеры в Telegram Web App.`,
       existingEmployee
     );
     return;
