@@ -60,12 +60,14 @@ async function sendMessage(token, chatId, text, extra = {}) {
   });
 }
 
-async function setChatMenuButton(token, { chatId, text, url } = {}) {
+async function setChatMenuButton(token, { chatId, text, url, type } = {}) {
   const payload = {};
   if (chatId) {
     payload.chat_id = chatId;
   }
-  if (text && url) {
+  if (type === 'default') {
+    payload.menu_button = { type: 'default' };
+  } else if (text && url) {
     payload.menu_button = {
       type: 'web_app',
       text,

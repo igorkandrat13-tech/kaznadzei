@@ -69,24 +69,43 @@ function logTelegramWebAppDebug(event, details = {}) {
   console.log(`[telegram-webapp] ${event}`, JSON.stringify(details));
 }
 
-async function syncTelegramMenuButton(token, chatId) {
+function getAuthorizedReplyMarkup() {
   const webAppUrl = getTelegramWebAppUrl();
-  if (!webAppUrl) return;
+  if (!webAppUrl) return null;
 
-  const menuButton = {
-    text: '📷 Сканер QR',
-    url: webAppUrl,
+  return {
+    keyboard: [[{
+      text: '📷 Сканер QR',
+      web_app: { url: webAppUrl },
+    }]],
+    resize_keyboard: true,
+    is_persistent: true,
+    one_time_keyboard: false,
   };
+}
 
-  await setChatMenuButton(token, menuButton).catch(() => null);
+function getUnauthorizedReplyMarkup() {
+  return {
+    remove_keyboard: true,
+  };
+}
+
+async function clearTelegramMenuButton(token, chatId) {
+  await setChatMenuButton(token, { type: 'default' }).catch(() => null);
   if (chatId) {
-    await setChatMenuButton(token, { ...menuButton, chatId }).catch(() => null);
+    await setChatMenuButton(token, { chatId, type: 'default' }).catch(() => null);
   }
 }
 
 async function sendAuthorizedMessage(token, chatId, text, employee) {
-  await syncTelegramMenuButton(token, chatId);
-  await sendMessage(token, chatId, text);
+  const replyMarkup = getAuthorizedReplyMarkup();
+  await clearTelegramMenuButton(token, chatId);
+  await sendMessage(token, chatId, text, replyMarkup ? { reply_markup: replyMarkup } : {});
+}
+
+async function sendGuestMessage(token, chatId, text) {
+  await clearTelegramMenuButton(token, chatId);
+  await sendMessage(token, chatId, text, { reply_markup: getUnauthorizedReplyMarkup() });
 }
 
 async function refreshAuthorizedEmployeeAccess(token) {
@@ -103,7 +122,7 @@ async function refreshAuthorizedEmployeeAccess(token) {
       await sendAuthorizedMessage(
         token,
         employee.telegramChatId,
-        `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку меню "📷 Сканер QR".`,
+        `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку "📷 Сканер QR" под полем ввода.`,
         employee
       );
       refreshedCount += 1;
@@ -132,7 +151,7 @@ async function processTelegramMessage(token, message) {
   if (!chatId || !from) return;
 
   const existingEmployee = EmployeeStore.findByTelegramUserId(from.id);
-  await syncTelegramMenuButton(token, chatId);
+  await clearTelegramMenuButton(token, chatId);
   if (existingEmployee) {
     EmployeeStore.touchTelegramUser(existingEmployee._id, {
       telegramUsername: from.username ? `@${String(from.username).replace(/^@+/, '')}` : existingEmployee.telegramUsername || '',
@@ -149,12 +168,12 @@ async function processTelegramMessage(token, message) {
       await sendAuthorizedMessage(
         token,
         chatId,
-        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку меню "📷 Сканер QR", чтобы открыть камеру и перейти к заказу.`,
+        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку "📷 Сканер QR" под полем ввода, чтобы открыть камеру и перейти к заказу.`,
         existingEmployee
       );
       return;
     }
-    await sendMessage(token, chatId, 'Здравствуйте! Для первичной авторизации отправьте PIN-код, который выдал администратор.');
+    await sendGuestMessage(token, chatId, 'Здравствуйте! Для первичной авторизации отправьте PIN-код, который выдал администратор.');
     return;
   }
 
@@ -162,7 +181,7 @@ async function processTelegramMessage(token, message) {
     await sendAuthorizedMessage(
       token,
       chatId,
-      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку меню "📷 Сканер QR" для открытия камеры в Telegram Web App.`,
+      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку "📷 Сканер QR" под полем ввода для открытия камеры в Telegram Web App.`,
       existingEmployee
     );
     return;
@@ -170,12 +189,12 @@ async function processTelegramMessage(token, message) {
 
   const employee = EmployeeStore.findByPinCode(text);
   if (!employee) {
-    await sendMessage(token, chatId, 'PIN-код не найден. Проверьте его и попробуйте снова.');
+    await sendGuestMessage(token, chatId, 'PIN-код не найден. Проверьте его и попробуйте снова.');
     return;
   }
 
   if (employee.telegramUserId && String(employee.telegramUserId) !== String(from.id)) {
-    await sendMessage(token, chatId, 'Этот сотрудник уже привязан к другому Telegram-пользователю. Обратитесь к администратору.');
+    await sendGuestMessage(token, chatId, 'Этот сотрудник уже привязан к другому Telegram-пользователю. Обратитесь к администратору.');
     return;
   }
 
@@ -206,7 +225,7 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
       getBotInfo(token),
       getWebhookInfo(token).catch(() => null),
     ]);
-    await syncTelegramMenuButton(token);
+    await clearTelegramMenuButton(token);
     const refreshResult = await refreshAuthorizedEmployeeAccess(token);
 
     res.json({
@@ -242,7 +261,7 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
   try {
     const webhookUrl = getRecommendedWebhookUrl();
     await setWebhook(token, webhookUrl);
-    await syncTelegramMenuButton(token);
+    await clearTelegramMenuButton(token);
     const refreshResult = await refreshAuthorizedEmployeeAccess(token);
     const [bot, webhook] = await Promise.all([
       getBotInfo(token),
@@ -279,7 +298,7 @@ router.post('/telegram/refresh-authorized', requireAdminAccess(), async (req, re
   }
 
   try {
-    await syncTelegramMenuButton(token);
+    await clearTelegramMenuButton(token);
     const refreshResult = await refreshAuthorizedEmployeeAccess(token);
     res.json({
       ok: true,
