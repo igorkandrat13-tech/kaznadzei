@@ -69,26 +69,18 @@ function logTelegramWebAppDebug(event, details = {}) {
   console.log(`[telegram-webapp] ${event}`, JSON.stringify(details));
 }
 
-function getAuthorizedReplyMarkup() {
+function getAuthorizedMessageReplyMarkup() {
   return {
-    keyboard: [[{
-      text: '📷 Сканер QR',
-    }]],
-    resize_keyboard: true,
-    is_persistent: true,
-    one_time_keyboard: false,
+    remove_keyboard: true,
   };
 }
 
-function getScannerLaunchInlineMarkup() {
+function getTelegramMenuButtonConfig() {
   const webAppUrl = getTelegramWebAppUrl();
   if (!webAppUrl) return null;
-
   return {
-    inline_keyboard: [[{
-      text: 'Открыть сканер QR',
-      web_app: { url: webAppUrl },
-    }]],
+    text: '📷 Сканер QR',
+    url: webAppUrl,
   };
 }
 
@@ -105,27 +97,26 @@ async function clearTelegramMenuButton(token, chatId) {
   }
 }
 
+async function syncTelegramMenuButton(token, chatId) {
+  const menuButton = getTelegramMenuButtonConfig();
+  if (!menuButton) {
+    await clearTelegramMenuButton(token, chatId);
+    return;
+  }
+  await setChatMenuButton(token, menuButton).catch(() => null);
+  if (chatId) {
+    await setChatMenuButton(token, { chatId, ...menuButton }).catch(() => null);
+  }
+}
+
 async function sendAuthorizedMessage(token, chatId, text, employee) {
-  const replyMarkup = getAuthorizedReplyMarkup();
-  await clearTelegramMenuButton(token, chatId);
-  await sendMessage(token, chatId, text, replyMarkup ? { reply_markup: replyMarkup } : {});
+  await syncTelegramMenuButton(token, chatId);
+  await sendMessage(token, chatId, text, { reply_markup: getAuthorizedMessageReplyMarkup() });
 }
 
 async function sendGuestMessage(token, chatId, text) {
   await clearTelegramMenuButton(token, chatId);
   await sendMessage(token, chatId, text, { reply_markup: getUnauthorizedReplyMarkup() });
-}
-
-async function sendScannerLaunchMessage(token, chatId) {
-  const replyMarkup = getScannerLaunchInlineMarkup();
-  if (!replyMarkup) {
-    await sendAuthorizedMessage(token, chatId, 'Сканер QR сейчас недоступен. Проверьте публичный адрес приложения в настройках.');
-    return;
-  }
-  await clearTelegramMenuButton(token, chatId);
-  await sendMessage(token, chatId, 'Нажмите кнопку ниже, чтобы открыть сканер QR.', {
-    reply_markup: replyMarkup,
-  });
 }
 
 async function refreshAuthorizedEmployeeAccess(token) {
@@ -142,7 +133,7 @@ async function refreshAuthorizedEmployeeAccess(token) {
       await sendAuthorizedMessage(
         token,
         employee.telegramChatId,
-        `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку "📷 Сканер QR" под полем ввода.`,
+        `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку меню "📷 Сканер QR".`,
         employee
       );
       refreshedCount += 1;
@@ -171,7 +162,11 @@ async function processTelegramMessage(token, message) {
   if (!chatId || !from) return;
 
   const existingEmployee = EmployeeStore.findByTelegramUserId(from.id);
-  await clearTelegramMenuButton(token, chatId);
+  if (existingEmployee) {
+    await syncTelegramMenuButton(token, chatId);
+  } else {
+    await clearTelegramMenuButton(token, chatId);
+  }
   if (existingEmployee) {
     EmployeeStore.touchTelegramUser(existingEmployee._id, {
       telegramUsername: from.username ? `@${String(from.username).replace(/^@+/, '')}` : existingEmployee.telegramUsername || '',
@@ -188,7 +183,7 @@ async function processTelegramMessage(token, message) {
       await sendAuthorizedMessage(
         token,
         chatId,
-        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку "📷 Сканер QR" под полем ввода.`,
+        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку меню "📷 Сканер QR".`,
         existingEmployee
       );
       return;
@@ -198,14 +193,10 @@ async function processTelegramMessage(token, message) {
   }
 
   if (existingEmployee) {
-    if (text === '📷 Сканер QR') {
-      await sendScannerLaunchMessage(token, chatId);
-      return;
-    }
     await sendAuthorizedMessage(
       token,
       chatId,
-      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку "📷 Сканер QR" под полем ввода.`,
+      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку меню "📷 Сканер QR".`,
       existingEmployee
     );
     return;
@@ -233,7 +224,7 @@ async function processTelegramMessage(token, message) {
   await sendAuthorizedMessage(
     token,
     chatId,
-    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь используйте кнопку "📷 Сканер QR" под полем ввода.`,
+    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь используйте кнопку меню "📷 Сканер QR".`,
     linkedEmployee
   );
 }
@@ -249,7 +240,7 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
       getBotInfo(token),
       getWebhookInfo(token).catch(() => null),
     ]);
-    await clearTelegramMenuButton(token);
+    await syncTelegramMenuButton(token);
     const refreshResult = await refreshAuthorizedEmployeeAccess(token);
 
     res.json({
@@ -285,7 +276,7 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
   try {
     const webhookUrl = getRecommendedWebhookUrl();
     await setWebhook(token, webhookUrl);
-    await clearTelegramMenuButton(token);
+    await syncTelegramMenuButton(token);
     const refreshResult = await refreshAuthorizedEmployeeAccess(token);
     const [bot, webhook] = await Promise.all([
       getBotInfo(token),
@@ -322,7 +313,7 @@ router.post('/telegram/refresh-authorized', requireAdminAccess(), async (req, re
   }
 
   try {
-    await clearTelegramMenuButton(token);
+    await syncTelegramMenuButton(token);
     const refreshResult = await refreshAuthorizedEmployeeAccess(token);
     res.json({
       ok: true,
