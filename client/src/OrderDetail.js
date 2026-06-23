@@ -112,7 +112,7 @@ function OrderDetail() {
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
     const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
-    const currentSessionToken = hasTelegramAuthPayload ? '' : getActiveTelegramSessionToken();
+    const currentSessionToken = getActiveTelegramSessionToken();
     if (!hasTelegramAuthPayload && !currentSessionToken) {
       if (!telegramAuthResolved) {
         setSessionLoading(true);
