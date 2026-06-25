@@ -4,66 +4,9 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { useRoleConfig } from './RoleConfigContext';
+import { ORDER_STAGE_LEGEND } from './orderStageLegend';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
-const ORDER_STAGE_LEGEND = [
-  {
-    key: 'unprocessed',
-    storeName: 'Легенда этапов: заказ не обработан',
-    label: 'Заказ не обработан',
-    description: 'Начальный статус без запуска работ',
-    defaultHex: '#FFFFFF',
-  },
-  {
-    key: 'brief',
-    storeName: 'Легенда этапов: ТЗ',
-    label: 'ТЗ',
-    description: 'ТЗ от заказчика, ТЗ для чертежей',
-    defaultHex: '#D3EAD9',
-  },
-  {
-    key: 'drafting',
-    storeName: 'Легенда этапов: чертежи',
-    label: 'Чертежи',
-    description: 'Начерчен, Расписан, Размеры, Готово ТЗ',
-    defaultHex: '#A8D7B6',
-  },
-  {
-    key: 'stock',
-    storeName: 'Легенда этапов: заготовка',
-    label: 'Заготовка',
-    description: 'Набирается заготовка, Укомплектовано',
-    defaultHex: '#99E5FF',
-  },
-  {
-    key: 'assembly',
-    storeName: 'Легенда этапов: сборка',
-    label: 'Сборка',
-    description: 'Собирается, Шлифуется',
-    defaultHex: '#F4C2A4',
-  },
-  {
-    key: 'paint',
-    storeName: 'Легенда этапов: покраска',
-    label: 'Покраска',
-    description: 'Красится',
-    defaultHex: '#BDA6D5',
-  },
-  {
-    key: 'postpaint',
-    storeName: 'Легенда этапов: после покраски',
-    label: 'После покраски',
-    description: 'Сборка после покраски',
-    defaultHex: '#C37C8E',
-  },
-  {
-    key: 'ready',
-    storeName: 'Легенда этапов: готово',
-    label: 'Готово',
-    description: 'Готов, Доставка/монтаж',
-    defaultHex: '#1D7638',
-  },
-];
 
 function getCommentPreview(comments = []) {
   if (!Array.isArray(comments) || comments.length === 0) return '—';
@@ -247,9 +190,6 @@ function OrdersWorkspace() {
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
   const [qrPreview, setQrPreview] = useState(null);
-  const [showLegendEditor, setShowLegendEditor] = useState(false);
-  const [legendColorDrafts, setLegendColorDrafts] = useState({});
-  const [savingLegendKey, setSavingLegendKey] = useState('');
 
   const fetchOrders = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) {
@@ -371,31 +311,6 @@ function OrdersWorkspace() {
 
   const formErrors = useMemo(() => validateOrderForm(orderForm), [orderForm]);
   const isFormValid = useMemo(() => !hasOrderFormErrors(formErrors), [formErrors]);
-  const legendItems = useMemo(() => {
-    return ORDER_STAGE_LEGEND.map((item) => {
-      const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
-      return {
-        ...item,
-        colorId: savedColor?._id || '',
-        hex: savedColor?.hex || item.defaultHex,
-      };
-    });
-  }, [colors]);
-
-  useEffect(() => {
-    setLegendColorDrafts(current => {
-      const next = { ...current };
-      let changed = false;
-      legendItems.forEach((item) => {
-        if (!next[item.key]) {
-          next[item.key] = item.hex;
-          changed = true;
-        }
-      });
-      return changed ? next : current;
-    });
-  }, [legendItems]);
-
   const handleDownloadQr = async (orderId, itemId, fileNameBase) => {
     const downloadKey = `${orderId}:${itemId}`;
     setDownloadingKey(downloadKey);
@@ -455,41 +370,6 @@ function OrdersWorkspace() {
   </body>
 </html>`);
     printWindow.document.close();
-  };
-
-  const handleLegendDraftChange = (key) => (event) => {
-    const value = event.target.value;
-    setLegendColorDrafts(current => ({
-      ...current,
-      [key]: value,
-    }));
-  };
-
-  const saveLegendColor = async (legendKey) => {
-    if (!isAdmin) return;
-    const legendItem = legendItems.find(item => item.key === legendKey);
-    if (!legendItem) return;
-    const nextHex = String(legendColorDrafts[legendKey] || legendItem.hex || '').trim();
-    if (!nextHex || nextHex === legendItem.hex) return;
-
-    setSavingLegendKey(legendKey);
-    setError('');
-    try {
-      const endpoint = legendItem.colorId ? `/api/colors/${legendItem.colorId}` : '/api/colors';
-      const method = legendItem.colorId ? 'PUT' : 'POST';
-      const res = await apiFetch(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: legendItem.storeName, hex: nextHex }),
-      });
-      if (!res.ok) {
-        setError(await getErrorMessage(res, 'Не удалось сохранить цвет легенды.'));
-        return;
-      }
-      await fetchColors();
-    } finally {
-      setSavingLegendKey('');
-    }
   };
 
   const openCreateForm = () => {
@@ -909,45 +789,6 @@ function OrdersWorkspace() {
           <div className="filters-summary">Строк: {rows.length}</div>
         </div>
 
-        <div className="orders-stage-legend">
-          <div className="orders-stage-legend-header">
-            <div>
-              <div className="orders-stage-legend-title">Легенда этапов</div>
-            </div>
-            {isAdmin ? (
-              <button className="btn btn-secondary btn-small" onClick={() => setShowLegendEditor(current => !current)}>
-                {showLegendEditor ? 'Скрыть редактирование' : 'Редактировать цвета'}
-              </button>
-            ) : null}
-          </div>
-          <div className="orders-stage-legend-grid">
-            {legendItems.map(item => {
-              const draftHex = legendColorDrafts[item.key] || item.hex;
-              const isSaving = savingLegendKey === item.key;
-              const isDirty = draftHex !== item.hex;
-              return (
-                <div key={item.key} className="orders-stage-legend-item">
-                  <span className="orders-stage-legend-swatch" style={{ background: draftHex }} />
-                  <div className="orders-stage-legend-content">
-                    <div className="orders-stage-legend-item-title">{item.label}</div>
-                    <div className="orders-stage-legend-item-subtitle">{item.description}</div>
-                  </div>
-                  {isAdmin && showLegendEditor ? (
-                    <div className="orders-stage-legend-editor">
-                      <input type="color" value={draftHex} onChange={handleLegendDraftChange(item.key)} disabled={isSaving} />
-                      <button className="btn btn-secondary btn-small" onClick={() => saveLegendColor(item.key)} disabled={!isDirty || isSaving}>
-                        {isSaving ? '...' : 'Сохранить'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="orders-stage-legend-hex">{item.hex}</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
         {Object.keys(inlineDrafts).length > 0 ? (
           <div className="excel-bulk-toolbar">
             <div className="filters-summary">Изменено строк: {Object.keys(inlineDrafts).length}</div>
@@ -1029,7 +870,6 @@ function OrdersWorkspace() {
                     <tr key={key} className={isInlineEditing ? 'unified-orders-row-editing' : ''}>
                       <td className="sticky-col sticky-col-1">
                         <div className="xlsx-order-cell">
-                          <div className="xlsx-order-cell-top">
                           {isAdmin ? (
                             <input
                               className="table-inline-input"
@@ -1042,37 +882,36 @@ function OrdersWorkspace() {
                               {order.orderNumber || '—'}
                             </Link>
                           )}
-                            <details className="manager-actions-menu order-number-action-menu">
-                              <summary className="order-number-action-trigger" aria-label={`Действия для заказа ${order.orderNumber || ''}`}>
-                                <span className="order-number-action-label">...</span>
-                              </summary>
-                              <div className="manager-actions-dropdown">
-                                {isInlineEditing ? (
-                                  <>
-                                    <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { saveInlineRow(key); closeActionMenu(event); }} disabled={isInlineSaving}>
-                                      {isInlineSaving ? 'Сохранение...' : 'Сохранить'}
-                                    </button>
-                                    <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { cancelInlineEdit(key); closeActionMenu(event); }} disabled={isInlineSaving}>
-                                      Отменить
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openInlineEdit({ key, order, item }); closeActionMenu(event); }}>
-                                    Быстрое редактирование
+                          <details className="manager-actions-menu order-number-action-menu">
+                            <summary className="order-number-action-trigger" aria-label={`Действия для заказа ${order.orderNumber || ''}`}>
+                              <span className="order-number-action-label">...</span>
+                            </summary>
+                            <div className="manager-actions-dropdown">
+                              {isInlineEditing ? (
+                                <>
+                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { saveInlineRow(key); closeActionMenu(event); }} disabled={isInlineSaving}>
+                                    {isInlineSaving ? 'Сохранение...' : 'Сохранить'}
                                   </button>
-                                )}
-                                <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openQrPreview(order, item); closeActionMenu(event); }}>
-                                  QR-код
+                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { cancelInlineEdit(key); closeActionMenu(event); }} disabled={isInlineSaving}>
+                                    Отменить
+                                  </button>
+                                </>
+                              ) : (
+                                <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openInlineEdit({ key, order, item }); closeActionMenu(event); }}>
+                                  Быстрое редактирование
                                 </button>
-                                <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openEditForm(order); closeActionMenu(event); }}>
-                                  Весь заказ
-                                </button>
-                                <button className="btn btn-danger manager-actions-dropdown-btn" type="button" onClick={(event) => { requestDelete(order); closeActionMenu(event); }}>
-                                  Удалить
-                                </button>
-                              </div>
-                            </details>
-                          </div>
+                              )}
+                              <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openQrPreview(order, item); closeActionMenu(event); }}>
+                                QR-код
+                              </button>
+                              <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openEditForm(order); closeActionMenu(event); }}>
+                                Весь заказ
+                              </button>
+                              <button className="btn btn-danger manager-actions-dropdown-btn" type="button" onClick={(event) => { requestDelete(order); closeActionMenu(event); }}>
+                                Удалить
+                              </button>
+                            </div>
+                          </details>
                           <div className="xlsx-order-cell-meta">
                             {commentPreview !== '—' ? (
                               <span className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</span>

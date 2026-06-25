@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
@@ -19,6 +19,7 @@ import RoleModal from './admin/RoleModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
 import { useRoleConfig } from './RoleConfigContext';
+import { ORDER_STAGE_LEGEND } from './orderStageLegend';
 
 function Admin() {
   const { roleTabs, allRoleTabs, refreshRoleConfig } = useRoleConfig();
@@ -90,6 +91,15 @@ function Admin() {
   const filteredSteps = steps.filter(s => s.role === activeRole).sort((a, b) => a.order - b.order);
   const employeeForm = employeeModalMode === 'edit' ? editEmployee : newEmployee;
   const roleForm = roleModalMode === 'edit' ? editRole : newRole;
+  const legendItems = useMemo(() => {
+    return ORDER_STAGE_LEGEND.map((item) => {
+      const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
+      return {
+        ...item,
+        hex: savedColor?.hex || item.defaultHex,
+      };
+    });
+  }, [colors]);
   const employeeRoleTabs = (() => {
     if (!employeeForm?.role) {
       return roleTabs;
@@ -1523,6 +1533,26 @@ function Admin() {
           <div className="card">
             <p>Здесь настраиваются цвета справочника и легенды этапов для единой таблицы заказов.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
+            <div className="orders-stage-legend">
+              <div className="orders-stage-legend-header">
+                <div>
+                  <div className="orders-stage-legend-title">Легенда этапов</div>
+                  <div className="orders-stage-legend-subtitle">Цвета ниже применяются к этапам в таблице заказов.</div>
+                </div>
+              </div>
+              <div className="orders-stage-legend-grid">
+                {legendItems.map(item => (
+                  <div key={item.key} className="orders-stage-legend-item">
+                    <span className="orders-stage-legend-swatch" style={{ background: item.hex }} />
+                    <div className="orders-stage-legend-content">
+                      <div className="orders-stage-legend-item-title">{item.label}</div>
+                      <div className="orders-stage-legend-item-subtitle">{item.description}</div>
+                    </div>
+                    <div className="orders-stage-legend-hex">{item.hex}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
             <SettingsActions>
               <button className="btn btn-success" onClick={openCreateColorModal}>Добавить цвет</button>
               <button className="btn" onClick={fetchColors}>Обновить список</button>

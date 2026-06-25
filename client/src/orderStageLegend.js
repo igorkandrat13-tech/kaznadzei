@@ -1,0 +1,58 @@
+export const ORDER_STAGE_LEGEND = [
+  {
+    key: 'unprocessed',
+    storeName: 'Легенда этапов: заказ не обработан',
+    label: 'Заказ не обработан',
+    description: 'Начальный статус без запуска работ',
+    defaultHex: '#FFFFFF',
+  },
+  {
+    key: 'brief',
+    storeName: 'Легенда этапов: ТЗ',
+    label: 'ТЗ',
+    description: 'ТЗ от заказчика, ТЗ для чертежей',
+    defaultHex: '#D3EAD9',
+  },
+  {
+    key: 'drafting',
+    storeName: 'Легенда этапов: чертежи',
+    label: 'Чертежи',
+    description: 'Начерчен, Расписан, Размеры, Готово ТЗ',
+    defaultHex: '#A8D7B6',
+  },
+  {
+    key: 'stock',
+    storeName: 'Легенда этапов: заготовка',
+    label: 'Заготовка',
+    description: 'Набирается заготовка, Укомплектовано',
+    defaultHex: '#99E5FF',
+  },
+  {
+    key: 'assembly',
+    storeName: 'Легенда этапов: сборка',
+    label: 'Сборка',
+    description: 'Собирается, Шлифуется',
+    defaultHex: '#F4C2A4',
+  },
+  {
+    key: 'paint',
+    storeName: 'Легенда этапов: покраска',
+    label: 'Покраска',
+    description: 'Красится',
+    defaultHex: '#BDA6D5',
+  },
+  {
+    key: 'postpaint',
+    storeName: 'Легенда этапов: после покраски',
+    label: 'После покраски',
+    description: 'Сборка после покраски',
+    defaultHex: '#C37C8E',
+  },
+  {
+    key: 'ready',
+    storeName: 'Легенда этапов: готово',
+    label: 'Готово',
+    description: 'Готов, Доставка/монтаж',
+    defaultHex: '#1D7638',
+  },
+];
