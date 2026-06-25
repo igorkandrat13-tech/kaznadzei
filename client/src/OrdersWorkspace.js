@@ -7,6 +7,64 @@ import { useRoleConfig } from './RoleConfigContext';
 import { getOrderStatusMeta } from './statusMeta';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
+const ORDER_STAGE_LEGEND = [
+  {
+    key: 'unprocessed',
+    storeName: 'Легенда этапов: заказ не обработан',
+    label: 'Заказ не обработан',
+    description: 'Начальный статус без запуска работ',
+    defaultHex: '#FFFFFF',
+  },
+  {
+    key: 'brief',
+    storeName: 'Легенда этапов: ТЗ',
+    label: 'ТЗ',
+    description: 'ТЗ от заказчика, ТЗ для чертежей',
+    defaultHex: '#D3EAD9',
+  },
+  {
+    key: 'drafting',
+    storeName: 'Легенда этапов: чертежи',
+    label: 'Чертежи',
+    description: 'Начерчен, Расписан, Размеры, Готово ТЗ',
+    defaultHex: '#A8D7B6',
+  },
+  {
+    key: 'stock',
+    storeName: 'Легенда этапов: заготовка',
+    label: 'Заготовка',
+    description: 'Набирается заготовка, Укомплектовано',
+    defaultHex: '#99E5FF',
+  },
+  {
+    key: 'assembly',
+    storeName: 'Легенда этапов: сборка',
+    label: 'Сборка',
+    description: 'Собирается, Шлифуется',
+    defaultHex: '#F4C2A4',
+  },
+  {
+    key: 'paint',
+    storeName: 'Легенда этапов: покраска',
+    label: 'Покраска',
+    description: 'Красится',
+    defaultHex: '#BDA6D5',
+  },
+  {
+    key: 'postpaint',
+    storeName: 'Легенда этапов: после покраски',
+    label: 'После покраски',
+    description: 'Сборка после покраски',
+    defaultHex: '#C37C8E',
+  },
+  {
+    key: 'ready',
+    storeName: 'Легенда этапов: готово',
+    label: 'Готово',
+    description: 'Готов, Доставка/монтаж',
+    defaultHex: '#1D7638',
+  },
+];
 
 function getItemRoleSummary(item, role) {
   const stages = Array.isArray(item?.stages) ? item.stages.filter(stage => stage.role === role) : [];
@@ -214,7 +272,9 @@ function hasOrderFormErrors(formErrors) {
 function OrdersWorkspace() {
   const authRole = getAppAuthRole();
   const { allRoleTabs } = useRoleConfig();
+  const isAdmin = canAccessRole('admin', authRole);
   const [orders, setOrders] = useState([]);
+  const [colors, setColors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -231,6 +291,9 @@ function OrdersWorkspace() {
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
+  const [showLegendEditor, setShowLegendEditor] = useState(false);
+  const [legendColorDrafts, setLegendColorDrafts] = useState({});
+  const [savingLegendKey, setSavingLegendKey] = useState('');
 
   const fetchOrders = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) {
@@ -257,6 +320,23 @@ function OrdersWorkspace() {
   useEffect(() => {
     fetchOrders({ showLoader: true });
   }, [fetchOrders]);
+
+  const fetchColors = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/colors');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось загрузить цвета легенды.');
+      }
+      setColors(Array.isArray(data) ? data : []);
+    } catch {
+      setColors([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchColors();
+  }, [fetchColors]);
 
   useEffect(() => {
     const refresh = () => {
@@ -335,6 +415,30 @@ function OrdersWorkspace() {
 
   const formErrors = useMemo(() => validateOrderForm(orderForm), [orderForm]);
   const isFormValid = useMemo(() => !hasOrderFormErrors(formErrors), [formErrors]);
+  const legendItems = useMemo(() => {
+    return ORDER_STAGE_LEGEND.map((item) => {
+      const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
+      return {
+        ...item,
+        colorId: savedColor?._id || '',
+        hex: savedColor?.hex || item.defaultHex,
+      };
+    });
+  }, [colors]);
+
+  useEffect(() => {
+    setLegendColorDrafts(current => {
+      const next = { ...current };
+      let changed = false;
+      legendItems.forEach((item) => {
+        if (!next[item.key]) {
+          next[item.key] = item.hex;
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [legendItems]);
 
   const handleDownloadQr = async (orderId, itemId, fileNameBase) => {
     const downloadKey = `${orderId}:${itemId}`;
@@ -357,6 +461,41 @@ function OrdersWorkspace() {
       window.alert(downloadError.message || 'Не удалось скачать QR-код.');
     } finally {
       setDownloadingKey('');
+    }
+  };
+
+  const handleLegendDraftChange = (key) => (event) => {
+    const value = event.target.value;
+    setLegendColorDrafts(current => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const saveLegendColor = async (legendKey) => {
+    if (!isAdmin) return;
+    const legendItem = legendItems.find(item => item.key === legendKey);
+    if (!legendItem) return;
+    const nextHex = String(legendColorDrafts[legendKey] || legendItem.hex || '').trim();
+    if (!nextHex || nextHex === legendItem.hex) return;
+
+    setSavingLegendKey(legendKey);
+    setError('');
+    try {
+      const endpoint = legendItem.colorId ? `/api/colors/${legendItem.colorId}` : '/api/colors';
+      const method = legendItem.colorId ? 'PUT' : 'POST';
+      const res = await apiFetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: legendItem.storeName, hex: nextHex }),
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось сохранить цвет легенды.'));
+        return;
+      }
+      await fetchColors();
+    } finally {
+      setSavingLegendKey('');
     }
   };
 
@@ -766,16 +905,44 @@ function OrdersWorkspace() {
           <div className="filters-summary">Строк: {rows.length}</div>
         </div>
 
-        <div className="excel-legend">
-          <span className="excel-legend-label">Легенда:</span>
-          <span className="excel-stage-chip excel-stage-chip-pending">Ожидание</span>
-          <span className="excel-stage-chip excel-stage-chip-progress">Частично</span>
-          <span className="excel-stage-chip excel-stage-chip-completed">Готово</span>
-          {visibleTableRoles.map(role => (
-            <span key={role.key} className={`excel-stage-chip excel-stage-chip-active excel-stage-chip-role-${role.key}`}>
-              {role.plainLabel || role.label}
-            </span>
-          ))}
+        <div className="orders-stage-legend">
+          <div className="orders-stage-legend-header">
+            <div>
+              <div className="orders-stage-legend-title">Легенда этапов</div>
+              <div className="orders-stage-legend-subtitle">Цвета вынесены отдельно от таблицы и повторяют этапы из Excel-файла заказчика.</div>
+            </div>
+            {isAdmin ? (
+              <button className="btn btn-secondary btn-small" onClick={() => setShowLegendEditor(current => !current)}>
+                {showLegendEditor ? 'Скрыть редактирование' : 'Редактировать цвета'}
+              </button>
+            ) : null}
+          </div>
+          <div className="orders-stage-legend-grid">
+            {legendItems.map(item => {
+              const draftHex = legendColorDrafts[item.key] || item.hex;
+              const isSaving = savingLegendKey === item.key;
+              const isDirty = draftHex !== item.hex;
+              return (
+                <div key={item.key} className="orders-stage-legend-item">
+                  <span className="orders-stage-legend-swatch" style={{ background: draftHex }} />
+                  <div className="orders-stage-legend-content">
+                    <div className="orders-stage-legend-item-title">{item.label}</div>
+                    <div className="orders-stage-legend-item-subtitle">{item.description}</div>
+                  </div>
+                  {isAdmin && showLegendEditor ? (
+                    <div className="orders-stage-legend-editor">
+                      <input type="color" value={draftHex} onChange={handleLegendDraftChange(item.key)} disabled={isSaving} />
+                      <button className="btn btn-secondary btn-small" onClick={() => saveLegendColor(item.key)} disabled={!isDirty || isSaving}>
+                        {isSaving ? '...' : 'Сохранить'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="orders-stage-legend-hex">{item.hex}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {Object.keys(inlineDrafts).length > 0 ? (

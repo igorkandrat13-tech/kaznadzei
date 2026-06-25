@@ -1518,10 +1518,10 @@ function Admin() {
     if (activeRole === 'colors') {
       return (
         <div>
-          <SettingsHeader title="⚙️ Настройки — Цвета покраски" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+          <SettingsHeader title="⚙️ Настройки — Цвета и легенда этапов" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card">
-            <p>Список доступных цветов для малярного цеха</p>
+            <p>Здесь настраиваются цвета справочника и легенды этапов для единой таблицы заказов.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
             <SettingsActions>
               <button className="btn btn-success" onClick={openCreateColorModal}>Добавить цвет</button>

@@ -21,7 +21,7 @@ function ColorModal({
         <div className="modal-header">
           <div>
             <div className="modal-title">{isEdit ? 'Редактировать цвет' : 'Добавить цвет'}</div>
-            <div className="modal-subtitle">Настройка палитры для малярного цеха.</div>
+            <div className="modal-subtitle">Настройка цветов справочника и легенды этапов.</div>
           </div>
           <button className="btn btn-small modal-close-btn" onClick={onClose} disabled={saving}>✕</button>
         </div>
