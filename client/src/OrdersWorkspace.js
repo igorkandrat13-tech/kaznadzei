@@ -773,7 +773,6 @@ function OrdersWorkspace() {
 
   const exportRowsToCsv = () => {
     const headers = [
-      '№',
       'Номер заказа',
       'Заказчик',
       'Помещение',
@@ -796,9 +795,8 @@ function OrdersWorkspace() {
 
     const csvLines = [
       headers.map(escapeCsvValue).join(';'),
-      ...rows.map(({ order, item }, index) => {
+      ...rows.map(({ order, item }) => {
         const cells = [
-          index + 1,
           order.orderNumber || '',
           order.customer || '',
           item.room || '',
@@ -981,10 +979,9 @@ function OrdersWorkspace() {
             <table className="orders-table unified-orders-table">
               <thead>
                 <tr className="xlsx-header-row xlsx-header-row-primary">
-                  <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">№</th>
-                  <th className="sticky-col sticky-col-2 xlsx-header-primary-cell">Номер заказа</th>
-                  <th className="sticky-col sticky-col-3 xlsx-header-primary-cell">Заказчик</th>
-                  <th className="sticky-col sticky-col-4 xlsx-header-primary-cell">Помещение</th>
+                  <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">Номер заказа</th>
+                  <th className="sticky-col sticky-col-2 xlsx-header-primary-cell">Заказчик</th>
+                  <th className="sticky-col sticky-col-3 xlsx-header-primary-cell">Помещение</th>
                   <th className="xlsx-header-primary-cell">№ помещения</th>
                   <th className="xlsx-header-primary-cell">№ изделия в заказе</th>
                   <th className="xlsx-header-primary-cell">Кол-во изделй</th>
@@ -1002,10 +999,9 @@ function OrdersWorkspace() {
                   <th className="xlsx-header-primary-cell">Время изготовления</th>
                 </tr>
                 <tr className="xlsx-header-row xlsx-header-row-secondary">
-                  <th className="sticky-col sticky-col-1 xlsx-header-secondary-cell">&nbsp;</th>
-                  <th className="sticky-col sticky-col-2 xlsx-header-secondary-cell">Заказ не обработан</th>
-                  <th className="sticky-col sticky-col-3 xlsx-header-secondary-cell">&nbsp;</th>
-                  <th className="sticky-col sticky-col-4 xlsx-header-secondary-cell">ТЗ от заказчика</th>
+                  <th className="sticky-col sticky-col-1 xlsx-header-secondary-cell">Заказ не обработан</th>
+                  <th className="sticky-col sticky-col-2 xlsx-header-secondary-cell">&nbsp;</th>
+                  <th className="sticky-col sticky-col-3 xlsx-header-secondary-cell">ТЗ от заказчика</th>
                   <th className="xlsx-header-secondary-cell">&nbsp;</th>
                   <th className="xlsx-header-secondary-cell">ТЗ для чертежей</th>
                   <th className="xlsx-header-secondary-cell">Начерчен</th>
@@ -1024,15 +1020,14 @@ function OrdersWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ key, order, item }, index) => {
+                {rows.map(({ key, order, item }) => {
                   const inlineDraft = inlineDrafts[key] || null;
                   const isInlineEditing = Boolean(inlineDraft);
                   const isInlineSaving = inlineSavingKey === key;
                   const commentPreview = getCommentPreview(item.comments);
                   return (
                     <tr key={key} className={isInlineEditing ? 'unified-orders-row-editing' : ''}>
-                      <td className="sticky-col sticky-col-1 xlsx-row-index-cell">{index + 1}</td>
-                      <td className="sticky-col sticky-col-2">
+                      <td className="sticky-col sticky-col-1">
                         <div className="xlsx-order-cell">
                           <div className="xlsx-order-cell-top">
                           {isAdmin ? (
@@ -1049,8 +1044,7 @@ function OrdersWorkspace() {
                           )}
                             <details className="manager-actions-menu order-number-action-menu">
                               <summary className="order-number-action-trigger" aria-label={`Действия для заказа ${order.orderNumber || ''}`}>
-                                <span className="order-number-action-label">Действия</span>
-                                <span className="order-number-action-caret">▾</span>
+                                <span className="order-number-action-label">...</span>
                               </summary>
                               <div className="manager-actions-dropdown">
                                 {isInlineEditing ? (
@@ -1086,8 +1080,8 @@ function OrdersWorkspace() {
                           </div>
                         </div>
                       </td>
-                      <td className="sticky-col sticky-col-3">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.customer} onChange={handleInlineChange(key, 'customer')} /> : (order.customer || '—')}</td>
-                      <td className="sticky-col sticky-col-4">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
+                      <td className="sticky-col sticky-col-2">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.customer} onChange={handleInlineChange(key, 'customer')} /> : (order.customer || '—')}</td>
+                      <td className="sticky-col sticky-col-3">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
                       <td>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
@@ -1126,7 +1120,7 @@ function OrdersWorkspace() {
                 })}
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={19} className="empty-cell">Нет изделий по выбранным фильтрам</td>
+                    <td colSpan={18} className="empty-cell">Нет изделий по выбранным фильтрам</td>
                   </tr>
                 ) : null}
               </tbody>
