@@ -3383,6 +3383,89 @@ body[data-theme='light'] .archive-table td:nth-child(9) {
   color: #294766;
 }
 
+body[data-theme='light'] .unified-orders-table th {
+  background: linear-gradient(180deg, rgba(228, 239, 249, 0.99), rgba(220, 234, 247, 0.98));
+  color: #315370;
+  border-bottom-color: rgba(103, 149, 196, 0.26);
+}
+
+body[data-theme='light'] .unified-orders-table .xlsx-header-secondary-cell {
+  background: linear-gradient(180deg, rgba(237, 245, 252, 0.99), rgba(230, 240, 250, 0.98));
+  color: #456684;
+}
+
+body[data-theme='light'] .sticky-col {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 1px 0 0 rgba(103, 149, 196, 0.14);
+}
+
+body[data-theme='light'] .unified-orders-row-editing {
+  background: rgba(210, 229, 248, 0.48);
+}
+
+body[data-theme='light'] .orders-stage-legend {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 249, 255, 0.9));
+  border-color: rgba(113, 158, 207, 0.22);
+  box-shadow: 0 16px 34px rgba(40, 76, 114, 0.1);
+}
+
+body[data-theme='light'] .orders-stage-legend-title,
+body[data-theme='light'] .orders-stage-legend-item-title {
+  color: #173857;
+}
+
+body[data-theme='light'] .orders-stage-legend-item {
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(240, 247, 255, 0.96));
+  border-color: rgba(113, 158, 207, 0.18);
+}
+
+body[data-theme='light'] .orders-stage-legend-item-subtitle,
+body[data-theme='light'] .orders-stage-legend-hex {
+  color: rgba(45, 75, 105, 0.9);
+}
+
+body[data-theme='light'] .orders-stage-legend-swatch {
+  border-color: rgba(62, 95, 130, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.46), 0 2px 8px rgba(70, 101, 136, 0.08);
+}
+
+body[data-theme='light'] .orders-stage-legend-editor input[type='color'] {
+  border-color: rgba(111, 156, 203, 0.24);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+body[data-theme='light'] .order-link-button {
+  background: linear-gradient(135deg, #e6f1ff, #f3f8ff);
+  border-color: rgba(111, 156, 203, 0.24);
+  color: #173857;
+}
+
+body[data-theme='light'] .order-link-button:hover {
+  background: linear-gradient(135deg, #d9ebff, #eef6ff);
+  color: #102b45;
+}
+
+body[data-theme='light'] .xlsx-order-cell-comment,
+body[data-theme='light'] .xlsx-empty-cell {
+  color: rgba(45, 75, 105, 0.88);
+}
+
+body[data-theme='light'] .table-inline-input,
+body[data-theme='light'] .table-inline-textarea {
+  background: rgba(255, 255, 255, 0.98);
+  color: #102b45;
+  border-color: rgba(111, 156, 203, 0.24);
+}
+
+body[data-theme='light'] .table-inline-input::placeholder,
+body[data-theme='light'] .table-inline-textarea::placeholder {
+  color: rgba(79, 109, 138, 0.56);
+}
+
+body[data-theme='light'] .table-inline-link {
+  color: #2167a6;
+}
+
 body[data-theme='light'] .admin-overview-table th:first-child {
   background: rgba(237, 245, 252, 0.98);
 }
