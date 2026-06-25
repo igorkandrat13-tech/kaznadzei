@@ -140,6 +140,11 @@ export function getOrderPathFromQr(rawValue) {
   const value = String(rawValue || '').trim();
   if (!value) return '';
 
+  const itemMatch = value.match(/\/order\/([^/?#]+)\/item\/([^/?#]+)/i);
+  if (itemMatch?.[1] && itemMatch?.[2]) {
+    return `/order/${decodeURIComponent(itemMatch[1])}/item/${decodeURIComponent(itemMatch[2])}`;
+  }
+
   const directMatch = value.match(/\/order\/([^/?#]+)/i);
   if (directMatch?.[1]) {
     return `/order/${decodeURIComponent(directMatch[1])}`;

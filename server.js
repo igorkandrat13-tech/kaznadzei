@@ -59,6 +59,122 @@ function buildFallbackOrderNumber(order, index) {
   return datePart ? `ORD-${datePart}-${numericPart}` : `ORD-${numericPart}`;
 }
 
+function buildDemoStages(progress = 0) {
+  const steps = OrderStore.buildInitialStages({ activateFirstStage: true });
+  return steps.map((stage, index) => {
+    if (index < progress) {
+      return {
+        ...stage,
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+      };
+    }
+    if (index === progress) {
+      return {
+        ...stage,
+        status: 'in_progress',
+        completedAt: null,
+      };
+    }
+    return {
+      ...stage,
+      status: 'pending',
+      completedAt: null,
+    };
+  });
+}
+
+function seedDemoMultiItemOrders() {
+  const existingOrderNumbers = new Set(OrderStore.findAll().map(order => String(order.orderNumber || '').trim()));
+  const demoOrders = [
+    {
+      orderNumber: 'DEMO-2026-KITCHEN',
+      customer: 'Тестовый заказчик: Кухня',
+      orderDate: '2026-06-22',
+      startDate: '2026-06-24',
+      endDate: '2026-07-20',
+      items: [
+        {
+          itemNumber: '1',
+          productNumber: 'K-001',
+          room: 'Кухня',
+          roomNumber: '01',
+          name: 'Кухонный шкаф верхний',
+          quantity: 3,
+          material: 'МДФ крашеный',
+          deliveryDate: '2026-07-18',
+          packageName: 'Фурнитура Blum',
+          photoLink: 'https://example.com/demo-kitchen-top',
+          notes: 'Тестовое изделие для проверки inline-редактирования',
+          stages: buildDemoStages(2),
+        },
+        {
+          itemNumber: '2',
+          productNumber: 'K-002',
+          room: 'Кухня',
+          roomNumber: '01',
+          name: 'Кухонный остров',
+          quantity: 1,
+          material: 'Шпон дуба',
+          deliveryDate: '2026-07-18',
+          packageName: 'Столешница + опоры',
+          photoLink: 'https://example.com/demo-kitchen-island',
+          notes: 'Проверка item-level QR и Telegram-комментариев',
+          stages: buildDemoStages(1),
+        },
+      ],
+    },
+    {
+      orderNumber: 'DEMO-2026-HOUSE',
+      customer: 'Тестовый заказчик: Дом',
+      orderDate: '2026-06-23',
+      startDate: '2026-06-26',
+      endDate: '2026-07-28',
+      items: [
+        {
+          itemNumber: '1',
+          productNumber: 'H-014',
+          room: 'Гостиная',
+          roomNumber: '12',
+          name: 'Тумба под ТВ',
+          quantity: 1,
+          material: 'ЛДСП Egger',
+          deliveryDate: '2026-07-25',
+          packageName: 'Корпус + фасады',
+          photoLink: 'https://example.com/demo-tv-stand',
+          notes: 'Проверка отображения нескольких помещений в одном заказе',
+          stages: buildDemoStages(3),
+        },
+        {
+          itemNumber: '2',
+          productNumber: 'H-015',
+          room: 'Спальня',
+          roomNumber: '15',
+          name: 'Шкаф-купе',
+          quantity: 1,
+          material: 'ЛДСП + зеркало',
+          deliveryDate: '2026-07-26',
+          packageName: 'Раздвижная система',
+          photoLink: 'https://example.com/demo-wardrobe',
+          notes: 'Строка для проверки прямого редактирования в таблице',
+          stages: buildDemoStages(0),
+        },
+      ],
+    },
+  ];
+
+  let seededCount = 0;
+  for (const demoOrder of demoOrders) {
+    if (existingOrderNumbers.has(demoOrder.orderNumber)) continue;
+    OrderStore.create(demoOrder);
+    seededCount += 1;
+  }
+
+  if (seededCount > 0) {
+    console.log(`${seededCount} demo multi-item orders seeded`);
+  }
+}
+
 function seed() {
   if (ProcessStepStore.count() === 0) {
     ProcessStepStore.insertMany(seedSteps);
@@ -104,6 +220,7 @@ function seed() {
 }
 
 seed();
+seedDemoMultiItemOrders();
 
 // Migrate existing orders — add new fields if missing
 (function migrate() {
@@ -111,7 +228,7 @@ seed();
   const employees = EmployeeStore.findAll();
   const steps = ProcessStepStore.findAll();
   const settings = SettingsStore.get();
-  let changed = false;
+  let changed = OrderStore.ensureOrders(require('./server/stores/store').load());
   for (const [index, o] of orders.entries()) {
     if (!o.orderNumber) { o.orderNumber = buildFallbackOrderNumber(o, index); changed = true; }
     if (!o.customer) { o.customer = ''; changed = true; }
@@ -123,7 +240,7 @@ seed();
     if (!o.endDate) { o.endDate = ''; changed = true; }
     if (!Array.isArray(o.comments)) { o.comments = []; changed = true; }
     if (!Array.isArray(o.stages) || o.stages.length === 0) {
-      o.stages = OrderStore.buildInitialStages();
+      o.stages = OrderStore.buildInitialStages({ activateFirstStage: true });
       changed = true;
     }
     if (Array.isArray(o.stages)) {

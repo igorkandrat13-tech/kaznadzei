@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import Admin from './Admin';
-import Manager from './Manager';
 import Archive from './Archive';
 import OrderDetail from './OrderDetail';
 import RoleWorkspacePage from './RoleWorkspacePage';
+import OrdersWorkspace from './OrdersWorkspace';
 import Home from './Home';
 import TelegramScannerPage from './TelegramScannerPage';
 import {
@@ -133,9 +133,9 @@ function AppLayout() {
                     <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
                         <nav className="App-header-nav App-header-nav-primary">
                             <Link to="/" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
-                            {canAccessRole('manager', authRole) && <Link to="/manager" onClick={() => setMobileMenuOpen(false)}>Менеджер</Link>}
+                            {canAccessRole('manager', authRole) && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
                             {canAccessRole('manager', authRole) && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
-                            {canAccessRole('admin', authRole) && <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>Админ</Link>}
+                            {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
                         </nav>
                         {canAccessRole('manager', authRole) ? (
                             <nav className="App-header-nav App-header-nav-specialists">
@@ -165,9 +165,12 @@ function AppLayout() {
             )}
             <div className={telegramMode ? 'container container-telegram' : 'container'}>
                 <Routes>
-                    <Route path='/admin' element={<ProtectedRoute requiredRole='admin'><Admin /></ProtectedRoute>} />
-                    <Route path='/manager' element={<ProtectedRoute requiredRole='manager'><Manager /></ProtectedRoute>} />
+                    <Route path='/settings' element={<ProtectedRoute requiredRole='admin'><Admin /></ProtectedRoute>} />
+                    <Route path='/admin' element={<Navigate to='/settings' replace />} />
+                    <Route path='/orders' element={<ProtectedRoute requiredRole='manager'><OrdersWorkspace /></ProtectedRoute>} />
+                    <Route path='/manager' element={<Navigate to='/orders' replace />} />
                     <Route path='/archive' element={<ProtectedRoute requiredRole='manager'><Archive /></ProtectedRoute>} />
+                    <Route path='/order/:id/item/:itemId' element={<OrderDetail />} />
                     <Route path='/order/:id' element={<OrderDetail />} />
                     <Route path='/role/:roleKey' element={<ProtectedRoute requiredRole='manager'><RoleWorkspacePage /></ProtectedRoute>} />
                     <Route path='/carpenter' element={<Navigate to='/role/carpenter' replace />} />

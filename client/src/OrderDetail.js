@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
-import { getNextStageStatusMeta, getOrderStatusMeta, getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
+import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 import {
   buildTelegramOrderPath,
   closeTelegramWebApp,
@@ -36,7 +36,7 @@ function OrderDetail() {
   const { getRoleShortLabel } = useRoleConfig();
   const location = useLocation();
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id, itemId } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [telegramEmployee, setTelegramEmployee] = useState(null);
@@ -47,12 +47,12 @@ function OrderDetail() {
   const [commentError, setCommentError] = useState('');
   const [savingComment, setSavingComment] = useState(false);
   const [commentEditing, setCommentEditing] = useState(false);
-  const [savingStageId, setSavingStageId] = useState('');
-  const [stageError, setStageError] = useState('');
+  const [scanActivationError, setScanActivationError] = useState('');
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
+  const activatedItemKeyRef = useRef('');
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
@@ -268,20 +268,30 @@ function OrderDetail() {
     return diff >= 0 ? diff + ' дн.' : '—';
   };
 
-  const statusMeta = getOrderStatusMeta(order?.overallStatus);
-  const managerNotes = String(order?.notes || '').trim();
+  const selectedItem = order
+    ? ((Array.isArray(order.items) ? order.items : []).find(item => item.itemId === itemId)
+      || (Array.isArray(order.items) ? order.items[0] : null))
+    : null;
+  const statusMeta = getOrderStatusMeta(selectedItem?.overallStatus || order?.overallStatus);
+  const managerNotes = String(selectedItem?.notes || order?.notes || '').trim();
   const currentRoleComment = telegramEmployee?.role
-    ? (order?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
+    ? (selectedItem?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
     : '';
   const roleStages = telegramEmployee?.role
-    ? (order?.stages || []).filter(stage => stage.role === telegramEmployee.role)
+    ? (selectedItem?.stages || []).filter(stage => stage.role === telegramEmployee.role)
     : [];
   const detailItems = order ? [
     { label: 'Номер заказа', value: order.orderNumber || '—' },
     { label: 'Заказчик', value: order.customer || '—' },
-    { label: 'Наименование', value: order.name || '—' },
-    { label: 'Кол-во изделий', value: order.quantity || 1 },
-    { label: 'Материал', value: order.material || '—' },
+    { label: 'Изделие', value: selectedItem?.name || order.name || '—' },
+    { label: '№ изделия в заказе', value: selectedItem?.itemNumber || '—' },
+    { label: 'Артикул изделия', value: selectedItem?.productNumber || '—' },
+    { label: 'Помещение', value: selectedItem?.room || '—' },
+    { label: '№ помещения', value: selectedItem?.roomNumber || '—' },
+    { label: 'Кол-во', value: selectedItem?.quantity || order.quantity || 1 },
+    { label: 'Материал', value: selectedItem?.material || order.material || '—' },
+    { label: 'Комплектация', value: selectedItem?.packageName || '—' },
+    { label: 'Отгрузка до', value: selectedItem?.deliveryDate ? new Date(selectedItem.deliveryDate).toLocaleDateString() : '—' },
     { label: 'Дата заказа', value: order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—' },
     { label: 'Начало изготовления', value: order.startDate ? new Date(order.startDate).toLocaleDateString() : '—' },
     { label: 'Окончание изготовления', value: order.endDate ? new Date(order.endDate).toLocaleDateString() : '—' },
@@ -291,6 +301,45 @@ function OrderDetail() {
     if (!telegramMode || !telegramEmployee || commentEditing) return;
     setCommentDraft(currentRoleComment);
   }, [commentEditing, currentRoleComment, telegramEmployee, telegramMode]);
+
+  useEffect(() => {
+    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
+    const activationKey = `${id}:${selectedItem.itemId}:${telegramEmployee.role}`;
+    if (activatedItemKeyRef.current === activationKey) return;
+
+    const activateItem = async () => {
+      const sessionToken = getActiveTelegramSessionToken();
+      const res = await apiFetch(`/api/orders/${id}/telegram-item-scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken,
+          itemId: selectedItem.itemId,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, 'Не удалось отметить изделие как взятое в работу.'));
+      }
+      activatedItemKeyRef.current = activationKey;
+      setScanActivationError('');
+      await fetchOrder();
+    };
+
+    activateItem().catch(error => {
+      setScanActivationError(error.message || 'Не удалось отметить изделие как взятое в работу.');
+    });
+  }, [
+    fetchOrder,
+    getActiveTelegramSessionToken,
+    id,
+    selectedItem?.itemId,
+    telegramEmployee,
+    telegramInitData,
+    telegramMode,
+    telegramUnsafeUser,
+  ]);
 
   if (loading) {
     return (
@@ -329,6 +378,7 @@ function OrderDetail() {
           initData: telegramInitData,
           unsafeUser: telegramUnsafeUser,
           sessionToken,
+                  itemId: selectedItem?.itemId || '',
           text,
         }),
       });
@@ -343,40 +393,6 @@ function OrderDetail() {
       setCommentEditing(false);
     } finally {
       setSavingComment(false);
-    }
-  };
-
-  const updateTelegramStage = async (stage) => {
-    const sessionToken = getActiveTelegramSessionToken();
-    if (!telegramMode || !telegramEmployee || (!telegramInitData && !telegramUnsafeUser?.id && !sessionToken)) {
-      setStageError('Не удалось определить ваш профиль для смены статуса.');
-      return;
-    }
-
-    const nextStatus = STAGE_STATUS_CYCLE[stage.status] || 'pending';
-    setSavingStageId(stage.stepId);
-    setStageError('');
-    try {
-      const res = await apiFetch(`/api/orders/${id}/telegram-stage-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
-          sessionToken,
-          stepId: stage.stepId,
-          status: nextStatus,
-        }),
-      });
-
-      if (!res.ok) {
-        setStageError(await getErrorMessage(res, 'Не удалось изменить статус этапа.'));
-        return;
-      }
-
-      await fetchOrder();
-    } finally {
-      setSavingStageId('');
     }
   };
 
@@ -396,9 +412,9 @@ function OrderDetail() {
 
   return (
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
-      <h2>{telegramMode ? `Заказ: ${order.name}` : `📋 Заказ: ${order.name}`}</h2>
+      <h2>{telegramMode ? `Изделие: ${selectedItem?.name || order.name}` : `📋 Изделие: ${selectedItem?.name || order.name}`}</h2>
       {telegramMode && (
-        <p className="telegram-order-subtitle">Актуальная информация по заказу.</p>
+        <p className="telegram-order-subtitle">Актуальная информация по изделию в заказе.</p>
       )}
 
       {telegramMode && (
@@ -421,11 +437,17 @@ function OrderDetail() {
       {telegramMode ? (
         <>
           <div className="telegram-order-summary">
-            <div className="telegram-order-summary-label">Статус заказа</div>
+            <div className="telegram-order-summary-label">Статус изделия</div>
             <div className="telegram-order-summary-value">
               <span className={statusMeta.className}>{statusMeta.label}</span>
             </div>
           </div>
+
+          {scanActivationError && (
+            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+              {scanActivationError}
+            </div>
+          )}
 
           <div className="telegram-order-grid">
             {detailItems.map((item) => (
@@ -447,17 +469,11 @@ function OrderDetail() {
           </div>
 
           <div className="telegram-stage-section">
-            <div className="telegram-comment-title">Статус по вашей роли</div>
-
-            {stageError && (
-              <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
-                {stageError}
-              </div>
-            )}
+            <div className="telegram-comment-title">Этапы по вашей роли</div>
 
             {!sessionLoading && !telegramEmployee && (
               <div className="telegram-comment-placeholder">
-                После проверки доступа здесь появятся кнопки смены статуса.
+                После проверки доступа здесь появится статус изделия по вашей роли.
               </div>
             )}
 
@@ -471,7 +487,6 @@ function OrderDetail() {
               <div className="telegram-stage-list">
                 {roleStages.map((stage) => {
                   const stageMeta = getStageStatusMeta(stage.status);
-                  const nextStageMeta = getNextStageStatusMeta(stage.status);
                   return (
                     <div key={stage.stepId} className="telegram-stage-card">
                       <div className="telegram-stage-card-top">
@@ -481,13 +496,9 @@ function OrderDetail() {
                         </div>
                         <span className={stageMeta.className}>{stageMeta.label}</span>
                       </div>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => updateTelegramStage(stage)}
-                        disabled={savingStageId === stage.stepId}
-                      >
-                        {savingStageId === stage.stepId ? 'Обновление...' : `Перевести в "${nextStageMeta.label}"`}
-                      </button>
+                      <div className="telegram-comment-placeholder" style={{ marginTop: 10 }}>
+                        При открытии изделия по QR статус "В работе" выставляется автоматически. Из Telegram доступен только комментарий.
+                      </div>
                     </div>
                   );
                 })}
@@ -501,10 +512,15 @@ function OrderDetail() {
             <tbody>
               <tr><td><strong>Номер заказа</strong></td><td>{order.orderNumber || '—'}</td></tr>
               <tr><td><strong>Заказчик</strong></td><td>{order.customer || '—'}</td></tr>
-              <tr><td><strong>Наименование</strong></td><td>{order.name}</td></tr>
-              <tr><td><strong>Кол-во изделий</strong></td><td>{order.quantity || 1}</td></tr>
-              <tr><td><strong>Материал</strong></td><td>{order.material || '—'}</td></tr>
-              <tr><td><strong>Примечания</strong></td><td>{order.notes || '—'}</td></tr>
+              <tr><td><strong>Изделие</strong></td><td>{selectedItem?.name || order.name}</td></tr>
+              <tr><td><strong>№ изделия в заказе</strong></td><td>{selectedItem?.itemNumber || '—'}</td></tr>
+              <tr><td><strong>Артикул изделия</strong></td><td>{selectedItem?.productNumber || '—'}</td></tr>
+              <tr><td><strong>Помещение</strong></td><td>{selectedItem?.room || '—'}</td></tr>
+              <tr><td><strong>№ помещения</strong></td><td>{selectedItem?.roomNumber || '—'}</td></tr>
+              <tr><td><strong>Кол-во изделий</strong></td><td>{selectedItem?.quantity || order.quantity || 1}</td></tr>
+              <tr><td><strong>Материал</strong></td><td>{selectedItem?.material || order.material || '—'}</td></tr>
+              <tr><td><strong>Комплектация</strong></td><td>{selectedItem?.packageName || '—'}</td></tr>
+              <tr><td><strong>Примечания</strong></td><td>{selectedItem?.notes || order.notes || '—'}</td></tr>
               <tr><td><strong>Дата заказа</strong></td><td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td></tr>
               <tr><td><strong>Начало изготовления</strong></td><td>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td></tr>
               <tr><td><strong>Окончание изготовления</strong></td><td>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td></tr>

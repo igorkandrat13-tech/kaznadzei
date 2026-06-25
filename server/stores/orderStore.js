@@ -12,12 +12,13 @@ function compareSteps(a, b) {
 }
 
 function buildInitialStages() {
+  const activateFirstStage = arguments[0]?.activateFirstStage === true;
   const steps = ProcessStepStore.findAll().slice().sort(compareSteps);
   return steps.map((step, index) => ({
     stepId: step._id,
     stepName: step.stepName,
     role: step.role,
-    status: index === 0 ? 'in_progress' : 'pending',
+    status: activateFirstStage && index === 0 ? 'in_progress' : 'pending',
     completedAt: null,
   }));
 }
@@ -68,18 +69,231 @@ function syncSingleOrderStages(order, steps) {
   return nextStages;
 }
 
+function normalizeComments(source = []) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map(comment => ({
+      role: String(comment?.role || '').trim(),
+      text: String(comment?.text || '').trim(),
+      createdAt: comment?.createdAt || new Date().toISOString(),
+    }))
+    .filter(comment => comment.role && comment.text);
+}
+
+function cloneStages(stages = []) {
+  return Array.isArray(stages)
+    ? stages.map(stage => ({
+      stepId: stage.stepId,
+      stepName: stage.stepName,
+      role: stage.role,
+      status: stage.status,
+      completedAt: stage.completedAt || null,
+    }))
+    : [];
+}
+
+function getDefaultItemNumber(index = 0) {
+  return String(index + 1);
+}
+
+function buildOrderItem(source = {}, options = {}) {
+  const steps = ProcessStepStore.findAll().slice().sort(compareSteps);
+  const hasSourceStages = Array.isArray(source.stages) && source.stages.length > 0;
+  const stages = hasSourceStages
+    ? syncSingleOrderStages({ stages: source.stages }, steps)
+    : buildInitialStages({ activateFirstStage: options.activateFirstStage === true });
+  const quantity = Number(source.quantity) || 1;
+  return {
+    itemId: String(source.itemId || source._id || id()).trim(),
+    itemNumber: String(source.itemNumber || source.orderItemNumber || options.defaultItemNumber || '').trim() || getDefaultItemNumber(options.index || 0),
+    productNumber: String(source.productNumber || source.productCode || '').trim(),
+    room: String(source.room || '').trim(),
+    roomNumber: String(source.roomNumber || '').trim(),
+    quantity: quantity > 0 ? quantity : 1,
+    name: String(source.name || '').trim(),
+    deliveryDate: String(source.deliveryDate || source.shipmentDate || '').trim(),
+    material: String(source.material || '').trim(),
+    packageName: String(source.packageName || source.package || '').trim(),
+    photoLink: String(source.photoLink || source.link || '').trim(),
+    notes: String(source.notes || '').trim(),
+    comments: normalizeComments(source.comments),
+    stages,
+    overallStatus: calculateOverallStatus(stages),
+    createdAt: source.createdAt || new Date().toISOString(),
+    updatedAt: source.updatedAt || source.createdAt || new Date().toISOString(),
+  };
+}
+
+function syncLegacyFields(order) {
+  const primaryItem = Array.isArray(order.items) && order.items.length > 0 ? order.items[0] : null;
+  if (!primaryItem) {
+    order.name = order.name || '';
+    order.quantity = Number(order.quantity) || 1;
+    order.material = order.material || '';
+    order.notes = order.notes || '';
+    order.comments = normalizeComments(order.comments);
+    order.stages = cloneStages(order.stages);
+    order.overallStatus = calculateOverallStatus(order.stages);
+    return;
+  }
+
+  order.name = primaryItem.name || '';
+  order.quantity = primaryItem.quantity || 1;
+  order.material = primaryItem.material || '';
+  order.notes = primaryItem.notes || '';
+  order.comments = normalizeComments(primaryItem.comments);
+  order.stages = cloneStages(primaryItem.stages);
+  order.overallStatus = primaryItem.overallStatus || calculateOverallStatus(primaryItem.stages);
+}
+
+function ensureOrderShape(order) {
+  if (!order || typeof order !== 'object') return false;
+
+  let changed = false;
+  const sourceItems = Array.isArray(order.items) ? order.items : [];
+
+  if (!Array.isArray(order.items) || order.items.length === 0) {
+    order.items = [
+      buildOrderItem({
+        itemNumber: '1',
+        quantity: order.quantity,
+        name: order.name,
+        material: order.material,
+        notes: order.notes,
+        comments: order.comments,
+        stages: order.stages,
+        overallStatus: order.overallStatus,
+        createdAt: order.createdAt,
+      }, { defaultItemNumber: '1', index: 0 }),
+    ];
+    changed = true;
+  } else {
+    const normalizedItems = order.items.map((item, index) => buildOrderItem({
+      ...item,
+      name: item?.name || (index === 0 ? order.name : item?.name),
+      quantity: item?.quantity || (index === 0 ? order.quantity : item?.quantity),
+      material: item?.material || (index === 0 ? order.material : item?.material),
+      notes: item?.notes || (index === 0 ? order.notes : item?.notes),
+      comments: Array.isArray(item?.comments) ? item.comments : (index === 0 ? order.comments : []),
+      stages: Array.isArray(item?.stages) ? item.stages : (index === 0 ? order.stages : []),
+      createdAt: item?.createdAt || order.createdAt,
+    }, { defaultItemNumber: getDefaultItemNumber(index), index }));
+
+    if (JSON.stringify(sourceItems) !== JSON.stringify(normalizedItems)) {
+      order.items = normalizedItems;
+      changed = true;
+    }
+  }
+
+  if (!order.orderDate) {
+    order.orderDate = order.createdAt ? String(order.createdAt).split('T')[0] : '';
+    changed = true;
+  }
+  if (!order.customer) {
+    order.customer = '';
+    changed = true;
+  }
+  if (!order.startDate) {
+    order.startDate = '';
+    changed = true;
+  }
+  if (!order.endDate) {
+    order.endDate = '';
+    changed = true;
+  }
+
+  const snapshotBeforeSync = JSON.stringify({
+    name: order.name,
+    quantity: order.quantity,
+    material: order.material,
+    notes: order.notes,
+    comments: order.comments,
+    stages: order.stages,
+    overallStatus: order.overallStatus,
+  });
+  syncLegacyFields(order);
+  if (snapshotBeforeSync !== JSON.stringify({
+    name: order.name,
+    quantity: order.quantity,
+    material: order.material,
+    notes: order.notes,
+    comments: order.comments,
+    stages: order.stages,
+    overallStatus: order.overallStatus,
+  })) {
+    changed = true;
+  }
+
+  return changed;
+}
+
+function ensureOrders(db) {
+  let changed = false;
+  db.orders = Array.isArray(db.orders) ? db.orders : [];
+  for (const order of db.orders) {
+    if (ensureOrderShape(order)) {
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function getOrderItem(order, itemId) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  if (!items.length) return null;
+  const normalizedItemId = String(itemId || '').trim();
+  if (!normalizedItemId) return items[0];
+  return items.find(item => item.itemId === normalizedItemId) || null;
+}
+
+function syncOrderStatus(order) {
+  if (!order) return;
+  ensureOrderShape(order);
+  syncLegacyFields(order);
+}
+
 const OrderStore = {
   findAll() {
-    return load().orders;
+    const db = load();
+    ensureOrders(db);
+    return db.orders;
   },
 
   findById(orderId) {
-    return load().orders.find(o => o._id === orderId);
+    const db = load();
+    ensureOrders(db);
+    return db.orders.find(o => o._id === orderId);
   },
 
   create(data) {
     const db = load();
-    const order = { _id: id(), ...data, createdAt: new Date().toISOString() };
+    const createdAt = new Date().toISOString();
+    const sourceItems = Array.isArray(data?.items) && data.items.length > 0
+      ? data.items
+      : [{
+          itemNumber: '1',
+          quantity: data.quantity,
+          name: data.name,
+          material: data.material,
+          notes: data.notes,
+          comments: data.comments,
+          stages: data.stages,
+        }];
+    const items = sourceItems.map((item, index) => buildOrderItem(item, {
+      defaultItemNumber: getDefaultItemNumber(index),
+      index,
+    }));
+    const order = {
+      _id: id(),
+      orderNumber: data.orderNumber || '',
+      customer: data.customer || '',
+      orderDate: data.orderDate || '',
+      startDate: data.startDate || '',
+      endDate: data.endDate || '',
+      createdAt,
+      items,
+    };
+    syncLegacyFields(order);
     db.orders.push(order);
     save();
     return order;
@@ -99,65 +313,148 @@ const OrderStore = {
     save();
   },
 
-  addComment(orderId, role, text) {
+  addComment(orderId, itemIdOrRole, roleOrText, maybeText) {
     const db = load();
+    ensureOrders(db);
     const order = db.orders.find(o => o._id === orderId);
     if (!order) return null;
-    if (!order.comments) order.comments = [];
-    order.comments = order.comments.filter(c => c.role !== role);
-    order.comments.push({ role, text, createdAt: new Date().toISOString() });
+    const hasItemId = maybeText !== undefined;
+    const item = getOrderItem(order, hasItemId ? itemIdOrRole : '');
+    if (!item) return null;
+    const role = hasItemId ? roleOrText : itemIdOrRole;
+    const text = hasItemId ? maybeText : roleOrText;
+    item.comments = normalizeComments(item.comments).filter(c => c.role !== role);
+    item.comments.push({ role, text, createdAt: new Date().toISOString() });
+    item.updatedAt = new Date().toISOString();
+    syncOrderStatus(order);
     save();
-    return order.comments;
+    return item.comments;
   },
 
-  deleteComment(orderId, role) {
+  deleteComment(orderId, itemIdOrRole, maybeRole) {
     const db = load();
+    ensureOrders(db);
     const order = db.orders.find(o => o._id === orderId);
     if (!order) return null;
-    if (!order.comments) {
+    const hasItemId = maybeRole !== undefined;
+    const item = getOrderItem(order, hasItemId ? itemIdOrRole : '');
+    if (!item || !Array.isArray(item.comments)) {
       return false;
     }
-    const nextComments = order.comments.filter(comment => comment.role !== role);
-    if (nextComments.length === order.comments.length) {
+    const role = hasItemId ? maybeRole : itemIdOrRole;
+    const nextComments = item.comments.filter(comment => comment.role !== role);
+    if (nextComments.length === item.comments.length) {
       return false;
     }
-    order.comments = nextComments;
+    item.comments = nextComments;
+    item.updatedAt = new Date().toISOString();
+    syncOrderStatus(order);
     save();
-    return order.comments;
+    return item.comments;
   },
 
-  updateStageStatus(orderId, stepId, status) {
+  updateStageStatus(orderId, itemIdOrStepId, stepIdOrStatus, maybeStatus) {
     const db = load();
+    ensureOrders(db);
     const order = db.orders.find(o => o._id === orderId);
     if (!order) return null;
-    const stage = (order.stages || []).find(s => s.stepId === stepId);
+    const hasItemId = maybeStatus !== undefined;
+    const item = getOrderItem(order, hasItemId ? itemIdOrStepId : '');
+    if (!item) return null;
+    const stepId = hasItemId ? stepIdOrStatus : itemIdOrStepId;
+    const status = hasItemId ? maybeStatus : stepIdOrStatus;
+    const stage = (item.stages || []).find(s => s.stepId === stepId);
     if (!stage) return false;
     stage.status = status;
     stage.completedAt = status === 'completed' ? new Date().toISOString() : null;
-    order.overallStatus = calculateOverallStatus(order.stages);
+    item.overallStatus = calculateOverallStatus(item.stages);
+    item.updatedAt = new Date().toISOString();
+    syncOrderStatus(order);
+    save();
+    return order;
+  },
+
+  markItemRoleInProgress(orderId, itemId, role) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find(o => o._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return false;
+    const roleStages = (item.stages || []).filter(stage => stage.role === role);
+    if (roleStages.length === 0) return false;
+    const stageToActivate = roleStages.find(stage => stage.status === 'in_progress')
+      || roleStages.find(stage => stage.status === 'pending');
+    if (!stageToActivate) {
+      return order;
+    }
+    if (stageToActivate.status !== 'in_progress') {
+      stageToActivate.status = 'in_progress';
+      stageToActivate.completedAt = null;
+      item.overallStatus = calculateOverallStatus(item.stages);
+      item.updatedAt = new Date().toISOString();
+      syncOrderStatus(order);
+      save();
+    }
+    return order;
+  },
+
+  update(orderId, updates = {}) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find(o => o._id === orderId);
+    if (!order) return null;
+
+    if (updates.orderNumber !== undefined) order.orderNumber = updates.orderNumber;
+    if (updates.customer !== undefined) order.customer = updates.customer;
+    if (updates.orderDate !== undefined) order.orderDate = updates.orderDate;
+    if (updates.startDate !== undefined) order.startDate = updates.startDate;
+    if (updates.endDate !== undefined) order.endDate = updates.endDate;
+
+    if (Array.isArray(updates.items)) {
+      order.items = updates.items.map((item, index) => buildOrderItem(item, {
+        defaultItemNumber: getDefaultItemNumber(index),
+        index,
+      }));
+    } else {
+      const primaryItem = getOrderItem(order);
+      if (primaryItem) {
+        if (updates.name !== undefined) primaryItem.name = updates.name;
+        if (updates.quantity !== undefined) primaryItem.quantity = Number(updates.quantity) || 1;
+        if (updates.material !== undefined) primaryItem.material = updates.material;
+        if (updates.notes !== undefined) primaryItem.notes = updates.notes;
+        primaryItem.updatedAt = new Date().toISOString();
+      }
+    }
+
+    ensureOrderShape(order);
     save();
     return order;
   },
 
   syncStagesWithProcessSteps() {
     const db = load();
+    ensureOrders(db);
     const steps = ProcessStepStore.findAll().slice().sort(compareSteps);
     let changed = false;
 
     for (const order of db.orders) {
-      const nextStages = syncSingleOrderStages(order, steps);
-      const nextOverallStatus = calculateOverallStatus(nextStages);
-      const currentStages = JSON.stringify(order.stages || []);
+      for (const item of order.items || []) {
+        const nextStages = syncSingleOrderStages(item, steps);
+        const nextOverallStatus = calculateOverallStatus(nextStages);
+        const currentStages = JSON.stringify(item.stages || []);
 
-      if (currentStages !== JSON.stringify(nextStages)) {
-        order.stages = nextStages;
-        changed = true;
-      }
+        if (currentStages !== JSON.stringify(nextStages)) {
+          item.stages = nextStages;
+          changed = true;
+        }
 
-      if (order.overallStatus !== nextOverallStatus) {
-        order.overallStatus = nextOverallStatus;
-        changed = true;
+        if (item.overallStatus !== nextOverallStatus) {
+          item.overallStatus = nextOverallStatus;
+          changed = true;
+        }
       }
+      syncLegacyFields(order);
     }
 
     if (changed) {
@@ -168,11 +465,13 @@ const OrderStore = {
   },
 
   count() {
-    return load().orders.length;
+    return this.findAll().length;
   },
 
   buildInitialStages,
   calculateOverallStatus,
+  getOrderItem,
+  ensureOrders,
 };
 
 module.exports = OrderStore;

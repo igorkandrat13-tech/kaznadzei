@@ -161,6 +161,9 @@ function sanitizeOrderInput(payload, options = {}) {
   if (!partial || payload.notes !== undefined) {
     data.notes = normalizeString(payload.notes, 'notes', { maxLength: 2000 });
   }
+  if (!partial || payload.orderDate !== undefined) {
+    data.orderDate = normalizeDate(payload.orderDate, 'orderDate', { allowUndefined: partial });
+  }
   if (!partial || payload.startDate !== undefined) {
     data.startDate = normalizeDate(payload.startDate, 'startDate', { allowUndefined: partial });
   }
@@ -170,6 +173,50 @@ function sanitizeOrderInput(payload, options = {}) {
 
   if (data.startDate && data.endDate && data.endDate < data.startDate) {
     fail('Дата окончания не может быть раньше даты начала.');
+  }
+
+  return data;
+}
+
+function sanitizeOrderItemInput(payload, options = {}) {
+  const partial = options.partial === true;
+  const data = {};
+
+  if (!partial || payload.itemId !== undefined) {
+    data.itemId = normalizeString(payload.itemId, 'itemId', { maxLength: 80 });
+  }
+  if (!partial || payload.itemNumber !== undefined) {
+    data.itemNumber = normalizeString(payload.itemNumber, 'itemNumber', { maxLength: 40 });
+  }
+  if (!partial || payload.productNumber !== undefined) {
+    data.productNumber = normalizeString(payload.productNumber, 'productNumber', { maxLength: 40 });
+  }
+  if (!partial || payload.room !== undefined) {
+    data.room = normalizeString(payload.room, 'room', { maxLength: 120 });
+  }
+  if (!partial || payload.roomNumber !== undefined) {
+    data.roomNumber = normalizeString(payload.roomNumber, 'roomNumber', { maxLength: 40 });
+  }
+  if (!partial || payload.name !== undefined) {
+    data.name = normalizeString(payload.name, 'name', { required: !partial, maxLength: 160 });
+  }
+  if (!partial || payload.quantity !== undefined) {
+    data.quantity = normalizePositiveInt(payload.quantity, 'quantity', { required: !partial, min: 1 });
+  }
+  if (!partial || payload.material !== undefined) {
+    data.material = normalizeString(payload.material, 'material', { maxLength: 120 });
+  }
+  if (!partial || payload.deliveryDate !== undefined) {
+    data.deliveryDate = normalizeDate(payload.deliveryDate, 'deliveryDate', { allowUndefined: partial });
+  }
+  if (!partial || payload.packageName !== undefined) {
+    data.packageName = normalizeString(payload.packageName, 'packageName', { maxLength: 160 });
+  }
+  if (!partial || payload.photoLink !== undefined) {
+    data.photoLink = normalizeString(payload.photoLink, 'photoLink', { maxLength: 500 });
+  }
+  if (!partial || payload.notes !== undefined) {
+    data.notes = normalizeString(payload.notes, 'notes', { maxLength: 2000 });
   }
 
   return data;
@@ -305,6 +352,7 @@ module.exports = {
   sanitizeCommentInput,
   sanitizeEmployeeInput,
   sanitizeOrderInput,
+  sanitizeOrderItemInput,
   sanitizeProcessStepInput,
   sanitizeRoleInput,
   sanitizeSettingsInput,

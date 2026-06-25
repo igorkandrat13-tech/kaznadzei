@@ -1727,6 +1727,303 @@ table tr:hover td {
   min-width: 108px;
 }
 
+.unified-orders-table {
+  min-width: 2350px;
+  table-layout: fixed;
+}
+
+.unified-orders-table th,
+.unified-orders-table td {
+  vertical-align: top;
+  text-align: left;
+  padding: 8px 10px;
+}
+
+.unified-orders-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(21, 39, 62, 0.98), rgba(16, 31, 51, 0.98));
+}
+
+.unified-orders-table th:nth-child(1),
+.unified-orders-table td:nth-child(1) {
+  min-width: 130px;
+}
+
+.unified-orders-table th:nth-child(2),
+.unified-orders-table td:nth-child(2) {
+  min-width: 180px;
+}
+
+.unified-orders-table th:nth-child(3),
+.unified-orders-table td:nth-child(3) {
+  min-width: 120px;
+}
+
+.unified-orders-table th:nth-child(4),
+.unified-orders-table td:nth-child(4),
+.unified-orders-table th:nth-child(5),
+.unified-orders-table td:nth-child(5),
+.unified-orders-table th:nth-child(6),
+.unified-orders-table td:nth-child(6) {
+  min-width: 95px;
+}
+
+.unified-orders-table th:nth-child(7),
+.unified-orders-table td:nth-child(7) {
+  min-width: 250px;
+}
+
+.unified-orders-table th:nth-child(8),
+.unified-orders-table td:nth-child(8),
+.unified-orders-table th:nth-child(9),
+.unified-orders-table td:nth-child(9),
+.unified-orders-table th:nth-child(10),
+.unified-orders-table td:nth-child(10) {
+  min-width: 140px;
+}
+
+.unified-orders-table th:nth-child(11),
+.unified-orders-table td:nth-child(11) {
+  min-width: 120px;
+}
+
+.unified-orders-table th:nth-child(12),
+.unified-orders-table td:nth-child(12) {
+  min-width: 220px;
+}
+
+.unified-orders-table .comments-cell {
+  min-width: 220px;
+  max-width: 320px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.order-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(121, 222, 255, 0.18);
+  background: rgba(18, 34, 52, 0.92);
+  color: #dff6ff;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.order-link-button:hover {
+  background: rgba(35, 63, 93, 0.95);
+  color: #ffffff;
+}
+
+.excel-stage-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 110px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(139, 188, 231, 0.16);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.excel-stage-chip-empty {
+  background: rgba(15, 27, 42, 0.84);
+  color: rgba(196, 214, 236, 0.62);
+}
+
+.excel-stage-chip-pending {
+  background: rgba(28, 43, 64, 0.92);
+  color: #d7e8fb;
+}
+
+.excel-stage-chip-progress {
+  background: rgba(72, 54, 16, 0.92);
+  color: #ffd891;
+}
+
+.excel-stage-chip-completed {
+  background: rgba(20, 70, 56, 0.92);
+  color: #9ff3d7;
+}
+
+.excel-stage-chip-active {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.excel-stage-chip-role-carpenter {
+  background: rgba(95, 70, 33, 0.95);
+}
+
+.excel-stage-chip-role-assembler {
+  background: rgba(36, 76, 122, 0.95);
+}
+
+.excel-stage-chip-role-painter {
+  background: rgba(103, 45, 116, 0.95);
+}
+
+.excel-stage-chip-role-designer {
+  background: rgba(25, 112, 92, 0.95);
+}
+
+.table-action-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sticky-col {
+  position: sticky;
+  z-index: 1;
+  background: rgba(8, 20, 34, 0.96);
+  box-shadow: 1px 0 0 rgba(121, 183, 255, 0.08);
+}
+
+.unified-orders-table th.sticky-col {
+  z-index: 3;
+}
+
+.sticky-col-1 {
+  left: 0;
+}
+
+.sticky-col-2 {
+  left: 130px;
+}
+
+.sticky-col-3 {
+  left: 310px;
+}
+
+.unified-orders-row-editing {
+  background: rgba(30, 55, 82, 0.24);
+}
+
+.table-inline-input,
+.table-inline-textarea {
+  width: 100%;
+  border: 1px solid rgba(121, 183, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(10, 23, 39, 0.92);
+  color: #edf6ff;
+  padding: 8px 9px;
+  font-size: 13px;
+}
+
+.table-inline-input {
+  min-height: 36px;
+}
+
+.table-inline-input-narrow {
+  min-width: 72px;
+}
+
+.table-inline-textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.table-inline-link {
+  color: var(--accent-cyan);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.table-inline-link:hover {
+  text-decoration: underline;
+}
+
+.notes-cell {
+  min-width: 220px;
+  max-width: 320px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.excel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.excel-legend-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.excel-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(126, 181, 239, 0.14);
+  background: rgba(8, 20, 34, 0.72);
+}
+
+.order-form-modal {
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.order-items-editor {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.order-items-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-item-editor-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(126, 181, 239, 0.14);
+  background: rgba(8, 20, 34, 0.78);
+}
+
+.order-item-editor-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.order-item-editor-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.order-item-editor-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

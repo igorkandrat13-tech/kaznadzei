@@ -4,7 +4,7 @@ const OrderStore = require('../stores/orderStore');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireManagerAccess, requireWriteAccess } = require('../middleware/security');
-const { sanitizeCommentInput, sanitizeOrderInput } = require('../utils/validators');
+const { sanitizeCommentInput, sanitizeOrderInput, sanitizeOrderItemInput } = require('../utils/validators');
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { notifyOrderCreated, notifyNextStage, notifyOrderCompleted } = require('../services/orderNotifications');
@@ -93,6 +93,31 @@ function resolveTelegramEmployee(token, payload, context = {}) {
   return employee;
 }
 
+function fail(message, status = 400) {
+  const error = new Error(message);
+  error.status = status;
+  throw error;
+}
+
+function sanitizeOrderItemsPayload(payload) {
+  if (payload === undefined) return undefined;
+  if (!Array.isArray(payload) || payload.length === 0) {
+    fail('Добавьте хотя бы одно изделие в заказ.');
+  }
+  return payload.map((item, index) => ({
+    ...sanitizeOrderItemInput(item || {}),
+    itemNumber: String(item?.itemNumber || index + 1).trim() || String(index + 1),
+  }));
+}
+
+function getOrderItemOrFail(order, itemId) {
+  const item = OrderStore.getOrderItem(order, itemId);
+  if (!item) {
+    fail('Изделие заказа не найдено.', 404);
+  }
+  return item;
+}
+
 router.get('/orders', (req, res) => {
   try {
     const orders = OrderStore.findAll().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -114,18 +139,22 @@ router.get('/orders/:id', (req, res) => {
 
 router.post('/orders/:id/comments', requireWriteAccess, (req, res) => {
   try {
+    const itemId = String(req.body?.itemId || '').trim();
     const { role, text } = sanitizeCommentInput(req.body || {});
-    const comments = OrderStore.addComment(req.params.id, role, text);
+    const comments = itemId
+      ? OrderStore.addComment(req.params.id, itemId, role, text)
+      : OrderStore.addComment(req.params.id, role, text);
     if (!comments) return res.status(404).json({ message: 'Order not found' });
     const order = OrderStore.findById(req.params.id);
+    const item = OrderStore.getOrderItem(order, itemId);
     addActivityLog({
       action: 'order.comment.upsert',
       entityType: 'order',
       entityId: req.params.id,
-      entityName: order?.name || '',
+      entityName: item?.name || order?.name || '',
       actor: getRequestActor(req, { label: 'Сотрудник' }),
       message: `Комментарий по роли "${role}" сохранен.`,
-      details: { role, textLength: text.length },
+      details: { role, itemId: item?.itemId || '', textLength: text.length },
     });
     res.status(201).json(comments);
   } catch (error) {
@@ -143,6 +172,7 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
     const context = {
       route: 'telegram-comment',
       orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
     };
     const employee = resolveTelegramEmployee(token, req.body || {}, context);
     if (!employee) {
@@ -155,8 +185,12 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
       text: req.body?.text,
     });
 
-    const comments = OrderStore.addComment(req.params.id, role, text);
+    const comments = context.itemId
+      ? OrderStore.addComment(req.params.id, context.itemId, role, text)
+      : OrderStore.addComment(req.params.id, role, text);
     if (!comments) return res.status(404).json({ message: 'Order not found' });
+    const order = OrderStore.findById(req.params.id);
+    const item = getOrderItemOrFail(order, context.itemId);
 
     logTelegramOrderDebug('telegram-comment.success', {
       ...context,
@@ -168,7 +202,7 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
       action: 'order.comment.telegram',
       entityType: 'order',
       entityId: req.params.id,
-      entityName: OrderStore.findById(req.params.id)?.name || '',
+      entityName: item.name || order?.name || '',
       actor: {
         type: 'telegram',
         role: employee.role,
@@ -176,12 +210,13 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
         label: `TG: ${employee.fullName}`,
       },
       message: 'Комментарий сохранен из Telegram.',
-      details: { role: employee.role, textLength: text.length },
+      details: { role: employee.role, itemId: item.itemId, textLength: text.length },
     });
 
     res.status(201).json({
       ok: true,
       comments,
+      item,
       employee: {
         _id: employee._id,
         fullName: employee.fullName,
@@ -192,6 +227,7 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
     logTelegramOrderDebug('telegram-comment.error', {
       route: 'telegram-comment',
       orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
       ...getTelegramPayloadDebug(req.body || {}),
       message: error.message || 'Не удалось сохранить комментарий из Telegram.',
     });
@@ -209,6 +245,7 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
     const context = {
       route: 'telegram-stage-status',
       orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
       stepId: String(req.body?.stepId || '').trim(),
       requestedStatus: String(req.body?.status || '').trim(),
     };
@@ -235,7 +272,8 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
       return res.status(400).json({ message: 'Некорректный статус этапа.' });
     }
 
-    const stage = (order.stages || []).find(item => item.stepId === stepId);
+    const item = getOrderItemOrFail(order, context.itemId);
+    const stage = (item.stages || []).find(itemStage => itemStage.stepId === stepId);
     if (!stage) {
       return res.status(404).json({ message: 'Этап заказа не найден.' });
     }
@@ -244,10 +282,13 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
       return res.status(403).json({ message: 'Можно менять только статус этапа своей роли.' });
     }
 
-    const updatedOrder = OrderStore.updateStageStatus(req.params.id, stepId, status);
+    const updatedOrder = context.itemId
+      ? OrderStore.updateStageStatus(req.params.id, context.itemId, stepId, status)
+      : OrderStore.updateStageStatus(req.params.id, stepId, status);
     if (!updatedOrder) {
       return res.status(404).json({ message: 'Не удалось обновить статус этапа.' });
     }
+    const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
 
     logTelegramOrderDebug('telegram-stage-status.success', {
       ...context,
@@ -259,7 +300,7 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
       action: 'order.stage.telegram',
       entityType: 'order',
       entityId: req.params.id,
-      entityName: updatedOrder.name || '',
+      entityName: updatedItem.name || updatedOrder.name || '',
       actor: {
         type: 'telegram',
         role: employee.role,
@@ -267,7 +308,7 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
         label: `TG: ${employee.fullName}`,
       },
       message: `Статус этапа "${stage.stepName || stepId}" изменен из Telegram.`,
-      details: { stepId, stepName: stage.stepName || '', status },
+      details: { itemId: updatedItem.itemId, stepId, stepName: stage.stepName || '', status },
     });
 
     if (status === 'completed') {
@@ -280,7 +321,8 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
     res.json({
       ok: true,
       order: updatedOrder,
-      stage: (updatedOrder.stages || []).find(item => item.stepId === stepId) || null,
+      item: updatedItem,
+      stage: (updatedItem.stages || []).find(itemStage => itemStage.stepId === stepId) || null,
       employee: {
         _id: employee._id,
         fullName: employee.fullName,
@@ -300,24 +342,105 @@ router.post('/orders/:id/telegram-stage-status', (req, res) => {
   }
 });
 
+router.post('/orders/:id/telegram-item-scan', (req, res) => {
+  try {
+    const token = String(SettingsStore.get().telegramBotToken || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+    }
+
+    const context = {
+      route: 'telegram-item-scan',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+    };
+    const employee = resolveTelegramEmployee(token, req.body || {}, context);
+    if (!employee) {
+      logTelegramOrderDebug('telegram-item-scan.reject.employee-not-found', context);
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+    if (!context.itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+
+    const updatedOrder = OrderStore.markItemRoleInProgress(req.params.id, context.itemId, employee.role);
+    if (!updatedOrder) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (updatedOrder === false) {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+
+    const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
+    logTelegramOrderDebug('telegram-item-scan.success', {
+      ...context,
+      employeeId: employee._id,
+      employeeRole: employee.role,
+    });
+
+    addActivityLog({
+      action: 'order.item.scan.telegram',
+      entityType: 'orderItem',
+      entityId: updatedItem.itemId,
+      entityName: updatedItem.name || '',
+      actor: {
+        type: 'telegram',
+        role: employee.role,
+        name: employee.fullName,
+        label: `TG: ${employee.fullName}`,
+      },
+      message: 'Изделие открыто сотрудником по QR-коду.',
+      details: {
+        orderId: req.params.id,
+        itemId: updatedItem.itemId,
+        role: employee.role,
+      },
+    });
+
+    res.json({
+      ok: true,
+      order: updatedOrder,
+      item: updatedItem,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+      },
+    });
+  } catch (error) {
+    logTelegramOrderDebug('telegram-item-scan.error', {
+      route: 'telegram-item-scan',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+      ...getTelegramPayloadDebug(req.body || {}),
+      message: error.message || 'Не удалось отметить изделие как взятое в работу.',
+    });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось отметить изделие как взятое в работу.' });
+  }
+});
+
 router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
   try {
+    const itemId = String(req.query?.itemId || '').trim();
     const role = String(req.params.role || '').trim();
     if (!role) {
       return res.status(400).json({ message: 'Role is required' });
     }
-    const comments = OrderStore.deleteComment(req.params.id, role);
+    const comments = itemId
+      ? OrderStore.deleteComment(req.params.id, itemId, role)
+      : OrderStore.deleteComment(req.params.id, role);
     if (comments === null) return res.status(404).json({ message: 'Order not found' });
     if (comments === false) return res.status(404).json({ message: 'Comment not found' });
     const order = OrderStore.findById(req.params.id);
+    const item = OrderStore.getOrderItem(order, itemId);
     addActivityLog({
       action: 'order.comment.delete',
       entityType: 'order',
       entityId: req.params.id,
-      entityName: order?.name || '',
+      entityName: item?.name || order?.name || '',
       actor: getRequestActor(req, { label: 'Сотрудник' }),
       message: `Комментарий по роли "${role}" удален.`,
-      details: { role },
+      details: { role, itemId: item?.itemId || '' },
     });
     res.json(comments);
   } catch (error) {
@@ -327,21 +450,21 @@ router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
 
 router.post('/orders', requireManagerAccess(), (req, res) => {
   try {
-    const { orderNumber, customer, name, quantity, material, notes, startDate, endDate } = sanitizeOrderInput(req.body || {});
-    const stages = OrderStore.buildInitialStages();
+    const { orderNumber, customer, name, quantity, material, notes, orderDate, startDate, endDate } = sanitizeOrderInput(req.body || {});
+    const items = sanitizeOrderItemsPayload(req.body?.items) || [{
+      itemNumber: '1',
+      quantity,
+      name,
+      material,
+      notes,
+    }];
     const order = OrderStore.create({
       orderNumber,
       customer,
-      name,
-      quantity,
-      material,
-      notes,
-      orderDate: new Date().toISOString().split('T')[0],
+      orderDate: orderDate || new Date().toISOString().split('T')[0],
       startDate,
       endDate,
-      comments: [],
-      stages,
-      overallStatus: OrderStore.calculateOverallStatus(stages),
+      items,
     });
     addActivityLog({
       action: 'order.create',
@@ -353,8 +476,7 @@ router.post('/orders', requireManagerAccess(), (req, res) => {
       details: {
         orderNumber: order.orderNumber || '',
         customer: order.customer || '',
-        quantity: order.quantity || 1,
-        material: order.material || '',
+        items: (order.items || []).length,
       },
     });
     notifyOrderCreated(order).catch(() => {});
@@ -366,28 +488,28 @@ router.post('/orders', requireManagerAccess(), (req, res) => {
 
 router.put('/orders/:id', requireManagerAccess(), (req, res) => {
   try {
-    const db = require('../stores/store');
-    const data = db.load();
-    const idx = data.orders.findIndex(o => o._id === req.params.id);
-    if (idx === -1) return res.status(404).json({ message: 'Order not found' });
     const updates = sanitizeOrderInput(req.body || {}, { partial: true });
-    const previousOrder = { ...data.orders[idx] };
-    data.orders[idx] = { ...data.orders[idx], ...updates };
-    db.save();
+    const items = sanitizeOrderItemsPayload(req.body?.items);
+    const previousOrder = OrderStore.findById(req.params.id);
+    if (!previousOrder) return res.status(404).json({ message: 'Order not found' });
+    const nextOrder = OrderStore.update(req.params.id, {
+      ...updates,
+      ...(items ? { items } : {}),
+    });
     addActivityLog({
       action: 'order.update',
       entityType: 'order',
       entityId: req.params.id,
-      entityName: data.orders[idx].name || '',
+      entityName: nextOrder?.name || '',
       actor: getRequestActor(req),
       message: 'Заказ обновлен.',
       details: {
-        changedFields: Object.keys(updates),
-        orderNumber: data.orders[idx].orderNumber || '',
-        notesChanged: previousOrder.notes !== data.orders[idx].notes,
+        changedFields: Object.keys({ ...updates, ...(items ? { items: true } : {}) }),
+        orderNumber: nextOrder?.orderNumber || '',
+        notesChanged: previousOrder.notes !== nextOrder.notes,
       },
     });
-    res.json(data.orders[idx]);
+    res.json(nextOrder);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
   }
@@ -422,23 +544,28 @@ router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
 
 router.patch('/orders/:id/stages/:stepId', requireWriteAccess, (req, res) => {
   try {
+    const itemId = String(req.body?.itemId || '').trim();
     const { status } = req.body;
     const allowedStatuses = ['pending', 'in_progress', 'completed'];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
-    const order = OrderStore.updateStageStatus(req.params.id, req.params.stepId, status);
+    const order = itemId
+      ? OrderStore.updateStageStatus(req.params.id, itemId, req.params.stepId, status)
+      : OrderStore.updateStageStatus(req.params.id, req.params.stepId, status);
     if (order === null) return res.status(404).json({ message: 'Order not found' });
     if (order === false) return res.status(404).json({ message: 'Stage not found' });
-    const stage = (order.stages || []).find(item => item.stepId === req.params.stepId);
+    const item = OrderStore.getOrderItem(order, itemId);
+    const stage = ((item?.stages) || (order.stages || [])).find(stageItem => stageItem.stepId === req.params.stepId);
     addActivityLog({
       action: 'order.stage.update',
       entityType: 'order',
       entityId: req.params.id,
-      entityName: order.name || '',
+      entityName: item?.name || order.name || '',
       actor: getRequestActor(req, { label: 'Сотрудник' }),
       message: `Статус этапа "${stage?.stepName || req.params.stepId}" изменен.`,
       details: {
+        itemId: item?.itemId || '',
         stepId: req.params.stepId,
         stepName: stage?.stepName || '',
         role: stage?.role || '',
@@ -457,12 +584,29 @@ router.patch('/orders/:id/stages/:stepId', requireWriteAccess, (req, res) => {
   }
 });
 
+router.get('/orders/:id/items/:itemId/qrcode', async (req, res) => {
+  try {
+    const order = OrderStore.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    const item = OrderStore.getOrderItem(order, req.params.itemId);
+    if (!item) return res.status(404).json({ message: 'Order item not found' });
+    const publicBaseUrl = SettingsStore.get().publicBaseUrl;
+    const url = new URL(`/order/${order._id}/item/${item.itemId}`, publicBaseUrl).toString();
+    const png = await QRCode.toBuffer(url, { width: 400, margin: 2 });
+    res.type('image/png').send(png);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/orders/:id/qrcode', async (req, res) => {
   try {
     const order = OrderStore.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    const item = OrderStore.getOrderItem(order);
+    if (!item) return res.status(404).json({ message: 'Order item not found' });
     const publicBaseUrl = SettingsStore.get().publicBaseUrl;
-    const url = new URL(`/order/${order._id}`, publicBaseUrl).toString();
+    const url = new URL(`/order/${order._id}/item/${item.itemId}`, publicBaseUrl).toString();
     const png = await QRCode.toBuffer(url, { width: 400, margin: 2 });
     res.type('image/png').send(png);
   } catch (error) {
