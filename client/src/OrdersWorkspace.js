@@ -4,7 +4,6 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { useRoleConfig } from './RoleConfigContext';
-import { ORDER_STAGE_LEGEND } from './orderStageLegend';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
 
@@ -172,7 +171,6 @@ function OrdersWorkspace() {
   const { allRoleTabs } = useRoleConfig();
   const isAdmin = canAccessRole('admin', authRole);
   const [orders, setOrders] = useState([]);
-  const [colors, setColors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -216,23 +214,6 @@ function OrdersWorkspace() {
   useEffect(() => {
     fetchOrders({ showLoader: true });
   }, [fetchOrders]);
-
-  const fetchColors = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/colors');
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось загрузить цвета легенды.');
-      }
-      setColors(Array.isArray(data) ? data : []);
-    } catch {
-      setColors([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchColors();
-  }, [fetchColors]);
 
   useEffect(() => {
     const refresh = () => {
@@ -302,6 +283,18 @@ function OrdersWorkspace() {
     () => allRoleTabs.filter(role => !HIDDEN_TABLE_ROLE_KEYS.has(role.key)),
     [allRoleTabs],
   );
+  const firstOrderRowKeys = useMemo(() => {
+    const seenOrders = new Set();
+    return rows.reduce((acc, row) => {
+      const orderId = row.order?._id || row.order?.orderNumber || row.key;
+      const isFirst = !seenOrders.has(orderId);
+      if (isFirst) {
+        seenOrders.add(orderId);
+      }
+      acc[row.key] = isFirst;
+      return acc;
+    }, {});
+  }, [rows]);
 
   const availableRooms = useMemo(() => {
     return Array.from(new Set(
@@ -865,53 +858,58 @@ function OrdersWorkspace() {
                   const inlineDraft = inlineDrafts[key] || null;
                   const isInlineEditing = Boolean(inlineDraft);
                   const isInlineSaving = inlineSavingKey === key;
+                  const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
                   const commentPreview = getCommentPreview(item.comments);
                   return (
                     <tr key={key} className={isInlineEditing ? 'unified-orders-row-editing' : ''}>
                       <td className="sticky-col sticky-col-1">
                         <div className="xlsx-order-cell">
-                          {isAdmin ? (
-                            <input
-                              className="table-inline-input"
-                              value={isInlineEditing ? inlineDraft.orderNumber : (order.orderNumber || '')}
-                              onChange={handleOrderNumberCellChange(key, { key, order, item })}
-                              placeholder="Номер заказа"
-                            />
-                          ) : (
-                            <Link className="order-link-button" to={`/order/${order._id}/item/${item.itemId}`}>
-                              {order.orderNumber || '—'}
-                            </Link>
-                          )}
-                          <details className="manager-actions-menu order-number-action-menu">
-                            <summary className="order-number-action-trigger" aria-label={`Действия для заказа ${order.orderNumber || ''}`}>
-                              <span className="order-number-action-label">...</span>
-                            </summary>
-                            <div className="manager-actions-dropdown">
-                              {isInlineEditing ? (
-                                <>
-                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { saveInlineRow(key); closeActionMenu(event); }} disabled={isInlineSaving}>
-                                    {isInlineSaving ? 'Сохранение...' : 'Сохранить'}
-                                  </button>
-                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { cancelInlineEdit(key); closeActionMenu(event); }} disabled={isInlineSaving}>
-                                    Отменить
-                                  </button>
-                                </>
+                          {isFirstOrderRow ? (
+                            <>
+                              {isAdmin ? (
+                                <input
+                                  className="table-inline-input"
+                                  value={isInlineEditing ? inlineDraft.orderNumber : (order.orderNumber || '')}
+                                  onChange={handleOrderNumberCellChange(key, { key, order, item })}
+                                  placeholder="Номер заказа"
+                                />
                               ) : (
-                                <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openInlineEdit({ key, order, item }); closeActionMenu(event); }}>
-                                  Быстрое редактирование
-                                </button>
+                                <Link className="order-link-button" to={`/order/${order._id}/item/${item.itemId}`}>
+                                  {order.orderNumber || '—'}
+                                </Link>
                               )}
-                              <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openQrPreview(order, item); closeActionMenu(event); }}>
-                                QR-код
-                              </button>
-                              <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openEditForm(order); closeActionMenu(event); }}>
-                                Весь заказ
-                              </button>
-                              <button className="btn btn-danger manager-actions-dropdown-btn" type="button" onClick={(event) => { requestDelete(order); closeActionMenu(event); }}>
-                                Удалить
-                              </button>
-                            </div>
-                          </details>
+                              <details className="manager-actions-menu order-number-action-menu">
+                                <summary className="order-number-action-trigger" aria-label={`Действия для заказа ${order.orderNumber || ''}`}>
+                                  <span className="order-number-action-label">...</span>
+                                </summary>
+                                <div className="manager-actions-dropdown">
+                                  {isInlineEditing ? (
+                                    <>
+                                      <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { saveInlineRow(key); closeActionMenu(event); }} disabled={isInlineSaving}>
+                                        {isInlineSaving ? 'Сохранение...' : 'Сохранить'}
+                                      </button>
+                                      <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { cancelInlineEdit(key); closeActionMenu(event); }} disabled={isInlineSaving}>
+                                        Отменить
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openInlineEdit({ key, order, item }); closeActionMenu(event); }}>
+                                      Быстрое редактирование
+                                    </button>
+                                  )}
+                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openQrPreview(order, item); closeActionMenu(event); }}>
+                                    QR-код
+                                  </button>
+                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openEditForm(order); closeActionMenu(event); }}>
+                                    Весь заказ
+                                  </button>
+                                  <button className="btn btn-danger manager-actions-dropdown-btn" type="button" onClick={(event) => { requestDelete(order); closeActionMenu(event); }}>
+                                    Удалить
+                                  </button>
+                                </div>
+                              </details>
+                            </>
+                          ) : null}
                           <div className="xlsx-order-cell-meta">
                             {commentPreview !== '—' ? (
                               <span className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</span>

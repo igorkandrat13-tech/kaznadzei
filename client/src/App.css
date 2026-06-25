@@ -221,9 +221,10 @@ body::before {
 }
 
 .container {
-  max-width: 1680px;
-  margin: 30px auto;
-  padding: 0 20px;
+  width: 100%;
+  max-width: none;
+  margin: 30px 0;
+  padding: 0 clamp(12px, 1.5vw, 28px);
   position: relative;
 }
 
@@ -302,6 +303,7 @@ table tr:hover td {
 .table-scroll {
   width: 100%;
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 6px;
 }
@@ -488,7 +490,7 @@ table tr:hover td {
 
 .order-number-action-menu {
   width: 100%;
-  justify-content: center;
+  justify-content: flex-start;
   margin: 0;
 }
 
@@ -513,12 +515,13 @@ table tr:hover td {
 .manager-actions-dropdown {
   position: absolute;
   top: calc(100% + 6px);
-  left: 50%;
+  left: 0;
   right: auto;
-  transform: translateX(-50%);
+  transform: none;
   z-index: 20;
-  min-width: 156px;
-  max-width: min(240px, calc(100vw - 32px));
+  min-width: 176px;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 24px));
   display: grid;
   gap: 6px;
   padding: 8px;
@@ -1736,6 +1739,7 @@ table tr:hover td {
 
 .unified-orders-table {
   min-width: 2140px;
+  width: 100%;
   table-layout: fixed;
 }
 
@@ -1941,6 +1945,7 @@ table tr:hover td {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 100%;
 }
 
 .xlsx-order-cell-meta {
@@ -2115,7 +2120,7 @@ table tr:hover td {
 
 .order-number-action-menu {
   width: 100%;
-  align-self: center;
+  align-self: flex-start;
 }
 
 .order-number-action-trigger {
@@ -3814,7 +3819,7 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .container {
-    margin: 20px auto;
+    margin: 20px 0;
     padding: 0 16px;
   }
 
@@ -3960,7 +3965,7 @@ body[data-theme='light'] .home-auth-status-pending {
   }
   .container {
     padding: 0 10px;
-    margin: 15px auto;
+    margin: 15px 0;
   }
   .home-landing {
     padding: 16px;

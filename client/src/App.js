@@ -14,7 +14,7 @@ import {
 } from './telegramWebApp';
 import { apiFetch } from './api';
 import { canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
-import { RoleConfigProvider, useRoleConfig } from './RoleConfigContext';
+import { RoleConfigProvider } from './RoleConfigContext';
 import './App.css';
 
 const THEME_STORAGE_KEY = 'kaznadzei.theme';
@@ -40,7 +40,6 @@ function AppLayout() {
     const [theme, setTheme] = useState(() => window.localStorage.getItem(THEME_STORAGE_KEY) || 'dark');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
-    const { roleTabs } = useRoleConfig();
 
     useEffect(() => {
         if (detectTelegramWebApp()) {
@@ -137,19 +136,6 @@ function AppLayout() {
                             {canAccessRole('manager', authRole) && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
                             {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
                         </nav>
-                        {canAccessRole('manager', authRole) ? (
-                            <nav className="App-header-nav App-header-nav-specialists">
-                                {roleTabs.map(tab => (
-                                    <Link
-                                        key={tab.key}
-                                        to={tab.route || '/manager'}
-                                        onClick={() => setMobileMenuOpen(false)}
-                                    >
-                                        {tab.plainLabel || tab.label}
-                                    </Link>
-                                ))}
-                            </nav>
-                        ) : null}
                         <div className="App-header-actions-right">
                             {authRole ? (
                                 <div className="App-header-session">
