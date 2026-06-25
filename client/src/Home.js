@@ -135,6 +135,7 @@ function Home() {
             });
             setAuthForm(current => ({ ...current, admin: '', manager: '' }));
             setAuthSuccess(data?.message || 'Пароли администратора и рабочего доступа сохранены.');
+            navigate('/orders');
         } catch (error) {
             setAuthError(error.message || 'Не удалось сохранить пароли доступа.');
         } finally {
@@ -170,7 +171,7 @@ function Home() {
             });
             setAuthRole(data?.role || role);
             setAuthSuccess(role === 'admin' ? 'Вход администратора выполнен.' : 'Рабочий доступ открыт.');
-            navigate(role === 'admin' ? '/settings' : '/orders');
+            navigate('/orders');
         } catch (error) {
             setAuthError(error.message || 'Не удалось выполнить вход.');
         } finally {

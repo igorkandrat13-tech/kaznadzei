@@ -4,7 +4,6 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { useRoleConfig } from './RoleConfigContext';
-import { getOrderStatusMeta } from './statusMeta';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
 const ORDER_STAGE_LEGEND = [
@@ -65,50 +64,6 @@ const ORDER_STAGE_LEGEND = [
     defaultHex: '#1D7638',
   },
 ];
-
-function getItemRoleSummary(item, role) {
-  const stages = Array.isArray(item?.stages) ? item.stages.filter(stage => stage.role === role) : [];
-  if (stages.length === 0) {
-    return {
-      text: '—',
-      title: 'Этапы не настроены',
-      className: 'excel-stage-chip excel-stage-chip-empty',
-    };
-  }
-
-  const completedCount = stages.filter(stage => stage.status === 'completed').length;
-  const activeStage = stages.find(stage => stage.status === 'in_progress');
-
-  if (activeStage) {
-    return {
-      text: activeStage.stepName || 'В работе',
-      title: `В работе: ${activeStage.stepName || 'Этап'}`,
-      className: `excel-stage-chip excel-stage-chip-active excel-stage-chip-role-${role}`,
-    };
-  }
-
-  if (completedCount === stages.length) {
-    return {
-      text: 'Готово',
-      title: `Завершено ${completedCount} из ${stages.length}`,
-      className: 'excel-stage-chip excel-stage-chip-completed',
-    };
-  }
-
-  if (completedCount > 0) {
-    return {
-      text: `${completedCount} / ${stages.length}`,
-      title: `Завершено ${completedCount} из ${stages.length}`,
-      className: 'excel-stage-chip excel-stage-chip-progress',
-    };
-  }
-
-  return {
-    text: 'Ожидание',
-    title: `Ожидает старта, этапов: ${stages.length}`,
-    className: 'excel-stage-chip excel-stage-chip-pending',
-  };
-}
 
 function getCommentPreview(comments = []) {
   if (!Array.isArray(comments) || comments.length === 0) return '—';
@@ -764,7 +719,7 @@ function OrdersWorkspace() {
 
   const exportRowsToCsv = () => {
     const headers = [
-      'Заказ не обработан',
+      '№',
       'Заказчик',
       'Помещение',
       '№ помещения',
@@ -772,7 +727,7 @@ function OrdersWorkspace() {
       '№ изделия',
       'Кол-во изделй',
       'Наименование',
-      'Размеры',
+      '',
       'Отгрузка до',
       'Материал',
       'Комплектация заказа',
@@ -801,10 +756,10 @@ function OrdersWorkspace() {
           item.deliveryDate || '',
           item.material || '',
           item.packageName || '',
-          getItemRoleSummary(item, 'painter').text || '',
+          '',
           item.photoLink || '',
           item.notes || '',
-          getItemRoleSummary(item, 'carpenter').text || '',
+          '',
           order.startDate || '',
           order.endDate || '',
           formatManufacturingTime(order.startDate, order.endDate),
@@ -909,7 +864,6 @@ function OrdersWorkspace() {
           <div className="orders-stage-legend-header">
             <div>
               <div className="orders-stage-legend-title">Легенда этапов</div>
-              <div className="orders-stage-legend-subtitle">Цвета вынесены отдельно от таблицы и повторяют этапы из Excel-файла заказчика.</div>
             </div>
             {isAdmin ? (
               <button className="btn btn-secondary btn-small" onClick={() => setShowLegendEditor(current => !current)}>
@@ -976,9 +930,9 @@ function OrdersWorkspace() {
             <table className="orders-table unified-orders-table">
               <thead>
                 <tr className="xlsx-header-row xlsx-header-row-primary">
-                  <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">&nbsp;</th>
+                  <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">№</th>
                   <th className="sticky-col sticky-col-2 xlsx-header-primary-cell">Заказчик</th>
-                  <th className="sticky-col sticky-col-3 xlsx-header-primary-cell">Помещение </th>
+                  <th className="sticky-col sticky-col-3 xlsx-header-primary-cell">Помещение</th>
                   <th className="xlsx-header-primary-cell">№ помещения</th>
                   <th className="xlsx-header-primary-cell">№ изделия в заказе</th>
                   <th className="xlsx-header-primary-cell">№ изделия</th>
@@ -1019,14 +973,11 @@ function OrdersWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ key, order, item, overallStatus }) => {
-                  const overallStatusMeta = getOrderStatusMeta(overallStatus);
+                {rows.map(({ key, order, item }) => {
                   const inlineDraft = inlineDrafts[key] || null;
                   const isInlineEditing = Boolean(inlineDraft);
                   const isInlineSaving = inlineSavingKey === key;
                   const commentPreview = getCommentPreview(item.comments);
-                  const painterSummary = getItemRoleSummary(item, 'painter');
-                  const carpenterSummary = getItemRoleSummary(item, 'carpenter');
                   return (
                     <tr key={key} className={isInlineEditing ? 'unified-orders-row-editing' : ''}>
                       <td className="sticky-col sticky-col-1">
@@ -1043,7 +994,6 @@ function OrdersWorkspace() {
                             </Link>
                           )}
                           <div className="xlsx-order-cell-meta">
-                            <span className={overallStatusMeta.className}>{overallStatusMeta.label}</span>
                             {commentPreview !== '—' ? (
                               <span className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</span>
                             ) : null}
@@ -1088,9 +1038,7 @@ function OrdersWorkspace() {
                       <td>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
-                      <td>
-                        <span className={painterSummary.className} title={painterSummary.title}>{painterSummary.text}</span>
-                      </td>
+                      <td>—</td>
                       <td>
                         {isInlineEditing ? (
                           <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
@@ -1105,9 +1053,7 @@ function OrdersWorkspace() {
                           item.notes || '—'
                         )}
                       </td>
-                      <td>
-                        <span className={carpenterSummary.className} title={carpenterSummary.title}>{carpenterSummary.text}</span>
-                      </td>
+                      <td>—</td>
                       <td>{formatDateDisplay(order.startDate)}</td>
                       <td>{formatDateDisplay(order.endDate)}</td>
                       <td>{formatManufacturingTime(order.startDate, order.endDate)}</td>
