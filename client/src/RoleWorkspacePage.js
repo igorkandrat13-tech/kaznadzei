@@ -23,7 +23,7 @@ function RoleWorkspacePage() {
   const roleMeta = getRoleMetaByKey(roleKey);
 
   if (!roleMeta || roleMeta.isDeleted) {
-    return <Navigate to="/manager" replace />;
+    return <Navigate to="/orders" replace />;
   }
 
   const commonProps = {

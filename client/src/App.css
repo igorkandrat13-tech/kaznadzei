@@ -1728,7 +1728,7 @@ table tr:hover td {
 }
 
 .unified-orders-table {
-  min-width: 2350px;
+  min-width: 2160px;
   table-layout: fixed;
 }
 
@@ -1741,24 +1741,39 @@ table tr:hover td {
 
 .unified-orders-table th {
   position: sticky;
-  top: 0;
   z-index: 2;
   background: linear-gradient(180deg, rgba(21, 39, 62, 0.98), rgba(16, 31, 51, 0.98));
+  text-transform: none;
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.unified-orders-table .xlsx-header-primary-cell {
+  top: 0;
+  z-index: 4;
+}
+
+.unified-orders-table .xlsx-header-secondary-cell {
+  top: 42px;
+  z-index: 3;
+  background: linear-gradient(180deg, rgba(16, 31, 51, 0.98), rgba(13, 25, 42, 0.98));
+  color: #d7ebff;
+  font-size: 11px;
 }
 
 .unified-orders-table th:nth-child(1),
 .unified-orders-table td:nth-child(1) {
-  min-width: 130px;
+  min-width: 180px;
 }
 
 .unified-orders-table th:nth-child(2),
 .unified-orders-table td:nth-child(2) {
-  min-width: 180px;
+  min-width: 194px;
 }
 
 .unified-orders-table th:nth-child(3),
 .unified-orders-table td:nth-child(3) {
-  min-width: 120px;
+  min-width: 116px;
 }
 
 .unified-orders-table th:nth-child(4),
@@ -1766,32 +1781,90 @@ table tr:hover td {
 .unified-orders-table th:nth-child(5),
 .unified-orders-table td:nth-child(5),
 .unified-orders-table th:nth-child(6),
-.unified-orders-table td:nth-child(6) {
-  min-width: 95px;
-}
-
+.unified-orders-table td:nth-child(6),
 .unified-orders-table th:nth-child(7),
 .unified-orders-table td:nth-child(7) {
-  min-width: 250px;
+  min-width: 90px;
 }
 
 .unified-orders-table th:nth-child(8),
-.unified-orders-table td:nth-child(8),
+.unified-orders-table td:nth-child(8) {
+  min-width: 220px;
+}
+
 .unified-orders-table th:nth-child(9),
-.unified-orders-table td:nth-child(9),
+.unified-orders-table td:nth-child(9) {
+  min-width: 120px;
+}
+
 .unified-orders-table th:nth-child(10),
 .unified-orders-table td:nth-child(10) {
-  min-width: 140px;
+  min-width: 136px;
 }
 
 .unified-orders-table th:nth-child(11),
 .unified-orders-table td:nth-child(11) {
-  min-width: 120px;
+  min-width: 246px;
 }
 
 .unified-orders-table th:nth-child(12),
 .unified-orders-table td:nth-child(12) {
+  min-width: 190px;
+}
+
+.unified-orders-table th:nth-child(13),
+.unified-orders-table td:nth-child(13) {
+  min-width: 150px;
+}
+
+.unified-orders-table th:nth-child(14),
+.unified-orders-table td:nth-child(14) {
   min-width: 220px;
+}
+
+.unified-orders-table th:nth-child(15),
+.unified-orders-table td:nth-child(15) {
+  min-width: 210px;
+}
+
+.unified-orders-table th:nth-child(16),
+.unified-orders-table td:nth-child(16),
+.unified-orders-table th:nth-child(17),
+.unified-orders-table td:nth-child(17),
+.unified-orders-table th:nth-child(18),
+.unified-orders-table td:nth-child(18),
+.unified-orders-table th:nth-child(19),
+.unified-orders-table td:nth-child(19) {
+  min-width: 112px;
+}
+
+.xlsx-order-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.xlsx-order-cell-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xlsx-order-cell-comment {
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.xlsx-order-cell-actions .btn {
+  min-height: 30px;
+}
+
+.xlsx-empty-cell {
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .unified-orders-table .comments-cell {
@@ -1900,11 +1973,11 @@ table tr:hover td {
 }
 
 .sticky-col-2 {
-  left: 130px;
+  left: 180px;
 }
 
 .sticky-col-3 {
-  left: 310px;
+  left: 374px;
 }
 
 .unified-orders-row-editing {

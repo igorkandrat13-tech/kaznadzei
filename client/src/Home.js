@@ -62,16 +62,16 @@ function Home() {
         },
         {
             role: 'manager',
-            title: 'Менеджер',
+            title: 'Рабочий доступ',
             icon: '📋',
             accent: 'cyan',
-            description: 'Доступ ко всем рабочим разделам, кроме административной панели и системных настроек.',
-            route: '/manager',
+            description: 'Доступ к единой таблице заказов, архиву и рабочим страницам цеха без системных настроек.',
+            route: '/orders',
             configured: authConfig.managerPasswordConfigured,
             statusLabel: authConfig.managerPasswordConfigured ? 'Пароль задан' : 'Не настроено',
             helper: authConfig.managerPasswordConfigured
-                ? 'Пароль менеджера настроен.'
-                : 'Пароль менеджера пока не задан в админ-панели.',
+                ? 'Рабочий пароль настроен.'
+                : 'Рабочий пароль пока не задан в настройках.',
         },
     ]), [authConfig]);
 
@@ -96,7 +96,7 @@ function Home() {
 
     const handleInitialSetup = async () => {
         if (!setupForm.adminPassword.trim() || !setupForm.managerPassword.trim()) {
-            setAuthError('Заполните новый пароль администратора и пароль менеджера.');
+            setAuthError('Заполните новый пароль администратора и рабочий пароль.');
             setAuthSuccess('');
             return;
         }
@@ -134,7 +134,7 @@ function Home() {
                 managerPassword: '',
             });
             setAuthForm(current => ({ ...current, admin: '', manager: '' }));
-            setAuthSuccess(data?.message || 'Пароли администратора и менеджера сохранены.');
+            setAuthSuccess(data?.message || 'Пароли администратора и рабочего доступа сохранены.');
         } catch (error) {
             setAuthError(error.message || 'Не удалось сохранить пароли доступа.');
         } finally {
@@ -145,7 +145,7 @@ function Home() {
     const handleLogin = async (role) => {
         const password = String(authForm[role] || '').trim();
         if (!password) {
-            setAuthError(role === 'admin' ? 'Введите пароль администратора.' : 'Введите пароль менеджера.');
+            setAuthError(role === 'admin' ? 'Введите пароль администратора.' : 'Введите рабочий пароль.');
             return;
         }
 
@@ -169,8 +169,8 @@ function Home() {
                 role: data?.role || role,
             });
             setAuthRole(data?.role || role);
-            setAuthSuccess(role === 'admin' ? 'Вход администратора выполнен.' : 'Вход менеджера выполнен.');
-            navigate(role === 'admin' ? '/admin' : '/manager');
+            setAuthSuccess(role === 'admin' ? 'Вход администратора выполнен.' : 'Рабочий доступ открыт.');
+            navigate(role === 'admin' ? '/settings' : '/orders');
         } catch (error) {
             setAuthError(error.message || 'Не удалось выполнить вход.');
         } finally {
@@ -206,7 +206,7 @@ function Home() {
                     <div className="home-hero-topline">TECH WORKSHOP INTERFACE</div>
                     <h2>Цифровая панель управления мебельным производством</h2>
                     <p>
-                        Войдите как администратор или менеджер по паролю и перейдите к нужному разделу.
+                        Войдите как администратор или через рабочий доступ по паролю и перейдите к нужному разделу.
                         Основной доступ в веб-интерфейс теперь начинается отсюда.
                     </p>
 
@@ -219,15 +219,15 @@ function Home() {
                     <div className="home-stats-grid">
                         <div className="home-stat-card">
                             <div className="home-stat-value">2</div>
-                            <div className="home-stat-label">роли входа</div>
+                            <div className="home-stat-label">режима входа</div>
                         </div>
                         <div className="home-stat-card">
                             <div className="home-stat-value">Full</div>
                             <div className="home-stat-label">доступ администратора</div>
                         </div>
                         <div className="home-stat-card">
-                            <div className="home-stat-value">Role</div>
-                            <div className="home-stat-label">доступ менеджера без админки</div>
+                            <div className="home-stat-value">Work</div>
+                            <div className="home-stat-label">рабочий доступ без настроек</div>
                         </div>
                     </div>
                 </section>
@@ -237,7 +237,7 @@ function Home() {
                         <div>
                             <div className="home-role-panel-title">Доступ к системе</div>
                             <div className="home-role-panel-subtitle">
-                                Администратор получает полный доступ, менеджер работает без доступа к админ-панели.
+                                Администратор получает полный доступ, рабочий доступ открывает заказы, архив и страницы специалистов без системных настроек.
                             </div>
                         </div>
                     </div>
@@ -249,7 +249,7 @@ function Home() {
                         <div className="home-auth-setup card">
                             <div className="home-role-panel-title">Первичная настройка доступа</div>
                             <div className="home-role-panel-subtitle" style={{ marginBottom: 16 }}>
-                                После обновления сразу задайте пароль администратора и пароль менеджера.
+                                После обновления сразу задайте пароль администратора и рабочий пароль.
                                 Они сохранятся в хэш и будут использоваться для всех следующих входов.
                             </div>
                             <form onSubmit={handleSetupSubmit}>
@@ -265,12 +265,12 @@ function Home() {
                                         />
                                     </div>
                                     <div className="form-group" style={{ marginBottom: 0 }}>
-                                        <label>Пароль менеджера</label>
+                                        <label>Рабочий пароль</label>
                                         <input
                                             type="password"
                                             value={setupForm.managerPassword}
                                             onChange={handleSetupChange('managerPassword')}
-                                            placeholder="Введите пароль менеджера"
+                                            placeholder="Введите рабочий пароль"
                                             disabled={setupLoading}
                                         />
                                     </div>
@@ -289,12 +289,12 @@ function Home() {
                             <div>
                                 <div className="home-role-panel-title">Активная сессия</div>
                                 <div className="home-role-panel-subtitle">
-                                    Текущая роль: <strong>{authRole === 'admin' ? 'Администратор' : 'Менеджер'}</strong>
+                                    Текущая роль: <strong>{authRole === 'admin' ? 'Администратор' : 'Рабочий доступ'}</strong>
                                 </div>
                             </div>
                             <div className="section-header-actions">
-                                {canAccessRole('admin', authRole) && <Link to="/admin" className="btn btn-primary">Открыть админку</Link>}
-                                {canAccessRole('manager', authRole) && <Link to="/manager" className="btn btn-secondary">Открыть менеджера</Link>}
+                                {canAccessRole('admin', authRole) && <Link to="/settings" className="btn btn-primary">Открыть настройки</Link>}
+                                {canAccessRole('manager', authRole) && <Link to="/orders" className="btn btn-secondary">Открыть заказы</Link>}
                                 <button className="btn" onClick={handleLogout}>Выйти</button>
                             </div>
                         </div>
@@ -315,12 +315,12 @@ function Home() {
                                 <div className="home-auth-hint">{card.helper}</div>
                                 <form onSubmit={handleLoginSubmit(card.role)}>
                                     <div className="form-group" style={{ marginBottom: 12 }}>
-                                        <label>{card.role === 'admin' ? 'Пароль администратора' : 'Пароль менеджера'}</label>
+                                        <label>{card.role === 'admin' ? 'Пароль администратора' : 'Рабочий пароль'}</label>
                                         <input
                                             type="password"
                                             value={authForm[card.role]}
                                             onChange={handleAuthChange(card.role)}
-                                            placeholder={card.role === 'admin' ? 'Введите пароль администратора' : 'Введите пароль менеджера'}
+                                            placeholder={card.role === 'admin' ? 'Введите пароль администратора' : 'Введите рабочий пароль'}
                                             disabled={authLoading || !card.configured}
                                         />
                                     </div>
@@ -343,7 +343,7 @@ function Home() {
                         ))}
                     </div>
                     <div className="home-auth-note">
-                        Рабочие роли цеха, QR и Telegram-сценарии продолжают работать по своим маршрутам и не требуют входа admin / manager на этой странице.
+                        Рабочие роли цеха, QR и Telegram-сценарии продолжают работать по своим маршрутам и не требуют отдельного входа через эту страницу.
                     </div>
                 </section>
             </div>

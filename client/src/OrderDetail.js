@@ -273,7 +273,7 @@ function OrderDetail() {
       || (Array.isArray(order.items) ? order.items[0] : null))
     : null;
   const statusMeta = getOrderStatusMeta(selectedItem?.overallStatus || order?.overallStatus);
-  const managerNotes = String(selectedItem?.notes || order?.notes || '').trim();
+  const orderNotes = String(selectedItem?.notes || order?.notes || '').trim();
   const currentRoleComment = telegramEmployee?.role
     ? (selectedItem?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
     : '';
@@ -353,7 +353,7 @@ function OrderDetail() {
     return (
       <div className="card">
         <h2>🔍 Заказ не найден</h2>
-        <p>Проверьте ссылку или обратитесь к менеджеру</p>
+        <p>Проверьте ссылку или обратитесь к администратору системы</p>
       </div>
     );
   }
@@ -459,9 +459,9 @@ function OrderDetail() {
           </div>
 
           <div className="detail-block detail-block-wide">
-            <div className="detail-label">Примечания менеджера</div>
+            <div className="detail-label">Примечания по заказу</div>
             <div className="detail-value detail-value-multiline">
-              {managerNotes || 'Менеджер пока не добавил примечание.'}
+              {orderNotes || 'Примечание по заказу пока не добавлено.'}
             </div>
             <div className="mt-8 text-small text-subtle">
               Данные заказа обновляются автоматически.

@@ -349,6 +349,17 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}`);
+});
+
+server.on('error', (error) => {
+  if (error && error.code === 'EADDRINUSE') {
+    const fallbackPort = Number(PORT) + 1;
+    console.error(`Port ${PORT} is already in use.`);
+    console.error(`Stop the existing process or run the server on another port, for example: $env:PORT=${fallbackPort}; npm start`);
+    process.exit(1);
+  }
+
+  throw error;
 });

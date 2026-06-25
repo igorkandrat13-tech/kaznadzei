@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import ConfirmDialog from './ConfirmDialog';
-import { getOrderStatusMeta } from './statusMeta';
 import {
   HelpTooltip,
   SectionHeader,
@@ -15,7 +14,6 @@ import {
   emptyEmployeeForm,
 } from './adminUI';
 import ColorModal from './admin/ColorModal';
-import CommentsModal from './admin/CommentsModal';
 import EmployeeModal from './admin/EmployeeModal';
 import RoleModal from './admin/RoleModal';
 import StepModal from './admin/StepModal';
@@ -32,8 +30,6 @@ function Admin() {
   const [activeRole, setActiveRole] = useState('general');
   const [steps, setSteps] = useState([]);
   const [colors, setColors] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [commentsModal, setCommentsModal] = useState(null);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [updateMessage, setUpdateMessage] = useState('');
   const [updateError, setUpdateError] = useState('');
@@ -65,9 +61,6 @@ function Admin() {
   const [clearingActivityLogs, setClearingActivityLogs] = useState(false);
   const [exportingBackup, setExportingBackup] = useState(false);
   const [importingBackup, setImportingBackup] = useState(false);
-  const [adminSearch, setAdminSearch] = useState('');
-  const [adminStatusFilter, setAdminStatusFilter] = useState('all');
-  const [adminRoleFilter, setAdminRoleFilter] = useState('all');
   const [employees, setEmployees] = useState([]);
   const [roles, setRoles] = useState([]);
   const [showDeletedRoles, setShowDeletedRoles] = useState(false);
@@ -150,13 +143,11 @@ function Admin() {
   useEffect(() => {
     fetchSteps();
     fetchColors();
-    fetchOrders();
     fetchUpdateStatus();
   }, []);
 
   useEffect(() => {
     const refreshOverview = () => {
-      fetchOrders();
       fetchSteps();
     };
 
@@ -186,14 +177,6 @@ function Admin() {
     const res = await apiFetch('/api/colors');
     const data = await parseJsonSafely(res);
     setColors(Array.isArray(data) ? data : []);
-  };
-
-  const fetchOrders = async () => {
-    try {
-      const res = await apiFetch('/api/orders');
-      const data = await parseJsonSafely(res);
-      setOrders(Array.isArray(data) ? data : []);
-    } catch { setOrders([]); }
   };
 
   const fetchRoles = async ({ includeDeleted = false } = {}) => {
@@ -328,111 +311,8 @@ function Admin() {
     }
   };
 
-  // Admin overview
   const getRoleLabel = (role) => {
     return allRoleTabs.find(item => item.key === role)?.label || role;
-  };
-
-  const getRoleShortLabel = (role) => {
-    return allRoleTabs.find(item => item.key === role)?.plainLabel || role;
-  };
-
-  const getCommentPreview = (text) => {
-    if (!text) return 'Без текста';
-    return text.length > 80 ? `${text.slice(0, 80)}...` : text;
-  };
-
-  const getCurrentResponsibleRole = (order) => {
-    const stages = Array.isArray(order?.stages) ? order.stages : [];
-    const activeStage = stages.find(stage => stage.status === 'in_progress')
-      || stages.find(stage => stage.status !== 'completed');
-    return activeStage?.role || '';
-  };
-
-  const getRoleProgressInfo = (order, role) => {
-    const stages = Array.isArray(order?.stages) ? order.stages : [];
-    const roleStages = stages.filter(stage => stage.role === role);
-    const total = roleStages.length;
-    const roleLabel = getRoleShortLabel(role);
-
-    if (total === 0) {
-      return {
-        total,
-        text: '—',
-        title: `${roleLabel}: этапы не настроены`,
-        className: 'role-progress-badge',
-      };
-    }
-
-    const completed = roleStages.filter(stage => stage.status === 'completed').length;
-    const activeIndex = roleStages.findIndex(stage => stage.status === 'in_progress');
-    const firstPendingIndex = roleStages.findIndex(stage => stage.status !== 'completed');
-    const lastCompletedStage = completed > 0 ? roleStages[completed - 1] : null;
-
-    if (completed === total) {
-      return {
-        total,
-        text: `Готово ${total} из ${total}`,
-        title: `${roleLabel}: все этапы завершены${lastCompletedStage?.stepName ? `\nПоследний этап: ${lastCompletedStage.stepName}` : ''}`,
-        className: 'role-progress-badge role-progress-badge-completed',
-      };
-    }
-
-    const currentStageIndex = activeIndex !== -1 ? activeIndex : (firstPendingIndex === -1 ? total - 1 : firstPendingIndex);
-    const isWaiting = activeIndex === -1 && completed === 0;
-    const currentStage = roleStages[currentStageIndex] || null;
-    const progressTitle = [
-      `${roleLabel}: завершено ${completed} из ${total}`,
-      currentStage?.stepName
-        ? `${isWaiting ? 'Ближайший этап' : 'Текущий этап'}: ${currentStage.stepName}`
-        : '',
-    ].filter(Boolean).join('\n');
-
-    if (isWaiting) {
-      return {
-        total,
-        text: 'Ожидание',
-        title: progressTitle,
-        className: 'role-progress-badge role-progress-badge-pending',
-      };
-    }
-
-    return {
-      total,
-      text: `Этап ${currentStageIndex + 1} из ${total}`,
-      title: progressTitle,
-      className: `role-progress-badge ${isWaiting ? 'role-progress-badge-pending' : 'role-progress-badge-active'}`,
-    };
-  };
-
-  const renderOrderComments = (order) => {
-    const comments = order.comments || [];
-    if (comments.length === 0) {
-      return <span className="empty-inline">—</span>;
-    }
-
-    return (
-      <div className="comments-cell">
-        <button
-          className="btn btn-small"
-          onClick={() => openCommentsModal(order)}
-        >
-          Открыть все ({comments.length})
-        </button>
-        <div className="comments-chip-list">
-          {comments.map((comment, index) => (
-            <span
-              key={`${comment.role}-${index}`}
-              onClick={() => openCommentsModal(order, comment.role)}
-              className="comments-chip"
-              title={comment.text}
-            >
-              📝 {getRoleLabel(comment.role)}
-            </span>
-          ))}
-        </div>
-      </div>
-    );
   };
 
   const getEmployeeTelegramSummary = (employee) => {
@@ -459,21 +339,6 @@ function Admin() {
       ? JSON.stringify(entry.details, null, 2)
       : String(entry?.details || '');
     return `[${timestamp}] ${actor}\n${message}\n${details}`;
-  };
-
-  const openCommentsModal = (order, initialRole) => {
-    const comments = Array.isArray(order.comments) ? order.comments : [];
-    if (comments.length === 0) return;
-    const activeComment = comments.find(comment => comment.role === initialRole) || comments[0];
-    setCommentsModal({
-      orderName: order.name,
-      comments,
-      activeRole: activeComment.role,
-    });
-  };
-
-  const closeCommentsModal = () => {
-    setCommentsModal(null);
   };
 
   const saveAppSettings = async () => {
@@ -695,7 +560,6 @@ function Admin() {
         throw new Error(data?.message || 'Не удалось импортировать резервную копию.');
       }
       await Promise.all([
-        fetchOrders(),
         fetchSteps(),
         fetchColors(),
         fetchEmployees().catch(() => {}),
@@ -1760,31 +1624,12 @@ function Admin() {
     );
   }
 
-  // ===== OVERVIEW VIEW =====
-  const filteredOverviewOrders = orders.filter(order => {
-    if (adminStatusFilter !== 'all' && order.overallStatus !== adminStatusFilter) return false;
-    if (adminRoleFilter !== 'all' && getCurrentResponsibleRole(order) !== adminRoleFilter) return false;
-    if (adminSearch.trim()) {
-      const query = adminSearch.trim().toLowerCase();
-      const haystack = [
-        order.orderNumber,
-        order.name,
-        order.customer,
-        order.material,
-        order.notes,
-        ...(order.comments || []).map(comment => comment.text),
-      ].join(' ').toLowerCase();
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
-  });
-
   return (
     <div>
       <div className="card" style={{ marginBottom: 20 }}>
         <SectionHeader
-          title="⚙️ Панель администратора"
-          description="Общая сводка по этапам производства, заказам и обновлениям проекта"
+          title="⚙️ Настройки системы"
+          description="Управление ролями, сотрудниками, этапами, цветами, Telegram и обновлениями проекта"
           actions={
             <>
             <Link to="/archive" className="btn btn-secondary section-toolbar-btn">📦 Архив</Link>
@@ -1795,137 +1640,6 @@ function Admin() {
           }
         />
       </div>
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <SectionHeader
-          title="📊 Сводка по всем заказам"
-          description="Прогресс каждого изделия по всем этапам производства"
-        />
-        <div className="responsive-filters">
-          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 220 }}>
-            <label>Поиск</label>
-            <input
-              value={adminSearch}
-              onChange={e => setAdminSearch(e.target.value)}
-              placeholder="Номер, изделие, заказчик, материал, комментарий"
-            />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Статус</label>
-            <select value={adminStatusFilter} onChange={e => setAdminStatusFilter(e.target.value)}>
-              <option value="all">Все</option>
-              <option value="pending">Ожидает</option>
-              <option value="in_progress">В работе</option>
-              <option value="completed">Завершен</option>
-            </select>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Ответственный</label>
-            <select value={adminRoleFilter} onChange={e => setAdminRoleFilter(e.target.value)}>
-              <option value="all">Все</option>
-              {roleTabs.map(tab => (
-                <option key={tab.key} value={tab.key}>{tab.label.replace(/^[^\s]+\s+/, '')}</option>
-              ))}
-            </select>
-          </div>
-          <div className="filters-summary">Найдено: {filteredOverviewOrders.length}</div>
-        </div>
-        <div className="table-scroll desktop-table-only">
-          <table className="orders-table admin-overview-table">
-            <thead>
-              <tr>
-                <th>Изделие</th>
-                {roleTabs.map(tab => (
-                  <th key={tab.key}>{getRoleShortLabel(tab.key)}</th>
-                ))}
-                <th>Общий статус</th>
-                <th>Примечания</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOverviewOrders.map(order => {
-                const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
-                return (
-                  <tr key={order._id}>
-                    <td>
-                      <div className="order-primary-title"><strong>{order.name}</strong></div>
-                      <div className="order-primary-subtitle">№ {order.orderNumber || '—'}</div>
-                    </td>
-                    {roleTabs.map(tab => {
-                      const progress = getRoleProgressInfo(order, tab.key);
-                      return (
-                        <td key={tab.key}>
-                          <span className={progress.className} title={progress.title}>
-                            {progress.text}
-                          </span>
-                        </td>
-                      );
-                    })}
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={overallStatusMeta.className}>
-                        {overallStatusMeta.label}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: 12, maxWidth: 200, wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                      {renderOrderComments(order)}
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredOverviewOrders.length === 0 && <tr><td colSpan={roleTabs.length + 3} className="empty-cell">Нет заказов</td></tr>}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mobile-card-list">
-          {filteredOverviewOrders.map(order => {
-            const overallStatusMeta = getOrderStatusMeta(order.overallStatus);
-            return (
-              <div key={order._id} className="mobile-order-card">
-                <div className="mobile-order-card-header">
-                  <div>
-                    <div className="mobile-order-card-title">{order.name}</div>
-                    <div className="mobile-order-card-subtitle">№ {order.orderNumber || '—'}</div>
-                  </div>
-                  <span className={overallStatusMeta.className}>{overallStatusMeta.label}</span>
-                </div>
-
-                <div className="mobile-order-card-note">
-                  <div className="mobile-order-card-label">Прогресс по ролям</div>
-                  <div className="order-role-progress-list">
-                    {roleTabs.map(tab => {
-                      const progress = getRoleProgressInfo(order, tab.key);
-                      if (!progress.total) return null;
-                      return (
-                        <div key={tab.key} className="order-role-progress-row">
-                          <span className="order-role-progress-label">{getRoleShortLabel(tab.key)}</span>
-                          <span className={progress.className} title={progress.title}>
-                            {progress.text}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="mobile-order-card-note">
-                  <div className="mobile-order-card-label">Примечания</div>
-                  <div>{renderOrderComments(order)}</div>
-                </div>
-              </div>
-            );
-          })}
-          {filteredOverviewOrders.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
-        </div>
-      </div>
-
-      <CommentsModal
-        commentsModal={commentsModal}
-        closeCommentsModal={closeCommentsModal}
-        setCommentsModal={setCommentsModal}
-        getRoleLabel={getRoleLabel}
-        getCommentPreview={getCommentPreview}
-      />
 
       <EmployeeModal
         mode={employeeModalMode}

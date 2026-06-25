@@ -77,7 +77,7 @@ function AdminTokenControls() {
     <div className="panel-soft">
       <div className="panel-soft-title">Доступ по паролю</div>
       <div className="panel-soft-text">
-        Здесь задаются пароли для администратора и менеджера. Администратор получает полный доступ, менеджер работает без доступа к админ-панели.
+        Здесь задаются пароли для администратора и рабочего доступа. Администратор получает полный доступ, рабочий доступ открывает заказы и рабочие страницы без системных настроек.
       </div>
 
       <div className="responsive-form-grid" style={{ marginTop: 16 }}>
@@ -100,18 +100,18 @@ function AdminTokenControls() {
         </div>
 
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Пароль менеджера</label>
+          <label>Рабочий пароль</label>
           <input
             type="password"
             value={form.managerPassword}
             onChange={(e) => setForm(current => ({ ...current, managerPassword: e.target.value }))}
-            placeholder="Введите новый пароль менеджера"
+            placeholder="Введите новый рабочий пароль"
             disabled={saving}
           />
           <div className="text-small text-subtle" style={{ marginTop: 8 }}>
             {config.managerPasswordConfigured
-              ? 'Пароль менеджера настроен.'
-              : 'Пароль менеджера пока не задан.'}
+              ? 'Рабочий пароль настроен.'
+              : 'Рабочий пароль пока не задан.'}
           </div>
         </div>
       </div>

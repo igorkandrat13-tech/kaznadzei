@@ -29,7 +29,7 @@ function ProtectedRoute({ requiredRole, children }) {
 
 function getAuthRoleLabel(role) {
     if (role === 'admin') return 'Администратор';
-    if (role === 'manager') return 'Менеджер';
+    if (role === 'manager') return 'Рабочий доступ';
     return '';
 }
 

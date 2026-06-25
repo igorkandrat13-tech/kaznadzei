@@ -142,8 +142,8 @@ function Archive() {
             <p>Фильтрация и просмотр завершенных и текущих заказов без возврата через историю браузера.</p>
           </div>
           <div className="section-header-actions">
-            <Link to="/manager" className="btn btn-secondary">К менеджеру</Link>
-            <Link to="/admin" className="btn btn-secondary">К админке</Link>
+            <Link to="/orders" className="btn btn-secondary">К заказам</Link>
+            <Link to="/settings" className="btn btn-secondary">К настройкам</Link>
           </div>
         </div>
         <div className="responsive-filters">

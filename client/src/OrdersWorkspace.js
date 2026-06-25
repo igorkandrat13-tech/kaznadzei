@@ -6,6 +6,8 @@ import { canAccessRole, getAppAuthRole } from './appAuth';
 import { useRoleConfig } from './RoleConfigContext';
 import { getOrderStatusMeta } from './statusMeta';
 
+const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
+
 function getItemRoleSummary(item, role) {
   const stages = Array.isArray(item?.stages) ? item.stages.filter(stage => stage.role === role) : [];
   if (stages.length === 0) {
@@ -62,6 +64,21 @@ function formatDateDisplay(value) {
   if (!normalized) return '—';
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? normalized : date.toLocaleDateString();
+}
+
+function formatManufacturingTime(startDate, endDate) {
+  const normalizedStart = String(startDate || '').trim();
+  if (!normalizedStart) return '—';
+
+  const start = new Date(normalizedStart);
+  if (Number.isNaN(start.getTime())) return '—';
+
+  const normalizedEnd = String(endDate || '').trim() || new Date().toISOString().split('T')[0];
+  const end = new Date(normalizedEnd);
+  if (Number.isNaN(end.getTime())) return '—';
+
+  const diffDays = Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+  return String(diffDays);
 }
 
 function escapeCsvValue(value) {
@@ -304,6 +321,11 @@ function OrdersWorkspace() {
     acc[row.key] = row;
     return acc;
   }, {}), [rows]);
+
+  const visibleTableRoles = useMemo(
+    () => allRoleTabs.filter(role => !HIDDEN_TABLE_ROLE_KEYS.has(role.key)),
+    [allRoleTabs],
+  );
 
   const availableRooms = useMemo(() => {
     return Array.from(new Set(
@@ -603,28 +625,30 @@ function OrdersWorkspace() {
 
   const exportRowsToCsv = () => {
     const headers = [
-      'Номер заказа',
+      'Заказ не обработан',
       'Заказчик',
       'Помещение',
       '№ помещения',
       '№ изделия в заказе',
       '№ изделия',
-      'Количество',
-      'Изделие',
+      'Кол-во изделй',
+      'Наименование',
+      'Размеры',
       'Отгрузка до',
       'Материал',
-      'Комплектация',
-      'Фото',
+      'Комплектация заказа',
+      'Покраска',
+      'Ссылка / фото',
       'Примечания',
-      ...allRoleTabs.map(role => role.plainLabel || role.label),
-      'Статус',
-      'Комментарии специалистов',
+      'СТОЛЯР',
+      'Начало изготовления',
+      'Окончание',
+      'Время изготовления',
     ];
 
     const csvLines = [
       headers.map(escapeCsvValue).join(';'),
-      ...rows.map(({ order, item, overallStatus }) => {
-        const statusMeta = getOrderStatusMeta(overallStatus);
+      ...rows.map(({ order, item }) => {
         const cells = [
           order.orderNumber || '',
           order.customer || '',
@@ -634,14 +658,17 @@ function OrdersWorkspace() {
           item.productNumber || '',
           item.quantity || '',
           item.name || '',
+          '',
           item.deliveryDate || '',
           item.material || '',
           item.packageName || '',
+          getItemRoleSummary(item, 'painter').text || '',
           item.photoLink || '',
           item.notes || '',
-          ...allRoleTabs.map(role => getItemRoleSummary(item, role.key).text || ''),
-          statusMeta.label,
-          getCommentPreview(item.comments),
+          getItemRoleSummary(item, 'carpenter').text || '',
+          order.startDate || '',
+          order.endDate || '',
+          formatManufacturingTime(order.startDate, order.endDate),
         ];
         return cells.map(escapeCsvValue).join(';');
       }),
@@ -685,7 +712,7 @@ function OrdersWorkspace() {
           <div>
             <h2 className="section-header-title">📋 Единая таблица заказов</h2>
             <p className="section-header-description">
-              Одна строка соответствует одному изделию в заказе. Таблица приближена к Excel-учету, а цвет по роли показывает, что изделие взято в работу.
+              Одна строка соответствует одному изделию в заказе. Колонки и порядок заголовков повторяют рабочий файл заказчика.
             </p>
           </div>
           <div className="section-header-actions">
@@ -722,7 +749,7 @@ function OrdersWorkspace() {
             <label>Активная роль</label>
             <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
               <option value="all">Все</option>
-              {allRoleTabs.map(role => (
+              {visibleTableRoles.map(role => (
                 <option key={role.key} value={role.key}>{role.plainLabel || role.label}</option>
               ))}
             </select>
@@ -744,7 +771,7 @@ function OrdersWorkspace() {
           <span className="excel-stage-chip excel-stage-chip-pending">Ожидание</span>
           <span className="excel-stage-chip excel-stage-chip-progress">Частично</span>
           <span className="excel-stage-chip excel-stage-chip-completed">Готово</span>
-          {allRoleTabs.map(role => (
+          {visibleTableRoles.map(role => (
             <span key={role.key} className={`excel-stage-chip excel-stage-chip-active excel-stage-chip-role-${role.key}`}>
               {role.plainLabel || role.label}
             </span>
@@ -781,27 +808,47 @@ function OrdersWorkspace() {
           <div className="table-scroll">
             <table className="orders-table unified-orders-table">
               <thead>
-                <tr>
-                  <th className="sticky-col sticky-col-1">№ заказа</th>
-                  <th className="sticky-col sticky-col-2">Заказчик</th>
-                  <th className="sticky-col sticky-col-3">Помещение</th>
-                  <th>№ пом.</th>
-                  <th>№ изд. в заказе</th>
-                  <th>№ изделия</th>
-                  <th>Кол-во</th>
-                  <th>Изделие</th>
-                  <th>Отгрузка до</th>
-                  <th>Материал</th>
-                  <th>Комплектация</th>
-                  <th>Фото</th>
-                  <th>Примечания</th>
-                  {allRoleTabs.map(role => (
-                    <th key={role.key}>{role.plainLabel || role.label}</th>
-                  ))}
-                  <th>Статус</th>
-                  <th>Комм. спец.</th>
-                  <th>QR</th>
-                  <th>Действия</th>
+                <tr className="xlsx-header-row xlsx-header-row-primary">
+                  <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">&nbsp;</th>
+                  <th className="sticky-col sticky-col-2 xlsx-header-primary-cell">Заказчик</th>
+                  <th className="sticky-col sticky-col-3 xlsx-header-primary-cell">Помещение </th>
+                  <th className="xlsx-header-primary-cell">№ помещения</th>
+                  <th className="xlsx-header-primary-cell">№ изделия в заказе</th>
+                  <th className="xlsx-header-primary-cell">№ изделия</th>
+                  <th className="xlsx-header-primary-cell">Кол-во изделй</th>
+                  <th className="xlsx-header-primary-cell">Наименование</th>
+                  <th className="xlsx-header-primary-cell">&nbsp;</th>
+                  <th className="xlsx-header-primary-cell">Отгрузка до</th>
+                  <th className="xlsx-header-primary-cell">Материал</th>
+                  <th className="xlsx-header-primary-cell">Комплектация заказа</th>
+                  <th className="xlsx-header-primary-cell">Покраска</th>
+                  <th className="xlsx-header-primary-cell">Ссылка / фото</th>
+                  <th className="xlsx-header-primary-cell">Примечания</th>
+                  <th className="xlsx-header-primary-cell">СТОЛЯР</th>
+                  <th className="xlsx-header-primary-cell">Начало изготовления</th>
+                  <th className="xlsx-header-primary-cell">Окончание</th>
+                  <th className="xlsx-header-primary-cell">Время изготовления</th>
+                </tr>
+                <tr className="xlsx-header-row xlsx-header-row-secondary">
+                  <th className="sticky-col sticky-col-1 xlsx-header-secondary-cell">Заказ не обработан</th>
+                  <th className="sticky-col sticky-col-2 xlsx-header-secondary-cell">&nbsp;</th>
+                  <th className="sticky-col sticky-col-3 xlsx-header-secondary-cell">ТЗ от заказчика</th>
+                  <th className="xlsx-header-secondary-cell">&nbsp;</th>
+                  <th className="xlsx-header-secondary-cell">ТЗ для чертежей</th>
+                  <th className="xlsx-header-secondary-cell">&nbsp;</th>
+                  <th className="xlsx-header-secondary-cell">Начерчен</th>
+                  <th className="xlsx-header-secondary-cell">Расписан</th>
+                  <th className="xlsx-header-secondary-cell">Размеры</th>
+                  <th className="xlsx-header-secondary-cell">Готово ТЗ</th>
+                  <th className="xlsx-header-secondary-cell">Набирается заготовка</th>
+                  <th className="xlsx-header-secondary-cell">Укомплектовано</th>
+                  <th className="xlsx-header-secondary-cell">Собирается</th>
+                  <th className="xlsx-header-secondary-cell">Шлифуется</th>
+                  <th className="xlsx-header-secondary-cell">Красится</th>
+                  <th className="xlsx-header-secondary-cell">Сборка после покраски</th>
+                  <th className="xlsx-header-secondary-cell">&nbsp;</th>
+                  <th className="xlsx-header-secondary-cell">Готов</th>
+                  <th className="xlsx-header-secondary-cell">Доставка/монтаж</th>
                 </tr>
               </thead>
               <tbody>
@@ -810,20 +857,52 @@ function OrdersWorkspace() {
                   const inlineDraft = inlineDrafts[key] || null;
                   const isInlineEditing = Boolean(inlineDraft);
                   const isInlineSaving = inlineSavingKey === key;
+                  const commentPreview = getCommentPreview(item.comments);
+                  const painterSummary = getItemRoleSummary(item, 'painter');
+                  const carpenterSummary = getItemRoleSummary(item, 'carpenter');
                   return (
                     <tr key={key} className={isInlineEditing ? 'unified-orders-row-editing' : ''}>
                       <td className="sticky-col sticky-col-1">
-                        {isInlineEditing ? (
-                          <input
-                            className="table-inline-input"
-                            value={inlineDraft.orderNumber}
-                            onChange={handleInlineChange(key, 'orderNumber')}
-                          />
-                        ) : (
-                          <Link className="order-link-button" to={`/order/${order._id}/item/${item.itemId}`}>
-                            {order.orderNumber || '—'}
-                          </Link>
-                        )}
+                        <div className="xlsx-order-cell">
+                          {isInlineEditing ? (
+                            <input
+                              className="table-inline-input"
+                              value={inlineDraft.orderNumber}
+                              onChange={handleInlineChange(key, 'orderNumber')}
+                            />
+                          ) : (
+                            <Link className="order-link-button" to={`/order/${order._id}/item/${item.itemId}`}>
+                              {order.orderNumber || '—'}
+                            </Link>
+                          )}
+                          <div className="xlsx-order-cell-meta">
+                            <span className={overallStatusMeta.className}>{overallStatusMeta.label}</span>
+                            {commentPreview !== '—' ? (
+                              <span className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</span>
+                            ) : null}
+                          </div>
+                          <div className="table-action-group xlsx-order-cell-actions">
+                            {isInlineEditing ? (
+                              <>
+                                <button className="btn btn-success btn-small" onClick={() => saveInlineRow(key)} disabled={isInlineSaving}>
+                                  {isInlineSaving ? '...' : 'Сохр.'}
+                                </button>
+                                <button className="btn btn-secondary btn-small" onClick={() => cancelInlineEdit(key)} disabled={isInlineSaving}>Отм.</button>
+                              </>
+                            ) : (
+                              <button className="btn btn-secondary btn-small" onClick={() => openInlineEdit({ key, order, item })}>Быстро</button>
+                            )}
+                            <button
+                              className="btn btn-secondary btn-small"
+                              onClick={() => handleDownloadQr(order._id, item.itemId, `${order.orderNumber || 'order'}-${item.itemNumber || 'item'}`)}
+                              disabled={downloadingKey === `${order._id}:${item.itemId}`}
+                            >
+                              {downloadingKey === `${order._id}:${item.itemId}` ? '...' : 'QR'}
+                            </button>
+                            <button className="btn btn-secondary btn-small" onClick={() => openEditForm(order)}>Заказ</button>
+                            <button className="btn btn-danger btn-small" onClick={() => requestDelete(order)}>Удал.</button>
+                          </div>
+                        </div>
                       </td>
                       <td className="sticky-col sticky-col-2">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.customer} onChange={handleInlineChange(key, 'customer')} /> : (order.customer || '—')}</td>
                       <td className="sticky-col sticky-col-3">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
@@ -838,9 +917,13 @@ function OrdersWorkspace() {
                           <div className="order-primary-title"><strong>{item.name || '—'}</strong></div>
                         )}
                       </td>
+                      <td className="xlsx-empty-cell">—</td>
                       <td>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
+                      <td>
+                        <span className={painterSummary.className} title={painterSummary.title}>{painterSummary.text}</span>
+                      </td>
                       <td>
                         {isInlineEditing ? (
                           <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
@@ -855,49 +938,18 @@ function OrdersWorkspace() {
                           item.notes || '—'
                         )}
                       </td>
-                      {allRoleTabs.map(role => {
-                        const summary = getItemRoleSummary(item, role.key);
-                        return (
-                          <td key={role.key}>
-                            <span className={summary.className} title={summary.title}>{summary.text}</span>
-                          </td>
-                        );
-                      })}
                       <td>
-                        <span className={overallStatusMeta.className}>{overallStatusMeta.label}</span>
+                        <span className={carpenterSummary.className} title={carpenterSummary.title}>{carpenterSummary.text}</span>
                       </td>
-                      <td className="comments-cell">{getCommentPreview(item.comments)}</td>
-                      <td>
-                        <button
-                          className="btn btn-secondary btn-small"
-                          onClick={() => handleDownloadQr(order._id, item.itemId, `${order.orderNumber || 'order'}-${item.itemNumber || 'item'}`)}
-                          disabled={downloadingKey === `${order._id}:${item.itemId}`}
-                        >
-                          {downloadingKey === `${order._id}:${item.itemId}` ? '...' : 'QR'}
-                        </button>
-                      </td>
-                      <td>
-                        <div className="table-action-group">
-                          {isInlineEditing ? (
-                            <>
-                              <button className="btn btn-success btn-small" onClick={() => saveInlineRow(key)} disabled={isInlineSaving}>
-                                {isInlineSaving ? '...' : 'Сохр.'}
-                              </button>
-                              <button className="btn btn-secondary btn-small" onClick={() => cancelInlineEdit(key)} disabled={isInlineSaving}>Отм.</button>
-                            </>
-                          ) : (
-                            <button className="btn btn-secondary btn-small" onClick={() => openInlineEdit({ key, order, item })}>Быстро</button>
-                          )}
-                          <button className="btn btn-secondary btn-small" onClick={() => openEditForm(order)}>Заказ</button>
-                          <button className="btn btn-danger btn-small" onClick={() => requestDelete(order)}>Удал.</button>
-                        </div>
-                      </td>
+                      <td>{formatDateDisplay(order.startDate)}</td>
+                      <td>{formatDateDisplay(order.endDate)}</td>
+                      <td>{formatManufacturingTime(order.startDate, order.endDate)}</td>
                     </tr>
                   );
                 })}
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={allRoleTabs.length + 16} className="empty-cell">Нет изделий по выбранным фильтрам</td>
+                    <td colSpan={19} className="empty-cell">Нет изделий по выбранным фильтрам</td>
                   </tr>
                 ) : null}
               </tbody>
