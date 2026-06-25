@@ -805,9 +805,6 @@ function OrdersWorkspace() {
         <div className="section-header">
           <div>
             <h2 className="section-header-title">📋 Единая таблица заказов</h2>
-            <p className="section-header-description">
-              Одна строка соответствует одному изделию в заказе. Колонки и порядок заголовков повторяют рабочий файл заказчика.
-            </p>
           </div>
           <div className="section-header-actions">
             <button className="btn btn-primary" onClick={openCreateForm}>➕ Новый заказ</button>
