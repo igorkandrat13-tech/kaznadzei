@@ -874,7 +874,7 @@ function OrdersWorkspace() {
                 <tr className="xlsx-header-row xlsx-header-row-primary">
                   <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">Номер заказа</th>
                   <th className="sticky-col sticky-col-2 xlsx-header-primary-cell">Заказчик</th>
-                  <th className="sticky-col sticky-col-3 xlsx-header-primary-cell">Помещение</th>
+                  <th className="xlsx-header-primary-cell">Помещение</th>
                   <th className="xlsx-header-primary-cell">№ помещения</th>
                   <th className="xlsx-header-primary-cell">№ изделия в заказе</th>
                   <th className="xlsx-header-primary-cell">Кол-во изделй</th>
@@ -894,7 +894,7 @@ function OrdersWorkspace() {
                 <tr className="xlsx-header-row xlsx-header-row-secondary">
                   <th className="sticky-col sticky-col-1 xlsx-header-secondary-cell">Заказ не обработан</th>
                   <th className="sticky-col sticky-col-2 xlsx-header-secondary-cell">&nbsp;</th>
-                  <th className="sticky-col sticky-col-3 xlsx-header-secondary-cell">ТЗ от заказчика</th>
+                  <th className="xlsx-header-secondary-cell">ТЗ от заказчика</th>
                   <th className="xlsx-header-secondary-cell">&nbsp;</th>
                   <th className="xlsx-header-secondary-cell">ТЗ для чертежей</th>
                   <th className="xlsx-header-secondary-cell">Начерчен</th>
@@ -958,7 +958,7 @@ function OrdersWorkspace() {
                           {isOrderInlineEditing ? <input className="table-inline-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : (order.customer || '—')}
                         </td>
                       ) : null}
-                      <td className="sticky-col sticky-col-3">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
+                      <td>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
                       <td>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>

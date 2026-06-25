@@ -1631,7 +1631,7 @@ table tr:hover td {
 }
 
 .unified-orders-table {
-  min-width: 2140px;
+  min-width: 1600px;
   width: 100%;
   table-layout: fixed;
 }
@@ -1640,7 +1640,7 @@ table tr:hover td {
 .unified-orders-table td {
   vertical-align: top;
   text-align: left;
-  padding: 8px 10px;
+  padding: 6px 8px;
 }
 
 .unified-orders-table th {
@@ -1648,7 +1648,7 @@ table tr:hover td {
   z-index: 2;
   background: linear-gradient(180deg, rgba(21, 39, 62, 0.98), rgba(16, 31, 51, 0.98));
   text-transform: none;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.15;
 }
 
@@ -1662,7 +1662,7 @@ table tr:hover td {
   z-index: 3;
   background: linear-gradient(180deg, rgba(16, 31, 51, 0.98), rgba(13, 25, 42, 0.98));
   color: #d7ebff;
-  font-size: 11px;
+  font-size: 10px;
   white-space: normal;
 }
 
@@ -1760,60 +1760,60 @@ table tr:hover td {
 }
 
 .unified-orders-table col.col-order-number {
-  width: 156px;
+  width: 120px;
 }
 
 .unified-orders-table col.col-customer {
-  width: 314px;
+  width: 220px;
 }
 
 .unified-orders-table col.col-room {
-  width: 160px;
+  width: 90px;
 }
 
 .unified-orders-table col.col-room-number,
 .unified-orders-table col.col-item-number,
 .unified-orders-table col.col-quantity {
-  width: 92px;
+  width: 58px;
 }
 
 .unified-orders-table col.col-name {
-  width: 220px;
+  width: 130px;
 }
 
 .unified-orders-table col.col-item-actions {
-  width: 94px;
+  width: 38px;
 }
 
 .unified-orders-table col.col-delivery-date {
-  width: 136px;
+  width: 82px;
 }
 
 .unified-orders-table col.col-material {
-  width: 246px;
+  width: 120px;
 }
 
 .unified-orders-table col.col-package {
-  width: 190px;
+  width: 108px;
 }
 
 .unified-orders-table col.col-paint {
-  width: 150px;
+  width: 78px;
 }
 
 .unified-orders-table col.col-photo {
-  width: 220px;
+  width: 110px;
 }
 
 .unified-orders-table col.col-notes {
-  width: 210px;
+  width: 120px;
 }
 
 .unified-orders-table col.col-carpenter,
 .unified-orders-table col.col-start-date,
 .unified-orders-table col.col-end-date,
 .unified-orders-table col.col-duration {
-  width: 112px;
+  width: 64px;
 }
 
 .xlsx-order-cell {
@@ -1953,11 +1953,7 @@ table tr:hover td {
 }
 
 .sticky-col-2 {
-  left: 156px;
-}
-
-.sticky-col-3 {
-  left: 470px;
+  left: 120px;
 }
 
 .unified-orders-row-editing {
@@ -1971,12 +1967,12 @@ table tr:hover td {
   border-radius: 8px;
   background: rgba(10, 23, 39, 0.92);
   color: #edf6ff;
-  padding: 8px 9px;
-  font-size: 13px;
+  padding: 6px 7px;
+  font-size: 12px;
 }
 
 .table-inline-input {
-  min-height: 36px;
+  min-height: 32px;
 }
 
 .table-inline-input-narrow {
@@ -2062,8 +2058,8 @@ table tr:hover td {
 }
 
 .notes-cell {
-  min-width: 220px;
-  max-width: 320px;
+  min-width: 0;
+  max-width: none;
   white-space: normal;
   word-break: break-word;
 }
