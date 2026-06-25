@@ -166,6 +166,10 @@ function hasOrderFormErrors(formErrors) {
   return (formErrors.items || []).some(itemError => itemError.name || itemError.quantity);
 }
 
+function getOrderIdentity(row) {
+  return row.order?._id || row.order?.orderNumber || row.key;
+}
+
 function OrdersWorkspace() {
   const authRole = getAppAuthRole();
   const { allRoleTabs } = useRoleConfig();
@@ -188,6 +192,7 @@ function OrdersWorkspace() {
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
   const [qrPreview, setQrPreview] = useState(null);
+  const [orderActionsOrder, setOrderActionsOrder] = useState(null);
 
   const fetchOrders = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) {
@@ -264,6 +269,7 @@ function OrdersWorkspace() {
 
           return {
             key: `${order._id}:${item.itemId}`,
+            orderId: order._id || '',
             order,
             item,
             overallStatus,
@@ -286,7 +292,7 @@ function OrdersWorkspace() {
   const firstOrderRowKeys = useMemo(() => {
     const seenOrders = new Set();
     return rows.reduce((acc, row) => {
-      const orderId = row.order?._id || row.order?.orderNumber || row.key;
+      const orderId = getOrderIdentity(row);
       const isFirst = !seenOrders.has(orderId);
       if (isFirst) {
         seenOrders.add(orderId);
@@ -295,6 +301,31 @@ function OrdersWorkspace() {
       return acc;
     }, {});
   }, [rows]);
+  const orderRowSpans = useMemo(() => {
+    const counts = rows.reduce((acc, row) => {
+      const orderId = getOrderIdentity(row);
+      acc[orderId] = (acc[orderId] || 0) + 1;
+      return acc;
+    }, {});
+
+    return rows.reduce((acc, row) => {
+      const orderId = getOrderIdentity(row);
+      acc[row.key] = firstOrderRowKeys[row.key] ? counts[orderId] || 1 : 0;
+      return acc;
+    }, {});
+  }, [firstOrderRowKeys, rows]);
+  const orderDraftKeys = useMemo(() => {
+    return Object.keys(inlineDrafts).reduce((acc, rowKey) => {
+      const row = rowsByKey[rowKey];
+      if (!row) return acc;
+      const orderId = getOrderIdentity(row);
+      if (!acc[orderId]) {
+        acc[orderId] = [];
+      }
+      acc[orderId].push(rowKey);
+      return acc;
+    }, {});
+  }, [inlineDrafts, rowsByKey]);
 
   const availableRooms = useMemo(() => {
     return Array.from(new Set(
@@ -535,10 +566,6 @@ function OrdersWorkspace() {
     }));
   };
 
-  const closeActionMenu = (event) => {
-    event?.currentTarget?.closest('details')?.removeAttribute('open');
-  };
-
   const saveInlineRow = async (rowKey) => {
     const row = rowsByKey[rowKey];
     const draft = inlineDrafts[rowKey];
@@ -642,6 +669,18 @@ function OrdersWorkspace() {
         break;
       }
     }
+  };
+
+  const cancelOrderInlineEdits = (orderId) => {
+    const keys = orderDraftKeys[orderId] || [];
+    if (keys.length === 0) return;
+    setInlineDrafts(current => {
+      const next = { ...current };
+      keys.forEach((rowKey) => {
+        delete next[rowKey];
+      });
+      return next;
+    });
   };
 
   const exportRowsToCsv = () => {
@@ -811,6 +850,26 @@ function OrdersWorkspace() {
         ) : (
           <div className="table-scroll">
             <table className="orders-table unified-orders-table">
+              <colgroup>
+                <col className="col-order-number" />
+                <col className="col-customer" />
+                <col className="col-room" />
+                <col className="col-room-number" />
+                <col className="col-item-number" />
+                <col className="col-quantity" />
+                <col className="col-name" />
+                <col className="col-item-actions" />
+                <col className="col-delivery-date" />
+                <col className="col-material" />
+                <col className="col-package" />
+                <col className="col-paint" />
+                <col className="col-photo" />
+                <col className="col-notes" />
+                <col className="col-carpenter" />
+                <col className="col-start-date" />
+                <col className="col-end-date" />
+                <col className="col-duration" />
+              </colgroup>
               <thead>
                 <tr className="xlsx-header-row xlsx-header-row-primary">
                   <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">Номер заказа</th>
@@ -857,67 +916,48 @@ function OrdersWorkspace() {
                 {rows.map(({ key, order, item }) => {
                   const inlineDraft = inlineDrafts[key] || null;
                   const isInlineEditing = Boolean(inlineDraft);
-                  const isInlineSaving = inlineSavingKey === key;
                   const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
+                  const orderRowSpan = orderRowSpans[key] || 1;
+                  const orderId = getOrderIdentity({ key, order });
+                  const currentOrderDraftKeys = orderDraftKeys[orderId] || [];
+                  const orderInlineDraft = currentOrderDraftKeys.length > 0 ? inlineDrafts[currentOrderDraftKeys[0]] : null;
+                  const isOrderInlineEditing = Boolean(orderInlineDraft);
+                  const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                   const commentPreview = getCommentPreview(item.comments);
                   return (
                     <tr key={key} className={isInlineEditing ? 'unified-orders-row-editing' : ''}>
-                      <td className="sticky-col sticky-col-1">
-                        <div className="xlsx-order-cell">
-                          {isFirstOrderRow ? (
-                            <>
-                              {isAdmin ? (
-                                <input
-                                  className="table-inline-input"
-                                  value={isInlineEditing ? inlineDraft.orderNumber : (order.orderNumber || '')}
-                                  onChange={handleOrderNumberCellChange(key, { key, order, item })}
-                                  placeholder="Номер заказа"
-                                />
-                              ) : (
-                                <Link className="order-link-button" to={`/order/${order._id}/item/${item.itemId}`}>
-                                  {order.orderNumber || '—'}
-                                </Link>
-                              )}
-                              <details className="manager-actions-menu order-number-action-menu">
-                                <summary className="order-number-action-trigger" aria-label={`Действия для заказа ${order.orderNumber || ''}`}>
-                                  <span className="order-number-action-label">...</span>
-                                </summary>
-                                <div className="manager-actions-dropdown">
-                                  {isInlineEditing ? (
-                                    <>
-                                      <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { saveInlineRow(key); closeActionMenu(event); }} disabled={isInlineSaving}>
-                                        {isInlineSaving ? 'Сохранение...' : 'Сохранить'}
-                                      </button>
-                                      <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { cancelInlineEdit(key); closeActionMenu(event); }} disabled={isInlineSaving}>
-                                        Отменить
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openInlineEdit({ key, order, item }); closeActionMenu(event); }}>
-                                      Быстрое редактирование
-                                    </button>
-                                  )}
-                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openQrPreview(order, item); closeActionMenu(event); }}>
-                                    QR-код
-                                  </button>
-                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openEditForm(order); closeActionMenu(event); }}>
-                                    Весь заказ
-                                  </button>
-                                  <button className="btn btn-danger manager-actions-dropdown-btn" type="button" onClick={(event) => { requestDelete(order); closeActionMenu(event); }}>
-                                    Удалить
-                                  </button>
-                                </div>
-                              </details>
-                            </>
-                          ) : null}
-                          <div className="xlsx-order-cell-meta">
-                            {commentPreview !== '—' ? (
-                              <span className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</span>
-                            ) : null}
+                      {isFirstOrderRow ? (
+                        <td rowSpan={orderRowSpan} className="sticky-col sticky-col-1 merged-order-cell">
+                          <div className="xlsx-order-cell">
+                            {isAdmin ? (
+                              <input
+                                className="table-inline-input"
+                                value={isOrderInlineEditing ? orderInlineDraft.orderNumber : (order.orderNumber || '')}
+                                onChange={handleOrderNumberCellChange(key, { key, order, item })}
+                                placeholder="Номер заказа"
+                              />
+                            ) : (
+                              <Link className="order-link-button" to={`/order/${order._id}/item/${item.itemId}`}>
+                                {order.orderNumber || '—'}
+                              </Link>
+                            )}
+                            <button
+                              className={`btn btn-secondary btn-small order-actions-trigger ${hasOrderDrafts ? 'order-actions-trigger-attention' : ''}`}
+                              type="button"
+                              aria-label={`Действия над заказом ${order.orderNumber || ''}`}
+                              title={hasOrderDrafts ? 'Действия над заказом: есть быстрые правки' : 'Действия над заказом'}
+                              onClick={() => setOrderActionsOrder(order)}
+                            >
+                              ...
+                            </button>
                           </div>
-                        </div>
-                      </td>
-                      <td className="sticky-col sticky-col-2">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.customer} onChange={handleInlineChange(key, 'customer')} /> : (order.customer || '—')}</td>
+                        </td>
+                      ) : null}
+                      {isFirstOrderRow ? (
+                        <td rowSpan={orderRowSpan} className="sticky-col sticky-col-2 merged-order-cell">
+                          {isOrderInlineEditing ? <input className="table-inline-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : (order.customer || '—')}
+                        </td>
+                      ) : null}
                       <td className="sticky-col sticky-col-3">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
@@ -945,13 +985,24 @@ function OrdersWorkspace() {
                         {isInlineEditing ? (
                           <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
                         ) : (
-                          item.notes || '—'
+                          <>
+                            {commentPreview !== '—' ? (
+                              <div className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</div>
+                            ) : null}
+                            {item.notes || (commentPreview !== '—' ? null : '—')}
+                          </>
                         )}
                       </td>
                       <td>—</td>
-                      <td>{formatDateDisplay(order.startDate)}</td>
-                      <td>{formatDateDisplay(order.endDate)}</td>
-                      <td>{formatManufacturingTime(order.startDate, order.endDate)}</td>
+                      {isFirstOrderRow ? (
+                        <td rowSpan={orderRowSpan} className="merged-order-cell">{formatDateDisplay(order.startDate)}</td>
+                      ) : null}
+                      {isFirstOrderRow ? (
+                        <td rowSpan={orderRowSpan} className="merged-order-cell">{formatDateDisplay(order.endDate)}</td>
+                      ) : null}
+                      {isFirstOrderRow ? (
+                        <td rowSpan={orderRowSpan} className="merged-order-cell">{formatManufacturingTime(order.startDate, order.endDate)}</td>
+                      ) : null}
                     </tr>
                   );
                 })}
@@ -1157,6 +1208,78 @@ function OrdersWorkspace() {
                   Печать
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {orderActionsOrder ? (
+        <div className="modal-overlay" onClick={() => setOrderActionsOrder(null)}>
+          <div className="modal-window modal-window-sm" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">Действия над заказом</div>
+                <div className="modal-subtitle">
+                  {orderActionsOrder.orderNumber ? `Заказ № ${orderActionsOrder.orderNumber}` : 'Без номера'}
+                  {orderActionsOrder.customer ? ` · ${orderActionsOrder.customer}` : ''}
+                </div>
+              </div>
+              <button className="btn btn-small modal-close-btn" onClick={() => setOrderActionsOrder(null)}>✕</button>
+            </div>
+
+            <div className="order-actions-modal-list">
+              <button
+                className="btn btn-primary order-actions-modal-btn"
+                type="button"
+                onClick={() => {
+                  setOrderActionsOrder(null);
+                  openEditForm(orderActionsOrder);
+                }}
+              >
+                Редактировать весь заказ
+              </button>
+              {Array.isArray(orderActionsOrder.items) && orderActionsOrder.items.length > 0 ? (
+                <div className="order-actions-qr-section">
+                  <div className="order-actions-qr-title">QR-коды изделий</div>
+                  <div className="order-actions-qr-list">
+                    {orderActionsOrder.items.map((item, index) => (
+                      <button
+                        key={item.itemId || `${orderActionsOrder._id || orderActionsOrder.orderNumber || 'order'}-${index}`}
+                        className="btn btn-secondary order-actions-modal-btn"
+                        type="button"
+                        onClick={() => {
+                          setOrderActionsOrder(null);
+                          openQrPreview(orderActionsOrder, item);
+                        }}
+                      >
+                        {`QR ${item.itemNumber ? `позиция ${item.itemNumber}` : `изделие ${index + 1}`}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {(orderDraftKeys[orderActionsOrder._id || orderActionsOrder.orderNumber || ''] || []).length > 0 ? (
+                <button
+                  className="btn btn-secondary order-actions-modal-btn"
+                  type="button"
+                  onClick={() => {
+                    cancelOrderInlineEdits(orderActionsOrder._id || orderActionsOrder.orderNumber || '');
+                    setOrderActionsOrder(null);
+                  }}
+                >
+                  Отменить быстрые правки по заказу
+                </button>
+              ) : null}
+              <button
+                className="btn btn-danger order-actions-modal-btn"
+                type="button"
+                onClick={() => {
+                  requestDelete(orderActionsOrder);
+                  setOrderActionsOrder(null);
+                }}
+              >
+                Удалить заказ
+              </button>
             </div>
           </div>
         </div>
