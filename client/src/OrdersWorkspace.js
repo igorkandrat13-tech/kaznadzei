@@ -246,6 +246,7 @@ function OrdersWorkspace() {
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
+  const [qrPreview, setQrPreview] = useState(null);
   const [showLegendEditor, setShowLegendEditor] = useState(false);
   const [legendColorDrafts, setLegendColorDrafts] = useState({});
   const [savingLegendKey, setSavingLegendKey] = useState('');
@@ -417,6 +418,43 @@ function OrdersWorkspace() {
     } finally {
       setDownloadingKey('');
     }
+  };
+
+  const openQrPreview = (order, item) => {
+    setQrPreview({
+      orderId: order._id,
+      itemId: item.itemId,
+      orderNumber: order.orderNumber || '',
+      itemNumber: item.itemNumber || '',
+      itemName: item.name || '',
+      fileNameBase: `${order.orderNumber || 'order'}-${item.itemNumber || 'item'}`,
+    });
+  };
+
+  const handlePrintQr = () => {
+    if (!qrPreview?.orderId || !qrPreview?.itemId) return;
+    const qrUrl = `${window.location.origin}/api/orders/${qrPreview.orderId}/items/${qrPreview.itemId}/qrcode`;
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=720,height=900');
+    if (!printWindow) return;
+    const title = `QR ${qrPreview.orderNumber || ''} ${qrPreview.itemNumber ? `- ${qrPreview.itemNumber}` : ''}`.trim();
+    printWindow.document.write(`<!doctype html>
+<html>
+  <head>
+    <title>${title}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 24px; text-align: center; }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { margin: 0 0 18px; color: #444; }
+      img { width: 320px; height: 320px; display: block; margin: 0 auto; }
+    </style>
+  </head>
+  <body>
+    <h1>${title || 'QR-код'}</h1>
+    <p>${qrPreview.itemName || ''}</p>
+    <img src="${qrUrl}" alt="QR code" onload="window.print(); setTimeout(() => window.close(), 150);" />
+  </body>
+</html>`);
+    printWindow.document.close();
   };
 
   const handleLegendDraftChange = (key) => (event) => {
@@ -612,6 +650,22 @@ function OrdersWorkspace() {
     }));
   };
 
+  const handleOrderNumberCellChange = (rowKey, row) => (event) => {
+    const value = event.target.value;
+    setError('');
+    setInlineDrafts(current => ({
+      ...current,
+      [rowKey]: {
+        ...(current[rowKey] || createInlineDraft(row)),
+        orderNumber: value,
+      },
+    }));
+  };
+
+  const closeActionMenu = (event) => {
+    event?.currentTarget?.closest('details')?.removeAttribute('open');
+  };
+
   const saveInlineRow = async (rowKey) => {
     const row = rowsByKey[rowKey];
     const draft = inlineDrafts[rowKey];
@@ -720,11 +774,11 @@ function OrdersWorkspace() {
   const exportRowsToCsv = () => {
     const headers = [
       '№',
+      'Номер заказа',
       'Заказчик',
       'Помещение',
       '№ помещения',
       '№ изделия в заказе',
-      '№ изделия',
       'Кол-во изделй',
       'Наименование',
       '',
@@ -742,14 +796,14 @@ function OrdersWorkspace() {
 
     const csvLines = [
       headers.map(escapeCsvValue).join(';'),
-      ...rows.map(({ order, item }) => {
+      ...rows.map(({ order, item }, index) => {
         const cells = [
+          index + 1,
           order.orderNumber || '',
           order.customer || '',
           item.room || '',
           item.roomNumber || '',
           item.itemNumber || '',
-          item.productNumber || '',
           item.quantity || '',
           item.name || '',
           '',
@@ -928,11 +982,11 @@ function OrdersWorkspace() {
               <thead>
                 <tr className="xlsx-header-row xlsx-header-row-primary">
                   <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">№</th>
-                  <th className="sticky-col sticky-col-2 xlsx-header-primary-cell">Заказчик</th>
-                  <th className="sticky-col sticky-col-3 xlsx-header-primary-cell">Помещение</th>
+                  <th className="sticky-col sticky-col-2 xlsx-header-primary-cell">Номер заказа</th>
+                  <th className="sticky-col sticky-col-3 xlsx-header-primary-cell">Заказчик</th>
+                  <th className="sticky-col sticky-col-4 xlsx-header-primary-cell">Помещение</th>
                   <th className="xlsx-header-primary-cell">№ помещения</th>
                   <th className="xlsx-header-primary-cell">№ изделия в заказе</th>
-                  <th className="xlsx-header-primary-cell">№ изделия</th>
                   <th className="xlsx-header-primary-cell">Кол-во изделй</th>
                   <th className="xlsx-header-primary-cell">Наименование</th>
                   <th className="xlsx-header-primary-cell">&nbsp;</th>
@@ -948,12 +1002,12 @@ function OrdersWorkspace() {
                   <th className="xlsx-header-primary-cell">Время изготовления</th>
                 </tr>
                 <tr className="xlsx-header-row xlsx-header-row-secondary">
-                  <th className="sticky-col sticky-col-1 xlsx-header-secondary-cell">Заказ не обработан</th>
-                  <th className="sticky-col sticky-col-2 xlsx-header-secondary-cell">&nbsp;</th>
-                  <th className="sticky-col sticky-col-3 xlsx-header-secondary-cell">ТЗ от заказчика</th>
+                  <th className="sticky-col sticky-col-1 xlsx-header-secondary-cell">&nbsp;</th>
+                  <th className="sticky-col sticky-col-2 xlsx-header-secondary-cell">Заказ не обработан</th>
+                  <th className="sticky-col sticky-col-3 xlsx-header-secondary-cell">&nbsp;</th>
+                  <th className="sticky-col sticky-col-4 xlsx-header-secondary-cell">ТЗ от заказчика</th>
                   <th className="xlsx-header-secondary-cell">&nbsp;</th>
                   <th className="xlsx-header-secondary-cell">ТЗ для чертежей</th>
-                  <th className="xlsx-header-secondary-cell">&nbsp;</th>
                   <th className="xlsx-header-secondary-cell">Начерчен</th>
                   <th className="xlsx-header-secondary-cell">Расписан</th>
                   <th className="xlsx-header-secondary-cell">Размеры</th>
@@ -970,59 +1024,72 @@ function OrdersWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ key, order, item }) => {
+                {rows.map(({ key, order, item }, index) => {
                   const inlineDraft = inlineDrafts[key] || null;
                   const isInlineEditing = Boolean(inlineDraft);
                   const isInlineSaving = inlineSavingKey === key;
                   const commentPreview = getCommentPreview(item.comments);
                   return (
                     <tr key={key} className={isInlineEditing ? 'unified-orders-row-editing' : ''}>
-                      <td className="sticky-col sticky-col-1">
+                      <td className="sticky-col sticky-col-1 xlsx-row-index-cell">{index + 1}</td>
+                      <td className="sticky-col sticky-col-2">
                         <div className="xlsx-order-cell">
-                          {isInlineEditing ? (
+                          <div className="xlsx-order-cell-top">
+                          {isAdmin ? (
                             <input
                               className="table-inline-input"
-                              value={inlineDraft.orderNumber}
-                              onChange={handleInlineChange(key, 'orderNumber')}
+                              value={isInlineEditing ? inlineDraft.orderNumber : (order.orderNumber || '')}
+                              onChange={handleOrderNumberCellChange(key, { key, order, item })}
+                              placeholder="Номер заказа"
                             />
                           ) : (
                             <Link className="order-link-button" to={`/order/${order._id}/item/${item.itemId}`}>
                               {order.orderNumber || '—'}
                             </Link>
                           )}
+                            <details className="manager-actions-menu order-number-action-menu">
+                              <summary className="order-number-action-trigger" aria-label={`Действия для заказа ${order.orderNumber || ''}`}>
+                                <span className="order-number-action-label">Действия</span>
+                                <span className="order-number-action-caret">▾</span>
+                              </summary>
+                              <div className="manager-actions-dropdown">
+                                {isInlineEditing ? (
+                                  <>
+                                    <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { saveInlineRow(key); closeActionMenu(event); }} disabled={isInlineSaving}>
+                                      {isInlineSaving ? 'Сохранение...' : 'Сохранить'}
+                                    </button>
+                                    <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { cancelInlineEdit(key); closeActionMenu(event); }} disabled={isInlineSaving}>
+                                      Отменить
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openInlineEdit({ key, order, item }); closeActionMenu(event); }}>
+                                    Быстрое редактирование
+                                  </button>
+                                )}
+                                <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openQrPreview(order, item); closeActionMenu(event); }}>
+                                  QR-код
+                                </button>
+                                <button className="btn manager-actions-dropdown-btn" type="button" onClick={(event) => { openEditForm(order); closeActionMenu(event); }}>
+                                  Весь заказ
+                                </button>
+                                <button className="btn btn-danger manager-actions-dropdown-btn" type="button" onClick={(event) => { requestDelete(order); closeActionMenu(event); }}>
+                                  Удалить
+                                </button>
+                              </div>
+                            </details>
+                          </div>
                           <div className="xlsx-order-cell-meta">
                             {commentPreview !== '—' ? (
                               <span className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</span>
                             ) : null}
                           </div>
-                          <div className="table-action-group xlsx-order-cell-actions">
-                            {isInlineEditing ? (
-                              <>
-                                <button className="btn btn-success btn-small" onClick={() => saveInlineRow(key)} disabled={isInlineSaving}>
-                                  {isInlineSaving ? '...' : 'Сохр.'}
-                                </button>
-                                <button className="btn btn-secondary btn-small" onClick={() => cancelInlineEdit(key)} disabled={isInlineSaving}>Отм.</button>
-                              </>
-                            ) : (
-                              <button className="btn btn-secondary btn-small" onClick={() => openInlineEdit({ key, order, item })}>Быстро</button>
-                            )}
-                            <button
-                              className="btn btn-secondary btn-small"
-                              onClick={() => handleDownloadQr(order._id, item.itemId, `${order.orderNumber || 'order'}-${item.itemNumber || 'item'}`)}
-                              disabled={downloadingKey === `${order._id}:${item.itemId}`}
-                            >
-                              {downloadingKey === `${order._id}:${item.itemId}` ? '...' : 'QR'}
-                            </button>
-                            <button className="btn btn-secondary btn-small" onClick={() => openEditForm(order)}>Заказ</button>
-                            <button className="btn btn-danger btn-small" onClick={() => requestDelete(order)}>Удал.</button>
-                          </div>
                         </div>
                       </td>
-                      <td className="sticky-col sticky-col-2">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.customer} onChange={handleInlineChange(key, 'customer')} /> : (order.customer || '—')}</td>
-                      <td className="sticky-col sticky-col-3">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
+                      <td className="sticky-col sticky-col-3">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.customer} onChange={handleInlineChange(key, 'customer')} /> : (order.customer || '—')}</td>
+                      <td className="sticky-col sticky-col-4">{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
                       <td>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
-                      <td>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.productNumber} onChange={handleInlineChange(key, 'productNumber')} /> : (item.productNumber || '—')}</td>
                       <td>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
                       <td>
                         {isInlineEditing ? (
@@ -1226,6 +1293,39 @@ function OrdersWorkspace() {
               <button className="btn btn-success" onClick={handleSubmit} disabled={!isFormValid || savingOrder}>
                 {savingOrder ? (editingOrderId ? 'Сохранение...' : 'Создание...') : (editingOrderId ? 'Сохранить заказ' : 'Создать заказ')}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {qrPreview ? (
+        <div className="modal-overlay" onClick={downloadingKey ? undefined : () => setQrPreview(null)}>
+          <div className="modal-window modal-window-sm qr-preview-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-title mb-16">QR-код заказа {qrPreview.orderNumber ? `№ ${qrPreview.orderNumber}` : ''}</div>
+            <div className="modal-subtitle mb-16">
+              {qrPreview.itemName || 'Изделие'}{qrPreview.itemNumber ? ` · позиция ${qrPreview.itemNumber}` : ''}
+            </div>
+            <img
+              src={`/api/orders/${qrPreview.orderId}/items/${qrPreview.itemId}/qrcode`}
+              alt="QR Code"
+              className="qr-image"
+            />
+            <div className="modal-actions modal-actions-between">
+              <button className="btn btn-secondary" onClick={() => setQrPreview(null)} disabled={Boolean(downloadingKey)}>
+                Закрыть
+              </button>
+              <div className="modal-actions-group">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleDownloadQr(qrPreview.orderId, qrPreview.itemId, qrPreview.fileNameBase)}
+                  disabled={downloadingKey === `${qrPreview.orderId}:${qrPreview.itemId}`}
+                >
+                  {downloadingKey === `${qrPreview.orderId}:${qrPreview.itemId}` ? 'Скачивание...' : 'Скачать'}
+                </button>
+                <button className="btn btn-secondary" onClick={handlePrintQr}>
+                  Печать
+                </button>
+              </div>
             </div>
           </div>
         </div>
