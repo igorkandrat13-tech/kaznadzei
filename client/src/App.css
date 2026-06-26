@@ -445,6 +445,45 @@ table tr:hover td {
   color: #9ff3d7;
 }
 
+.workshop-comment-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workshop-comment-text {
+  cursor: pointer;
+  flex: 1;
+  min-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  transition: color 0.2s ease;
+}
+
+.workshop-comment-text-filled {
+  color: var(--text-main);
+}
+
+.workshop-comment-text-empty {
+  color: var(--text-muted);
+}
+
+.workshop-comment-icon {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-muted);
+  user-select: none;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.workshop-comment-cell:hover .workshop-comment-text-filled,
+.workshop-comment-cell:hover .workshop-comment-icon {
+  color: var(--accent-cyan);
+}
+
 .manager-actions-cell {
   display: flex;
   align-items: center;
@@ -3552,6 +3591,133 @@ body[data-theme='light'] .manager-stage-empty {
 body[data-theme='light'] .manager-stage-panel-title,
 body[data-theme='light'] .manager-stage-name {
   color: #1c3956;
+}
+
+body[data-theme='light'] .mobile-empty-state,
+body[data-theme='light'] .order-actions-qr-section,
+body[data-theme='light'] .excel-bulk-toolbar,
+body[data-theme='light'] .order-item-editor-card,
+body[data-theme='light'] .scanner-status-box,
+body[data-theme='light'] .settings-hint,
+body[data-theme='light'] .manager-stage-panel,
+body[data-theme='light'] .manager-stage-empty {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 248, 254, 0.94));
+  border-color: rgba(111, 156, 203, 0.2);
+  box-shadow: 0 14px 30px rgba(40, 76, 114, 0.08);
+}
+
+body[data-theme='light'] .order-actions-trigger {
+  color: #173857;
+  border-color: rgba(111, 156, 203, 0.22);
+}
+
+body[data-theme='light'] .order-actions-trigger-attention {
+  border-color: rgba(74, 182, 150, 0.34);
+  box-shadow: 0 0 0 1px rgba(74, 182, 150, 0.12);
+}
+
+body[data-theme='light'] .order-actions-qr-title,
+body[data-theme='light'] .excel-legend-label,
+body[data-theme='light'] .panel-soft-message {
+  color: #2e5d81;
+}
+
+body[data-theme='light'] .home-stat-value {
+  color: #1f7bb0;
+}
+
+body[data-theme='light'] .home-auth-hint,
+body[data-theme='light'] .modal-subtitle,
+body[data-theme='light'] .workshop-comment-text-empty,
+body[data-theme='light'] .workshop-comment-icon {
+  color: rgba(61, 91, 121, 0.82);
+}
+
+body[data-theme='light'] .workshop-comment-text-filled {
+  color: #173857;
+}
+
+body[data-theme='light'] .workshop-comment-cell:hover .workshop-comment-text-filled,
+body[data-theme='light'] .workshop-comment-cell:hover .workshop-comment-icon {
+  color: #2167a6;
+}
+
+body[data-theme='light'] .excel-stage-chip {
+  border-color: rgba(111, 156, 203, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+body[data-theme='light'] .excel-stage-chip-empty {
+  background: rgba(239, 246, 253, 0.94);
+  color: #7089a2;
+}
+
+body[data-theme='light'] .excel-stage-chip-pending {
+  background: rgba(232, 240, 249, 0.96);
+  color: #284967;
+}
+
+body[data-theme='light'] .excel-stage-chip-progress {
+  background: rgba(255, 242, 208, 0.96);
+  color: #845712;
+}
+
+body[data-theme='light'] .excel-stage-chip-completed {
+  background: rgba(218, 248, 236, 0.96);
+  color: #145843;
+}
+
+body[data-theme='light'] .excel-stage-chip-active {
+  color: #16314b;
+  border-color: rgba(111, 156, 203, 0.26);
+  box-shadow: 0 8px 18px rgba(40, 76, 114, 0.08);
+}
+
+body[data-theme='light'] .excel-stage-chip-role-carpenter {
+  background: rgba(255, 235, 205, 0.96);
+}
+
+body[data-theme='light'] .excel-stage-chip-role-assembler {
+  background: rgba(220, 236, 252, 0.98);
+}
+
+body[data-theme='light'] .excel-stage-chip-role-painter {
+  background: rgba(238, 226, 247, 0.98);
+}
+
+body[data-theme='light'] .excel-stage-chip-role-designer {
+  background: rgba(218, 244, 237, 0.98);
+}
+
+body[data-theme='light'] .input-invalid {
+  background: rgba(255, 241, 241, 0.98);
+  border-color: #dd7870 !important;
+}
+
+body[data-theme='light'] .field-error,
+body[data-theme='light'] .text-danger {
+  color: #c95e57;
+}
+
+body[data-theme='light'] .help-tooltip-icon {
+  background: rgba(234, 244, 254, 0.98);
+  color: #2167a6;
+  border-color: rgba(111, 156, 203, 0.24);
+}
+
+body[data-theme='light'] .help-tooltip-content {
+  background: #ffffff;
+  color: #173857;
+  border: 1px solid rgba(111, 156, 203, 0.18);
+  box-shadow: 0 12px 28px rgba(40, 76, 114, 0.12);
+}
+
+body[data-theme='light'] .help-tooltip-content::after {
+  border-top-color: #ffffff;
+}
+
+body[data-theme='light'] .modal-overlay {
+  background: rgba(20, 42, 69, 0.18);
 }
 
 body[data-theme='light'] .role-progress-badge {

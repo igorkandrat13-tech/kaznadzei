@@ -191,26 +191,17 @@ function WorkshopPage({
     const text = getComment(order);
     const isLong = text.length > 40;
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div className="workshop-comment-cell">
         <span
           onClick={() => openCommentModal(order, text ? 'replace' : 'create')}
-          style={{
-            cursor: 'pointer',
-            fontSize: 13,
-            color: text ? '#333' : '#bbb',
-            minHeight: 20,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            flex: 1,
-          }}
+          className={`workshop-comment-text ${text ? 'workshop-comment-text-filled' : 'workshop-comment-text-empty'}`}
           title={text || 'Добавить примечание'}
         >
           {text ? (isLong ? text.slice(0, 40) + '...' : text) : '➕ Добавить'}
         </span>
         <span
           onClick={() => openCommentModal(order, text ? 'replace' : 'create')}
-          style={{ cursor: 'pointer', fontSize: 14, color: 'rgba(189, 208, 230, 0.62)', userSelect: 'none', flexShrink: 0 }}
+          className="workshop-comment-icon"
           title={text ? 'Открыть примечание' : 'Добавить примечание'}
         >
           {text ? '✏️' : '📝'}
