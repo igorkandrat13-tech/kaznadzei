@@ -70,12 +70,14 @@ function Admin() {
   const [roleModalMode, setRoleModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
   const [colorModalMode, setColorModalMode] = useState('');
+  const [showLegendColorModal, setShowLegendColorModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [savingStep, setSavingStep] = useState(false);
   const [savingColor, setSavingColor] = useState(false);
+  const [savingLegendColors, setSavingLegendColors] = useState(false);
   const [savingAppSettings, setSavingAppSettings] = useState(false);
   const [savingUpdateSettings, setSavingUpdateSettings] = useState(false);
 
@@ -85,6 +87,7 @@ function Admin() {
   const [editRole, setEditRole] = useState(null);
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
   const [newColor, setNewColor] = useState({ name: '', hex: '#000000' });
+  const [legendColorDrafts, setLegendColorDrafts] = useState([]);
   const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
   const [newRole, setNewRole] = useState({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
   const backupImportInputRef = useRef(null);
@@ -97,6 +100,7 @@ function Admin() {
       const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
       return {
         ...item,
+        colorId: savedColor?._id || '',
         hex: savedColor?.hex || item.defaultHex,
       };
     });
@@ -716,6 +720,32 @@ function Admin() {
     setNewColor({ name: '', hex: '#000000' });
   };
 
+  const openLegendColorModal = () => {
+    setLegendColorDrafts(legendItems.map(item => ({
+      key: item.key,
+      label: item.label,
+      description: item.description,
+      storeName: item.storeName,
+      colorId: item.colorId,
+      hex: item.hex,
+    })));
+    setShowLegendColorModal(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+  };
+
+  const closeLegendColorModal = () => {
+    if (savingLegendColors) return;
+    setShowLegendColorModal(false);
+    setLegendColorDrafts([]);
+  };
+
+  const updateLegendColorDraft = (key, patch) => {
+    setLegendColorDrafts(current => current.map(item => (
+      item.key === key ? { ...item, ...patch } : item
+    )));
+  };
+
   const requestDeleteAction = (action) => {
     setSettingsError('');
     setSettingsSuccess('');
@@ -1103,6 +1133,51 @@ function Admin() {
     }
   };
 
+  const handleSaveLegendColors = async () => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    setSavingLegendColors(true);
+    try {
+      for (const draft of legendColorDrafts) {
+        const normalizedHex = String(draft.hex || '').trim() || '#000000';
+        if (draft.colorId) {
+          const existingItem = legendItems.find(item => item.key === draft.key);
+          if (existingItem?.hex === normalizedHex) {
+            continue;
+          }
+
+          const res = await apiFetch(`/api/colors/${draft.colorId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: draft.storeName, hex: normalizedHex }),
+          });
+          if (!res.ok) {
+            throw new Error(await getErrorMessage(res, `Не удалось обновить цвет этапа "${draft.label}".`));
+          }
+          continue;
+        }
+
+        const res = await apiFetch('/api/colors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: draft.storeName, hex: normalizedHex }),
+        });
+        if (!res.ok) {
+          throw new Error(await getErrorMessage(res, `Не удалось создать цвет этапа "${draft.label}".`));
+        }
+      }
+
+      await fetchColors();
+      setSettingsSuccess('Цвета этапов обновлены.');
+      setShowLegendColorModal(false);
+      setLegendColorDrafts([]);
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось сохранить цвета этапов.');
+    } finally {
+      setSavingLegendColors(false);
+    }
+  };
+
   const settingsCrudModals = (
     <>
       <RoleModal
@@ -1205,6 +1280,54 @@ function Admin() {
         onClose={closeStepModal}
         saving={savingStep}
       />
+
+      {showLegendColorModal ? (
+        <div className="modal-overlay" onClick={savingLegendColors ? undefined : closeLegendColorModal}>
+          <div className="modal-window modal-window-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">Цвета этапов</div>
+                <div className="modal-subtitle">Эти цвета используются в легенде этапов и во второй строке таблицы заказов.</div>
+              </div>
+              <button className="btn btn-small modal-close-btn" onClick={closeLegendColorModal} disabled={savingLegendColors}>✕</button>
+            </div>
+
+            <div className="stage-legend-colors-modal-grid">
+              {legendColorDrafts.map(item => (
+                <div key={item.key} className="stage-legend-color-row">
+                  <div className="stage-legend-color-row-info">
+                    <span className="orders-stage-legend-swatch" style={{ background: item.hex }} />
+                    <div className="orders-stage-legend-content">
+                      <div className="orders-stage-legend-item-title">{item.label}</div>
+                      <div className="orders-stage-legend-item-subtitle">{item.description}</div>
+                    </div>
+                  </div>
+                  <div className="stage-legend-color-row-controls">
+                    <input
+                      type="color"
+                      value={item.hex}
+                      onChange={(event) => updateLegendColorDraft(item.key, { hex: event.target.value })}
+                      disabled={savingLegendColors}
+                    />
+                    <input
+                      value={item.hex}
+                      onChange={(event) => updateLegendColorDraft(item.key, { hex: event.target.value })}
+                      disabled={savingLegendColors}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn btn-success" onClick={handleSaveLegendColors} disabled={savingLegendColors}>
+                {savingLegendColors ? 'Сохранение...' : 'Сохранить цвета этапов'}
+              </button>
+              <button className="btn" onClick={closeLegendColorModal} disabled={savingLegendColors}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ColorModal
         mode={colorModalMode}
@@ -1637,6 +1760,7 @@ function Admin() {
                   <div className="orders-stage-legend-title">Легенда этапов</div>
                   <div className="orders-stage-legend-subtitle">Цвета ниже применяются к этапам в таблице заказов.</div>
                 </div>
+                <button className="btn btn-secondary" onClick={openLegendColorModal}>Редактировать цвета этапов</button>
               </div>
               <div className="orders-stage-legend-grid">
                 {legendItems.map(item => (

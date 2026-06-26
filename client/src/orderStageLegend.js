@@ -56,3 +56,21 @@ export const ORDER_STAGE_LEGEND = [
     defaultHex: '#1D7638',
   },
 ];
+
+export const ORDER_STAGE_SECONDARY_HEADERS = [
+  { label: 'Заказ не обработан', legendKey: 'unprocessed', colSpan: 2, textHex: '#000000', stickyCol: 'sticky-col-1' },
+  { label: 'ТЗ от заказчика', legendKey: 'brief', colSpan: 2, textHex: '#000000' },
+  { label: 'ТЗ для чертежей', legendKey: 'brief', colSpan: 1, textHex: '#000000' },
+  { label: 'Начерчен', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
+  { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
+  { label: 'Размеры', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
+  { label: 'Готово ТЗ', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
+  { label: 'Набирается заготовка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F' },
+  { label: 'Укомплектовано', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F' },
+  { label: 'Собирается', legendKey: 'assembly', colSpan: 1, textHex: '#1F1F1F' },
+  { label: 'Шлифуется', legendKey: 'assembly', colSpan: 1, textHex: '#1F1F1F' },
+  { label: 'Красится', legendKey: 'paint', colSpan: 1, textHex: '#000000' },
+  { label: 'Сборка после покраски', legendKey: 'postpaint', colSpan: 2, textHex: '#000000' },
+  { label: 'Готов', legendKey: 'ready', colSpan: 1, textHex: '#000000' },
+  { label: 'Доставка/монтаж', legendKey: 'ready', colSpan: 1, textHex: '#000000' },
+];
