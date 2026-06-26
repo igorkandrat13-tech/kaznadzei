@@ -1670,6 +1670,8 @@ table tr:hover td {
 }
 
 .unified-orders-table {
+  --orders-sticky-offset: 92px;
+  --orders-header-primary-height: 34px;
   min-width: 1450px;
   width: 100%;
   table-layout: fixed;
@@ -1692,12 +1694,12 @@ table tr:hover td {
 }
 
 .unified-orders-table .xlsx-header-primary-cell {
-  top: 0;
+  top: var(--orders-sticky-offset);
   z-index: 4;
 }
 
 .unified-orders-table .xlsx-header-secondary-cell {
-  top: 42px;
+  top: calc(var(--orders-sticky-offset) + var(--orders-header-primary-height));
   z-index: 3;
   background: linear-gradient(180deg, rgba(16, 31, 51, 0.98), rgba(13, 25, 42, 0.98));
   color: #d7ebff;
@@ -4208,6 +4210,10 @@ body[data-theme='light'] .home-auth-status-pending {
 }
 
 @media (max-width: 1024px) {
+  .unified-orders-table {
+    --orders-sticky-offset: 84px;
+  }
+
   .App-header {
     padding: 16px 20px;
   }
@@ -4285,6 +4291,10 @@ body[data-theme='light'] .home-auth-status-pending {
 }
 
 @media (max-width: 768px) {
+  .unified-orders-table {
+    --orders-sticky-offset: 66px;
+  }
+
   .App-header {
     padding: 12px 14px;
     gap: 10px;

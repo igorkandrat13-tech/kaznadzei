@@ -854,9 +854,7 @@ function OrdersWorkspace() {
             <button className="btn btn-secondary" onClick={exportRowsToCsv}>Экспорт CSV</button>
           </div>
         </div>
-      </div>
 
-      <div className="card">
         <div className="responsive-filters">
           <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 260 }}>
             <label>Поиск</label>
@@ -895,7 +893,9 @@ function OrdersWorkspace() {
           </div>
           <div className="filters-summary">Строк: {rows.length}</div>
         </div>
+      </div>
 
+      <div className="card">
         {Object.keys(inlineDrafts).length > 0 ? (
           <div className="excel-bulk-toolbar">
             <div className="filters-summary">Изменено строк: {Object.keys(inlineDrafts).length}</div>
