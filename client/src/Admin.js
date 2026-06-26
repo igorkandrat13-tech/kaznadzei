@@ -476,8 +476,10 @@ function Admin() {
       }
       setTelegramLogs([]);
       setSettingsSuccess(data?.message || 'Логи ТГ бота очищены.');
+      return true;
     } catch (error) {
       setSettingsError(error.message || 'Не удалось очистить логи ТГ бота.');
+      return false;
     } finally {
       setClearingTelegramLogs(false);
     }
@@ -520,8 +522,10 @@ function Admin() {
       }
       setActivityLogs([]);
       setSettingsSuccess(data?.message || 'Журнал действий очищен.');
+      return true;
     } catch (error) {
       setSettingsError(error.message || 'Не удалось очистить журнал действий.');
+      return false;
     } finally {
       setClearingActivityLogs(false);
     }
@@ -742,6 +746,10 @@ function Admin() {
   };
 
   useEscapeKey(() => {
+    if (confirmAction && !confirmLoading) {
+      setConfirmAction(null);
+      return;
+    }
     if (showActivityLogs) {
       setShowActivityLogs(false);
       return;
@@ -757,7 +765,7 @@ function Admin() {
     if (stageManagerRoleKey && !savingStep) {
       closeStageManager();
     }
-  }, Boolean(showActivityLogs || showTelegramLogs || showLegendColorModal || stageManagerRoleKey));
+  }, Boolean(confirmAction || showActivityLogs || showTelegramLogs || showLegendColorModal || stageManagerRoleKey));
 
   const updateLegendColorDraft = (key, patch) => {
     setLegendColorDrafts(current => current.map(item => (
@@ -811,6 +819,24 @@ function Admin() {
     });
   };
 
+  const requestClearTelegramLogs = () => {
+    requestDeleteAction({
+      type: 'clearTelegramLogs',
+      title: 'Очистить лог ТГ бота?',
+      message: `Все записи в логе ТГ бота будут удалены без возможности восстановления.`,
+      confirmLabel: 'Очистить лог',
+    });
+  };
+
+  const requestClearActivityLogs = () => {
+    requestDeleteAction({
+      type: 'clearActivityLogs',
+      title: 'Очистить журнал действий?',
+      message: `Все записи журнала действий будут удалены без возможности восстановления.`,
+      confirmLabel: 'Очистить журнал',
+    });
+  };
+
   const handleConfirmDelete = async () => {
     if (!confirmAction) return;
     if (confirmLoading) return;
@@ -825,6 +851,10 @@ function Admin() {
         success = await handleDeleteStep(confirmAction.id);
       } else if (confirmAction.type === 'color') {
         success = await handleDeleteColor(confirmAction.id);
+      } else if (confirmAction.type === 'clearTelegramLogs') {
+        success = await clearTelegramLogs();
+      } else if (confirmAction.type === 'clearActivityLogs') {
+        success = await clearActivityLogs();
       }
     } finally {
       setConfirmLoading(false);
@@ -1500,7 +1530,7 @@ function Admin() {
                     <button className="btn btn-secondary" onClick={() => fetchTelegramLogs()} disabled={telegramLogsLoading}>
                       {telegramLogsLoading ? 'Обновление...' : 'Обновить'}
                     </button>
-                    <button className="btn btn-danger" onClick={clearTelegramLogs} disabled={clearingTelegramLogs}>
+                    <button className="btn btn-danger" onClick={requestClearTelegramLogs} disabled={clearingTelegramLogs || confirmLoading}>
                       {clearingTelegramLogs ? 'Очистка...' : 'Очистить лог'}
                     </button>
                   </div>
@@ -1546,7 +1576,7 @@ function Admin() {
                     <button className="btn btn-secondary" onClick={() => fetchActivityLogs()} disabled={activityLogsLoading}>
                       {activityLogsLoading ? 'Обновление...' : 'Обновить'}
                     </button>
-                    <button className="btn btn-danger" onClick={clearActivityLogs} disabled={clearingActivityLogs}>
+                    <button className="btn btn-danger" onClick={requestClearActivityLogs} disabled={clearingActivityLogs || confirmLoading}>
                       {clearingActivityLogs ? 'Очистка...' : 'Очистить журнал'}
                     </button>
                   </div>

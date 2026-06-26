@@ -98,6 +98,10 @@ function WorkshopPage({
   };
 
   useEscapeKey(() => {
+    if (confirmDeleteComment && !deletingComment) {
+      setConfirmDeleteComment(false);
+      return;
+    }
     if (commentModal && !savingComment && !deletingComment) {
       closeCommentModal();
       return;
@@ -105,7 +109,7 @@ function WorkshopPage({
     if (popupText) {
       setPopupText(null);
     }
-  }, Boolean(commentModal || popupText));
+  }, Boolean(confirmDeleteComment || commentModal || popupText));
 
   const openCommentModal = (order, mode = 'replace') => {
     const currentText = getComment(order);

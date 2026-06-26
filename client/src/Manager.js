@@ -177,6 +177,7 @@ function Manager() {
   const [qrOrderId, setQrOrderId] = useState(null);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmDeleteManagerComment, setConfirmDeleteManagerComment] = useState(false);
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [managerCommentModal, setManagerCommentModal] = useState(null);
   const [savingManagerComment, setSavingManagerComment] = useState(false);
@@ -446,6 +447,14 @@ function Manager() {
   };
 
   useEscapeKey(() => {
+    if (confirmDeleteManagerComment && !deletingManagerComment) {
+      setConfirmDeleteManagerComment(false);
+      return;
+    }
+    if (confirmDelete && !deletingOrder) {
+      setConfirmDelete(null);
+      return;
+    }
     if (managerCommentModal && !savingManagerComment && !deletingManagerComment) {
       closeManagerCommentModal();
       return;
@@ -457,7 +466,7 @@ function Manager() {
     if (showForm && !savingOrder) {
       handleCancel();
     }
-  }, Boolean(managerCommentModal || qrOrderId || showForm));
+  }, Boolean(confirmDeleteManagerComment || confirmDelete || managerCommentModal || qrOrderId || showForm));
 
   const saveManagerComment = async () => {
     if (!managerCommentModal?.orderId) return;
@@ -847,7 +856,7 @@ function Manager() {
               <div>
                 <button
                   className="btn btn-danger"
-                  onClick={deleteManagerComment}
+                  onClick={() => setConfirmDeleteManagerComment(true)}
                   disabled={savingManagerComment || deletingManagerComment || !String(managerCommentModal.currentNotes || '').trim()}
                 >
                   {deletingManagerComment ? 'Удаление...' : 'Удалить'}
@@ -873,6 +882,15 @@ function Manager() {
         onConfirm={handleDelete}
         onCancel={() => !deletingOrder && setConfirmDelete(null)}
         loading={deletingOrder}
+      />
+      <ConfirmDialog
+        open={confirmDeleteManagerComment}
+        title="Удалить комментарий менеджера?"
+        message={managerCommentModal ? `Комментарий менеджера для заказа "${managerCommentModal.orderName}" будет удален.` : ''}
+        confirmLabel="Удалить комментарий"
+        onConfirm={deleteManagerComment}
+        onCancel={() => !deletingManagerComment && setConfirmDeleteManagerComment(false)}
+        loading={deletingManagerComment}
       />
     </div>
   );

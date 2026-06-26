@@ -190,6 +190,7 @@ function OrdersWorkspace() {
   const [orderForm, setOrderForm] = useState(createEmptyOrderForm);
   const [savingOrder, setSavingOrder] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmRemoveItemIndex, setConfirmRemoveItemIndex] = useState(null);
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
@@ -462,6 +463,14 @@ function OrdersWorkspace() {
   };
 
   useEscapeKey(() => {
+    if (confirmRemoveItemIndex !== null && !savingOrder) {
+      setConfirmRemoveItemIndex(null);
+      return;
+    }
+    if (confirmDelete && !deletingOrder) {
+      setConfirmDelete(null);
+      return;
+    }
     if (orderActionsOrder) {
       setOrderActionsOrder(null);
       return;
@@ -473,7 +482,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(orderActionsOrder || qrPreview || showForm));
+  }, Boolean(confirmRemoveItemIndex !== null || confirmDelete || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -519,6 +528,17 @@ function OrdersWorkspace() {
         items: nextItems,
       };
     });
+  };
+
+  const requestRemoveItem = (index) => {
+    if (savingOrder || orderForm.items.length <= 1) return;
+    setConfirmRemoveItemIndex(index);
+  };
+
+  const confirmRemoveItem = () => {
+    if (confirmRemoveItemIndex === null) return;
+    removeItem(confirmRemoveItemIndex);
+    setConfirmRemoveItemIndex(null);
   };
 
   const handleSubmit = async () => {
@@ -1168,7 +1188,7 @@ function OrdersWorkspace() {
                       </div>
                       <button
                         className="btn btn-danger btn-small"
-                        onClick={() => removeItem(index)}
+                        onClick={() => requestRemoveItem(index)}
                         disabled={savingOrder || orderForm.items.length <= 1}
                       >
                         Удалить
@@ -1367,6 +1387,15 @@ function OrdersWorkspace() {
         onConfirm={handleDelete}
         onCancel={() => !deletingOrder && setConfirmDelete(null)}
         loading={deletingOrder}
+      />
+      <ConfirmDialog
+        open={confirmRemoveItemIndex !== null}
+        title="Удалить изделие?"
+        message={confirmRemoveItemIndex !== null ? `Изделие ${confirmRemoveItemIndex + 1} будет удалено из текущего заказа до сохранения формы.` : ''}
+        confirmLabel="Удалить изделие"
+        onConfirm={confirmRemoveItem}
+        onCancel={() => !savingOrder && setConfirmRemoveItemIndex(null)}
+        loading={false}
       />
     </div>
   );
