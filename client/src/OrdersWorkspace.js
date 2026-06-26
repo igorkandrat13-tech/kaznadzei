@@ -987,18 +987,19 @@ function OrdersWorkspace() {
                       {isFirstOrderRow ? (
                         <td
                           rowSpan={orderRowSpan}
-                          className={`sticky-col sticky-col-1 merged-order-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`}
+                          className={`sticky-col sticky-col-1 merged-order-cell merged-order-number-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`}
                         >
-                          <div className="xlsx-order-cell">
+                          <div className="merged-order-number-content">
+                            <div className="xlsx-order-cell">
                             {isAdmin ? (
                               <input
-                                className="table-inline-input"
+                                className="table-inline-input merged-order-number-input"
                                 value={isOrderInlineEditing ? orderInlineDraft.orderNumber : (order.orderNumber || '')}
                                 onChange={handleOrderNumberCellChange(key, { key, order, item })}
                                 placeholder="Номер заказа"
                               />
                             ) : (
-                              <Link className="order-link-button" to={`/order/${order._id}/item/${item.itemId}`}>
+                              <Link className="order-link-button merged-order-number-link" to={`/order/${order._id}/item/${item.itemId}`}>
                                 {order.orderNumber || '—'}
                               </Link>
                             )}
@@ -1011,6 +1012,7 @@ function OrdersWorkspace() {
                             >
                               ...
                             </button>
+                            </div>
                           </div>
                         </td>
                       ) : null}

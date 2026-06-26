@@ -1915,23 +1915,42 @@ table tr:hover td {
   min-height: 100%;
 }
 
-.merged-order-cell {
-  vertical-align: top;
-}
-
-.merged-order-customer-cell {
-  position: relative;
+.unified-orders-table td.merged-order-cell {
   vertical-align: middle;
-  padding: 0;
 }
 
-.merged-order-customer-content {
-  position: absolute;
-  inset: 0;
+.unified-orders-table td.merged-order-number-cell {
+  padding: 8px;
+}
+
+.merged-order-number-content {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+}
+
+.merged-order-number-content .xlsx-order-cell {
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.merged-order-number-input,
+.merged-order-number-link,
+.merged-order-number-content .order-actions-trigger {
+  text-align: center;
+}
+
+.unified-orders-table td.merged-order-customer-cell {
   padding: 8px;
+}
+
+.merged-order-customer-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 
 .merged-order-customer-text,
@@ -1946,21 +1965,17 @@ table tr:hover td {
   width: 100%;
 }
 
-.merged-order-meta-cell {
-  position: relative;
-  vertical-align: middle;
+.unified-orders-table td.merged-order-meta-cell {
   text-align: center;
   font-weight: 600;
-  padding: 0;
+  padding: 8px;
 }
 
 .merged-order-meta-content {
-  position: absolute;
-  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  width: 100%;
   text-align: center;
 }
 
