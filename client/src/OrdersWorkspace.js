@@ -1017,9 +1017,11 @@ function OrdersWorkspace() {
                       {isFirstOrderRow ? (
                         <td
                           rowSpan={orderRowSpan}
-                          className={`sticky-col sticky-col-2 merged-order-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
+                          className={`sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
                         >
-                          {isOrderInlineEditing ? <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : <div className="merged-order-customer-text">{order.customer || '—'}</div>}
+                          <div className="merged-order-customer-content">
+                            {isOrderInlineEditing ? <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : <div className="merged-order-customer-text">{order.customer || '—'}</div>}
+                          </div>
                         </td>
                       ) : null}
                       <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>

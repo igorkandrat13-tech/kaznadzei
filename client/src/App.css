@@ -1919,6 +1919,21 @@ table tr:hover td {
   vertical-align: top;
 }
 
+.merged-order-customer-cell {
+  position: relative;
+  vertical-align: middle;
+  padding: 0;
+}
+
+.merged-order-customer-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
 .merged-order-customer-text,
 .merged-order-customer-input {
   text-align: center;
@@ -1928,7 +1943,7 @@ table tr:hover td {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100%;
+  width: 100%;
 }
 
 .merged-order-meta-cell {
