@@ -2254,7 +2254,7 @@ table tr:hover td {
 
 .unified-orders-table thead .sticky-col.sticky-col-2,
 .unified-orders-table tbody .sticky-col.sticky-col-2 {
-  box-shadow: 1px 0 0 rgba(121, 183, 255, 0.06), 8px 0 14px rgba(2, 8, 16, 0.1);
+  box-shadow: none;
 }
 
 .sticky-col-1 {
@@ -3745,7 +3745,7 @@ body[data-theme='light'] .unified-orders-table tbody tr:hover .merged-order-cell
 
 body[data-theme='light'] .unified-orders-table thead .sticky-col.sticky-col-2,
 body[data-theme='light'] .unified-orders-table tbody .sticky-col.sticky-col-2 {
-  box-shadow: 1px 0 0 rgba(103, 149, 196, 0.08), 8px 0 14px rgba(77, 114, 154, 0.08);
+  box-shadow: none;
 }
 
 body[data-theme='light'] .unified-orders-row-editing {
