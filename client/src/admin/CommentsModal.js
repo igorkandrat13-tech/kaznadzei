@@ -1,4 +1,5 @@
 import React from 'react';
+import useEscapeKey from '../useEscapeKey';
 
 function CommentsModal({
   commentsModal,
@@ -8,6 +9,8 @@ function CommentsModal({
   getCommentPreview,
 }) {
   if (!commentsModal) return null;
+
+  useEscapeKey(closeCommentsModal);
 
   return (
     <div className="modal-overlay" onClick={closeCommentsModal}>

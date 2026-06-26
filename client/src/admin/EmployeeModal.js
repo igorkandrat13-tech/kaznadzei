@@ -1,5 +1,6 @@
 import React from 'react';
 import { generatePassword, generatePinCode } from '../adminUI';
+import useEscapeKey from '../useEscapeKey';
 
 function EmployeeModal({
   mode,
@@ -12,6 +13,10 @@ function EmployeeModal({
   roleTabs = [],
 }) {
   if (!mode) return null;
+
+  useEscapeKey(() => {
+    if (!saving) onClose();
+  });
 
   return (
     <div className="modal-overlay" onClick={saving ? undefined : onClose}>

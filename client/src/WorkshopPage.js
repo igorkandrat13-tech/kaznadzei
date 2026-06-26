@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getNextStageStatusMeta, getStageStatusMeta, STAGE_STATUS_CYCLE } from './statusMeta';
 import ConfirmDialog from './ConfirmDialog';
+import useEscapeKey from './useEscapeKey';
 
 function WorkshopPage({
   role,
@@ -95,6 +96,16 @@ function WorkshopPage({
     setCommentError('');
     setConfirmDeleteComment(false);
   };
+
+  useEscapeKey(() => {
+    if (commentModal && !savingComment && !deletingComment) {
+      closeCommentModal();
+      return;
+    }
+    if (popupText) {
+      setPopupText(null);
+    }
+  }, Boolean(commentModal || popupText));
 
   const openCommentModal = (order, mode = 'replace') => {
     const currentText = getComment(order);

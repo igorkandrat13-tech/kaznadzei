@@ -5,6 +5,7 @@ import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { ORDER_STAGE_LEGEND, ORDER_STAGE_SECONDARY_HEADERS } from './orderStageLegend';
 import { useRoleConfig } from './RoleConfigContext';
+import useEscapeKey from './useEscapeKey';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
 
@@ -459,6 +460,20 @@ function OrdersWorkspace() {
     setEditingOrderId('');
     setOrderForm(createEmptyOrderForm());
   };
+
+  useEscapeKey(() => {
+    if (orderActionsOrder) {
+      setOrderActionsOrder(null);
+      return;
+    }
+    if (qrPreview && !downloadingKey) {
+      setQrPreview(null);
+      return;
+    }
+    if (showForm && !savingOrder) {
+      closeForm();
+    }
+  }, Boolean(orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -1004,7 +1019,7 @@ function OrdersWorkspace() {
                           rowSpan={orderRowSpan}
                           className={`sticky-col sticky-col-2 merged-order-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
                         >
-                          {isOrderInlineEditing ? <input className="table-inline-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : (order.customer || '—')}
+                          {isOrderInlineEditing ? <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : <div className="merged-order-customer-text">{order.customer || '—'}</div>}
                         </td>
                       ) : null}
                       <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>

@@ -1919,6 +1919,18 @@ table tr:hover td {
   vertical-align: top;
 }
 
+.merged-order-customer-text,
+.merged-order-customer-input {
+  text-align: center;
+}
+
+.merged-order-customer-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+}
+
 .merged-order-meta-cell {
   position: relative;
   vertical-align: middle;

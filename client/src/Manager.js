@@ -4,6 +4,7 @@ import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 import ConfirmDialog from './ConfirmDialog';
 import { useRoleConfig } from './RoleConfigContext';
+import useEscapeKey from './useEscapeKey';
 
 const EMPTY_FORM = {
   orderNumber: '',
@@ -443,6 +444,20 @@ function Manager() {
     if (savingManagerComment || deletingManagerComment) return;
     setManagerCommentModal(null);
   };
+
+  useEscapeKey(() => {
+    if (managerCommentModal && !savingManagerComment && !deletingManagerComment) {
+      closeManagerCommentModal();
+      return;
+    }
+    if (qrOrderId && !downloadingQr) {
+      setQrOrderId(null);
+      return;
+    }
+    if (showForm && !savingOrder) {
+      handleCancel();
+    }
+  }, Boolean(managerCommentModal || qrOrderId || showForm));
 
   const saveManagerComment = async () => {
     if (!managerCommentModal?.orderId) return;

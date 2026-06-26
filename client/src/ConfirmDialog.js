@@ -1,4 +1,5 @@
 import React from 'react';
+import useEscapeKey from './useEscapeKey';
 
 function ConfirmDialog({
   open,
@@ -12,6 +13,10 @@ function ConfirmDialog({
   variant = 'danger',
 }) {
   if (!open) return null;
+
+  useEscapeKey(() => {
+    if (!loading) onCancel();
+  });
 
   return (
     <div className="modal-overlay" onClick={loading ? undefined : onCancel}>

@@ -1,4 +1,5 @@
 import React from 'react';
+import useEscapeKey from '../useEscapeKey';
 
 function StepModal({
   mode,
@@ -14,6 +15,9 @@ function StepModal({
   if (!mode) return null;
 
   const isEdit = mode === 'edit';
+  useEscapeKey(() => {
+    if (!saving) onClose();
+  });
 
   return (
     <div className="modal-overlay" onClick={saving ? undefined : onClose}>

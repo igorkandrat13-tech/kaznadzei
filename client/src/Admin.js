@@ -19,6 +19,7 @@ import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
 import { useRoleConfig } from './RoleConfigContext';
 import { ORDER_STAGE_LEGEND } from './orderStageLegend';
+import useEscapeKey from './useEscapeKey';
 
 function Admin() {
   const navigate = useNavigate();
@@ -739,6 +740,24 @@ function Admin() {
     setShowLegendColorModal(false);
     setLegendColorDrafts([]);
   };
+
+  useEscapeKey(() => {
+    if (showActivityLogs) {
+      setShowActivityLogs(false);
+      return;
+    }
+    if (showTelegramLogs) {
+      setShowTelegramLogs(false);
+      return;
+    }
+    if (showLegendColorModal && !savingLegendColors) {
+      closeLegendColorModal();
+      return;
+    }
+    if (stageManagerRoleKey && !savingStep) {
+      closeStageManager();
+    }
+  }, Boolean(showActivityLogs || showTelegramLogs || showLegendColorModal || stageManagerRoleKey));
 
   const updateLegendColorDraft = (key, patch) => {
     setLegendColorDrafts(current => current.map(item => (

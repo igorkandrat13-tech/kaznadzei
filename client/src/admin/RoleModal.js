@@ -1,4 +1,5 @@
 import React from 'react';
+import useEscapeKey from '../useEscapeKey';
 
 function RoleModal({
   mode,
@@ -12,6 +13,9 @@ function RoleModal({
   if (!mode) return null;
 
   const isEdit = mode === 'edit';
+  useEscapeKey(() => {
+    if (!saving) onClose();
+  });
 
   return (
     <div className="modal-overlay" onClick={saving ? undefined : onClose}>
