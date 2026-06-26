@@ -852,10 +852,6 @@ function OrdersWorkspace() {
           <div className="section-header-actions">
             <button className="btn btn-primary" onClick={openCreateForm}>➕ Новый заказ</button>
             <button className="btn btn-secondary" onClick={exportRowsToCsv}>Экспорт CSV</button>
-            <Link to="/archive" className="btn btn-secondary">Архив</Link>
-            {canAccessRole('admin', authRole) ? (
-              <Link to="/settings" className="btn btn-secondary">Настройки</Link>
-            ) : null}
           </div>
         </div>
       </div>
