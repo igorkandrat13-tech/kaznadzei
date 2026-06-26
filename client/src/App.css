@@ -1671,10 +1671,13 @@ table tr:hover td {
 
 .unified-orders-table {
   --orders-sticky-offset: 92px;
-  --orders-header-primary-height: 34px;
+  --orders-header-primary-height: 42px;
+  --orders-header-secondary-height: 36px;
   min-width: 1450px;
   width: 100%;
   table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .unified-orders-table th,
@@ -1696,6 +1699,9 @@ table tr:hover td {
 .unified-orders-table .xlsx-header-primary-cell {
   top: var(--orders-sticky-offset);
   z-index: 4;
+  min-height: var(--orders-header-primary-height);
+  height: var(--orders-header-primary-height);
+  vertical-align: middle;
 }
 
 .unified-orders-table .xlsx-header-secondary-cell {
@@ -1705,6 +1711,9 @@ table tr:hover td {
   color: #d7ebff;
   font-size: 9px;
   white-space: normal;
+  min-height: var(--orders-header-secondary-height);
+  height: var(--orders-header-secondary-height);
+  vertical-align: middle;
 }
 
 .unified-orders-table .xlsx-header-secondary-cell-colored {
