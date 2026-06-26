@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
@@ -8,6 +8,26 @@ import { useRoleConfig } from './RoleConfigContext';
 import useEscapeKey from './useEscapeKey';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
+const ORDER_PRIMARY_HEADERS = [
+  'Номер заказа',
+  'Заказчик',
+  'Помещение',
+  '№ помещения',
+  '№ изделия в заказе',
+  'Кол-во изделй',
+  'Наименование',
+  '',
+  'Отгрузка до',
+  'Материал',
+  'Комплектация заказа',
+  'Покраска',
+  'Ссылка / фото',
+  'Примечания',
+  'СТОЛЯР',
+  'Начало изготовления',
+  'Окончание',
+  'Время изготовления',
+];
 
 function getCommentPreview(comments = []) {
   if (!Array.isArray(comments) || comments.length === 0) return '—';
@@ -198,6 +218,9 @@ function OrdersWorkspace() {
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
   const [hoveredOrderId, setHoveredOrderId] = useState('');
   const [colors, setColors] = useState([]);
+  const headerScrollRef = useRef(null);
+  const bodyScrollRef = useRef(null);
+  const syncingScrollRef = useRef(false);
 
   const fetchOrders = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) {
@@ -378,6 +401,39 @@ function OrdersWorkspace() {
       orders.flatMap(order => (order.items || []).map(item => String(item.room || '').trim()).filter(Boolean))
     )).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [orders]);
+
+  const syncHorizontalScroll = useCallback((source, target) => {
+    if (!source || !target) return;
+    if (syncingScrollRef.current) return;
+    syncingScrollRef.current = true;
+    target.scrollLeft = source.scrollLeft;
+    window.requestAnimationFrame(() => {
+      syncingScrollRef.current = false;
+    });
+  }, []);
+
+  const renderOrdersColGroup = useCallback(() => (
+    <colgroup>
+      <col className="col-order-number" />
+      <col className="col-customer" />
+      <col className="col-room" />
+      <col className="col-room-number" />
+      <col className="col-item-number" />
+      <col className="col-quantity" />
+      <col className="col-name" />
+      <col className="col-item-actions" />
+      <col className="col-delivery-date" />
+      <col className="col-material" />
+      <col className="col-package" />
+      <col className="col-paint" />
+      <col className="col-photo" />
+      <col className="col-notes" />
+      <col className="col-carpenter" />
+      <col className="col-start-date" />
+      <col className="col-end-date" />
+      <col className="col-duration" />
+    </colgroup>
+  ), []);
 
   const formErrors = useMemo(() => validateOrderForm(orderForm), [orderForm]);
   const isFormValid = useMemo(() => !hasOrderFormErrors(formErrors), [formErrors]);
@@ -923,187 +979,170 @@ function OrdersWorkspace() {
         {loading ? (
           <div className="mobile-empty-state">Загрузка таблицы...</div>
         ) : (
-          <div className="table-scroll">
-            <table className="orders-table unified-orders-table">
-              <colgroup>
-                <col className="col-order-number" />
-                <col className="col-customer" />
-                <col className="col-room" />
-                <col className="col-room-number" />
-                <col className="col-item-number" />
-                <col className="col-quantity" />
-                <col className="col-name" />
-                <col className="col-item-actions" />
-                <col className="col-delivery-date" />
-                <col className="col-material" />
-                <col className="col-package" />
-                <col className="col-paint" />
-                <col className="col-photo" />
-                <col className="col-notes" />
-                <col className="col-carpenter" />
-                <col className="col-start-date" />
-                <col className="col-end-date" />
-                <col className="col-duration" />
-              </colgroup>
-              <thead>
-                <tr className="xlsx-header-row xlsx-header-row-primary">
-                  <th className="sticky-col sticky-col-1 xlsx-header-primary-cell">Номер заказа</th>
-                  <th className="sticky-col sticky-col-2 xlsx-header-primary-cell">Заказчик</th>
-                  <th className="xlsx-header-primary-cell">Помещение</th>
-                  <th className="xlsx-header-primary-cell">№ помещения</th>
-                  <th className="xlsx-header-primary-cell">№ изделия в заказе</th>
-                  <th className="xlsx-header-primary-cell">Кол-во изделй</th>
-                  <th className="xlsx-header-primary-cell">Наименование</th>
-                  <th className="xlsx-header-primary-cell">&nbsp;</th>
-                  <th className="xlsx-header-primary-cell">Отгрузка до</th>
-                  <th className="xlsx-header-primary-cell">Материал</th>
-                  <th className="xlsx-header-primary-cell">Комплектация заказа</th>
-                  <th className="xlsx-header-primary-cell">Покраска</th>
-                  <th className="xlsx-header-primary-cell">Ссылка / фото</th>
-                  <th className="xlsx-header-primary-cell">Примечания</th>
-                  <th className="xlsx-header-primary-cell">СТОЛЯР</th>
-                  <th className="xlsx-header-primary-cell">Начало изготовления</th>
-                  <th className="xlsx-header-primary-cell">Окончание</th>
-                  <th className="xlsx-header-primary-cell">Время изготовления</th>
-                </tr>
-                <tr className="xlsx-header-row xlsx-header-row-secondary">
-                  {secondaryHeaderCells.map((cell, index) => (
-                    <th
-                      key={`${cell.label}-${index}`}
-                      colSpan={cell.colSpan || 1}
-                      className={`${cell.stickyCol ? `sticky-col ${cell.stickyCol} ` : ''}xlsx-header-secondary-cell${cell.legendKey ? ' xlsx-header-secondary-cell-colored' : ''}${(cell.colSpan || 1) > 1 ? ' xlsx-header-secondary-cell-merged' : ''}`}
-                      style={{ background: cell.hex, color: cell.textColor }}
-                    >
-                      {cell.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody onMouseLeave={() => setHoveredOrderId('')}>
-                {rows.map(({ key, order, item }) => {
-                  const inlineDraft = inlineDrafts[key] || null;
-                  const isInlineEditing = Boolean(inlineDraft);
-                  const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
-                  const orderId = getOrderIdentity({ key, order });
-                  const isLastOrderRow = lastOrderRowKeys[orderId] === key;
-                  const orderRowSpan = orderRowSpans[key] || 1;
-                  const isHoveredOrder = hoveredOrderId === orderId;
-                  const regularOutlineClass = `${isHoveredOrder ? ' order-outline-cell' : ''}${isHoveredOrder && isFirstOrderRow ? ' order-outline-top' : ''}${isHoveredOrder && isLastOrderRow ? ' order-outline-bottom' : ''}`.trim();
-                  const currentOrderDraftKeys = orderDraftKeys[orderId] || [];
-                  const orderInlineDraft = currentOrderDraftKeys.length > 0 ? inlineDrafts[currentOrderDraftKeys[0]] : null;
-                  const isOrderInlineEditing = Boolean(orderInlineDraft);
-                  const hasOrderDrafts = currentOrderDraftKeys.length > 0;
-                  const commentPreview = getCommentPreview(item.comments);
-                  return (
-                    <tr
-                      key={key}
-                      className={isInlineEditing ? 'unified-orders-row-editing' : ''}
-                      onMouseEnter={() => setHoveredOrderId(orderId)}
-                    >
-                      {isFirstOrderRow ? (
-                        <td
-                          rowSpan={orderRowSpan}
-                          className={`sticky-col sticky-col-1 merged-order-cell merged-order-number-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`}
-                        >
-                          <div className="merged-order-number-content">
-                            <div className="xlsx-order-cell">
-                            {isAdmin ? (
-                              <input
-                                className="table-inline-input merged-order-number-input"
-                                value={isOrderInlineEditing ? orderInlineDraft.orderNumber : (order.orderNumber || '')}
-                                onChange={handleOrderNumberCellChange(key, { key, order, item })}
-                                placeholder="Номер заказа"
-                              />
-                            ) : (
-                              <Link className="order-link-button merged-order-number-link" to={`/order/${order._id}/item/${item.itemId}`}>
-                                {order.orderNumber || '—'}
-                              </Link>
-                            )}
-                            <button
-                              className={`btn btn-secondary btn-small order-actions-trigger ${hasOrderDrafts ? 'order-actions-trigger-attention' : ''}`}
-                              type="button"
-                              aria-label={`Действия над заказом ${order.orderNumber || ''}`}
-                              title={hasOrderDrafts ? 'Действия над заказом: есть быстрые правки' : 'Действия над заказом'}
-                              onClick={() => setOrderActionsOrder(order)}
-                            >
-                              ...
-                            </button>
-                            </div>
-                          </div>
-                        </td>
-                      ) : null}
-                      {isFirstOrderRow ? (
-                        <td
-                          rowSpan={orderRowSpan}
-                          className={`sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
-                        >
-                          <div className="merged-order-customer-content">
-                            {isOrderInlineEditing ? <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : <div className="merged-order-customer-text">{order.customer || '—'}</div>}
-                          </div>
-                        </td>
-                      ) : null}
-                      <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
-                      <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
-                      <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
-                      <td className={regularOutlineClass}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
-                      <td className={regularOutlineClass}>
-                        {isInlineEditing ? (
-                          <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
-                        ) : (
-                          <div className="order-primary-title"><strong>{item.name || '—'}</strong></div>
-                        )}
-                      </td>
-                      <td className={`xlsx-empty-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>—</td>
-                      <td className={regularOutlineClass}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
-                      <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
-                      <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
-                      <td className={regularOutlineClass}>—</td>
-                      <td className={`photo-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>
-                        {isInlineEditing ? (
-                          <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
-                        ) : item.photoLink ? (
-                          <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a>
-                        ) : '—'}
-                      </td>
-                      <td className={`notes-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>
-                        {isInlineEditing ? (
-                          <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
-                        ) : (
-                          <>
-                            {commentPreview !== '—' ? (
-                              <div className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</div>
-                            ) : null}
-                            {item.notes || (commentPreview !== '—' ? null : '—')}
-                          </>
-                        )}
-                      </td>
-                      <td className={regularOutlineClass}>—</td>
-                      {isFirstOrderRow ? (
-                        <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
-                          <div className="merged-order-meta-content">{formatDateDisplay(order.startDate)}</div>
-                        </td>
-                      ) : null}
-                      {isFirstOrderRow ? (
-                        <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
-                          <div className="merged-order-meta-content">{formatDateDisplay(order.endDate)}</div>
-                        </td>
-                      ) : null}
-                      {isFirstOrderRow ? (
-                        <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`}>
-                          <div className="merged-order-meta-content">{formatManufacturingTime(order.startDate, order.endDate)}</div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  );
-                })}
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={18} className="empty-cell">Нет изделий по выбранным фильтрам</td>
+          <>
+            <div
+              ref={headerScrollRef}
+              className="table-scroll unified-orders-header-scroll"
+              onScroll={() => syncHorizontalScroll(headerScrollRef.current, bodyScrollRef.current)}
+            >
+              <table className="orders-table unified-orders-table unified-orders-header-table">
+                {renderOrdersColGroup()}
+                <thead>
+                  <tr className="xlsx-header-row xlsx-header-row-primary">
+                    {ORDER_PRIMARY_HEADERS.map((label, index) => (
+                      <th key={`primary-header-${index}`} className="xlsx-header-primary-cell">
+                        {label || '\u00A0'}
+                      </th>
+                    ))}
                   </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+                  <tr className="xlsx-header-row xlsx-header-row-secondary">
+                    {secondaryHeaderCells.map((cell, index) => (
+                      <th
+                        key={`${cell.label}-${index}`}
+                        colSpan={cell.colSpan || 1}
+                        className={`xlsx-header-secondary-cell${cell.legendKey ? ' xlsx-header-secondary-cell-colored' : ''}${(cell.colSpan || 1) > 1 ? ' xlsx-header-secondary-cell-merged' : ''}`}
+                        style={{ background: cell.hex, color: cell.textColor }}
+                      >
+                        {cell.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+              </table>
+            </div>
+            <div
+              ref={bodyScrollRef}
+              className="table-scroll unified-orders-body-scroll"
+              onScroll={() => syncHorizontalScroll(bodyScrollRef.current, headerScrollRef.current)}
+            >
+              <table className="orders-table unified-orders-table unified-orders-body-table">
+                {renderOrdersColGroup()}
+                <tbody onMouseLeave={() => setHoveredOrderId('')}>
+                  {rows.map(({ key, order, item }) => {
+                    const inlineDraft = inlineDrafts[key] || null;
+                    const isInlineEditing = Boolean(inlineDraft);
+                    const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
+                    const orderId = getOrderIdentity({ key, order });
+                    const isLastOrderRow = lastOrderRowKeys[orderId] === key;
+                    const orderRowSpan = orderRowSpans[key] || 1;
+                    const isHoveredOrder = hoveredOrderId === orderId;
+                    const regularOutlineClass = `${isHoveredOrder ? ' order-outline-cell' : ''}${isHoveredOrder && isFirstOrderRow ? ' order-outline-top' : ''}${isHoveredOrder && isLastOrderRow ? ' order-outline-bottom' : ''}`.trim();
+                    const currentOrderDraftKeys = orderDraftKeys[orderId] || [];
+                    const orderInlineDraft = currentOrderDraftKeys.length > 0 ? inlineDrafts[currentOrderDraftKeys[0]] : null;
+                    const isOrderInlineEditing = Boolean(orderInlineDraft);
+                    const hasOrderDrafts = currentOrderDraftKeys.length > 0;
+                    const commentPreview = getCommentPreview(item.comments);
+                    return (
+                      <tr
+                        key={key}
+                        className={isInlineEditing ? 'unified-orders-row-editing' : ''}
+                        onMouseEnter={() => setHoveredOrderId(orderId)}
+                      >
+                        {isFirstOrderRow ? (
+                          <td
+                            rowSpan={orderRowSpan}
+                            className={`sticky-col sticky-col-1 merged-order-cell merged-order-number-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`}
+                          >
+                            <div className="merged-order-number-content">
+                              <div className="xlsx-order-cell">
+                              {isAdmin ? (
+                                <input
+                                  className="table-inline-input merged-order-number-input"
+                                  value={isOrderInlineEditing ? orderInlineDraft.orderNumber : (order.orderNumber || '')}
+                                  onChange={handleOrderNumberCellChange(key, { key, order, item })}
+                                  placeholder="Номер заказа"
+                                />
+                              ) : (
+                                <Link className="order-link-button merged-order-number-link" to={`/order/${order._id}/item/${item.itemId}`}>
+                                  {order.orderNumber || '—'}
+                                </Link>
+                              )}
+                              <button
+                                className={`btn btn-secondary btn-small order-actions-trigger ${hasOrderDrafts ? 'order-actions-trigger-attention' : ''}`}
+                                type="button"
+                                aria-label={`Действия над заказом ${order.orderNumber || ''}`}
+                                title={hasOrderDrafts ? 'Действия над заказом: есть быстрые правки' : 'Действия над заказом'}
+                                onClick={() => setOrderActionsOrder(order)}
+                              >
+                                ...
+                              </button>
+                              </div>
+                            </div>
+                          </td>
+                        ) : null}
+                        {isFirstOrderRow ? (
+                          <td
+                            rowSpan={orderRowSpan}
+                            className={`sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
+                          >
+                            <div className="merged-order-customer-content">
+                              {isOrderInlineEditing ? <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : <div className="merged-order-customer-text">{order.customer || '—'}</div>}
+                            </div>
+                          </td>
+                        ) : null}
+                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
+                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
+                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
+                        <td className={regularOutlineClass}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
+                        <td className={regularOutlineClass}>
+                          {isInlineEditing ? (
+                            <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
+                          ) : (
+                            <div className="order-primary-title"><strong>{item.name || '—'}</strong></div>
+                          )}
+                        </td>
+                        <td className={`xlsx-empty-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>—</td>
+                        <td className={regularOutlineClass}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
+                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
+                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
+                        <td className={regularOutlineClass}>—</td>
+                        <td className={`photo-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>
+                          {isInlineEditing ? (
+                            <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
+                          ) : item.photoLink ? (
+                            <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a>
+                          ) : '—'}
+                        </td>
+                        <td className={`notes-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>
+                          {isInlineEditing ? (
+                            <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
+                          ) : (
+                            <>
+                              {commentPreview !== '—' ? (
+                                <div className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</div>
+                              ) : null}
+                              {item.notes || (commentPreview !== '—' ? null : '—')}
+                            </>
+                          )}
+                        </td>
+                        <td className={regularOutlineClass}>—</td>
+                        {isFirstOrderRow ? (
+                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
+                            <div className="merged-order-meta-content">{formatDateDisplay(order.startDate)}</div>
+                          </td>
+                        ) : null}
+                        {isFirstOrderRow ? (
+                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
+                            <div className="merged-order-meta-content">{formatDateDisplay(order.endDate)}</div>
+                          </td>
+                        ) : null}
+                        {isFirstOrderRow ? (
+                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`}>
+                            <div className="merged-order-meta-content">{formatManufacturingTime(order.startDate, order.endDate)}</div>
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })}
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={18} className="empty-cell">Нет изделий по выбранным фильтрам</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         <div className="filters-summary" style={{ marginTop: 12 }}>

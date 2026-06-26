@@ -308,6 +308,25 @@ table tr:hover td {
   padding-bottom: 6px;
 }
 
+.unified-orders-header-scroll {
+  position: sticky;
+  top: 92px;
+  z-index: 12;
+  overflow-y: hidden;
+  padding-bottom: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: var(--panel-bg, rgba(10, 21, 36, 0.82));
+}
+
+.unified-orders-header-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.unified-orders-body-scroll {
+  margin-top: 0;
+}
+
 .table-scroll table {
   min-width: 520px;
 }
@@ -1680,6 +1699,11 @@ table tr:hover td {
   border-spacing: 0;
 }
 
+.unified-orders-header-table,
+.unified-orders-body-table {
+  margin-top: 0;
+}
+
 .unified-orders-table th,
 .unified-orders-table td {
   vertical-align: top;
@@ -1722,6 +1746,10 @@ table tr:hover td {
 
 .unified-orders-table .xlsx-header-secondary-cell-merged {
   text-align: center;
+}
+
+.unified-orders-header-table th {
+  position: static;
 }
 
 .orders-stage-legend {
@@ -4219,6 +4247,10 @@ body[data-theme='light'] .home-auth-status-pending {
 }
 
 @media (max-width: 1024px) {
+  .unified-orders-header-scroll {
+    top: 84px;
+  }
+
   .unified-orders-table {
     --orders-sticky-offset: 84px;
   }
@@ -4300,6 +4332,10 @@ body[data-theme='light'] .home-auth-status-pending {
 }
 
 @media (max-width: 768px) {
+  .unified-orders-header-scroll {
+    top: 66px;
+  }
+
   .unified-orders-table {
     --orders-sticky-offset: 66px;
   }
