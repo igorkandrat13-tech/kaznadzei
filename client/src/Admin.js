@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import ConfirmDialog from './ConfirmDialog';
 import {
   HelpTooltip,
-  SectionHeader,
   SettingsActions,
   SettingsFeedback,
   SettingsHeader,
@@ -22,13 +21,15 @@ import { useRoleConfig } from './RoleConfigContext';
 import { ORDER_STAGE_LEGEND } from './orderStageLegend';
 
 function Admin() {
+  const navigate = useNavigate();
   const { roleTabs, allRoleTabs, refreshRoleConfig } = useRoleConfig();
   const getDefaultEmployeeForm = (role = '') => ({
     ...emptyEmployeeForm,
     role: role || roleTabs[0]?.key || '',
   });
-  const [showSettings, setShowSettings] = useState(false);
   const [activeRole, setActiveRole] = useState('general');
+  const [selectedStepsRole, setSelectedStepsRole] = useState(() => roleTabs[0]?.key || '');
+  const [stageManagerRoleKey, setStageManagerRoleKey] = useState('');
   const [steps, setSteps] = useState([]);
   const [colors, setColors] = useState([]);
   const [updateStatus, setUpdateStatus] = useState(null);
@@ -87,8 +88,8 @@ function Admin() {
   const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
   const [newRole, setNewRole] = useState({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
   const backupImportInputRef = useRef(null);
-  const settingsTabs = buildSettingsTabs(roleTabs);
-  const filteredSteps = steps.filter(s => s.role === activeRole).sort((a, b) => a.order - b.order);
+  const settingsTabs = buildSettingsTabs();
+  const filteredSteps = steps.filter(s => s.role === selectedStepsRole).sort((a, b) => a.order - b.order);
   const employeeForm = employeeModalMode === 'edit' ? editEmployee : newEmployee;
   const roleForm = roleModalMode === 'edit' ? editRole : newRole;
   const legendItems = useMemo(() => {
@@ -126,7 +127,6 @@ function Admin() {
   };
 
   useEffect(() => {
-    if (!showSettings) return;
     setEditStep(null);
     setEditColor(null);
     setEditEmployee(null);
@@ -141,14 +141,24 @@ function Admin() {
     setNewRole({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
     setSettingsError('');
     setSettingsSuccess('');
-  }, [activeRole, showSettings, filteredSteps.length]);
+  }, [activeRole, filteredSteps.length, selectedStepsRole]);
 
   useEffect(() => {
-    if (!showSettings) return;
     fetchAppSettings().catch(error => setSettingsError(error.message || 'Не удалось загрузить настройки.'));
     fetchEmployees().catch(error => setSettingsError(error.message || 'Не удалось загрузить сотрудников.'));
     fetchRoles({ includeDeleted: true }).catch(error => setSettingsError(error.message || 'Не удалось загрузить роли.'));
-  }, [showSettings]);
+  }, []);
+
+  useEffect(() => {
+    if (!roleTabs.length) {
+      setSelectedStepsRole('');
+      return;
+    }
+
+    if (!selectedStepsRole || !roleTabs.some(role => role.key === selectedStepsRole)) {
+      setSelectedStepsRole(roleTabs[0]?.key || '');
+    }
+  }, [roleTabs, selectedStepsRole]);
 
   useEffect(() => {
     fetchSteps();
@@ -650,6 +660,18 @@ function Admin() {
     resetRoleForm();
   };
 
+  const openStageManager = (roleKey) => {
+    setSelectedStepsRole(roleKey);
+    setStageManagerRoleKey(roleKey);
+    setSettingsError('');
+    setSettingsSuccess('');
+  };
+
+  const closeStageManager = () => {
+    if (savingStep) return;
+    setStageManagerRoleKey('');
+  };
+
   const openCreateStepModal = () => {
     setEditStep(null);
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
@@ -902,6 +924,13 @@ function Admin() {
       if (activeRole === roleKey) {
         setActiveRole('roles');
       }
+      if (selectedStepsRole === roleKey) {
+        const nextRole = roleTabs.find(role => role.key !== roleKey);
+        setSelectedStepsRole(nextRole?.key || '');
+      }
+      if (stageManagerRoleKey === roleKey) {
+        setStageManagerRoleKey('');
+      }
       if (editRole?.key === roleKey) {
         closeRoleModal();
       }
@@ -935,7 +964,7 @@ function Admin() {
 
   // Settings
   const handleAddStep = async () => {
-    if (!newStep.stepName || !newStep.description) return;
+    if (!selectedStepsRole || !newStep.stepName || !newStep.description) return;
     setSettingsError('');
     setSettingsSuccess('');
     setSavingStep(true);
@@ -943,7 +972,7 @@ function Admin() {
       const res = await apiFetch('/api/processSteps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newStep, role: activeRole }),
+        body: JSON.stringify({ ...newStep, role: selectedStepsRole }),
       });
       if (!res.ok) {
         setSettingsError(await getErrorMessage(res, 'Не удалось добавить этап.'));
@@ -1096,6 +1125,75 @@ function Admin() {
         roleTabs={employeeRoleTabs}
       />
 
+      {stageManagerRoleKey ? (
+        <div className="modal-overlay" onClick={savingStep ? undefined : closeStageManager}>
+          <div className="modal-window modal-window-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">Этапы роли {getRoleLabel(stageManagerRoleKey)}</div>
+                <div className="modal-subtitle">
+                  Управляйте этапами выбранной роли прямо из действий.
+                </div>
+              </div>
+              <button className="btn btn-small modal-close-btn" onClick={closeStageManager} disabled={savingStep}>
+                ✕
+              </button>
+            </div>
+
+            <SettingsFeedback error={settingsError} success={settingsSuccess} />
+            <SettingsActions>
+              <button className="btn btn-success" onClick={openCreateStepModal} disabled={!selectedStepsRole}>
+                Добавить этап
+              </button>
+              <button className="btn" onClick={fetchSteps}>
+                Обновить этапы
+              </button>
+            </SettingsActions>
+
+            <div className="table-scroll desktop-table-only">
+              <table>
+                <thead><tr><th>№</th><th>Название этапа</th><th>Описание</th><th>Действия</th></tr></thead>
+                <tbody>
+                  {filteredSteps.map(step => (
+                    <tr key={step._id}>
+                      <td>{step.order}</td>
+                      <td>{step.stepName}</td>
+                      <td>{step.description}</td>
+                      <td>
+                        <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditStepModal(step)}>✎</button>
+                        <button className="btn btn-danger" onClick={() => requestDeleteStep(step)}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredSteps.length === 0 && <tr><td colSpan={4} className="empty-cell">Нет этапов для выбранной роли</td></tr>}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mobile-card-list">
+              {filteredSteps.map(step => (
+                <div key={step._id} className="mobile-settings-card">
+                  <div className="mobile-settings-card-header">
+                    <div>
+                      <div className="mobile-order-card-title">{step.stepName}</div>
+                      <div className="mobile-order-card-subtitle">Порядок: {step.order}</div>
+                    </div>
+                  </div>
+                  <div className="mobile-settings-card-note">
+                    {step.description || 'Без описания'}
+                  </div>
+                  <div className="mobile-settings-card-actions">
+                    <button className="btn btn-primary" onClick={() => openEditStepModal(step)}>Редактировать</button>
+                    <button className="btn btn-danger" onClick={() => requestDeleteStep(step)}>Удалить</button>
+                  </div>
+                </div>
+              ))}
+              {filteredSteps.length === 0 && <div className="mobile-empty-state">Нет этапов для выбранной роли</div>}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <StepModal
         mode={stepModalMode}
         editStep={editStep}
@@ -1132,12 +1230,10 @@ function Admin() {
     </>
   );
 
-  // ===== SETTINGS VIEW =====
-  if (showSettings) {
-    if (activeRole === 'general') {
-      return (
-        <div>
-          <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+  if (activeRole === 'general') {
+    return (
+      <div>
+        <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card">
             <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
@@ -1352,14 +1448,14 @@ function Admin() {
             onSaveUpdateSettings={saveUpdateSettings}
             savingUpdateSettings={savingUpdateSettings}
           />
-        </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    if (activeRole === 'employees') {
-      return (
-        <div>
-          <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+  if (activeRole === 'employees') {
+    return (
+      <div>
+        <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card" style={{ marginBottom: 20 }}>
             <p>Список сотрудников для входа в Telegram-бот и работы с заказами по ролям.</p>
@@ -1429,15 +1525,15 @@ function Admin() {
           </div>
 
           {settingsCrudModals}
-        </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    if (activeRole === 'roles') {
-      const visibleRoles = roles.filter(role => showDeletedRoles || !role.isDeleted);
-      return (
-        <div>
-          <SettingsHeader title="⚙️ Настройки — Роли" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+  if (activeRole === 'roles') {
+    const visibleRoles = roles.filter(role => showDeletedRoles || !role.isDeleted);
+    return (
+      <div>
+        <SettingsHeader title="⚙️ Настройки — Роли" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card" style={{ marginBottom: 20 }}>
             <p>Здесь настраиваются производственные роли, которые используются в этапах, сотрудниках, таблицах и рабочих экранах.</p>
@@ -1479,6 +1575,7 @@ function Admin() {
                           <button className="btn btn-secondary" onClick={() => handleRestoreRole(role.key)}>Восстановить</button>
                         ) : (
                           <>
+                            <button className="btn btn-secondary" style={{ marginRight: 6 }} onClick={() => openStageManager(role.key)}>Этапы</button>
                             <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditRoleModal(role)}>✎</button>
                             <button className="btn btn-danger" onClick={() => requestDeleteRole(role)}>✕</button>
                           </>
@@ -1509,6 +1606,7 @@ function Admin() {
                       <button className="btn btn-secondary" onClick={() => handleRestoreRole(role.key)}>Восстановить</button>
                     ) : (
                       <>
+                        <button className="btn btn-secondary" onClick={() => openStageManager(role.key)}>Этапы</button>
                         <button className="btn btn-primary" onClick={() => openEditRoleModal(role)}>Редактировать</button>
                         <button className="btn btn-danger" onClick={() => requestDeleteRole(role)}>Удалить</button>
                       </>
@@ -1521,14 +1619,14 @@ function Admin() {
           </div>
 
           {settingsCrudModals}
-        </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    if (activeRole === 'colors') {
-      return (
-        <div>
-          <SettingsHeader title="⚙️ Настройки — Цвета и легенда этапов" onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+  if (activeRole === 'colors') {
+    return (
+      <div>
+        <SettingsHeader title="⚙️ Настройки — Цвета и легенда этапов" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card">
             <p>Здесь настраиваются цвета справочника и легенды этапов для единой таблицы заказов.</p>
@@ -1595,125 +1693,11 @@ function Admin() {
             </div>
           </div>
           {settingsCrudModals}
-        </div>
-      );
-    }
-
-    return (
-      <div>
-        <SettingsHeader title={`⚙️ Настройки — ${settingsTabs.find(t => t.key === activeRole)?.label}`} onBack={() => setShowSettings(false)} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
-
-        <div className="card">
-          <p>Настройка этапов для данной роли</p>
-          <SettingsFeedback error={settingsError} success={settingsSuccess} />
-          <SettingsActions>
-            <button className="btn btn-success" onClick={openCreateStepModal}>Добавить этап</button>
-            <button className="btn" onClick={fetchSteps}>Обновить список</button>
-          </SettingsActions>
-          <div className="table-scroll desktop-table-only">
-            <table>
-              <thead><tr><th>№</th><th>Название этапа</th><th>Описание</th><th>Действия</th></tr></thead>
-              <tbody>
-                {filteredSteps.map(s => (
-                  <tr key={s._id}>
-                    <td>{s.order}</td><td>{s.stepName}</td><td>{s.description}</td>
-                    <td>
-                      <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditStepModal(s)}>✎</button>
-                      <button className="btn btn-danger" onClick={() => requestDeleteStep(s)}>✕</button>
-                    </td>
-                  </tr>
-                ))}
-                {filteredSteps.length === 0 && <tr><td colSpan={4} className="empty-cell">Нет этапов</td></tr>}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mobile-card-list">
-            {filteredSteps.map(step => (
-              <div key={step._id} className="mobile-settings-card">
-                <div className="mobile-settings-card-header">
-                  <div>
-                    <div className="mobile-order-card-title">{step.stepName}</div>
-                    <div className="mobile-order-card-subtitle">Порядок: {step.order}</div>
-                  </div>
-                </div>
-                <div className="mobile-settings-card-note">
-                  {step.description || 'Без описания'}
-                </div>
-                <div className="mobile-settings-card-actions">
-                  <button className="btn btn-primary" onClick={() => openEditStepModal(step)}>Редактировать</button>
-                  <button className="btn btn-danger" onClick={() => requestDeleteStep(step)}>Удалить</button>
-                </div>
-              </div>
-            ))}
-            {filteredSteps.length === 0 && <div className="mobile-empty-state">Нет этапов</div>}
-          </div>
-        </div>
-        {settingsCrudModals}
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="card" style={{ marginBottom: 20 }}>
-        <SectionHeader
-          title="⚙️ Настройки системы"
-          description="Управление ролями, сотрудниками, этапами, цветами, Telegram и обновлениями проекта"
-          actions={
-            <>
-            <Link to="/archive" className="btn btn-secondary section-toolbar-btn">📦 Архив</Link>
-            <button className="btn btn-secondary section-toolbar-btn" onClick={() => { setActiveRole('general'); setShowSettings(true); }}>
-              ⚙️ Настройки
-            </button>
-            </>
-          }
-        />
-      </div>
-
-      <EmployeeModal
-        mode={employeeModalMode}
-        employeeForm={employeeForm}
-        setEmployeeForm={setEmployeeForm}
-        onAdd={handleAddEmployee}
-        onUpdate={handleUpdateEmployee}
-        onClose={closeEmployeeModal}
-        roleTabs={employeeRoleTabs}
-      />
-
-      <StepModal
-        mode={stepModalMode}
-        editStep={editStep}
-        newStep={newStep}
-        setEditStep={setEditStep}
-        setNewStep={setNewStep}
-        onAdd={handleAddStep}
-        onUpdate={handleUpdateStep}
-        onClose={closeStepModal}
-      />
-
-      <ColorModal
-        mode={colorModalMode}
-        editColor={editColor}
-        newColor={newColor}
-        setEditColor={setEditColor}
-        setNewColor={setNewColor}
-        onAdd={handleAddColor}
-        onUpdate={handleUpdateColor}
-        onClose={closeColorModal}
-      />
-
-      <ConfirmDialog
-        open={Boolean(confirmAction)}
-        title={confirmAction?.title}
-        message={confirmAction?.message}
-        confirmLabel={confirmAction?.confirmLabel}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => !confirmLoading && setConfirmAction(null)}
-        loading={confirmLoading}
-      />
-    </div>
-  );
+  return null;
 }
 
 export default Admin;

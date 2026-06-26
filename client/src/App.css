@@ -1981,10 +1981,29 @@ table tr:hover td {
   z-index: 1;
   background: rgba(8, 20, 34, 0.96);
   box-shadow: 1px 0 0 rgba(121, 183, 255, 0.08);
+  background-clip: padding-box;
 }
 
-.unified-orders-table th.sticky-col {
-  z-index: 3;
+.unified-orders-table thead .sticky-col {
+  z-index: 6;
+}
+
+.unified-orders-table tbody .sticky-col {
+  z-index: 4;
+}
+
+.unified-orders-table tbody .merged-order-cell.sticky-col {
+  background: rgba(8, 20, 34, 0.98);
+}
+
+.unified-orders-table thead .sticky-col.sticky-col-1,
+.unified-orders-table tbody .sticky-col.sticky-col-1 {
+  box-shadow: 1px 0 0 rgba(121, 183, 255, 0.1);
+}
+
+.unified-orders-table thead .sticky-col.sticky-col-2,
+.unified-orders-table tbody .sticky-col.sticky-col-2 {
+  box-shadow: 1px 0 0 rgba(121, 183, 255, 0.12), 10px 0 18px rgba(2, 8, 16, 0.18);
 }
 
 .sticky-col-1 {
@@ -3381,6 +3400,15 @@ body[data-theme='light'] .unified-orders-table .xlsx-header-secondary-cell {
 body[data-theme='light'] .sticky-col {
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 1px 0 0 rgba(103, 149, 196, 0.14);
+}
+
+body[data-theme='light'] .unified-orders-table tbody .merged-order-cell.sticky-col {
+  background: rgba(255, 255, 255, 0.99);
+}
+
+body[data-theme='light'] .unified-orders-table thead .sticky-col.sticky-col-2,
+body[data-theme='light'] .unified-orders-table tbody .sticky-col.sticky-col-2 {
+  box-shadow: 1px 0 0 rgba(103, 149, 196, 0.16), 10px 0 18px rgba(77, 114, 154, 0.12);
 }
 
 body[data-theme='light'] .unified-orders-row-editing {

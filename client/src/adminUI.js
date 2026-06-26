@@ -1,5 +1,4 @@
 import React from 'react';
-import { buildRoleTabs } from './roleConfig';
 
 export const emptyEmployeeForm = {
   fullName: '',
@@ -23,7 +22,7 @@ export function SettingsHeader({ title, onBack, activeRole, onTabChange, tabs = 
     <div className="card settings-header-card">
       <div className="settings-header-top">
         <h2>{title}</h2>
-        <button className="btn" onClick={onBack}>← Назад к обзору</button>
+        <button className="btn" onClick={onBack}>← Назад</button>
       </div>
       <div className="tabs">
         {tabs.map(tab => (
@@ -73,12 +72,11 @@ export function generatePinCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-export function buildSettingsTabs(roles = []) {
+export function buildSettingsTabs() {
   return [
     { key: 'general', label: '⚙️ Общие' },
     { key: 'roles', label: '🧩 Роли' },
     { key: 'employees', label: '👥 Сотрудники' },
-    ...buildRoleTabs(roles),
     { key: 'colors', label: '🎨 Цвета' },
   ];
 }

@@ -1252,7 +1252,7 @@ function OrdersWorkspace() {
                           openQrPreview(orderActionsOrder, item);
                         }}
                       >
-                        {`QR ${item.itemNumber ? `позиция ${item.itemNumber}` : `изделие ${index + 1}`}`}
+                        {`QR ${String(item.name || '').trim() || `изделие ${index + 1}`}`}
                       </button>
                     ))}
                   </div>
