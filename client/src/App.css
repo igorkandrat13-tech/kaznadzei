@@ -1670,7 +1670,7 @@ table tr:hover td {
 }
 
 .unified-orders-table {
-  min-width: 1600px;
+  min-width: 1450px;
   width: 100%;
   table-layout: fixed;
 }
@@ -1679,7 +1679,7 @@ table tr:hover td {
 .unified-orders-table td {
   vertical-align: top;
   text-align: left;
-  padding: 6px 8px;
+  padding: 5px 6px;
 }
 
 .unified-orders-table th {
@@ -1687,8 +1687,8 @@ table tr:hover td {
   z-index: 2;
   background: linear-gradient(180deg, rgba(21, 39, 62, 0.98), rgba(16, 31, 51, 0.98));
   text-transform: none;
-  font-size: 11px;
-  line-height: 1.15;
+  font-size: 10px;
+  line-height: 1.1;
 }
 
 .unified-orders-table .xlsx-header-primary-cell {
@@ -1701,7 +1701,7 @@ table tr:hover td {
   z-index: 3;
   background: linear-gradient(180deg, rgba(16, 31, 51, 0.98), rgba(13, 25, 42, 0.98));
   color: #d7ebff;
-  font-size: 10px;
+  font-size: 9px;
   white-space: normal;
 }
 
@@ -1852,66 +1852,66 @@ table tr:hover td {
 }
 
 .unified-orders-table col.col-order-number {
-  width: 120px;
+  width: 112px;
 }
 
 .unified-orders-table col.col-customer {
-  width: 220px;
+  width: 200px;
 }
 
 .unified-orders-table col.col-room {
-  width: 90px;
+  width: 80px;
 }
 
 .unified-orders-table col.col-room-number,
 .unified-orders-table col.col-item-number,
 .unified-orders-table col.col-quantity {
-  width: 58px;
+  width: 52px;
 }
 
 .unified-orders-table col.col-name {
-  width: 130px;
+  width: 118px;
 }
 
 .unified-orders-table col.col-item-actions {
-  width: 38px;
+  width: 34px;
 }
 
 .unified-orders-table col.col-delivery-date {
-  width: 82px;
+  width: 76px;
 }
 
 .unified-orders-table col.col-material {
-  width: 120px;
+  width: 104px;
 }
 
 .unified-orders-table col.col-package {
-  width: 108px;
+  width: 96px;
 }
 
 .unified-orders-table col.col-paint {
-  width: 78px;
+  width: 66px;
 }
 
 .unified-orders-table col.col-photo {
-  width: 110px;
+  width: 96px;
 }
 
 .unified-orders-table col.col-notes {
-  width: 120px;
+  width: 108px;
 }
 
 .unified-orders-table col.col-carpenter,
 .unified-orders-table col.col-start-date,
 .unified-orders-table col.col-end-date,
 .unified-orders-table col.col-duration {
-  width: 64px;
+  width: 58px;
 }
 
 .xlsx-order-cell {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 100%;
 }
 
@@ -1920,7 +1920,7 @@ table tr:hover td {
 }
 
 .unified-orders-table td.merged-order-number-cell {
-  padding: 8px;
+  padding: 6px;
 }
 
 .merged-order-number-content {
@@ -1943,7 +1943,7 @@ table tr:hover td {
 }
 
 .unified-orders-table td.merged-order-customer-cell {
-  padding: 8px;
+  padding: 6px;
 }
 
 .merged-order-customer-content {
@@ -1968,7 +1968,7 @@ table tr:hover td {
 .unified-orders-table td.merged-order-meta-cell {
   text-align: center;
   font-weight: 600;
-  padding: 8px;
+  padding: 6px;
 }
 
 .merged-order-meta-content {
@@ -2207,7 +2207,7 @@ table tr:hover td {
 }
 
 .sticky-col-2 {
-  left: 120px;
+  left: 112px;
 }
 
 .unified-orders-row-editing {
@@ -2253,13 +2253,13 @@ table tr:hover td {
 }
 
 .order-actions-trigger {
-  width: 44px;
-  min-height: 34px;
-  min-width: 44px;
-  padding: 4px 10px;
+  width: 40px;
+  min-height: 32px;
+  min-width: 40px;
+  padding: 4px 8px;
   border-radius: 12px;
   align-self: flex-start;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
 }
 
