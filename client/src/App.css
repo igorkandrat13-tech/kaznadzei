@@ -2022,6 +2022,22 @@ table tr:hover td {
   background: transparent;
 }
 
+.unified-orders-table tbody td.order-filled-cell,
+.unified-orders-table tbody td.photo-cell.order-filled-cell,
+.unified-orders-table tbody td.notes-cell.order-filled-cell,
+.unified-orders-table tbody .merged-order-cell.order-filled-cell,
+.unified-orders-table tbody .merged-order-cell.sticky-col.order-filled-cell {
+  background: rgba(12, 26, 42, 0.94);
+}
+
+.unified-orders-table tbody tr:hover td.order-filled-cell,
+.unified-orders-table tbody tr:hover td.photo-cell.order-filled-cell,
+.unified-orders-table tbody tr:hover td.notes-cell.order-filled-cell,
+.unified-orders-table tbody tr:hover .merged-order-cell.order-filled-cell,
+.unified-orders-table tbody tr:hover .merged-order-cell.sticky-col.order-filled-cell {
+  background: rgba(12, 26, 42, 0.94);
+}
+
 .order-outline-cell {
   position: relative;
   z-index: 2;
@@ -3709,6 +3725,22 @@ body[data-theme='light'] .order-outline-top.order-outline-bottom.order-outline-r
 
 body[data-theme='light'] .sticky-col.order-outline-cell::after {
   border-color: rgba(62, 123, 179, 0.96);
+}
+
+body[data-theme='light'] .unified-orders-table tbody td.order-filled-cell,
+body[data-theme='light'] .unified-orders-table tbody td.photo-cell.order-filled-cell,
+body[data-theme='light'] .unified-orders-table tbody td.notes-cell.order-filled-cell,
+body[data-theme='light'] .unified-orders-table tbody .merged-order-cell.order-filled-cell,
+body[data-theme='light'] .unified-orders-table tbody .merged-order-cell.sticky-col.order-filled-cell {
+  background: rgba(240, 246, 252, 0.98);
+}
+
+body[data-theme='light'] .unified-orders-table tbody tr:hover td.order-filled-cell,
+body[data-theme='light'] .unified-orders-table tbody tr:hover td.photo-cell.order-filled-cell,
+body[data-theme='light'] .unified-orders-table tbody tr:hover td.notes-cell.order-filled-cell,
+body[data-theme='light'] .unified-orders-table tbody tr:hover .merged-order-cell.order-filled-cell,
+body[data-theme='light'] .unified-orders-table tbody tr:hover .merged-order-cell.sticky-col.order-filled-cell {
+  background: rgba(240, 246, 252, 0.98);
 }
 
 body[data-theme='light'] .unified-orders-table thead .sticky-col.sticky-col-2,

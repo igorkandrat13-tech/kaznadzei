@@ -1026,7 +1026,7 @@ function OrdersWorkspace() {
                     const isLastOrderRow = lastOrderRowKeys[orderId] === key;
                     const orderRowSpan = orderRowSpans[key] || 1;
                     const isHoveredOrder = hoveredOrderId === orderId;
-                    const regularOutlineClass = `${isHoveredOrder ? ' order-outline-cell' : ''}${isHoveredOrder && isFirstOrderRow ? ' order-outline-top' : ''}${isHoveredOrder && isLastOrderRow ? ' order-outline-bottom' : ''}`.trim();
+                    const regularOrderClass = `order-filled-cell${isHoveredOrder ? ` order-outline-cell${isFirstOrderRow ? ' order-outline-top' : ''}${isLastOrderRow ? ' order-outline-bottom' : ''}` : ''}`.trim();
                     const currentOrderDraftKeys = orderDraftKeys[orderId] || [];
                     const orderInlineDraft = currentOrderDraftKeys.length > 0 ? inlineDrafts[currentOrderDraftKeys[0]] : null;
                     const isOrderInlineEditing = Boolean(orderInlineDraft);
@@ -1041,7 +1041,7 @@ function OrdersWorkspace() {
                         {isFirstOrderRow ? (
                           <td
                             rowSpan={orderRowSpan}
-                            className={`sticky-col sticky-col-1 merged-order-cell merged-order-number-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`}
+                            className={`sticky-col sticky-col-1 merged-order-cell merged-order-number-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`}
                           >
                             <div className="merged-order-number-content">
                               <div className="xlsx-order-cell">
@@ -1073,37 +1073,37 @@ function OrdersWorkspace() {
                         {isFirstOrderRow ? (
                           <td
                             rowSpan={orderRowSpan}
-                            className={`sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
+                            className={`sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
                           >
                             <div className="merged-order-customer-content">
                               {isOrderInlineEditing ? <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : <div className="merged-order-customer-text">{order.customer || '—'}</div>}
                             </div>
                           </td>
                         ) : null}
-                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
-                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
-                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
-                        <td className={regularOutlineClass}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
-                        <td className={regularOutlineClass}>
+                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
+                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
+                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
+                        <td className={regularOrderClass}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
+                        <td className={regularOrderClass}>
                           {isInlineEditing ? (
                             <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
                           ) : (
                             <div className="order-primary-title"><strong>{item.name || '—'}</strong></div>
                           )}
                         </td>
-                        <td className={`xlsx-empty-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>—</td>
-                        <td className={regularOutlineClass}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
-                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
-                        <td className={regularOutlineClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
-                        <td className={regularOutlineClass}>—</td>
-                        <td className={`photo-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>
+                        <td className={`xlsx-empty-cell ${regularOrderClass}`}>—</td>
+                        <td className={regularOrderClass}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
+                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
+                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
+                        <td className={regularOrderClass}>—</td>
+                        <td className={`photo-cell ${regularOrderClass}`}>
                           {isInlineEditing ? (
                             <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
                           ) : item.photoLink ? (
                             <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a>
                           ) : '—'}
                         </td>
-                        <td className={`notes-cell${regularOutlineClass ? ` ${regularOutlineClass}` : ''}`}>
+                        <td className={`notes-cell ${regularOrderClass}`}>
                           {isInlineEditing ? (
                             <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
                           ) : (
@@ -1115,19 +1115,19 @@ function OrdersWorkspace() {
                             </>
                           )}
                         </td>
-                        <td className={regularOutlineClass}>—</td>
+                        <td className={regularOrderClass}>—</td>
                         {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
+                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
                             <div className="merged-order-meta-content">{formatDateDisplay(order.startDate)}</div>
                           </td>
                         ) : null}
                         {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
+                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
                             <div className="merged-order-meta-content">{formatDateDisplay(order.endDate)}</div>
                           </td>
                         ) : null}
                         {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`}>
+                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`}>
                             <div className="merged-order-meta-content">{formatManufacturingTime(order.startDate, order.endDate)}</div>
                           </td>
                         ) : null}
