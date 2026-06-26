@@ -948,7 +948,7 @@ function OrdersWorkspace() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody onMouseLeave={() => setHoveredOrderId('')}>
                 {rows.map(({ key, order, item }) => {
                   const inlineDraft = inlineDrafts[key] || null;
                   const isInlineEditing = Boolean(inlineDraft);
@@ -964,13 +964,15 @@ function OrdersWorkspace() {
                   const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                   const commentPreview = getCommentPreview(item.comments);
                   return (
-                    <tr key={key} className={isInlineEditing ? 'unified-orders-row-editing' : ''}>
+                    <tr
+                      key={key}
+                      className={isInlineEditing ? 'unified-orders-row-editing' : ''}
+                      onMouseEnter={() => setHoveredOrderId(orderId)}
+                    >
                       {isFirstOrderRow ? (
                         <td
                           rowSpan={orderRowSpan}
                           className={`sticky-col sticky-col-1 merged-order-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`}
-                          onMouseEnter={() => setHoveredOrderId(orderId)}
-                          onMouseLeave={() => setHoveredOrderId(current => (current === orderId ? '' : current))}
                         >
                           <div className="xlsx-order-cell">
                             {isAdmin ? (
@@ -1001,8 +1003,6 @@ function OrdersWorkspace() {
                         <td
                           rowSpan={orderRowSpan}
                           className={`sticky-col sticky-col-2 merged-order-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
-                          onMouseEnter={() => setHoveredOrderId(orderId)}
-                          onMouseLeave={() => setHoveredOrderId(current => (current === orderId ? '' : current))}
                         >
                           {isOrderInlineEditing ? <input className="table-inline-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : (order.customer || '—')}
                         </td>
