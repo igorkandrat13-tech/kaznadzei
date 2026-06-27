@@ -8,6 +8,7 @@ function WorkshopPage({
   role,
   title,
   description,
+  showStages = true,
   emptyStepsText = 'Нет настроенных этапов',
   emptyOrdersText = 'Нет заказов',
   summaryColumnTitle = 'Готовность',
@@ -38,10 +39,14 @@ function WorkshopPage({
   };
 
   useEffect(() => {
-    apiFetch('/api/processSteps?role=' + role)
-      .then(res => parseJsonSafely(res))
-      .then(data => setSteps(Array.isArray(data) ? data : []))
-      .catch(() => setSteps([]));
+    if (showStages) {
+      apiFetch('/api/processSteps?role=' + role)
+        .then(res => parseJsonSafely(res))
+        .then(data => setSteps(Array.isArray(data) ? data : []))
+        .catch(() => setSteps([]));
+    } else {
+      setSteps([]);
+    }
 
     fetchOrders().catch(() => setOrders([]));
 
@@ -49,7 +54,7 @@ function WorkshopPage({
     fetchExtraData()
       .then(data => setExtraData(data || initialExtraData))
       .catch(() => setExtraData(initialExtraData));
-  }, [role, fetchExtraData]);
+  }, [role, fetchExtraData, showStages]);
 
   useEffect(() => {
     const refreshData = () => {
@@ -242,6 +247,9 @@ function WorkshopPage({
   };
 
   const defaultSummaryCell = (order) => {
+    if (!showStages || steps.length === 0) {
+      return <span className="badge badge-neutral">—</span>;
+    }
     const done = steps.filter(step => findStage(order, step)?.status === 'completed').length;
     return <span className="badge badge-active">{done}/{steps.length}</span>;
   };
@@ -270,7 +278,7 @@ function WorkshopPage({
 
       {renderBeforeTable ? renderBeforeTable(context) : null}
 
-      {steps.length === 0 ? (
+      {showStages && steps.length === 0 ? (
         renderNoSteps ? renderNoSteps(context) : <p className="text-subtle">{emptyStepsText}</p>
       ) : (
         <>
@@ -279,7 +287,7 @@ function WorkshopPage({
               <thead>
                 <tr>
                   <th>Изделие</th>
-                  {steps.map(step => <th key={step._id}>{step.stepName}</th>)}
+                  {showStages && steps.map(step => <th key={step._id}>{step.stepName}</th>)}
                   {extraColumns.map(column => <th key={column.key}>{column.header}</th>)}
                   {renderSummaryCell !== null && <th>{summaryColumnTitle}</th>}
                   <th>Примечание</th>
@@ -292,7 +300,7 @@ function WorkshopPage({
                       <div className="order-primary-title"><strong>{order.name}</strong></div>
                       <div className="order-primary-subtitle">№ {order.orderNumber || '—'}</div>
                     </td>
-                    {steps.map(step => {
+                    {showStages && steps.map(step => {
                       const stage = findStage(order, step);
                       return <td key={step._id} style={{ textAlign: 'center' }}>{stage ? renderStageButton(order, stage) : '—'}</td>;
                     })}
@@ -307,7 +315,7 @@ function WorkshopPage({
                     <td style={{ minWidth: 160, maxWidth: 200 }}>{renderCommentCell(order)}</td>
                   </tr>
                 ))}
-                {orders.length === 0 && <tr><td colSpan={steps.length + extraColumns.length + (renderSummaryCell !== null ? 3 : 2)} className="empty-cell">{emptyOrdersText}</td></tr>}
+                {orders.length === 0 && <tr><td colSpan={(showStages ? steps.length : 0) + extraColumns.length + (renderSummaryCell !== null ? 3 : 2)} className="empty-cell">{emptyOrdersText}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -325,19 +333,21 @@ function WorkshopPage({
                   )}
                 </div>
 
-                <div className="mobile-order-stage-list">
-                  {steps.map(step => {
-                    const stage = findStage(order, step);
-                    return (
-                      <div key={step._id} className="mobile-order-stage-row">
-                        <div className="mobile-order-card-label">{step.stepName}</div>
-                        <div className="mobile-order-stage-action">
-                          {stage ? renderStageButton(order, stage) : '—'}
+                {showStages && (
+                  <div className="mobile-order-stage-list">
+                    {steps.map(step => {
+                      const stage = findStage(order, step);
+                      return (
+                        <div key={step._id} className="mobile-order-stage-row">
+                          <div className="mobile-order-card-label">{step.stepName}</div>
+                          <div className="mobile-order-stage-action">
+                            {stage ? renderStageButton(order, stage) : '—'}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {extraColumns.length > 0 && (
                   <div className="mobile-order-card-grid">

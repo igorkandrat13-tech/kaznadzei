@@ -65,6 +65,11 @@ function getItemActiveRoleStage(item, role) {
   return (item?.stages || []).find((stage) => stage.role === role && stage.status === 'in_progress') || null;
 }
 
+function getItemWorkerAssignment(item, role) {
+  if (!item?.workerAssignments || typeof item.workerAssignments !== 'object') return null;
+  return item.workerAssignments[role] || null;
+}
+
 function getItemActiveStage(item) {
   return (item?.stages || []).find((stage) => stage.status === 'in_progress') || null;
 }
@@ -329,6 +334,7 @@ function OrdersWorkspace() {
           const overallStatus = item?.overallStatus || order?.overallStatus || 'pending';
           const currentRole = (item?.stages || []).find(stage => stage.status === 'in_progress')?.role || '';
           const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
+          const carpenterAssignment = getItemWorkerAssignment(item, 'carpenter');
           const activeStage = getItemActiveStage(item);
           const assignedStage = getItemAssignedStage(item);
           const haystack = [
@@ -342,6 +348,7 @@ function OrdersWorkspace() {
             item.material,
             item.packageName,
             item.notes,
+            carpenterAssignment?.employeeName,
             ...(item.comments || []).map(comment => comment.text),
           ].join(' ').toLowerCase();
 
@@ -360,6 +367,7 @@ function OrdersWorkspace() {
             activeStage,
             assignedStage,
             carpenterActiveStage,
+            carpenterAssignment,
           };
         })
         .filter(Boolean);
@@ -1042,7 +1050,7 @@ function OrdersWorkspace() {
               <table className="orders-table unified-orders-table unified-orders-body-table">
                 {renderOrdersColGroup()}
                 <tbody onMouseLeave={() => setHoveredOrderId('')}>
-                  {rows.map(({ key, order, item, carpenterActiveStage, activeStage, assignedStage }) => {
+                  {rows.map(({ key, order, item, carpenterActiveStage, carpenterAssignment, activeStage, assignedStage }) => {
                     const inlineDraft = inlineDrafts[key] || null;
                     const isInlineEditing = Boolean(inlineDraft);
                     const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
@@ -1058,15 +1066,17 @@ function OrdersWorkspace() {
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                     const commentPreview = getCommentPreview(item.comments);
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
-                    const workerCellText = String(workerStageForText?.employeeName || '').trim() || '—';
-                    const workerCellTitle = workerStageForText?.stepName || activeStage?.stepName || '';
-                    const carpenterCellStyle = (carpenterActiveStage || activeStage)
+                    const workerCellText = String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—';
+                    const workerCellTitle = carpenterAssignment?.employeeName
+                      ? 'Сотрудник взял изделие в работу по QR'
+                      : (workerStageForText?.stepName || activeStage?.stepName || '');
+                    const carpenterCellStyle = (carpenterAssignment || carpenterActiveStage || activeStage)
                       ? {
                           background: legendColorMap[CARPENTER_STAGE_LEGEND_KEY] || '#C37C8E',
                           color: CARPENTER_STAGE_TEXT_HEX,
                         }
                       : undefined;
-                    const carpenterCellClassName = `${(carpenterActiveStage || activeStage) ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
+                    const carpenterCellClassName = `${(carpenterAssignment || carpenterActiveStage || activeStage) ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
                     return (
                       <tr
                         key={key}

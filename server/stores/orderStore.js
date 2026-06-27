@@ -40,6 +40,61 @@ function getStageEmployeeName(stage = {}) {
   return getEmployeeDisplayName(EmployeeStore.findById(employeeId));
 }
 
+function normalizeWorkerAssignments(source = {}) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
+
+  return Object.entries(source).reduce((acc, [role, assignment]) => {
+    const roleKey = String(role || '').trim();
+    if (!roleKey || !assignment || typeof assignment !== 'object') return acc;
+
+    const employeeId = String(assignment.employeeId || assignment._id || '').trim();
+    const employeeName = String(assignment.employeeName || assignment.fullName || assignment.name || '').trim();
+    const scannedAt = assignment.scannedAt || assignment.startedAt || assignment.takenAt || null;
+    if (!employeeId && !employeeName && !scannedAt) return acc;
+
+    acc[roleKey] = {
+      employeeId,
+      employeeName,
+      scannedAt,
+    };
+    return acc;
+  }, {});
+}
+
+function getWorkerAssignmentsFromStages(stages = []) {
+  if (!Array.isArray(stages) || stages.length === 0) return {};
+
+  return stages.reduce((acc, stage) => {
+    const role = String(stage?.role || '').trim();
+    if (!role) return acc;
+
+    const employeeId = String(stage?.employeeId || '').trim();
+    const employeeName = getStageEmployeeName(stage);
+    const scannedAt = stage?.startedAt || null;
+    if (!employeeId && !employeeName && !scannedAt) return acc;
+
+    const current = acc[role];
+    const nextAssignment = { employeeId, employeeName, scannedAt };
+    const currentHasName = Boolean(String(current?.employeeName || '').trim());
+    const nextHasName = Boolean(String(employeeName || '').trim());
+    const currentIsActive = Boolean(current?.scannedAt);
+    const nextIsActive = stage?.status === 'in_progress' || Boolean(scannedAt);
+
+    if (!current || (!currentHasName && nextHasName) || (!currentIsActive && nextIsActive)) {
+      acc[role] = nextAssignment;
+    }
+
+    return acc;
+  }, {});
+}
+
+function mergeWorkerAssignments(sourceAssignments = {}, stages = []) {
+  return {
+    ...getWorkerAssignmentsFromStages(stages),
+    ...normalizeWorkerAssignments(sourceAssignments),
+  };
+}
+
 function buildInitialStages() {
   const activateFirstStage = arguments[0]?.activateFirstStage === true;
   const steps = ProcessStepStore.findAll().slice().sort(compareSteps);
@@ -143,6 +198,7 @@ function buildOrderItem(source = {}, options = {}) {
   const stages = hasSourceStages
     ? syncSingleOrderStages({ stages: source.stages }, steps)
     : buildInitialStages({ activateFirstStage: options.activateFirstStage === true });
+  const workerAssignments = mergeWorkerAssignments(source.workerAssignments, stages);
   const quantity = Number(source.quantity) || 1;
   return {
     itemId: String(source.itemId || source._id || id()).trim(),
@@ -158,6 +214,7 @@ function buildOrderItem(source = {}, options = {}) {
     photoLink: String(source.photoLink || source.link || '').trim(),
     notes: String(source.notes || '').trim(),
     comments: normalizeComments(source.comments),
+    workerAssignments,
     stages,
     overallStatus: calculateOverallStatus(stages),
     createdAt: source.createdAt || new Date().toISOString(),
@@ -429,32 +486,45 @@ const OrderStore = {
     if (!order) return null;
     const item = getOrderItem(order, itemId);
     if (!item) return false;
-    const roleStages = (item.stages || []).filter(stage => stage.role === role);
-    if (roleStages.length === 0) return false;
-    const stageToActivate = roleStages.find(stage => stage.status === 'in_progress')
-      || roleStages.find(stage => stage.status === 'pending');
-    if (!stageToActivate) {
-      return order;
-    }
     let changed = false;
-    if (stageToActivate.status !== 'in_progress') {
-      stageToActivate.status = 'in_progress';
-      stageToActivate.completedAt = null;
-      changed = true;
-    }
     const employeeId = String(employee.employeeId || employee._id || '').trim();
     const employeeName = String(employee.employeeName || employee.fullName || '').trim();
-    if (employeeId && stageToActivate.employeeId !== employeeId) {
-      stageToActivate.employeeId = employeeId;
+    const scannedAt = new Date().toISOString();
+
+    item.workerAssignments = mergeWorkerAssignments(item.workerAssignments, item.stages);
+    const currentAssignment = item.workerAssignments[role] || {};
+    const nextAssignment = {
+      employeeId,
+      employeeName,
+      scannedAt: currentAssignment.scannedAt || scannedAt,
+    };
+    if (JSON.stringify(currentAssignment) !== JSON.stringify(nextAssignment)) {
+      item.workerAssignments[role] = nextAssignment;
       changed = true;
     }
-    if (employeeName && stageToActivate.employeeName !== employeeName) {
-      stageToActivate.employeeName = employeeName;
-      changed = true;
-    }
-    if (!stageToActivate.startedAt) {
-      stageToActivate.startedAt = new Date().toISOString();
-      changed = true;
+
+    const roleStages = (item.stages || []).filter(stage => stage.role === role);
+    const stageToActivate = roleStages.find(stage => stage.status === 'in_progress')
+      || roleStages.find(stage => stage.status === 'pending')
+      || null;
+    if (stageToActivate) {
+      if (stageToActivate.status !== 'in_progress') {
+        stageToActivate.status = 'in_progress';
+        stageToActivate.completedAt = null;
+        changed = true;
+      }
+      if (employeeId && stageToActivate.employeeId !== employeeId) {
+        stageToActivate.employeeId = employeeId;
+        changed = true;
+      }
+      if (employeeName && stageToActivate.employeeName !== employeeName) {
+        stageToActivate.employeeName = employeeName;
+        changed = true;
+      }
+      if (!stageToActivate.startedAt) {
+        stageToActivate.startedAt = scannedAt;
+        changed = true;
+      }
     }
     if (changed) {
       item.overallStatus = calculateOverallStatus(item.stages);
@@ -478,10 +548,20 @@ const OrderStore = {
     if (updates.endDate !== undefined) order.endDate = updates.endDate;
 
     if (Array.isArray(updates.items)) {
-      order.items = updates.items.map((item, index) => buildOrderItem(item, {
-        defaultItemNumber: getDefaultItemNumber(index),
-        index,
-      }));
+      const currentItems = Array.isArray(order.items) ? order.items : [];
+      order.items = updates.items.map((item, index) => {
+        const currentItem = currentItems.find(existingItem => existingItem.itemId === String(item?.itemId || '').trim())
+          || currentItems[index]
+          || {};
+        return buildOrderItem({
+          ...currentItem,
+          ...item,
+          workerAssignments: item?.workerAssignments || currentItem?.workerAssignments || {},
+        }, {
+          defaultItemNumber: getDefaultItemNumber(index),
+          index,
+        });
+      });
     } else {
       const primaryItem = getOrderItem(order);
       if (primaryItem) {
