@@ -695,6 +695,7 @@ router.post('/orders/:id/attachments', requireManagerAccess(), (req, res) => {
 
       const normalizedFileName = normalizeUploadedFileName(req.file.originalname || '');
       const relativePath = path.relative(ORDER_ATTACHMENTS_ROOT, req.file.path).replace(/\\/g, '/');
+      const overwriteRequested = ['1', 'true', 'yes'].includes(String(req.query?.overwrite || req.body?.overwrite || '').trim().toLowerCase());
       const attachment = sanitizeOrderAttachmentInput({
         name: normalizedFileName,
         type: req.file.mimetype || 'application/octet-stream',
@@ -703,32 +704,52 @@ router.post('/orders/:id/attachments', requireManagerAccess(), (req, res) => {
         relativePath,
         uploadedAt: new Date().toISOString(),
       });
-      const createdAttachment = OrderStore.addAttachment(req.params.id, attachment);
-      if (createdAttachment === null) {
+      const attachmentResult = OrderStore.saveAttachment(req.params.id, attachment, { overwrite: overwriteRequested });
+      if (attachmentResult.status === 'order_not_found') {
         deleteStoredAttachmentFile({ relativePath });
         return res.status(404).json({ message: 'Заказ не найден.' });
       }
-      if (createdAttachment === false) {
+      if (attachmentResult.status === 'invalid') {
         deleteStoredAttachmentFile({ relativePath });
         return res.status(400).json({ message: 'Не удалось сохранить файл карточки заказа.' });
       }
+      if (attachmentResult.status === 'conflict') {
+        deleteStoredAttachmentFile({ relativePath });
+        return res.status(409).json({
+          message: `Файл "${normalizedFileName}" уже загружен в карточку заказа. Подтвердите перезапись.`,
+          code: 'ATTACHMENT_NAME_EXISTS',
+          existingAttachment: attachmentResult.existingAttachment || null,
+        });
+      }
+
+      if (attachmentResult.status === 'overwritten' && attachmentResult.replacedAttachment) {
+        deleteStoredAttachmentFile(attachmentResult.replacedAttachment);
+      }
+
+      const savedAttachment = attachmentResult.attachment;
 
       addActivityLog({
-        action: 'order.attachment.create',
+        action: attachmentResult.status === 'overwritten' ? 'order.attachment.overwrite' : 'order.attachment.create',
         entityType: 'order',
         entityId: req.params.id,
-        entityName: attachment.name || '',
+        entityName: savedAttachment?.name || attachment.name || '',
         actor: getRequestActor(req),
-        message: 'Файл карточки заказа загружен.',
+        message: attachmentResult.status === 'overwritten'
+          ? 'Файл карточки заказа перезаписан.'
+          : 'Файл карточки заказа загружен.',
         details: {
-          attachmentId: createdAttachment.attachmentId,
-          fileName: createdAttachment.name,
-          size: createdAttachment.size,
-          type: createdAttachment.type,
+          attachmentId: savedAttachment?.attachmentId || '',
+          fileName: savedAttachment?.name || '',
+          size: savedAttachment?.size || 0,
+          type: savedAttachment?.type || '',
+          overwritten: attachmentResult.status === 'overwritten',
         },
       });
 
-      res.status(201).json(createdAttachment);
+      res.status(attachmentResult.status === 'overwritten' ? 200 : 201).json({
+        ...savedAttachment,
+        overwritten: attachmentResult.status === 'overwritten',
+      });
     } catch (error) {
       if (req.file?.path && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);

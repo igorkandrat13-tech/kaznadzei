@@ -89,6 +89,10 @@ function isSpreadsheetAttachment(attachment = {}) {
     || extension === '.xls';
 }
 
+function getAttachmentNameKey(fileName = '') {
+  return String(fileName || '').trim().toLowerCase();
+}
+
 function formatAttachmentSize(size) {
   const numericSize = Number(size) || 0;
   if (numericSize <= 0) return '';
@@ -366,6 +370,7 @@ function OrdersWorkspace() {
   const [attachmentsDialog, setAttachmentsDialog] = useState(null);
   const [attachmentPreview, setAttachmentPreview] = useState(null);
   const [confirmAttachmentDelete, setConfirmAttachmentDelete] = useState(null);
+  const [confirmAttachmentOverwrite, setConfirmAttachmentOverwrite] = useState(null);
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
@@ -956,6 +961,10 @@ function OrdersWorkspace() {
       setConfirmAttachmentDelete(null);
       return;
     }
+    if (confirmAttachmentOverwrite && !attachmentUploadingOrderId) {
+      setConfirmAttachmentOverwrite(null);
+      return;
+    }
     if (attachmentPreview) {
       closeAttachmentPreview();
       return;
@@ -975,7 +984,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || confirmAttachmentDelete || attachmentPreview || attachmentsDialog || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -1156,7 +1165,7 @@ function OrdersWorkspace() {
     }
   };
 
-  const handleUploadOrderAttachment = async (order, file) => {
+  const handleUploadOrderAttachment = async (order, file, { overwrite = false } = {}) => {
     if (!order?._id || !file) return;
 
     setAttachmentUploadingOrderId(order._id);
@@ -1165,15 +1174,26 @@ function OrdersWorkspace() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await apiFetch(`/api/orders/${order._id}/attachments`, {
+      const res = await apiFetch(`/api/orders/${order._id}/attachments${overwrite ? '?overwrite=1' : ''}`, {
         method: 'POST',
         body: formData,
       });
+      const data = await parseJsonSafely(res);
       if (!res.ok) {
-        setError(await getErrorMessage(res, 'Не удалось загрузить файл карточки заказа.'));
+        if (res.status === 409 && !overwrite) {
+          setConfirmAttachmentOverwrite({
+            orderId: order._id,
+            orderNumber: order.orderNumber || '',
+            attachmentName: data?.existingAttachment?.name || file.name || 'Файл',
+            file,
+          });
+          return;
+        }
+        setError(data?.message || 'Не удалось загрузить файл карточки заказа.');
         return;
       }
 
+      setConfirmAttachmentOverwrite(null);
       await fetchOrders();
     } catch (uploadError) {
       setError(uploadError.message || 'Не удалось загрузить файл карточки заказа.');
@@ -1199,9 +1219,12 @@ function OrdersWorkspace() {
       if (isImageAttachment(attachment)) {
         const blobUrl = window.URL.createObjectURL(blob);
         setAttachmentPreviewState({
+          orderId,
+          attachment,
           mode: 'image',
           name: attachment.name || 'Изображение',
           kindLabel: getAttachmentKindLabel(attachment),
+          sizeLabel: formatAttachmentSize(attachment.size),
           url: blobUrl,
         });
         return;
@@ -1210,9 +1233,12 @@ function OrdersWorkspace() {
       if (isPdfAttachment(attachment)) {
         const blobUrl = window.URL.createObjectURL(blob);
         setAttachmentPreviewState({
+          orderId,
+          attachment,
           mode: 'pdf',
           name: attachment.name || 'PDF',
           kindLabel: getAttachmentKindLabel(attachment),
+          sizeLabel: formatAttachmentSize(attachment.size),
           url: blobUrl,
         });
         return;
@@ -1223,9 +1249,12 @@ function OrdersWorkspace() {
         const mammoth = mammothImport.default || mammothImport;
         const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
         setAttachmentPreviewState({
+          orderId,
+          attachment,
           mode: 'word',
           name: attachment.name || 'Word',
           kindLabel: getAttachmentKindLabel(attachment),
+          sizeLabel: formatAttachmentSize(attachment.size),
           html: result.value || '<p>Пустой документ.</p>',
         });
         return;
@@ -1248,9 +1277,12 @@ function OrdersWorkspace() {
           };
         });
         setAttachmentPreviewState({
+          orderId,
+          attachment,
           mode: 'spreadsheet',
           name: attachment.name || 'Excel',
           kindLabel: getAttachmentKindLabel(attachment),
+          sizeLabel: formatAttachmentSize(attachment.size),
           sheets,
           activeSheetIndex: 0,
         });
@@ -1296,7 +1328,34 @@ function OrdersWorkspace() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+
+    const duplicateAttachment = (order.attachments || []).find((attachment) => (
+      getAttachmentNameKey(attachment.name) === getAttachmentNameKey(file.name)
+    ));
+    if (duplicateAttachment) {
+      setConfirmAttachmentOverwrite({
+        orderId: order._id || '',
+        orderNumber: order.orderNumber || '',
+        attachmentName: duplicateAttachment.name || file.name || 'Файл',
+        file,
+      });
+      return;
+    }
     await handleUploadOrderAttachment(order, file);
+  };
+
+  const performOverwriteAttachment = async () => {
+    const orderId = String(confirmAttachmentOverwrite?.orderId || '').trim();
+    const file = confirmAttachmentOverwrite?.file;
+    if (!orderId || !file) return;
+
+    const order = orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) {
+      setError('Заказ для перезаписи файла не найден.');
+      return;
+    }
+
+    await handleUploadOrderAttachment(order, file, { overwrite: true });
   };
 
   const performDeleteAttachment = async (orderId, attachmentId) => {
@@ -1888,37 +1947,41 @@ function OrdersWorkspace() {
                                 accept={ORDER_CARD_ATTACHMENT_ACCEPT}
                                 onChange={(event) => handleAttachmentInputChange(order, event)}
                               />
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                className="order-card-icon-btn"
-                                onClick={() => attachmentInputRefs.current[order._id]?.click()}
-                                disabled={attachmentUploadingOrderId === order._id}
-                                title="Загрузить файл"
-                                aria-label="Загрузить файл"
-                              >
-                                {attachmentUploadingOrderId === order._id ? '...' : '+'}
-                              </Button>
-                              <div
-                                className={`order-card-summary ${orderAttachments.length > 0 ? 'order-card-summary-has-files' : 'order-card-summary-no-files'}`}
-                                title={orderAttachments.length > 0 ? `Файлов прикреплено: ${orderAttachments.length}` : 'Файлы не прикреплены'}
-                              >
-                                <span className={`order-card-status-indicator ${orderAttachments.length > 0 ? 'order-card-status-indicator-active' : ''}`}>
-                                  {orderAttachments.length > 0 ? '●' : '○'}
-                                </span>
+                              <div className="order-card-cell-row">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="order-card-icon-btn"
+                                  onClick={() => attachmentInputRefs.current[order._id]?.click()}
+                                  disabled={attachmentUploadingOrderId === order._id}
+                                  title="Загрузить файл"
+                                  aria-label="Загрузить файл"
+                                >
+                                  {attachmentUploadingOrderId === order._id ? '...' : '+'}
+                                </Button>
+                                <div
+                                  className={`order-card-summary ${orderAttachments.length > 0 ? 'order-card-summary-has-files' : 'order-card-summary-no-files'}`}
+                                  title={orderAttachments.length > 0 ? `Файлов прикреплено: ${orderAttachments.length}` : 'Файлы не прикреплены'}
+                                >
+                                  <span className={`order-card-status-indicator ${orderAttachments.length > 0 ? 'order-card-status-indicator-active' : ''}`}>
+                                    {orderAttachments.length > 0 ? '●' : '○'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="order-card-cell-row">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="order-card-icon-btn"
+                                  onClick={() => openAttachmentsDialog(order)}
+                                  disabled={orderAttachments.length === 0}
+                                  title={orderAttachments.length > 0 ? 'Просмотр файлов' : 'Файлы не прикреплены'}
+                                  aria-label="Просмотр файлов"
+                                >
+                                  ⌕
+                                </Button>
                                 <span className="order-card-summary-badge">{orderAttachments.length}</span>
                               </div>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                className="order-card-icon-btn"
-                                onClick={() => openAttachmentsDialog(order)}
-                                disabled={orderAttachments.length === 0}
-                                title={orderAttachments.length > 0 ? 'Просмотр файлов' : 'Файлы не прикреплены'}
-                                aria-label="Просмотр файлов"
-                              >
-                                ⌕
-                              </Button>
                             </div>
                           </td>
                         ) : null}
@@ -2274,70 +2337,102 @@ function OrdersWorkspace() {
       ) : null}
 
       {attachmentPreview ? (
-        <Modal open={Boolean(attachmentPreview)} onClose={closeAttachmentPreview} size="lg" className="order-form-modal">
+        <Modal open={Boolean(attachmentPreview)} onClose={closeAttachmentPreview} size="xl" className="order-form-modal">
           <ModalHeader
             title={attachmentPreview.name || 'Просмотр файла'}
             subtitle={attachmentPreview.kindLabel || 'Изображение'}
             onClose={closeAttachmentPreview}
           />
-          <div className="attachment-preview-wrap">
-            {attachmentPreview.mode === 'image' ? (
-              <img src={attachmentPreview.url} alt={attachmentPreview.name || 'Изображение'} className="attachment-preview-image" />
-            ) : null}
-            {attachmentPreview.mode === 'pdf' ? (
-              <iframe
-                title={attachmentPreview.name || 'PDF'}
-                src={attachmentPreview.url}
-                className="attachment-preview-frame"
-              />
-            ) : null}
-            {attachmentPreview.mode === 'word' ? (
-              <div
-                className="attachment-preview-document"
-                dangerouslySetInnerHTML={{ __html: attachmentPreview.html || '<p>Пустой документ.</p>' }}
-              />
-            ) : null}
-            {attachmentPreview.mode === 'spreadsheet' ? (
-              <div className="attachment-preview-sheet-view">
-                <div className="attachment-preview-sheet-tabs">
-                  {(attachmentPreview.sheets || []).map((sheet, index) => (
-                    <button
-                      key={`${sheet.name}-${index}`}
-                      type="button"
-                      className={cn(
-                        'attachment-preview-sheet-tab',
-                        index === (attachmentPreview.activeSheetIndex || 0) && 'attachment-preview-sheet-tab-active',
-                      )}
-                      onClick={() => setAttachmentPreview((current) => current ? {
-                        ...current,
-                        activeSheetIndex: index,
-                      } : current)}
-                    >
-                      {sheet.name}
-                    </button>
-                  ))}
-                </div>
-                <div className="attachment-preview-sheet-meta">
-                  Показаны первые {Math.min(
-                    ((attachmentPreview.sheets || [])[attachmentPreview.activeSheetIndex || 0]?.rows || []).length,
-                    100,
-                  )} строк
-                </div>
-                <div className="attachment-preview-table-wrap">
-                  <table className="attachment-preview-table">
-                    <tbody>
-                      {(((attachmentPreview.sheets || [])[attachmentPreview.activeSheetIndex || 0]?.rows) || []).map((row, rowIndex) => (
-                        <tr key={`sheet-row-${rowIndex}`}>
-                          {(Array.isArray(row) ? row : [row]).map((cell, cellIndex) => (
-                            <td key={`sheet-cell-${rowIndex}-${cellIndex}`}>{String(cell ?? '') || ' '}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          <div className="attachment-preview-panel">
+            <div className="attachment-preview-toolbar">
+              <div className="attachment-preview-toolbar-meta">
+                <span className="attachment-preview-toolbar-kind">{attachmentPreview.kindLabel || 'Файл'}</span>
+                {attachmentPreview.sizeLabel ? (
+                  <span className="attachment-preview-toolbar-size">{attachmentPreview.sizeLabel}</span>
+                ) : null}
               </div>
-            ) : null}
+              {attachmentPreview.orderId && attachmentPreview.attachment ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleDownloadAttachment(attachmentPreview.orderId, attachmentPreview.attachment)}
+                  disabled={attachmentOpeningKey === `${attachmentPreview.orderId}:${attachmentPreview.attachment.attachmentId}:download`}
+                >
+                  {attachmentOpeningKey === `${attachmentPreview.orderId}:${attachmentPreview.attachment.attachmentId}:download` ? 'Скачивание...' : 'Скачать'}
+                </Button>
+              ) : null}
+            </div>
+            <div
+              className={cn(
+                'attachment-preview-wrap',
+                attachmentPreview.mode === 'image' && 'attachment-preview-wrap-image',
+                attachmentPreview.mode === 'pdf' && 'attachment-preview-wrap-pdf',
+                attachmentPreview.mode === 'word' && 'attachment-preview-wrap-document',
+                attachmentPreview.mode === 'spreadsheet' && 'attachment-preview-wrap-sheet',
+              )}
+            >
+              {attachmentPreview.mode === 'image' ? (
+                <img src={attachmentPreview.url} alt={attachmentPreview.name || 'Изображение'} className="attachment-preview-image" />
+              ) : null}
+              {attachmentPreview.mode === 'pdf' ? (
+                <iframe
+                  title={attachmentPreview.name || 'PDF'}
+                  src={attachmentPreview.url}
+                  className="attachment-preview-frame"
+                />
+              ) : null}
+              {attachmentPreview.mode === 'word' ? (
+                <div
+                  className="attachment-preview-document"
+                  dangerouslySetInnerHTML={{ __html: attachmentPreview.html || '<p>Пустой документ.</p>' }}
+                />
+              ) : null}
+              {attachmentPreview.mode === 'spreadsheet' ? (
+                <div className="attachment-preview-sheet-view">
+                  <div className="attachment-preview-sheet-tabs">
+                    {(attachmentPreview.sheets || []).map((sheet, index) => (
+                      <button
+                        key={`${sheet.name}-${index}`}
+                        type="button"
+                        className={cn(
+                          'attachment-preview-sheet-tab',
+                          index === (attachmentPreview.activeSheetIndex || 0) && 'attachment-preview-sheet-tab-active',
+                        )}
+                        onClick={() => setAttachmentPreview((current) => current ? {
+                          ...current,
+                          activeSheetIndex: index,
+                        } : current)}
+                      >
+                        {sheet.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="attachment-preview-sheet-meta">
+                    {(() => {
+                      const activeSheet = (attachmentPreview.sheets || [])[attachmentPreview.activeSheetIndex || 0];
+                      const shownRows = Math.min((activeSheet?.rows || []).length, 100);
+                      const totalRows = Number(activeSheet?.totalRows) || 0;
+                      return totalRows > shownRows
+                        ? `Показаны первые ${shownRows} из ${totalRows} строк`
+                        : `Показано строк: ${shownRows}`;
+                    })()}
+                  </div>
+                  <div className="attachment-preview-table-wrap">
+                    <table className="attachment-preview-table">
+                      <tbody>
+                        {(((attachmentPreview.sheets || [])[attachmentPreview.activeSheetIndex || 0]?.rows) || []).map((row, rowIndex) => (
+                          <tr key={`sheet-row-${rowIndex}`}>
+                            {(Array.isArray(row) ? row : [row]).map((cell, cellIndex) => (
+                              <td key={`sheet-cell-${rowIndex}-${cellIndex}`}>{String(cell ?? '') || ' '}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </Modal>
       ) : null}
@@ -2461,6 +2556,16 @@ function OrdersWorkspace() {
         onConfirm={() => performDeleteAttachment(confirmAttachmentDelete?.orderId || '', confirmAttachmentDelete?.attachmentId || '')}
         onCancel={() => !attachmentDeletingKey && setConfirmAttachmentDelete(null)}
         loading={Boolean(confirmAttachmentDelete && attachmentDeletingKey === `${confirmAttachmentDelete.orderId}:${confirmAttachmentDelete.attachmentId}`)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmAttachmentOverwrite)}
+        title="Перезаписать файл?"
+        message={confirmAttachmentOverwrite ? `Файл "${confirmAttachmentOverwrite.attachmentName}" уже загружен${confirmAttachmentOverwrite.orderNumber ? ` в заказ № ${confirmAttachmentOverwrite.orderNumber}` : ''}.\nСтарый файл будет заменен новой версией.` : ''}
+        confirmLabel="Перезаписать файл"
+        onConfirm={performOverwriteAttachment}
+        onCancel={() => !attachmentUploadingOrderId && setConfirmAttachmentOverwrite(null)}
+        loading={Boolean(confirmAttachmentOverwrite && attachmentUploadingOrderId === confirmAttachmentOverwrite.orderId)}
       />
     </div>
   );

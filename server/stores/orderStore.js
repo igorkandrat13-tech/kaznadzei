@@ -184,6 +184,18 @@ function normalizeOrderAttachments(source = []) {
   }, []);
 }
 
+function getAttachmentNameKey(fileName = '') {
+  return String(fileName || '').trim().toLowerCase();
+}
+
+function findAttachmentIndexByName(attachments = [], attachmentName = '') {
+  const targetKey = getAttachmentNameKey(attachmentName);
+  if (!targetKey) return -1;
+  return normalizeOrderAttachments(attachments).findIndex((attachment) => (
+    getAttachmentNameKey(attachment.name) === targetKey
+  ));
+}
+
 function getManualStageLegendKey(manualStageMarks = {}) {
   const marks = Object.values(normalizeManualStageMarks(manualStageMarks));
   if (marks.length === 0) return '';
@@ -897,18 +909,52 @@ const OrderStore = {
     return this.findAll().length;
   },
 
-  addAttachment(orderId, attachment = {}) {
+  saveAttachment(orderId, attachment = {}, { overwrite = false } = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
-    if (!order) return null;
+    if (!order) {
+      return { status: 'order_not_found' };
+    }
 
     const normalizedAttachment = normalizeOrderAttachments([attachment])[0];
-    if (!normalizedAttachment) return false;
+    if (!normalizedAttachment) {
+      return { status: 'invalid' };
+    }
+
+    const currentAttachments = normalizeOrderAttachments(order.attachments);
+    const duplicateIndex = findAttachmentIndexByName(currentAttachments, normalizedAttachment.name);
+
+    if (duplicateIndex !== -1) {
+      const existingAttachment = currentAttachments[duplicateIndex];
+      if (!overwrite) {
+        return {
+          status: 'conflict',
+          existingAttachment,
+        };
+      }
+
+      const overwrittenAttachment = {
+        ...normalizedAttachment,
+        attachmentId: existingAttachment.attachmentId,
+      };
+      currentAttachments[duplicateIndex] = overwrittenAttachment;
+      order.attachments = normalizeOrderAttachments(currentAttachments);
+      save();
+      return {
+        status: 'overwritten',
+        attachment: overwrittenAttachment,
+        replacedAttachment: existingAttachment,
+      };
+    }
 
     order.attachments = normalizeOrderAttachments([...(order.attachments || []), normalizedAttachment]);
     save();
-    return normalizedAttachment;
+    return {
+      status: 'created',
+      attachment: normalizedAttachment,
+      replacedAttachment: null,
+    };
   },
 
   deleteAttachment(orderId, attachmentId) {
