@@ -109,8 +109,17 @@ function UpdatesOverview({
             <div className="overview-stat-card"><strong>Ветка:</strong> {updateStatus?.branch || '—'}</div>
             <div className="overview-stat-card"><strong>Источник обновления:</strong> {updateStatus?.targetRef || '—'}</div>
             <div className="overview-stat-card"><strong>Новых коммитов:</strong> {updateStatus?.behind ?? '—'}</div>
+            <div className="overview-stat-card"><strong>Локальные изменения:</strong> {updateStatus?.workingTreeDirty ? 'есть' : 'нет'}</div>
           </div>
           {!updateError && updateStatus?.message && <SettingsHint>{updateStatus.message}</SettingsHint>}
+          {updateStatus?.workingTreeDirty ? (
+            <SettingsHint>
+              На тестовой ВМ есть локальные изменения в tracked-файлах. При установке обновлений они будут автоматически сохранены в <strong>git stash</strong>, чтобы <strong>git pull</strong> не падал.
+              {Array.isArray(updateStatus?.dirtyTrackedFiles) && updateStatus.dirtyTrackedFiles.length > 0
+                ? ` Файлы: ${updateStatus.dirtyTrackedFiles.join(', ')}.`
+                : ''}
+            </SettingsHint>
+          ) : null}
           {updateStatus && !updateStatus.gitAvailable && (
             <SettingsHint>
               Для включения обновлений установите Git и убедитесь, что команда <strong>git</strong> доступна в PATH.

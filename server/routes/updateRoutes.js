@@ -15,6 +15,14 @@ const DEFAULT_PATH = process.platform === 'win32'
 
 let installInProgress = false;
 
+function hasPackageLock(cwd) {
+  return fs.existsSync(path.join(cwd, 'package-lock.json'));
+}
+
+function getInstallCommandArgs(cwd) {
+  return hasPackageLock(cwd) ? ['ci'] : ['install'];
+}
+
 function getConfiguredServiceName() {
   return (process.env.SYSTEMD_SERVICE_NAME || 'kaznadzei').trim();
 }
@@ -283,6 +291,48 @@ async function ensureGitRemoteConfigured() {
   };
 }
 
+async function getTrackedGitChanges() {
+  const statusResult = await tryGit(['status', '--porcelain', '--untracked-files=no'], PROJECT_ROOT);
+  if (!statusResult?.stdout) {
+    return [];
+  }
+  return statusResult.stdout
+    .split(/\r?\n/)
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean);
+}
+
+async function stashTrackedGitChanges() {
+  const dirtyFiles = await getTrackedGitChanges();
+  if (!dirtyFiles.length) {
+    return {
+      created: false,
+      stashEntry: '',
+      dirtyFiles: [],
+      error: '',
+    };
+  }
+
+  const stashMessage = `kaznadzei-auto-update-${new Date().toISOString()}`;
+  const stashResult = await tryGitDetailed(['stash', 'push', '-m', stashMessage], PROJECT_ROOT);
+  if (!stashResult.ok) {
+    return {
+      created: false,
+      stashEntry: '',
+      dirtyFiles,
+      error: stashResult.errorText || 'Не удалось временно сохранить локальные изменения перед обновлением.',
+    };
+  }
+
+  const stashEntry = (await tryGit(['stash', 'list', '--max-count=1', '--format=%gd'], PROJECT_ROOT))?.stdout || 'stash@{0}';
+  return {
+    created: true,
+    stashEntry,
+    dirtyFiles,
+    error: '',
+  };
+}
+
 async function getUpdateStatus() {
   const gitVersion = await hasGit();
   const status = {
@@ -304,6 +354,8 @@ async function getUpdateStatus() {
     updatesAvailable: false,
     ahead: 0,
     behind: 0,
+    workingTreeDirty: false,
+    dirtyTrackedFiles: [],
     canInstall: false,
     installInProgress,
     fetchError: '',
@@ -382,6 +434,9 @@ async function getUpdateStatus() {
     status.updatesAvailable = status.behind > 0;
   }
 
+  status.dirtyTrackedFiles = await getTrackedGitChanges();
+  status.workingTreeDirty = status.dirtyTrackedFiles.length > 0;
+
   status.canInstall = !installInProgress && status.hasRemote && Boolean(status.targetRef);
   status.message = status.updatesAvailable
     ? `Доступно обновлений: ${status.behind}`
@@ -453,25 +508,47 @@ router.post('/updates/install', requireAdminAccess(), async (req, res) => {
       return res.json({ ok: true, updated: false, message: 'Новых обновлений нет.', logs, status: statusBefore });
     }
 
+    const stashResult = await stashTrackedGitChanges();
+    if (stashResult.error) {
+      return res.status(500).json({
+        message: 'Не удалось подготовить локальный репозиторий к обновлению.',
+        details: stashResult.error,
+        logs,
+        status: statusBefore,
+      });
+    }
+    if (stashResult.created) {
+      logs.push(`git stash push -m "${stashResult.stashEntry}"`);
+      logs.push(`Временно сохранены локальные изменения: ${stashResult.dirtyFiles.join(', ')}`);
+    }
+
     logs.push(`git pull --ff-only origin ${statusBefore.targetRef.replace('origin/', '')}`);
     await runFile(getGitCommand(), ['pull', '--ff-only', 'origin', statusBefore.targetRef.replace('origin/', '')], PROJECT_ROOT);
 
-    logs.push('npm install');
-    await runFile(getNpmCommand(), ['install'], PROJECT_ROOT);
+    const rootInstallArgs = getInstallCommandArgs(PROJECT_ROOT);
+    logs.push(`npm ${rootInstallArgs.join(' ')}`);
+    await runFile(getNpmCommand(), rootInstallArgs, PROJECT_ROOT);
 
-    logs.push('npm install (client)');
-    await runFile(getNpmCommand(), ['install'], CLIENT_ROOT);
+    const clientInstallArgs = getInstallCommandArgs(CLIENT_ROOT);
+    logs.push(`npm ${clientInstallArgs.join(' ')} (client)`);
+    await runFile(getNpmCommand(), clientInstallArgs, CLIENT_ROOT);
 
     logs.push('npm run build (client)');
     await runFile(getNpmCommand(), ['run', 'build'], CLIENT_ROOT);
 
     const statusAfter = await getUpdateStatus();
+    const stashMessage = stashResult.created
+      ? ` Локальные изменения временно сохранены в ${stashResult.stashEntry}. При необходимости их можно вернуть командой git stash pop ${stashResult.stashEntry}.`
+      : '';
     res.json({
       ok: true,
       updated: true,
-      message: 'Обновления установлены, клиент пересобран. Перезапустите приложение для применения изменений.',
+      message: `Обновления установлены, клиент пересобран. Перезапустите приложение для применения изменений.${stashMessage}`,
       logs,
       status: statusAfter,
+      stashCreated: stashResult.created,
+      stashEntry: stashResult.stashEntry,
+      stashedFiles: stashResult.dirtyFiles,
     });
   } catch (error) {
     res.status(500).json({
