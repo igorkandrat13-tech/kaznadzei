@@ -3,7 +3,7 @@ const QRCode = require('qrcode');
 const OrderStore = require('../stores/orderStore');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
-const { requireManagerAccess, requireWriteAccess } = require('../middleware/security');
+const { requireAdminAccess, requireManagerAccess, requireWriteAccess } = require('../middleware/security');
 const { sanitizeCommentInput, sanitizeOrderInput, sanitizeOrderItemInput } = require('../utils/validators');
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
@@ -191,6 +191,61 @@ router.post('/orders/:id/comments', requireWriteAccess, (req, res) => {
     res.status(201).json(comments);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+router.patch('/orders/manual-stage-marks', requireAdminAccess(), (req, res) => {
+  try {
+    const legendKey = String(req.body?.legendKey || '').trim();
+    const selections = Array.isArray(req.body?.selections) ? req.body.selections : [];
+
+    if (selections.length === 0) {
+      return res.status(400).json({ message: 'Не выбраны ячейки для обновления.' });
+    }
+
+    const normalizedSelections = selections.map((selection) => ({
+      orderId: String(selection?.orderId || '').trim(),
+      itemId: String(selection?.itemId || '').trim(),
+      columnKey: String(selection?.columnKey || '').trim(),
+    })).filter(selection => selection.orderId && selection.itemId && selection.columnKey);
+
+    if (normalizedSelections.length === 0) {
+      return res.status(400).json({ message: 'Некорректный список ячеек.' });
+    }
+
+    const updatedOrders = OrderStore.setManualStageMarks(
+      normalizedSelections,
+      legendKey,
+      req.auth?.role || 'admin'
+    );
+
+    if (updatedOrders === false) {
+      return res.status(400).json({ message: 'Не удалось обновить ручные этапные отметки.' });
+    }
+
+    addActivityLog({
+      action: legendKey ? 'order.manual-stage.apply' : 'order.manual-stage.clear',
+      entityType: 'order',
+      entityId: normalizedSelections[0]?.orderId || '',
+      entityName: normalizedSelections.length === 1
+        ? (OrderStore.getOrderPrimaryName(updatedOrders[0]) || '')
+        : `Массовое обновление (${normalizedSelections.length} ячеек)`,
+      actor: getRequestActor(req, { label: 'Администратор' }),
+      message: legendKey
+        ? `Ручной этап "${legendKey}" применен к ${normalizedSelections.length} ячейкам таблицы.`
+        : `Ручные этапные отметки очищены для ${normalizedSelections.length} ячеек таблицы.`,
+      details: {
+        legendKey,
+        selections: normalizedSelections.length,
+      },
+    });
+
+    res.json({
+      ok: true,
+      updatedOrders,
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить ручные этапные отметки.' });
   }
 });
 

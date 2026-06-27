@@ -4,8 +4,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "concurrently -n server,client -c blue,green \"npm run server\" \"npm run client\"",
+    "dev": "concurrently -n server,client -c blue,green \"npm run server:dev\" \"npm run client\"",
     "server": "node server.js",
+    "server:dev": "nodemon server.js",
     "client": "cd client && npm start",
     "build": "cd client && npm install && npm run build",
     "deploy": "npm install && npm run build"

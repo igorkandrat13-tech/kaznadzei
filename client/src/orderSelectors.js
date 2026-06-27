@@ -19,8 +19,14 @@ function getOrderComments(order) {
 }
 
 function getOrderOverallStatus(order) {
-  const primaryItem = getOrderPrimaryItem(order);
-  return primaryItem?.overallStatus || order?.overallStatus || 'pending';
+  const items = getOrderItems(order);
+  if (items.length === 0) {
+    const primaryItem = getOrderPrimaryItem(order);
+    return primaryItem?.overallStatus || order?.overallStatus || 'pending';
+  }
+  if (items.every((item) => item?.overallStatus === 'completed')) return 'completed';
+  if (items.every((item) => (item?.overallStatus || 'pending') === 'pending')) return 'pending';
+  return 'in_progress';
 }
 
 function getOrderPrimaryName(order) {

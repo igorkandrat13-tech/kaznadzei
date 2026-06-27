@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
@@ -6,10 +6,25 @@ import { canAccessRole, getAppAuthRole } from './appAuth';
 import { ORDER_STAGE_LEGEND, ORDER_STAGE_SECONDARY_HEADERS } from './orderStageLegend';
 import { getOrderPrimaryName } from './orderSelectors';
 import { useRoleConfig } from './RoleConfigContext';
-import { Button, Modal, ModalHeader } from './ui';
+import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
+const MANUAL_STAGE_SELECTABLE_COLUMNS = new Set([
+  'room',
+  'roomNumber',
+  'itemNumber',
+  'quantity',
+  'name',
+  'stageSpacer',
+  'deliveryDate',
+  'material',
+  'packageName',
+  'paint',
+  'photoLink',
+  'notes',
+  'carpenter',
+]);
 const ORDER_PRIMARY_HEADERS = [
   'Номер заказа',
   'Заказчик',
@@ -32,6 +47,12 @@ const ORDER_PRIMARY_HEADERS = [
 ];
 const CARPENTER_STAGE_LEGEND_KEY = 'postpaint';
 const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const MANUAL_STAGE_TEXT_COLOR_MAP = ORDER_STAGE_SECONDARY_HEADERS.reduce((acc, item) => {
+  if (item.legendKey && !acc[item.legendKey]) {
+    acc[item.legendKey] = item.textHex || '#000000';
+  }
+  return acc;
+}, {});
 
 function getCommentPreview(comments = []) {
   if (!Array.isArray(comments) || comments.length === 0) return '—';
@@ -80,6 +101,15 @@ function getItemAssignedStage(item) {
   return stages.find((stage) => stage.status === 'in_progress' && String(stage.employeeName || '').trim())
     || stages.find((stage) => String(stage.employeeName || '').trim())
     || null;
+}
+
+function getItemManualStageMark(item, columnKey) {
+  if (!item?.manualStageMarks || typeof item.manualStageMarks !== 'object') return null;
+  return item.manualStageMarks[columnKey] || null;
+}
+
+function buildManualStageCellKey(rowKey, columnKey) {
+  return `${rowKey}::${columnKey}`;
 }
 
 function escapeCsvValue(value) {
@@ -238,12 +268,18 @@ function OrdersWorkspace() {
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
+  const [manualStageSaving, setManualStageSaving] = useState(false);
+  const [manualStageLegendDraft, setManualStageLegendDraft] = useState('');
+  const [manualStageDropdownOpen, setManualStageDropdownOpen] = useState(false);
+  const [selectedStageCellKeys, setSelectedStageCellKeys] = useState([]);
+  const [manualStageToolbarPosition, setManualStageToolbarPosition] = useState(null);
   const [qrPreview, setQrPreview] = useState(null);
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
   const [hoveredOrderId, setHoveredOrderId] = useState('');
   const [colors, setColors] = useState([]);
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
+  const manualStageToolbarRef = useRef(null);
   const syncingScrollRef = useRef(false);
 
   const fetchOrders = useCallback(async ({ showLoader = false } = {}) => {
@@ -379,6 +415,23 @@ function OrdersWorkspace() {
     acc[row.key] = row;
     return acc;
   }, {}), [rows]);
+  const selectedStageSelections = useMemo(() => selectedStageCellKeys
+    .map((cellKey) => {
+      const [rowKey, columnKey] = String(cellKey || '').split('::');
+      if (!rowKey || !columnKey || !MANUAL_STAGE_SELECTABLE_COLUMNS.has(columnKey)) return null;
+      const row = rowsByKey[rowKey];
+      if (!row?.item?.itemId || !row?.orderId) return null;
+      return {
+        cellKey,
+        rowKey,
+        columnKey,
+        orderId: row.orderId,
+        itemId: row.item.itemId,
+        itemName: row.item.name || '',
+        orderNumber: row.order.orderNumber || '',
+      };
+    })
+    .filter(Boolean), [rowsByKey, selectedStageCellKeys]);
 
   const visibleTableRoles = useMemo(
     () => allRoleTabs.filter(role => !HIDDEN_TABLE_ROLE_KEYS.has(role.key)),
@@ -435,6 +488,110 @@ function OrdersWorkspace() {
     )).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [orders]);
 
+  const clearSelectedStageCells = useCallback(() => {
+    setSelectedStageCellKeys([]);
+  }, []);
+
+  useEffect(() => {
+    setSelectedStageCellKeys((current) => current.filter((cellKey) => {
+      const [rowKey, columnKey] = String(cellKey || '').split('::');
+      return Boolean(rowKey && columnKey && MANUAL_STAGE_SELECTABLE_COLUMNS.has(columnKey) && rowsByKey[rowKey]);
+    }));
+  }, [rowsByKey]);
+
+  useEffect(() => {
+    if (selectedStageSelections.length === 0) {
+      setManualStageLegendDraft('');
+      setManualStageDropdownOpen(false);
+    }
+  }, [selectedStageSelections.length]);
+
+  useEffect(() => {
+    if (!isAdmin || selectedStageSelections.length === 0) return undefined;
+
+    const handlePointerDown = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('.manual-stage-toolbar-floating')) return;
+      if (target.closest('[data-manual-stage-cell-key]')) return;
+      setManualStageDropdownOpen(false);
+      clearSelectedStageCells();
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown, { passive: true });
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [clearSelectedStageCells, isAdmin, selectedStageSelections.length]);
+
+  useLayoutEffect(() => {
+    if (!isAdmin || selectedStageSelections.length === 0) {
+      setManualStageToolbarPosition(null);
+      return undefined;
+    }
+
+    const updateToolbarPosition = () => {
+      const selectedKeys = new Set(selectedStageCellKeys);
+      const nodes = Array.from(document.querySelectorAll('[data-manual-stage-cell-key]'))
+        .filter((node) => selectedKeys.has(node.getAttribute('data-manual-stage-cell-key') || ''));
+
+      if (nodes.length === 0) {
+        setManualStageToolbarPosition(null);
+        return;
+      }
+
+      const rects = nodes.map((node) => node.getBoundingClientRect());
+      const bounds = rects.reduce((acc, rect) => ({
+        left: Math.min(acc.left, rect.left),
+        top: Math.min(acc.top, rect.top),
+        right: Math.max(acc.right, rect.right),
+        bottom: Math.max(acc.bottom, rect.bottom),
+      }), {
+        left: rects[0].left,
+        top: rects[0].top,
+        right: rects[0].right,
+        bottom: rects[0].bottom,
+      });
+
+      const toolbarRect = manualStageToolbarRef.current?.getBoundingClientRect();
+      const toolbarWidth = toolbarRect?.width || 320;
+      const toolbarHeight = toolbarRect?.height || 56;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const margin = 12;
+      const preferredLeft = bounds.left + ((bounds.right - bounds.left) / 2) - (toolbarWidth / 2);
+      const clampedLeft = Math.min(
+        Math.max(margin, preferredLeft),
+        Math.max(margin, viewportWidth - toolbarWidth - margin),
+      );
+      const fitsBelow = bounds.bottom + margin + toolbarHeight <= viewportHeight - margin;
+      const top = fitsBelow
+        ? bounds.bottom + margin
+        : Math.max(margin, bounds.top - toolbarHeight - margin);
+
+      setManualStageToolbarPosition({
+        left: clampedLeft,
+        top,
+      });
+    };
+
+    updateToolbarPosition();
+
+    const bodyNode = bodyScrollRef.current;
+    window.addEventListener('resize', updateToolbarPosition);
+    window.addEventListener('scroll', updateToolbarPosition, true);
+    bodyNode?.addEventListener('scroll', updateToolbarPosition);
+
+    return () => {
+      window.removeEventListener('resize', updateToolbarPosition);
+      window.removeEventListener('scroll', updateToolbarPosition, true);
+      bodyNode?.removeEventListener('scroll', updateToolbarPosition);
+    };
+  }, [isAdmin, selectedStageSelections.length, selectedStageCellKeys, manualStageLegendDraft]);
+
   const syncHorizontalScroll = useCallback((source, target) => {
     if (!source || !target) return;
     if (syncingScrollRef.current) return;
@@ -444,6 +601,78 @@ function OrdersWorkspace() {
       syncingScrollRef.current = false;
     });
   }, []);
+
+  const handleManualStageCellClick = useCallback((event, rowKey, columnKey) => {
+    if (!isAdmin || manualStageSaving) return;
+    if (!MANUAL_STAGE_SELECTABLE_COLUMNS.has(columnKey)) return;
+    if (event.target.closest('a, button, input, textarea, select, summary, details, label')) return;
+
+    const cellKey = buildManualStageCellKey(rowKey, columnKey);
+    setSelectedStageCellKeys((current) => {
+      if (event.ctrlKey || event.metaKey) {
+        return current.includes(cellKey)
+          ? current.filter((value) => value !== cellKey)
+          : [...current, cellKey];
+      }
+      return [cellKey];
+    });
+  }, [isAdmin, manualStageSaving]);
+
+  const applyManualStageToSelection = useCallback(async (legendKey = '') => {
+    if (!isAdmin || manualStageSaving || selectedStageSelections.length === 0) return;
+
+    setManualStageSaving(true);
+    setError('');
+    try {
+      const res = await apiFetch('/api/orders/manual-stage-marks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          legendKey,
+          selections: selectedStageSelections.map(({ orderId, itemId, columnKey }) => ({
+            orderId,
+            itemId,
+            columnKey,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось обновить ручные этапные отметки.'));
+        return;
+      }
+      setManualStageDropdownOpen(false);
+      clearSelectedStageCells();
+      await fetchOrders();
+    } finally {
+      setManualStageSaving(false);
+    }
+  }, [clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
+
+  const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
+    const manualMark = getItemManualStageMark(item, columnKey);
+    const isSelected = selectedStageCellKeys.includes(buildManualStageCellKey(rowKey, columnKey));
+    const className = cn(
+      baseClassName,
+      manualMark ? 'manual-stage-cell-marked' : '',
+      isAdmin && !disabled ? 'manual-stage-cell-selectable' : '',
+      isSelected ? 'manual-stage-cell-selected' : '',
+    );
+    const style = manualMark
+      ? {
+          ...(baseStyle || {}),
+          background: legendColorMap[manualMark.legendKey] || '#FFFFFF',
+          color: MANUAL_STAGE_TEXT_COLOR_MAP[manualMark.legendKey] || '#000000',
+        }
+      : baseStyle;
+
+    return {
+      className,
+      style,
+      onClick: isAdmin && !disabled ? (event) => handleManualStageCellClick(event, rowKey, columnKey) : undefined,
+      'data-manual-stage-cell-key': buildManualStageCellKey(rowKey, columnKey),
+      title: manualMark?.legendKey ? `${manualMark.legendKey}${manualMark.updatedAt ? ` • ${new Date(manualMark.updatedAt).toLocaleString()}` : ''}` : undefined,
+    };
+  }, [handleManualStageCellClick, isAdmin, legendColorMap, selectedStageCellKeys]);
 
   const renderOrdersColGroup = useCallback(() => (
     <colgroup>
@@ -552,6 +781,10 @@ function OrdersWorkspace() {
   };
 
   useEscapeKey(() => {
+    if (selectedStageCellKeys.length > 0 && !manualStageSaving) {
+      clearSelectedStageCells();
+      return;
+    }
     if (confirmRemoveItemIndex !== null && !savingOrder) {
       setConfirmRemoveItemIndex(null);
       return;
@@ -571,7 +804,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(confirmRemoveItemIndex !== null || confirmDelete || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmRemoveItemIndex !== null || confirmDelete || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -1078,6 +1311,19 @@ function OrdersWorkspace() {
                         }
                       : undefined;
                     const carpenterCellClassName = `${(carpenterAssignment || carpenterActiveStage || activeStage) ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
+                    const roomCellProps = getManualStageCellProps(key, item, 'room', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const roomNumberCellProps = getManualStageCellProps(key, item, 'roomNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const itemNumberCellProps = getManualStageCellProps(key, item, 'itemNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const quantityCellProps = getManualStageCellProps(key, item, 'quantity', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const stageSpacerCellProps = getManualStageCellProps(key, item, 'stageSpacer', `xlsx-empty-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
+                    const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const materialCellProps = getManualStageCellProps(key, item, 'material', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const packageCellProps = getManualStageCellProps(key, item, 'packageName', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const paintCellProps = getManualStageCellProps(key, item, 'paint', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const photoCellProps = getManualStageCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
+                    const notesCellProps = getManualStageCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
+                    const carpenterCellProps = getManualStageCellProps(key, item, 'carpenter', carpenterCellClassName, carpenterCellStyle, { disabled: isInlineEditing });
                     return (
                       <tr
                         key={key}
@@ -1126,30 +1372,30 @@ function OrdersWorkspace() {
                             </div>
                           </td>
                         ) : null}
-                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
-                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
-                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
-                        <td className={regularOrderClass}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
-                        <td className={regularOrderClass}>
+                        <td {...roomCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
+                        <td {...roomNumberCellProps}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
+                        <td {...itemNumberCellProps}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
+                        <td {...quantityCellProps}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
+                        <td {...nameCellProps}>
                           {isInlineEditing ? (
                             <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
                           ) : (
                             <div className="order-primary-title"><strong>{item.name || '—'}</strong></div>
                           )}
                         </td>
-                        <td className={`xlsx-empty-cell ${regularOrderClass}`}>—</td>
-                        <td className={regularOrderClass}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
-                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
-                        <td className={regularOrderClass}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
-                        <td className={regularOrderClass}>—</td>
-                        <td className={`photo-cell ${regularOrderClass}`}>
+                        <td {...stageSpacerCellProps}>—</td>
+                        <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
+                        <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
+                        <td {...packageCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
+                        <td {...paintCellProps}>—</td>
+                        <td {...photoCellProps}>
                           {isInlineEditing ? (
                             <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
                           ) : item.photoLink ? (
                             <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a>
                           ) : '—'}
                         </td>
-                        <td className={`notes-cell ${regularOrderClass}`}>
+                        <td {...notesCellProps}>
                           {isInlineEditing ? (
                             <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
                           ) : (
@@ -1161,7 +1407,7 @@ function OrdersWorkspace() {
                             </>
                           )}
                         </td>
-                        <td className={carpenterCellClassName} style={carpenterCellStyle} title={workerCellTitle}>
+                        <td {...carpenterCellProps} title={workerCellTitle}>
                           {workerCellText}
                         </td>
                         {isFirstOrderRow ? (
@@ -1197,6 +1443,71 @@ function OrdersWorkspace() {
           Обновлено: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : '—'}
         </div>
       </div>
+
+      {isAdmin && selectedStageSelections.length > 0 && manualStageToolbarPosition ? (
+        <div
+          ref={manualStageToolbarRef}
+          className="manual-stage-toolbar manual-stage-toolbar-floating"
+          style={{
+            left: manualStageToolbarPosition.left,
+            top: manualStageToolbarPosition.top,
+          }}
+        >
+          <div className="manual-stage-toolbar-summary">
+            Выбрано: <strong>{selectedStageSelections.length}</strong>
+          </div>
+          <div className="manual-stage-toolbar-actions">
+            <div className="manual-stage-select-wrap">
+              <button
+                type="button"
+                className="manual-stage-select-trigger"
+                onClick={() => setManualStageDropdownOpen((current) => !current)}
+                disabled={manualStageSaving}
+              >
+                <span
+                  className="manual-stage-select-trigger-label"
+                  style={manualStageLegendDraft ? {
+                    background: legendColorMap[manualStageLegendDraft] || '#FFFFFF',
+                    color: MANUAL_STAGE_TEXT_COLOR_MAP[manualStageLegendDraft] || '#000000',
+                  } : undefined}
+                >
+                  {ORDER_STAGE_LEGEND.find((stage) => stage.key === manualStageLegendDraft)?.label || 'Выберите этап'}
+                </span>
+                <span className="manual-stage-select-trigger-arrow">{manualStageDropdownOpen ? '▲' : '▼'}</span>
+              </button>
+              {manualStageDropdownOpen ? (
+                <div className="manual-stage-select-menu">
+                  {ORDER_STAGE_LEGEND.map((stage) => (
+                    <button
+                      key={stage.key}
+                      type="button"
+                      className="manual-stage-select-option"
+                      style={{
+                        background: legendColorMap[stage.key] || stage.defaultHex,
+                        color: MANUAL_STAGE_TEXT_COLOR_MAP[stage.key] || '#000000',
+                      }}
+                      onClick={() => {
+                        setManualStageLegendDraft(stage.key);
+                        applyManualStageToSelection(stage.key);
+                      }}
+                      disabled={manualStageSaving}
+                      title={stage.description || stage.label}
+                    >
+                      {stage.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => applyManualStageToSelection('')} disabled={manualStageSaving}>
+              Сбросить
+            </Button>
+            <Button variant="secondary" size="sm" onClick={clearSelectedStageCells} disabled={manualStageSaving}>
+              Закрыть
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {showForm ? (
         <Modal open={showForm} onClose={closeForm} closeDisabled={savingOrder} size="lg" className="order-form-modal">

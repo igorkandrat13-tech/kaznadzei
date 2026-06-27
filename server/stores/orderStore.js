@@ -3,6 +3,12 @@ const ProcessStepStore = require('./processStepStore');
 const RoleStore = require('./roleStore');
 const EmployeeStore = require('./employeeStore');
 
+const MANUAL_STAGE_ORDER = ['unprocessed', 'brief', 'drafting', 'stock', 'assembly', 'paint', 'postpaint', 'ready'];
+const MANUAL_STAGE_STATUS = {
+  unprocessed: 'pending',
+  ready: 'completed',
+};
+
 function compareSteps(a, b) {
   const roleOrder = RoleStore.findAll({ includeDeleted: true }).map(role => role.key);
   const aIndex = roleOrder.indexOf(a.role);
@@ -93,6 +99,49 @@ function mergeWorkerAssignments(sourceAssignments = {}, stages = []) {
     ...getWorkerAssignmentsFromStages(stages),
     ...normalizeWorkerAssignments(sourceAssignments),
   };
+}
+
+function normalizeManualStageMarks(source = {}) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
+
+  return Object.entries(source).reduce((acc, [columnKey, mark]) => {
+    const normalizedColumnKey = String(columnKey || '').trim();
+    if (!normalizedColumnKey || !mark || typeof mark !== 'object') return acc;
+
+    const legendKey = String(mark.legendKey || '').trim();
+    if (!legendKey || !MANUAL_STAGE_ORDER.includes(legendKey)) return acc;
+
+    acc[normalizedColumnKey] = {
+      legendKey,
+      updatedAt: mark.updatedAt || new Date().toISOString(),
+      updatedBy: String(mark.updatedBy || '').trim(),
+    };
+    return acc;
+  }, {});
+}
+
+function getManualStageLegendKey(manualStageMarks = {}) {
+  const marks = Object.values(normalizeManualStageMarks(manualStageMarks));
+  if (marks.length === 0) return '';
+
+  return marks.reduce((currentKey, mark) => {
+    if (!currentKey) return mark.legendKey;
+    return MANUAL_STAGE_ORDER.indexOf(mark.legendKey) > MANUAL_STAGE_ORDER.indexOf(currentKey)
+      ? mark.legendKey
+      : currentKey;
+  }, '');
+}
+
+function getManualStageStatus(manualStageMarks = {}) {
+  const legendKey = getManualStageLegendKey(manualStageMarks);
+  if (!legendKey) return '';
+  return MANUAL_STAGE_STATUS[legendKey] || 'in_progress';
+}
+
+function calculateItemOverallStatus(stages, manualStageMarks = {}) {
+  const manualStatus = getManualStageStatus(manualStageMarks);
+  if (manualStatus) return manualStatus;
+  return calculateOverallStatus(stages);
 }
 
 function buildInitialStages() {
@@ -199,6 +248,7 @@ function buildOrderItem(source = {}, options = {}) {
     ? syncSingleOrderStages({ stages: source.stages }, steps)
     : buildInitialStages({ activateFirstStage: options.activateFirstStage === true });
   const workerAssignments = mergeWorkerAssignments(source.workerAssignments, stages);
+  const manualStageMarks = normalizeManualStageMarks(source.manualStageMarks);
   const quantity = Number(source.quantity) || 1;
   return {
     itemId: String(source.itemId || source._id || id()).trim(),
@@ -215,8 +265,9 @@ function buildOrderItem(source = {}, options = {}) {
     notes: String(source.notes || '').trim(),
     comments: normalizeComments(source.comments),
     workerAssignments,
+    manualStageMarks,
     stages,
-    overallStatus: calculateOverallStatus(stages),
+    overallStatus: calculateItemOverallStatus(stages, manualStageMarks),
     createdAt: source.createdAt || new Date().toISOString(),
     updatedAt: source.updatedAt || source.createdAt || new Date().toISOString(),
   };
@@ -240,8 +291,13 @@ function getOrderComments(order) {
 }
 
 function getOrderOverallStatus(order) {
-  const primaryItem = getOrderPrimaryItem(order);
-  return primaryItem?.overallStatus || calculateOverallStatus(getOrderStages(order));
+  const items = Array.isArray(order?.items) ? order.items : [];
+  if (items.length === 0) {
+    return calculateOverallStatus(getOrderStages(order));
+  }
+  if (items.every(item => item?.overallStatus === 'completed')) return 'completed';
+  if (items.every(item => (item?.overallStatus || 'pending') === 'pending')) return 'pending';
+  return 'in_progress';
 }
 
 function getOrderPrimaryName(order) {
@@ -293,6 +349,7 @@ function ensureOrderShape(order) {
         material: order.material,
         notes: order.notes,
         comments: order.comments,
+        manualStageMarks: order.manualStageMarks,
         stages: order.stages,
         overallStatus: order.overallStatus,
         createdAt: order.createdAt,
@@ -307,6 +364,7 @@ function ensureOrderShape(order) {
       material: item?.material || (index === 0 ? order.material : item?.material),
       notes: item?.notes || (index === 0 ? order.notes : item?.notes),
       comments: Array.isArray(item?.comments) ? item.comments : (index === 0 ? order.comments : []),
+      manualStageMarks: item?.manualStageMarks || (index === 0 ? order.manualStageMarks : {}),
       stages: Array.isArray(item?.stages) ? item.stages : (index === 0 ? order.stages : []),
       createdAt: item?.createdAt || order.createdAt,
     }, { defaultItemNumber: getDefaultItemNumber(index), index }));
@@ -513,7 +571,7 @@ const OrderStore = {
       }
     }
     if (changed) {
-      item.overallStatus = calculateOverallStatus(item.stages);
+      item.overallStatus = calculateItemOverallStatus(item.stages, item.manualStageMarks);
       item.updatedAt = new Date().toISOString();
       syncOrderStatus(order);
       save();
@@ -543,6 +601,7 @@ const OrderStore = {
           ...currentItem,
           ...item,
           workerAssignments: item?.workerAssignments || currentItem?.workerAssignments || {},
+          manualStageMarks: item?.manualStageMarks || currentItem?.manualStageMarks || {},
         }, {
           defaultItemNumber: getDefaultItemNumber(index),
           index,
@@ -564,6 +623,76 @@ const OrderStore = {
     return order;
   },
 
+  setManualStageMarks(entries = [], legendKey = '', actor = '') {
+    const db = load();
+    ensureOrders(db);
+    const normalizedLegendKey = String(legendKey || '').trim();
+    const shouldClear = !normalizedLegendKey;
+    if (!shouldClear && !MANUAL_STAGE_ORDER.includes(normalizedLegendKey)) {
+      return false;
+    }
+
+    let changed = false;
+    const touchedOrderIds = new Set();
+
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      const orderId = String(entry?.orderId || '').trim();
+      const itemId = String(entry?.itemId || '').trim();
+      const columnKey = String(entry?.columnKey || '').trim();
+      if (!orderId || !itemId || !columnKey) continue;
+
+      const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+      if (!order) continue;
+      const item = getOrderItem(order, itemId);
+      if (!item) continue;
+
+      const currentMarks = normalizeManualStageMarks(item.manualStageMarks);
+      item.manualStageMarks = { ...currentMarks };
+      const currentMark = item.manualStageMarks[columnKey];
+      let itemChanged = false;
+
+      if (shouldClear) {
+        if (currentMark) {
+          delete item.manualStageMarks[columnKey];
+          itemChanged = true;
+        }
+      } else {
+        const nextMark = {
+          legendKey: normalizedLegendKey,
+          updatedAt: new Date().toISOString(),
+          updatedBy: String(actor || '').trim(),
+        };
+        if (JSON.stringify({ ...currentMark, updatedAt: undefined }) !== JSON.stringify({ ...nextMark, updatedAt: undefined })) {
+          item.manualStageMarks[columnKey] = nextMark;
+          itemChanged = true;
+        } else if (!currentMark?.updatedAt) {
+          item.manualStageMarks[columnKey] = nextMark;
+          itemChanged = true;
+        }
+      }
+
+      if (itemChanged) {
+        item.manualStageMarks = normalizeManualStageMarks(item.manualStageMarks);
+        item.overallStatus = calculateItemOverallStatus(item.stages, item.manualStageMarks);
+        item.updatedAt = new Date().toISOString();
+        touchedOrderIds.add(orderId);
+        changed = true;
+      }
+    }
+
+    if (!changed) return false;
+
+    for (const orderId of touchedOrderIds) {
+      const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+      if (order) {
+        syncOrderStatus(order);
+      }
+    }
+
+    save();
+    return db.orders.filter(order => touchedOrderIds.has(order._id));
+  },
+
   syncStagesWithProcessSteps() {
     const db = load();
     ensureOrders(db);
@@ -573,7 +702,7 @@ const OrderStore = {
     for (const order of db.orders) {
       for (const item of order.items || []) {
         const nextStages = syncSingleOrderStages(item, steps);
-        const nextOverallStatus = calculateOverallStatus(nextStages);
+        const nextOverallStatus = calculateItemOverallStatus(nextStages, item.manualStageMarks);
         const currentStages = JSON.stringify(item.stages || []);
 
         if (currentStages !== JSON.stringify(nextStages)) {
@@ -604,6 +733,7 @@ const OrderStore = {
 
   buildInitialStages,
   calculateOverallStatus,
+  calculateItemOverallStatus,
   getOrderComments,
   getOrderItem,
   getOrderOverallStatus,
@@ -613,6 +743,7 @@ const OrderStore = {
   getOrderPrimaryNotes,
   getOrderPrimaryQuantity,
   getOrderStages,
+  getManualStageLegendKey,
   ensureOrders,
 };
 

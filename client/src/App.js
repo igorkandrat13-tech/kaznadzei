@@ -19,6 +19,51 @@ import './App.css';
 
 const THEME_STORAGE_KEY = 'kaznadzei.theme';
 
+class AppErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            hasError: false,
+            errorMessage: '',
+        };
+    }
+
+    static getDerivedStateFromError(error) {
+        return {
+            hasError: true,
+            errorMessage: error?.message || 'Неизвестная ошибка интерфейса.',
+        };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error('Application render error:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="container">
+                    <div className="card" style={{ maxWidth: 760, margin: '48px auto' }}>
+                        <h2 style={{ marginTop: 0 }}>Интерфейс не смог загрузиться</h2>
+                        <p style={{ marginBottom: 12 }}>
+                            Приложение поймало ошибку во время рендера. Обновите страницу.
+                            Если ошибка повторится, пришлите текст ниже.
+                        </p>
+                        <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                            {this.state.errorMessage}
+                        </div>
+                        <button className="btn btn-primary" type="button" onClick={() => window.location.reload()}>
+                            Обновить страницу
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
+}
+
 function ProtectedRoute({ requiredRole, children }) {
     const authRole = getAppAuthRole();
     if (!canAccessRole(requiredRole, authRole)) {
@@ -175,7 +220,9 @@ function App() {
     return (
         <RoleConfigProvider>
             <Router>
-                <AppLayout />
+                <AppErrorBoundary>
+                    <AppLayout />
+                </AppErrorBoundary>
             </Router>
         </RoleConfigProvider>
     );

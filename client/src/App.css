@@ -2137,6 +2137,127 @@ table tr:hover td {
   text-align: center;
 }
 
+.manual-stage-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(126, 191, 255, 0.22);
+  background: rgba(11, 27, 44, 0.88);
+}
+
+.manual-stage-toolbar-floating {
+  position: fixed;
+  z-index: 1200;
+  margin-bottom: 0;
+  padding: 10px 12px;
+  box-shadow: 0 18px 38px rgba(2, 8, 16, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.manual-stage-toolbar-summary {
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.manual-stage-toolbar-hint {
+  color: var(--text-soft);
+}
+
+.manual-stage-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.manual-stage-select-wrap {
+  position: relative;
+}
+
+.manual-stage-select-trigger {
+  min-width: 220px;
+  min-height: 36px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(126, 191, 255, 0.22);
+  background: rgba(18, 34, 52, 0.94);
+  color: var(--text-main);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.manual-stage-select-trigger:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.manual-stage-select-trigger-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 8px;
+  padding: 4px 8px;
+  flex: 1;
+  text-align: left;
+}
+
+.manual-stage-select-trigger-arrow {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.manual-stage-select-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(126, 191, 255, 0.22);
+  background: rgba(11, 27, 44, 0.98);
+  box-shadow: 0 18px 38px rgba(2, 8, 16, 0.28);
+}
+
+.manual-stage-select-option {
+  border: 1px solid rgba(12, 26, 42, 0.14);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manual-stage-select-option:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.manual-stage-cell-selectable {
+  cursor: pointer;
+}
+
+.manual-stage-cell-selected {
+  position: relative;
+  box-shadow: inset 0 0 0 2px rgba(76, 208, 255, 0.96);
+}
+
+.manual-stage-cell-marked.manual-stage-cell-selected {
+  box-shadow: inset 0 0 0 2px rgba(14, 22, 34, 0.5), inset 0 0 0 4px rgba(76, 208, 255, 0.9);
+}
+
 .unified-orders-table .comments-cell {
   min-width: 220px;
   max-width: 320px;
@@ -3741,6 +3862,47 @@ body[data-theme='light'] .unified-orders-table tbody tr:hover td.notes-cell.orde
 body[data-theme='light'] .unified-orders-table tbody tr:hover .merged-order-cell.order-filled-cell,
 body[data-theme='light'] .unified-orders-table tbody tr:hover .merged-order-cell.sticky-col.order-filled-cell {
   background: rgba(240, 246, 252, 0.98);
+}
+
+body[data-theme='light'] .manual-stage-toolbar {
+  background: rgba(245, 249, 255, 0.96);
+  border-color: rgba(111, 156, 203, 0.24);
+}
+
+body[data-theme='light'] .manual-stage-toolbar-floating {
+  box-shadow: 0 16px 28px rgba(54, 88, 122, 0.14);
+}
+
+body[data-theme='light'] .manual-stage-toolbar-summary {
+  color: #173857;
+}
+
+body[data-theme='light'] .manual-stage-toolbar-hint {
+  color: rgba(33, 65, 96, 0.82);
+}
+
+body[data-theme='light'] .manual-stage-select-trigger {
+  border-color: rgba(111, 156, 203, 0.24);
+  background: rgba(255, 255, 255, 0.98);
+  color: #173857;
+}
+
+body[data-theme='light'] .manual-stage-select-menu {
+  border-color: rgba(111, 156, 203, 0.24);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 28px rgba(54, 88, 122, 0.14);
+}
+
+body[data-theme='light'] .manual-stage-select-option {
+  border-color: rgba(33, 65, 96, 0.12);
+}
+
+body[data-theme='light'] .manual-stage-cell-selected {
+  box-shadow: inset 0 0 0 2px rgba(41, 131, 210, 0.92);
+}
+
+body[data-theme='light'] .manual-stage-cell-marked.manual-stage-cell-selected {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.84), inset 0 0 0 4px rgba(41, 131, 210, 0.92);
 }
 
 body[data-theme='light'] .unified-orders-table thead .sticky-col.sticky-col-2,
