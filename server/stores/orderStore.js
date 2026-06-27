@@ -8,6 +8,20 @@ const MANUAL_STAGE_STATUS = {
   unprocessed: 'pending',
   ready: 'completed',
 };
+const ORDER_MANUAL_STAGE_COLUMN_KEYS = [
+  'room',
+  'roomNumber',
+  'itemNumber',
+  'quantity',
+  'name',
+  'deliveryDate',
+  'material',
+  'packageName',
+  'paint',
+  'photoLink',
+  'notes',
+  'carpenter',
+];
 
 function compareSteps(a, b) {
   const roleOrder = RoleStore.findAll({ includeDeleted: true }).map(role => role.key);
@@ -133,6 +147,41 @@ function normalizeManualStageClears(source = {}) {
     };
     return acc;
   }, {});
+}
+
+function normalizeOrderAttachments(source = []) {
+  if (!Array.isArray(source)) return [];
+
+  return source.reduce((acc, attachment) => {
+    if (!attachment || typeof attachment !== 'object') return acc;
+
+    const rawName = String(attachment.name || '').trim();
+    const name = /[ÐÑÃ]/.test(rawName)
+      ? (() => {
+          try {
+            const decoded = Buffer.from(rawName, 'latin1').toString('utf8').trim();
+            return /[А-Яа-яЁё]/.test(decoded) ? decoded : rawName;
+          } catch {
+            return rawName;
+          }
+        })()
+      : rawName;
+    const content = String(attachment.content || '').trim();
+    const relativePath = String(attachment.relativePath || '').trim().replace(/\\/g, '/');
+    if (!name || (!content && !relativePath)) return acc;
+
+    acc.push({
+      attachmentId: String(attachment.attachmentId || attachment._id || id()).trim(),
+      name,
+      type: String(attachment.type || '').trim(),
+      size: Number(attachment.size) || 0,
+      storedName: String(attachment.storedName || '').trim(),
+      relativePath,
+      content,
+      uploadedAt: attachment.uploadedAt || new Date().toISOString(),
+    });
+    return acc;
+  }, []);
 }
 
 function getManualStageLegendKey(manualStageMarks = {}) {
@@ -337,6 +386,50 @@ function getOrderPrimaryNotes(order) {
   return String(primaryItem?.notes || order?.notes || '').trim();
 }
 
+function hasLegacyPrimaryItemData(order = {}) {
+  return Boolean(
+    String(order?.name || '').trim()
+    || Number(order?.quantity)
+    || String(order?.material || '').trim()
+    || String(order?.notes || '').trim()
+    || (Array.isArray(order?.comments) && order.comments.length > 0)
+    || (Array.isArray(order?.stages) && order.stages.length > 0)
+    || (order?.manualStageMarks && Object.keys(order.manualStageMarks).length > 0)
+    || (order?.manualStageClears && Object.keys(order.manualStageClears).length > 0)
+  );
+}
+
+function deriveOrderManufacturingMeta(order = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const markTimestamps = [];
+  let isCompleted = items.length > 0;
+
+  for (const item of items) {
+    const manualStageMarks = normalizeManualStageMarks(item?.manualStageMarks);
+
+    for (const columnKey of ORDER_MANUAL_STAGE_COLUMN_KEYS) {
+      const mark = manualStageMarks[columnKey];
+      if (mark?.updatedAt) {
+        markTimestamps.push(String(mark.updatedAt));
+      } else {
+        isCompleted = false;
+      }
+    }
+  }
+
+  const sortedTimestamps = markTimestamps.slice().sort();
+  const startAt = sortedTimestamps[0] || '';
+  const endAt = isCompleted ? (sortedTimestamps.at(-1) || '') : '';
+
+  return {
+    startAt,
+    endAt,
+    startDate: startAt ? startAt.split('T')[0] : '',
+    endDate: endAt ? endAt.split('T')[0] : '',
+    isCompleted,
+  };
+}
+
 function cleanupLegacyOrderFields(order) {
   const legacyKeys = ['name', 'quantity', 'material', 'notes', 'comments', 'stages', 'overallStatus'];
   let changed = false;
@@ -358,22 +451,28 @@ function ensureOrderShape(order) {
   const sourceItems = Array.isArray(order.items) ? order.items : [];
 
   if (!Array.isArray(order.items) || order.items.length === 0) {
-    order.items = [
-      buildOrderItem({
-        itemNumber: '1',
-        quantity: order.quantity,
-        name: order.name,
-        material: order.material,
-        notes: order.notes,
-        comments: order.comments,
-        manualStageMarks: order.manualStageMarks,
-        manualStageClears: order.manualStageClears,
-        stages: order.stages,
-        overallStatus: order.overallStatus,
-        createdAt: order.createdAt,
-      }, { defaultItemNumber: '1', index: 0 }),
-    ];
-    changed = true;
+    const normalizedItems = hasLegacyPrimaryItemData(order)
+      ? [
+          buildOrderItem({
+            itemNumber: '1',
+            quantity: order.quantity,
+            name: order.name,
+            material: order.material,
+            notes: order.notes,
+            comments: order.comments,
+            manualStageMarks: order.manualStageMarks,
+            manualStageClears: order.manualStageClears,
+            stages: order.stages,
+            overallStatus: order.overallStatus,
+            createdAt: order.createdAt,
+          }, { defaultItemNumber: '1', index: 0 }),
+        ]
+      : [];
+
+    if (JSON.stringify(sourceItems) !== JSON.stringify(normalizedItems)) {
+      order.items = normalizedItems;
+      changed = true;
+    }
   } else {
     const normalizedItems = order.items.map((item, index) => buildOrderItem({
       ...item,
@@ -402,12 +501,20 @@ function ensureOrderShape(order) {
     order.customer = '';
     changed = true;
   }
-  if (!order.startDate) {
-    order.startDate = '';
+  const normalizedAttachments = normalizeOrderAttachments(order.attachments);
+  if (JSON.stringify(order.attachments || []) !== JSON.stringify(normalizedAttachments)) {
+    order.attachments = normalizedAttachments;
     changed = true;
   }
-  if (!order.endDate) {
-    order.endDate = '';
+  const manufacturingMeta = deriveOrderManufacturingMeta(order);
+  const nextStartDate = manufacturingMeta.startDate || '';
+  const nextEndDate = manufacturingMeta.endDate || '';
+  if (order.startDate !== nextStartDate) {
+    order.startDate = nextStartDate;
+    changed = true;
+  }
+  if (order.endDate !== nextEndDate) {
+    order.endDate = nextEndDate;
     changed = true;
   }
 
@@ -458,17 +565,19 @@ const OrderStore = {
   create(data) {
     const db = load();
     const createdAt = new Date().toISOString();
-    const sourceItems = Array.isArray(data?.items) && data.items.length > 0
+    const sourceItems = Array.isArray(data?.items)
       ? data.items
-      : [{
-          itemNumber: '1',
-          quantity: data.quantity,
-          name: data.name,
-          material: data.material,
-          notes: data.notes,
-          comments: data.comments,
-          stages: data.stages,
-        }];
+      : (hasLegacyPrimaryItemData(data)
+        ? [{
+            itemNumber: '1',
+            quantity: data.quantity,
+            name: data.name,
+            material: data.material,
+            notes: data.notes,
+            comments: data.comments,
+            stages: data.stages,
+          }]
+        : []);
     const items = sourceItems.map((item, index) => buildOrderItem(item, {
       defaultItemNumber: getDefaultItemNumber(index),
       index,
@@ -478,11 +587,13 @@ const OrderStore = {
       orderNumber: data.orderNumber || '',
       customer: data.customer || '',
       orderDate: data.orderDate || '',
-      startDate: data.startDate || '',
-      endDate: data.endDate || '',
+      startDate: '',
+      endDate: '',
       createdAt,
+      attachments: normalizeOrderAttachments(data.attachments),
       items,
     };
+    syncOrderStatus(order);
     db.orders.push(order);
     save();
     return order;
@@ -607,8 +718,9 @@ const OrderStore = {
     if (updates.orderNumber !== undefined) order.orderNumber = updates.orderNumber;
     if (updates.customer !== undefined) order.customer = updates.customer;
     if (updates.orderDate !== undefined) order.orderDate = updates.orderDate;
-    if (updates.startDate !== undefined) order.startDate = updates.startDate;
-    if (updates.endDate !== undefined) order.endDate = updates.endDate;
+    if (updates.attachments !== undefined) {
+      order.attachments = normalizeOrderAttachments(updates.attachments);
+    }
 
     if (Array.isArray(updates.items)) {
       const currentItems = Array.isArray(order.items) ? order.items : [];
@@ -757,6 +869,21 @@ const OrderStore = {
       if (cleanupLegacyOrderFields(order)) {
         changed = true;
       }
+      const currentAttachments = JSON.stringify(order.attachments || []);
+      const nextAttachments = JSON.stringify(normalizeOrderAttachments(order.attachments));
+      if (currentAttachments !== nextAttachments) {
+        order.attachments = JSON.parse(nextAttachments);
+        changed = true;
+      }
+      const manufacturingMeta = deriveOrderManufacturingMeta(order);
+      if (order.startDate !== manufacturingMeta.startDate) {
+        order.startDate = manufacturingMeta.startDate;
+        changed = true;
+      }
+      if (order.endDate !== manufacturingMeta.endDate) {
+        order.endDate = manufacturingMeta.endDate;
+        changed = true;
+      }
     }
 
     if (changed) {
@@ -768,6 +895,47 @@ const OrderStore = {
 
   count() {
     return this.findAll().length;
+  },
+
+  addAttachment(orderId, attachment = {}) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+
+    const normalizedAttachment = normalizeOrderAttachments([attachment])[0];
+    if (!normalizedAttachment) return false;
+
+    order.attachments = normalizeOrderAttachments([...(order.attachments || []), normalizedAttachment]);
+    save();
+    return normalizedAttachment;
+  },
+
+  deleteAttachment(orderId, attachmentId) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+
+    const normalizedAttachmentId = String(attachmentId || '').trim();
+    const currentAttachments = normalizeOrderAttachments(order.attachments);
+    const deletedAttachment = currentAttachments.find((attachment) => attachment.attachmentId === normalizedAttachmentId) || null;
+    const nextAttachments = currentAttachments.filter((attachment) => attachment.attachmentId !== normalizedAttachmentId);
+    if (!deletedAttachment) return false;
+
+    order.attachments = nextAttachments;
+    save();
+    return deletedAttachment;
+  },
+
+  getAttachment(orderId, attachmentId) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+
+    const normalizedAttachmentId = String(attachmentId || '').trim();
+    return normalizeOrderAttachments(order.attachments).find((attachment) => attachment.attachmentId === normalizedAttachmentId) || false;
   },
 
   buildInitialStages,
@@ -782,6 +950,7 @@ const OrderStore = {
   getOrderPrimaryNotes,
   getOrderPrimaryQuantity,
   getOrderStages,
+  deriveOrderManufacturingMeta,
   getManualStageLegendKey,
   ensureOrders,
 };

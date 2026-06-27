@@ -2,6 +2,21 @@ function getOrderItems(order) {
   return Array.isArray(order?.items) ? order.items : [];
 }
 
+const ORDER_MANUAL_STAGE_COLUMN_KEYS = [
+  'room',
+  'roomNumber',
+  'itemNumber',
+  'quantity',
+  'name',
+  'deliveryDate',
+  'material',
+  'packageName',
+  'paint',
+  'photoLink',
+  'notes',
+  'carpenter',
+];
+
 function getOrderPrimaryItem(order) {
   return getOrderItems(order)[0] || null;
 }
@@ -49,8 +64,42 @@ function getOrderPrimaryNotes(order) {
   return primaryItem?.notes || order?.notes || '';
 }
 
+function getOrderManufacturingMeta(order) {
+  const items = getOrderItems(order);
+  const timestamps = [];
+  let isCompleted = items.length > 0;
+
+  items.forEach((item) => {
+    const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
+      ? item.manualStageMarks
+      : {};
+
+    ORDER_MANUAL_STAGE_COLUMN_KEYS.forEach((columnKey) => {
+      const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
+      if (updatedAt) {
+        timestamps.push(updatedAt);
+      } else {
+        isCompleted = false;
+      }
+    });
+  });
+
+  const sorted = timestamps.slice().sort();
+  const startAt = sorted[0] || '';
+  const endAt = isCompleted ? (sorted.at(-1) || '') : '';
+
+  return {
+    startAt,
+    endAt,
+    startDate: startAt ? startAt.split('T')[0] : '',
+    endDate: endAt ? endAt.split('T')[0] : '',
+    isCompleted,
+  };
+}
+
 export {
   getOrderComments,
+  getOrderManufacturingMeta,
   getOrderItems,
   getOrderOverallStatus,
   getOrderPrimaryItem,

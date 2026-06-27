@@ -4,27 +4,12 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { ORDER_STAGE_LEGEND, ORDER_STAGE_SECONDARY_HEADERS } from './orderStageLegend';
-import { getOrderPrimaryName } from './orderSelectors';
+import { getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
 import { useRoleConfig } from './RoleConfigContext';
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
-const MANUAL_STAGE_SELECTABLE_COLUMNS = new Set([
-  'room',
-  'roomNumber',
-  'itemNumber',
-  'quantity',
-  'name',
-  'stageSpacer',
-  'deliveryDate',
-  'material',
-  'packageName',
-  'paint',
-  'photoLink',
-  'notes',
-  'carpenter',
-]);
 const ORDER_PRIMARY_HEADERS = [
   'Номер заказа',
   'Заказчик',
@@ -33,7 +18,7 @@ const ORDER_PRIMARY_HEADERS = [
   '№ изделия в заказе',
   'Кол-во изделй',
   'Наименование',
-  '',
+  'Карточка заказа',
   'Отгрузка до',
   'Материал',
   'Комплектация заказа',
@@ -47,12 +32,71 @@ const ORDER_PRIMARY_HEADERS = [
 ];
 const CARPENTER_STAGE_LEGEND_KEY = 'postpaint';
 const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
 const MANUAL_STAGE_TEXT_COLOR_MAP = ORDER_STAGE_SECONDARY_HEADERS.reduce((acc, item) => {
   if (item.legendKey && !acc[item.legendKey]) {
     acc[item.legendKey] = item.textHex || '#000000';
   }
   return acc;
 }, {});
+
+function getAttachmentKindLabel(attachment = {}) {
+  const type = String(attachment.type || '').toLowerCase();
+  if (type.includes('pdf')) return 'PDF';
+  if (type.includes('word') || type.includes('document')) return 'Word';
+  if (type.includes('excel') || type.includes('spreadsheet') || type.includes('sheet')) return 'Excel';
+  if (type.startsWith('image/')) return 'Изображение';
+  return 'Файл';
+}
+
+function getAttachmentIcon(attachment = {}) {
+  const type = String(attachment.type || '').toLowerCase();
+  if (type.includes('pdf')) return 'PDF';
+  if (type.includes('word') || type.includes('document')) return 'DOC';
+  if (type.includes('excel') || type.includes('spreadsheet') || type.includes('sheet')) return 'XLS';
+  if (type.startsWith('image/')) return 'IMG';
+  return 'FILE';
+}
+
+function getAttachmentExtension(attachment = {}) {
+  const fileName = String(attachment.name || '').trim().toLowerCase();
+  const match = fileName.match(/(\.[a-z0-9]+)$/i);
+  return match ? match[1] : '';
+}
+
+function isImageAttachment(attachment = {}) {
+  const type = String(attachment.type || '').toLowerCase();
+  return type.startsWith('image/');
+}
+
+function isPdfAttachment(attachment = {}) {
+  const type = String(attachment.type || '').toLowerCase();
+  return type.includes('pdf') || getAttachmentExtension(attachment) === '.pdf';
+}
+
+function isDocxAttachment(attachment = {}) {
+  const type = String(attachment.type || '').toLowerCase();
+  const extension = getAttachmentExtension(attachment);
+  return type.includes('wordprocessingml') || extension === '.docx';
+}
+
+function isSpreadsheetAttachment(attachment = {}) {
+  const type = String(attachment.type || '').toLowerCase();
+  const extension = getAttachmentExtension(attachment);
+  return type.includes('excel')
+    || type.includes('spreadsheet')
+    || extension === '.xlsx'
+    || extension === '.xls';
+}
+
+function formatAttachmentSize(size) {
+  const numericSize = Number(size) || 0;
+  if (numericSize <= 0) return '';
+  if (numericSize >= 1024 * 1024) {
+    return `${(numericSize / (1024 * 1024)).toFixed(1)} МБ`;
+  }
+  return `${Math.max(1, Math.round(numericSize / 1024))} КБ`;
+}
 
 function getCommentPreview(comments = []) {
   if (!Array.isArray(comments) || comments.length === 0) return '—';
@@ -125,6 +169,10 @@ function buildManualStageCellKey(rowKey, columnKey) {
   return `${rowKey}::${columnKey}`;
 }
 
+function isManualStageSelectableColumn(columnKey) {
+  return Boolean(String(columnKey || '').trim());
+}
+
 function escapeCsvValue(value) {
   const normalized = String(value ?? '');
   if (normalized.includes('"') || normalized.includes(';') || normalized.includes('\n')) {
@@ -165,12 +213,49 @@ const EMPTY_ITEM = {
   notes: '',
 };
 
-function createEmptyItem(index = 0) {
+function createRoomEditorItem(index = 0) {
   return {
     ...EMPTY_ITEM,
-    itemNumber: String(index + 1),
-    clientKey: `new-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    itemNumber: '',
+    clientKey: `room-item-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
   };
+}
+
+function mapItemToRoomEditorItem(item = {}, index = 0) {
+  return {
+    itemId: item.itemId || '',
+    clientKey: item.itemId || `room-item-edit-${index}`,
+    itemNumber: item.itemNumber || '',
+    productNumber: item.productNumber || '',
+    name: item.name || '',
+    quantity: item.quantity || 1,
+    material: item.material || '',
+    deliveryDate: item.deliveryDate || '',
+    packageName: item.packageName || '',
+    photoLink: item.photoLink || '',
+    notes: item.notes || '',
+  };
+}
+
+function buildRoomGroupKey(room = '', roomNumber = '') {
+  return `${String(room || '').trim()}::${String(roomNumber || '').trim()}`;
+}
+
+function buildOrderItemsPayload(items = []) {
+  return items.map((item, index) => ({
+    ...(item.itemId ? { itemId: item.itemId } : {}),
+    itemNumber: String(item.itemNumber || index + 1).trim() || String(index + 1),
+    productNumber: String(item.productNumber || '').trim(),
+    room: String(item.room || '').trim(),
+    roomNumber: String(item.roomNumber || '').trim(),
+    name: String(item.name || '').trim(),
+    quantity: Number(item.quantity) || 1,
+    material: String(item.material || '').trim(),
+    deliveryDate: String(item.deliveryDate || '').trim(),
+    packageName: String(item.packageName || '').trim(),
+    photoLink: String(item.photoLink || '').trim(),
+    notes: String(item.notes || '').trim(),
+  }));
 }
 
 function createEmptyOrderForm() {
@@ -181,7 +266,7 @@ function createEmptyOrderForm() {
     orderDate: today,
     startDate: '',
     endDate: '',
-    items: [createEmptyItem(0)],
+    items: [],
   };
 }
 
@@ -202,7 +287,7 @@ function mapOrderToForm(order) {
         photoLink: item.photoLink || '',
         notes: item.notes || '',
       }))
-    : [createEmptyItem(0)];
+    : [];
 
   return {
     orderNumber: order?.orderNumber || '',
@@ -231,28 +316,12 @@ function validateOrderForm(form) {
   if (form.startDate && form.endDate && new Date(form.endDate) < new Date(form.startDate)) {
     errors.endDate = 'Дата окончания не может быть раньше даты начала.';
   }
-  if (!Array.isArray(form.items) || form.items.length === 0) {
-    errors.items = [{ name: 'Добавьте хотя бы одно изделие.', quantity: '' }];
-    return errors;
-  }
-
-  errors.items = form.items.map((item) => {
-    const itemErrors = { name: '', quantity: '' };
-    if (!String(item.name || '').trim()) {
-      itemErrors.name = 'Укажите наименование изделия.';
-    }
-    if ((Number(item.quantity) || 0) < 1) {
-      itemErrors.quantity = 'Количество должно быть не меньше 1.';
-    }
-    return itemErrors;
-  });
-
   return errors;
 }
 
 function hasOrderFormErrors(formErrors) {
   if (formErrors.orderNumber || formErrors.orderDate || formErrors.endDate) return true;
-  return (formErrors.items || []).some(itemError => itemError.name || itemError.quantity);
+  return false;
 }
 
 function getOrderIdentity(row) {
@@ -277,7 +346,6 @@ function OrdersWorkspace() {
   const [orderForm, setOrderForm] = useState(createEmptyOrderForm);
   const [savingOrder, setSavingOrder] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [confirmRemoveItemIndex, setConfirmRemoveItemIndex] = useState(null);
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
@@ -290,9 +358,18 @@ function OrdersWorkspace() {
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
   const [hoveredOrderId, setHoveredOrderId] = useState('');
   const [colors, setColors] = useState([]);
+  const [roomEditor, setRoomEditor] = useState(null);
+  const [roomEditorSaving, setRoomEditorSaving] = useState(false);
+  const [attachmentUploadingOrderId, setAttachmentUploadingOrderId] = useState('');
+  const [attachmentDeletingKey, setAttachmentDeletingKey] = useState('');
+  const [attachmentOpeningKey, setAttachmentOpeningKey] = useState('');
+  const [attachmentsDialog, setAttachmentsDialog] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [confirmAttachmentDelete, setConfirmAttachmentDelete] = useState(null);
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
+  const attachmentInputRefs = useRef({});
   const syncingScrollRef = useRef(false);
 
   const fetchOrders = useCallback(async ({ showLoader = false } = {}) => {
@@ -334,6 +411,14 @@ function OrdersWorkspace() {
     fetchOrders({ showLoader: true });
     fetchColors();
   }, [fetchColors, fetchOrders]);
+
+  useEffect(() => {
+    return () => {
+      if (attachmentPreview?.url) {
+        window.URL.revokeObjectURL(attachmentPreview.url);
+      }
+    };
+  }, [attachmentPreview]);
 
   useEffect(() => {
     const refresh = () => {
@@ -379,8 +464,31 @@ function OrdersWorkspace() {
     const query = search.trim().toLowerCase();
     return orders.flatMap(order => {
       const items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
-      return items
+      const sourceRows = items.length > 0 ? items : [{
+        itemId: '',
+        itemNumber: '',
+        productNumber: '',
+        room: '',
+        roomNumber: '',
+        quantity: '',
+        name: '',
+        deliveryDate: '',
+        material: '',
+        packageName: '',
+        photoLink: '',
+        notes: '',
+        comments: [],
+        manualStageMarks: {},
+        manualStageClears: {},
+        workerAssignments: {},
+        stages: [],
+        overallStatus: order?.overallStatus || 'pending',
+        __placeholder: true,
+      }];
+
+      return sourceRows
         .map(item => {
+          const isPlaceholder = item?.__placeholder === true;
           const overallStatus = item?.overallStatus || order?.overallStatus || 'pending';
           const currentRole = (item?.stages || []).find(stage => stage.status === 'in_progress')?.role || '';
           const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
@@ -408,7 +516,7 @@ function OrdersWorkspace() {
           if (query && !haystack.includes(query)) return null;
 
           return {
-            key: `${order._id}:${item.itemId}`,
+            key: `${order._id}:${item.itemId || '__empty__'}`,
             orderId: order._id || '',
             order,
             item,
@@ -418,6 +526,7 @@ function OrdersWorkspace() {
             assignedStage,
             carpenterActiveStage,
             carpenterAssignment,
+            isPlaceholder,
           };
         })
         .filter(Boolean);
@@ -431,7 +540,7 @@ function OrdersWorkspace() {
   const selectedStageSelections = useMemo(() => selectedStageCellKeys
     .map((cellKey) => {
       const [rowKey, columnKey] = String(cellKey || '').split('::');
-      if (!rowKey || !columnKey || !MANUAL_STAGE_SELECTABLE_COLUMNS.has(columnKey)) return null;
+      if (!rowKey || !columnKey || !isManualStageSelectableColumn(columnKey)) return null;
       const row = rowsByKey[rowKey];
       if (!row?.item?.itemId || !row?.orderId) return null;
       return {
@@ -500,6 +609,10 @@ function OrdersWorkspace() {
       orders.flatMap(order => (order.items || []).map(item => String(item.room || '').trim()).filter(Boolean))
     )).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [orders]);
+  const currentAttachmentDialogOrder = useMemo(
+    () => orders.find((order) => order._id === attachmentsDialog?.orderId) || null,
+    [attachmentsDialog?.orderId, orders],
+  );
 
   const clearSelectedStageCells = useCallback(() => {
     setSelectedStageCellKeys([]);
@@ -508,7 +621,7 @@ function OrdersWorkspace() {
   useEffect(() => {
     setSelectedStageCellKeys((current) => current.filter((cellKey) => {
       const [rowKey, columnKey] = String(cellKey || '').split('::');
-      return Boolean(rowKey && columnKey && MANUAL_STAGE_SELECTABLE_COLUMNS.has(columnKey) && rowsByKey[rowKey]);
+      return Boolean(rowKey && columnKey && isManualStageSelectableColumn(columnKey) && rowsByKey[rowKey]);
     }));
   }, [rowsByKey]);
 
@@ -617,7 +730,7 @@ function OrdersWorkspace() {
 
   const handleManualStageCellClick = useCallback((event, rowKey, columnKey) => {
     if (!isAdmin || manualStageSaving) return;
-    if (!MANUAL_STAGE_SELECTABLE_COLUMNS.has(columnKey)) return;
+    if (!isManualStageSelectableColumn(columnKey)) return;
     if (event.target.closest('a, button, input, textarea, select, summary, details, label')) return;
 
     const cellKey = buildManualStageCellKey(rowKey, columnKey);
@@ -804,17 +917,51 @@ function OrdersWorkspace() {
     setOrderForm(createEmptyOrderForm());
   };
 
+  const setAttachmentPreviewState = useCallback((nextPreview) => {
+    setAttachmentPreview((current) => {
+      if (current?.url) {
+        window.URL.revokeObjectURL(current.url);
+      }
+      return nextPreview;
+    });
+  }, []);
+
+  const closeAttachmentPreview = useCallback(() => {
+    setAttachmentPreviewState(null);
+  }, [setAttachmentPreviewState]);
+
+  const openAttachmentsDialog = useCallback((order) => {
+    if (!order?._id) return;
+    setAttachmentsDialog({
+      orderId: order._id,
+      orderNumber: order.orderNumber || '',
+      customer: order.customer || '',
+    });
+  }, []);
+
   useEscapeKey(() => {
     if (selectedStageCellKeys.length > 0 && !manualStageSaving) {
       clearSelectedStageCells();
       return;
     }
-    if (confirmRemoveItemIndex !== null && !savingOrder) {
-      setConfirmRemoveItemIndex(null);
-      return;
-    }
     if (confirmDelete && !deletingOrder) {
       setConfirmDelete(null);
+      return;
+    }
+    if (roomEditor && !roomEditorSaving) {
+      setRoomEditor(null);
+      return;
+    }
+    if (confirmAttachmentDelete && !attachmentDeletingKey) {
+      setConfirmAttachmentDelete(null);
+      return;
+    }
+    if (attachmentPreview) {
+      closeAttachmentPreview();
+      return;
+    }
+    if (attachmentsDialog) {
+      setAttachmentsDialog(null);
       return;
     }
     if (orderActionsOrder) {
@@ -828,7 +975,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(selectedStageCellKeys.length > 0 || confirmRemoveItemIndex !== null || confirmDelete || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || confirmAttachmentDelete || attachmentPreview || attachmentsDialog || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -841,74 +988,15 @@ function OrdersWorkspace() {
     setOrderForm(current => ({ ...current, [field]: value }));
   };
 
-  const handleItemFieldChange = (index, field) => (event) => {
-    const value = event.target.value;
-    setError('');
-    setOrderForm(current => ({
-      ...current,
-      items: current.items.map((item, itemIndex) => (
-        itemIndex === index
-          ? { ...item, [field]: field === 'quantity' ? value : value }
-          : item
-      )),
-    }));
-  };
-
-  const addItem = () => {
-    setOrderForm(current => ({
-      ...current,
-      items: [...current.items, createEmptyItem(current.items.length)],
-    }));
-  };
-
-  const removeItem = (index) => {
-    setOrderForm(current => {
-      if (current.items.length <= 1) return current;
-      const nextItems = current.items.filter((_, itemIndex) => itemIndex !== index)
-        .map((item, itemIndex) => ({
-          ...item,
-          itemNumber: item.itemNumber || String(itemIndex + 1),
-        }));
-      return {
-        ...current,
-        items: nextItems,
-      };
-    });
-  };
-
-  const requestRemoveItem = (index) => {
-    if (savingOrder || orderForm.items.length <= 1) return;
-    setConfirmRemoveItemIndex(index);
-  };
-
-  const confirmRemoveItem = () => {
-    if (confirmRemoveItemIndex === null) return;
-    removeItem(confirmRemoveItemIndex);
-    setConfirmRemoveItemIndex(null);
-  };
-
   const handleSubmit = async () => {
     if (!isFormValid) {
-      setError(formErrors.orderNumber || formErrors.orderDate || formErrors.endDate || formErrors.items.find(item => item.name || item.quantity)?.name || formErrors.items.find(item => item.name || item.quantity)?.quantity || 'Проверьте форму заказа.');
+      setError(formErrors.orderNumber || formErrors.orderDate || formErrors.endDate || 'Проверьте форму заказа.');
       return;
     }
     if (savingOrder) return;
 
-    const preparedItems = orderForm.items.map((item, index) => ({
-      ...(item.itemId ? { itemId: item.itemId } : {}),
-      itemNumber: String(item.itemNumber || index + 1).trim() || String(index + 1),
-      productNumber: String(item.productNumber || '').trim(),
-      room: String(item.room || '').trim(),
-      roomNumber: String(item.roomNumber || '').trim(),
-      name: String(item.name || '').trim(),
-      quantity: Number(item.quantity) || 1,
-      material: String(item.material || '').trim(),
-      deliveryDate: String(item.deliveryDate || '').trim(),
-      packageName: String(item.packageName || '').trim(),
-      photoLink: String(item.photoLink || '').trim(),
-      notes: String(item.notes || '').trim(),
-    }));
-    const firstItem = preparedItems[0];
+    const preparedItems = buildOrderItemsPayload(orderForm.items || []);
+    const firstItem = preparedItems[0] || null;
     const payload = {
       orderNumber: String(orderForm.orderNumber || '').trim(),
       customer: String(orderForm.customer || '').trim(),
@@ -939,6 +1027,306 @@ function OrdersWorkspace() {
     } finally {
       setSavingOrder(false);
     }
+  };
+
+  const openCreateRoomEditor = (order) => {
+    setError('');
+    setRoomEditor({
+      orderId: order._id || '',
+      sourceGroupKey: '',
+      room: '',
+      roomNumber: '',
+      items: [createRoomEditorItem(0)],
+    });
+  };
+
+  const openEditRoomEditor = (order, item) => {
+    if (!order?._id || !item || item.__placeholder) return;
+    const groupKey = buildRoomGroupKey(item.room, item.roomNumber);
+    const roomItems = (order.items || []).filter((currentItem) => buildRoomGroupKey(currentItem.room, currentItem.roomNumber) === groupKey);
+    setError('');
+    setRoomEditor({
+      orderId: order._id || '',
+      sourceGroupKey: groupKey,
+      room: item.room || '',
+      roomNumber: item.roomNumber || '',
+      items: roomItems.length > 0
+        ? roomItems.map((roomItem, index) => mapItemToRoomEditorItem(roomItem, index))
+        : [createRoomEditorItem(0)],
+    });
+  };
+
+  const handleRoomEditorFieldChange = (field) => (event) => {
+    const value = event.target.value;
+    setError('');
+    setRoomEditor((current) => current ? { ...current, [field]: value } : current);
+  };
+
+  const handleRoomEditorItemFieldChange = (index, field) => (event) => {
+    const value = event.target.value;
+    setError('');
+    setRoomEditor((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item, itemIndex) => (
+          itemIndex === index
+            ? { ...item, [field]: value }
+            : item
+        )),
+      };
+    });
+  };
+
+  const addRoomEditorItem = () => {
+    setRoomEditor((current) => current ? {
+      ...current,
+      items: [...current.items, createRoomEditorItem(current.items.length)],
+    } : current);
+  };
+
+  const removeRoomEditorItem = (index) => {
+    setRoomEditor((current) => {
+      if (!current || current.items.length <= 1) return current;
+      return {
+        ...current,
+        items: current.items.filter((_, itemIndex) => itemIndex !== index),
+      };
+    });
+  };
+
+  const handleSaveRoomEditor = async () => {
+    if (!roomEditor || roomEditorSaving) return;
+
+    const roomValue = String(roomEditor.room || '').trim();
+    const roomNumberValue = String(roomEditor.roomNumber || '').trim();
+    if (!roomValue && !roomNumberValue) {
+      setError('Укажите помещение или его номер.');
+      return;
+    }
+
+    const invalidItem = (roomEditor.items || []).find((item) => !String(item.name || '').trim() || (Number(item.quantity) || 0) < 1);
+    if (invalidItem) {
+      setError('Для каждого изделия укажите наименование и количество не меньше 1.');
+      return;
+    }
+
+    const baseOrder = orders.find((order) => order._id === roomEditor.orderId);
+    if (!baseOrder) {
+      setError('Заказ для редактирования помещения не найден.');
+      return;
+    }
+
+    const preservedItems = (baseOrder.items || []).filter((item) => (
+      !roomEditor.sourceGroupKey || buildRoomGroupKey(item.room, item.roomNumber) !== roomEditor.sourceGroupKey
+    ));
+    const nextRoomItems = buildOrderItemsPayload((roomEditor.items || []).map((item) => ({
+      ...item,
+      room: roomValue,
+      roomNumber: roomNumberValue,
+    })));
+    const nextItems = [...preservedItems, ...nextRoomItems].map((item, index) => ({
+      ...item,
+      itemNumber: String(item.itemNumber || index + 1).trim() || String(index + 1),
+    }));
+
+    const payload = {
+      orderNumber: String(baseOrder.orderNumber || '').trim(),
+      customer: String(baseOrder.customer || '').trim(),
+      orderDate: String(baseOrder.orderDate || '').trim(),
+      items: nextItems,
+    };
+
+    setRoomEditorSaving(true);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${baseOrder._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось сохранить помещение и изделия.'));
+        return;
+      }
+      setRoomEditor(null);
+      await fetchOrders();
+    } finally {
+      setRoomEditorSaving(false);
+    }
+  };
+
+  const handleUploadOrderAttachment = async (order, file) => {
+    if (!order?._id || !file) return;
+
+    setAttachmentUploadingOrderId(order._id);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await apiFetch(`/api/orders/${order._id}/attachments`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось загрузить файл карточки заказа.'));
+        return;
+      }
+
+      await fetchOrders();
+    } catch (uploadError) {
+      setError(uploadError.message || 'Не удалось загрузить файл карточки заказа.');
+    } finally {
+      setAttachmentUploadingOrderId('');
+    }
+  };
+
+  const handleOpenAttachment = async (orderId, attachment) => {
+    if (!orderId || !attachment?.attachmentId) return;
+
+    const openKey = `${orderId}:${attachment.attachmentId}`;
+    setAttachmentOpeningKey(openKey);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${orderId}/attachments/${attachment.attachmentId}/file`);
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось открыть файл карточки заказа.'));
+        return;
+      }
+
+      const blob = await res.blob();
+      if (isImageAttachment(attachment)) {
+        const blobUrl = window.URL.createObjectURL(blob);
+        setAttachmentPreviewState({
+          mode: 'image',
+          name: attachment.name || 'Изображение',
+          kindLabel: getAttachmentKindLabel(attachment),
+          url: blobUrl,
+        });
+        return;
+      }
+
+      if (isPdfAttachment(attachment)) {
+        const blobUrl = window.URL.createObjectURL(blob);
+        setAttachmentPreviewState({
+          mode: 'pdf',
+          name: attachment.name || 'PDF',
+          kindLabel: getAttachmentKindLabel(attachment),
+          url: blobUrl,
+        });
+        return;
+      }
+
+      if (isDocxAttachment(attachment)) {
+        const mammothImport = await import('mammoth/mammoth.browser');
+        const mammoth = mammothImport.default || mammothImport;
+        const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
+        setAttachmentPreviewState({
+          mode: 'word',
+          name: attachment.name || 'Word',
+          kindLabel: getAttachmentKindLabel(attachment),
+          html: result.value || '<p>Пустой документ.</p>',
+        });
+        return;
+      }
+
+      if (isSpreadsheetAttachment(attachment)) {
+        const xlsxImport = await import('xlsx');
+        const XLSX = xlsxImport.default || xlsxImport;
+        const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+        const sheets = workbook.SheetNames.map((sheetName) => {
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+            header: 1,
+            raw: false,
+            blankrows: false,
+          });
+          return {
+            name: sheetName,
+            rows: rows.slice(0, 100),
+            totalRows: rows.length,
+          };
+        });
+        setAttachmentPreviewState({
+          mode: 'spreadsheet',
+          name: attachment.name || 'Excel',
+          kindLabel: getAttachmentKindLabel(attachment),
+          sheets,
+          activeSheetIndex: 0,
+        });
+        return;
+      }
+
+      await handleDownloadAttachment(orderId, attachment);
+    } catch (openError) {
+      setError(openError.message || 'Не удалось открыть файл карточки заказа.');
+    } finally {
+      setAttachmentOpeningKey('');
+    }
+  };
+
+  const handleDownloadAttachment = async (orderId, attachment) => {
+    if (!orderId || !attachment?.attachmentId) return;
+
+    const downloadKey = `${orderId}:${attachment.attachmentId}:download`;
+    setAttachmentOpeningKey(downloadKey);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${orderId}/attachments/${attachment.attachmentId}/file`);
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось скачать файл карточки заказа.'));
+        return;
+      }
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = attachment.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 5_000);
+    } finally {
+      setAttachmentOpeningKey('');
+    }
+  };
+
+  const handleAttachmentInputChange = async (order, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    await handleUploadOrderAttachment(order, file);
+  };
+
+  const performDeleteAttachment = async (orderId, attachmentId) => {
+    if (!orderId || !attachmentId) return;
+
+    const deleteKey = `${orderId}:${attachmentId}`;
+    setAttachmentDeletingKey(deleteKey);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${orderId}/attachments/${attachmentId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось удалить файл карточки заказа.'));
+        return;
+      }
+      setConfirmAttachmentDelete(null);
+      await fetchOrders();
+    } finally {
+      setAttachmentDeletingKey('');
+    }
+  };
+
+  const requestDeleteAttachment = (orderId, attachment) => {
+    if (!orderId || !attachment?.attachmentId) return;
+    setConfirmAttachmentDelete({
+      orderId,
+      attachmentId: attachment.attachmentId,
+      attachmentName: attachment.name || 'Файл',
+    });
   };
 
   const requestDelete = (order) => {
@@ -999,16 +1387,17 @@ function OrdersWorkspace() {
     const orderNumber = String(draft.orderNumber || '').trim();
     const productName = String(draft.name || '').trim();
     const quantity = Number(draft.quantity) || 0;
+    const isPlaceholder = Boolean(row.isPlaceholder);
 
     if (!orderNumber) {
       setError('Для быстрого редактирования укажите номер заказа.');
       return false;
     }
-    if (!productName) {
+    if (!isPlaceholder && !productName) {
       setError('Для быстрого редактирования укажите наименование изделия.');
       return false;
     }
-    if (quantity < 1) {
+    if (!isPlaceholder && quantity < 1) {
       setError('Количество изделия должно быть не меньше 1.');
       return false;
     }
@@ -1037,18 +1426,10 @@ function OrdersWorkspace() {
           }
         : item
     ));
-
-    const firstItem = nextItems[0] || {};
     const payload = {
       orderNumber,
       customer: String(draft.customer || '').trim(),
       orderDate: baseOrder.orderDate || '',
-      startDate: baseOrder.startDate || '',
-      endDate: baseOrder.endDate || '',
-      name: firstItem.name || '',
-      quantity: Number(firstItem.quantity) || 1,
-      material: String(firstItem.material || '').trim(),
-      notes: String(firstItem.notes || '').trim(),
       items: nextItems.map(item => ({
         itemId: item.itemId,
         itemNumber: item.itemNumber || '',
@@ -1117,7 +1498,7 @@ function OrdersWorkspace() {
       '№ изделия в заказе',
       'Кол-во изделй',
       'Наименование',
-      '',
+      'Карточка заказа',
       'Отгрузка до',
       'Материал',
       'Комплектация заказа',
@@ -1133,6 +1514,7 @@ function OrdersWorkspace() {
     const csvLines = [
       headers.map(escapeCsvValue).join(';'),
       ...rows.map(({ order, item }) => {
+        const manufacturingMeta = getOrderManufacturingMeta(order);
         const cells = [
           order.orderNumber || '',
           order.customer || '',
@@ -1141,7 +1523,7 @@ function OrdersWorkspace() {
           item.itemNumber || '',
           item.quantity || '',
           item.name || '',
-          '',
+          (order.attachments || []).map((attachment) => attachment.name).join(', '),
           item.deliveryDate || '',
           item.material || '',
           item.packageName || '',
@@ -1149,9 +1531,9 @@ function OrdersWorkspace() {
           item.photoLink || '',
           item.notes || '',
           '',
-          order.startDate || '',
-          order.endDate || '',
-          formatManufacturingTime(order.startDate, order.endDate),
+          manufacturingMeta.startDate || '',
+          manufacturingMeta.endDate || '',
+          formatManufacturingTime(manufacturingMeta.startDate, manufacturingMeta.endDate),
         ];
         return cells.map(escapeCsvValue).join(';');
       }),
@@ -1308,7 +1690,7 @@ function OrdersWorkspace() {
               <table className="orders-table unified-orders-table unified-orders-body-table">
                 {renderOrdersColGroup()}
                 <tbody onMouseLeave={() => setHoveredOrderId('')}>
-                  {rows.map(({ key, order, item, carpenterActiveStage, carpenterAssignment, activeStage, assignedStage }) => {
+                  {rows.map(({ key, order, item, carpenterActiveStage, carpenterAssignment, activeStage, assignedStage, isPlaceholder }) => {
                     const inlineDraft = inlineDrafts[key] || null;
                     const isInlineEditing = Boolean(inlineDraft);
                     const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
@@ -1323,6 +1705,8 @@ function OrdersWorkspace() {
                     const isOrderInlineEditing = Boolean(orderInlineDraft);
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                     const commentPreview = getCommentPreview(item.comments);
+                    const orderManufacturingMeta = getOrderManufacturingMeta(order);
+                    const orderAttachments = Array.isArray(order.attachments) ? order.attachments : [];
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
                     const carpenterClearMark = getItemManualStageClear(item, 'carpenter');
                     const latestCarpenterAutoAt = getLatestAutoHighlightAt(
@@ -1351,7 +1735,6 @@ function OrdersWorkspace() {
                     const itemNumberCellProps = getManualStageCellProps(key, item, 'itemNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const quantityCellProps = getManualStageCellProps(key, item, 'quantity', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const stageSpacerCellProps = getManualStageCellProps(key, item, 'stageSpacer', `xlsx-empty-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const materialCellProps = getManualStageCellProps(key, item, 'material', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const packageCellProps = getManualStageCellProps(key, item, 'packageName', regularOrderClass, undefined, { disabled: isInlineEditing });
@@ -1359,6 +1742,46 @@ function OrdersWorkspace() {
                     const photoCellProps = getManualStageCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const notesCellProps = getManualStageCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const carpenterCellProps = getManualStageCellProps(key, item, 'carpenter', carpenterCellClassName, carpenterCellStyle, { disabled: isInlineEditing });
+                    const orderNumberCellProps = getManualStageCellProps(
+                      key,
+                      item,
+                      'orderNumber',
+                      `sticky-col sticky-col-1 merged-order-cell merged-order-number-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`,
+                      undefined,
+                      { disabled: isOrderInlineEditing },
+                    );
+                    const customerCellProps = getManualStageCellProps(
+                      key,
+                      item,
+                      'customer',
+                      `sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                      undefined,
+                      { disabled: isOrderInlineEditing },
+                    );
+                    const orderCardCellProps = getManualStageCellProps(
+                      key,
+                      item,
+                      'orderCard',
+                      `merged-order-cell order-card-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                    );
+                    const startDateMetaCellProps = getManualStageCellProps(
+                      key,
+                      item,
+                      'startDate',
+                      `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                    );
+                    const endDateMetaCellProps = getManualStageCellProps(
+                      key,
+                      item,
+                      'endDate',
+                      `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                    );
+                    const durationMetaCellProps = getManualStageCellProps(
+                      key,
+                      item,
+                      'duration',
+                      `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`,
+                    );
                     return (
                       <tr
                         key={key}
@@ -1368,7 +1791,7 @@ function OrdersWorkspace() {
                         {isFirstOrderRow ? (
                           <td
                             rowSpan={orderRowSpan}
-                            className={`sticky-col sticky-col-1 merged-order-cell merged-order-number-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`}
+                            {...orderNumberCellProps}
                           >
                             <div className="merged-order-number-content">
                               <div className="xlsx-order-cell">
@@ -1380,9 +1803,13 @@ function OrdersWorkspace() {
                                   placeholder="Номер заказа"
                                 />
                               ) : (
-                                <Link className="order-link-button merged-order-number-link" to={`/order/${order._id}/item/${item.itemId}`}>
-                                  {order.orderNumber || '—'}
-                                </Link>
+                                item.itemId ? (
+                                  <Link className="order-link-button merged-order-number-link" to={`/order/${order._id}/item/${item.itemId}`}>
+                                    {order.orderNumber || '—'}
+                                  </Link>
+                                ) : (
+                                  <div className="merged-order-number-link">{order.orderNumber || '—'}</div>
+                                )
                               )}
                               <button
                                 className={`btn btn-secondary btn-small order-actions-trigger ${hasOrderDrafts ? 'order-actions-trigger-attention' : ''}`}
@@ -1400,25 +1827,101 @@ function OrdersWorkspace() {
                         {isFirstOrderRow ? (
                           <td
                             rowSpan={orderRowSpan}
-                            className={`sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}
+                            {...customerCellProps}
                           >
                             <div className="merged-order-customer-content">
                               {isOrderInlineEditing ? <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : <div className="merged-order-customer-text">{order.customer || '—'}</div>}
                             </div>
                           </td>
                         ) : null}
-                        <td {...roomCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} /> : (item.room || '—')}</td>
+                        <td {...roomCellProps}>
+                          {isInlineEditing ? (
+                            <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} />
+                          ) : (
+                            <div className="room-cell-content">
+                              <div className="room-cell-text">{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</div>
+                              <div className="room-cell-actions">
+                                <button
+                                  type="button"
+                                  className="room-cell-action-btn"
+                                  title="Редактировать помещение и изделия"
+                                  onClick={() => openEditRoomEditor(order, item)}
+                                  disabled={isPlaceholder}
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  type="button"
+                                  className="room-cell-action-btn"
+                                  title="Добавить помещение и изделия"
+                                  onClick={() => openCreateRoomEditor(order)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </td>
                         <td {...roomNumberCellProps}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
                         <td {...itemNumberCellProps}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
-                        <td {...quantityCellProps}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (item.quantity || 1)}</td>
+                        <td {...quantityCellProps}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (isPlaceholder ? '—' : (item.quantity || 1))}</td>
                         <td {...nameCellProps}>
                           {isInlineEditing ? (
                             <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
                           ) : (
-                            <div className="order-primary-title"><strong>{item.name || '—'}</strong></div>
+                            <div className="order-primary-title"><strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong></div>
                           )}
                         </td>
-                        <td {...stageSpacerCellProps}>—</td>
+                        {isFirstOrderRow ? (
+                          <td rowSpan={orderRowSpan} {...orderCardCellProps}>
+                            <div className="order-card-cell-content">
+                              <input
+                                ref={(node) => {
+                                  if (node) {
+                                    attachmentInputRefs.current[order._id] = node;
+                                  } else {
+                                    delete attachmentInputRefs.current[order._id];
+                                  }
+                                }}
+                                type="file"
+                                className="order-card-file-input"
+                                accept={ORDER_CARD_ATTACHMENT_ACCEPT}
+                                onChange={(event) => handleAttachmentInputChange(order, event)}
+                              />
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="order-card-icon-btn"
+                                onClick={() => attachmentInputRefs.current[order._id]?.click()}
+                                disabled={attachmentUploadingOrderId === order._id}
+                                title="Загрузить файл"
+                                aria-label="Загрузить файл"
+                              >
+                                {attachmentUploadingOrderId === order._id ? '...' : '+'}
+                              </Button>
+                              <div
+                                className={`order-card-summary ${orderAttachments.length > 0 ? 'order-card-summary-has-files' : 'order-card-summary-no-files'}`}
+                                title={orderAttachments.length > 0 ? `Файлов прикреплено: ${orderAttachments.length}` : 'Файлы не прикреплены'}
+                              >
+                                <span className={`order-card-status-indicator ${orderAttachments.length > 0 ? 'order-card-status-indicator-active' : ''}`}>
+                                  {orderAttachments.length > 0 ? '●' : '○'}
+                                </span>
+                                <span className="order-card-summary-badge">{orderAttachments.length}</span>
+                              </div>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="order-card-icon-btn"
+                                onClick={() => openAttachmentsDialog(order)}
+                                disabled={orderAttachments.length === 0}
+                                title={orderAttachments.length > 0 ? 'Просмотр файлов' : 'Файлы не прикреплены'}
+                                aria-label="Просмотр файлов"
+                              >
+                                ⌕
+                              </Button>
+                            </div>
+                          </td>
+                        ) : null}
                         <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
                         <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
                         <td {...packageCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
@@ -1443,21 +1946,21 @@ function OrdersWorkspace() {
                           )}
                         </td>
                         <td {...carpenterCellProps} title={workerCellTitle}>
-                          {workerCellText}
+                          {isPlaceholder ? '—' : workerCellText}
                         </td>
                         {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
-                            <div className="merged-order-meta-content">{formatDateDisplay(order.startDate)}</div>
+                          <td rowSpan={orderRowSpan} {...startDateMetaCellProps}>
+                            <div className="merged-order-meta-content">{formatDateDisplay(orderManufacturingMeta.startDate)}</div>
                           </td>
                         ) : null}
                         {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
-                            <div className="merged-order-meta-content">{formatDateDisplay(order.endDate)}</div>
+                          <td rowSpan={orderRowSpan} {...endDateMetaCellProps}>
+                            <div className="merged-order-meta-content">{formatDateDisplay(orderManufacturingMeta.endDate)}</div>
                           </td>
                         ) : null}
                         {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`}>
-                            <div className="merged-order-meta-content">{formatManufacturingTime(order.startDate, order.endDate)}</div>
+                          <td rowSpan={orderRowSpan} {...durationMetaCellProps}>
+                            <div className="merged-order-meta-content">{formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate)}</div>
                           </td>
                         ) : null}
                       </tr>
@@ -1548,7 +2051,7 @@ function OrdersWorkspace() {
         <Modal open={showForm} onClose={closeForm} closeDisabled={savingOrder} size="lg" className="order-form-modal">
           <ModalHeader
             title={editingOrderId ? 'Редактирование заказа' : 'Новый заказ'}
-            subtitle="Один заказ может содержать несколько изделий. QR формируется для каждого изделия отдельно."
+            subtitle="Заказ создается без изделий. Помещения и изделия добавляются позже прямо из таблицы заказов."
             onClose={closeForm}
             closeDisabled={savingOrder}
           />
@@ -1583,113 +2086,11 @@ function OrdersWorkspace() {
                 {formErrors.orderDate ? <div className="field-error">{formErrors.orderDate}</div> : null}
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Начало изготовления</label>
-                <input type="date" value={orderForm.startDate} onChange={handleOrderFieldChange('startDate')} />
+                <label>Изготовление заказа</label>
+                <div className="modal-inline-note">
+                  Даты начала и окончания, а также время изготовления рассчитываются автоматически по закрашенным этапам.
+                </div>
               </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Окончание изготовления</label>
-                <input
-                  type="date"
-                  value={orderForm.endDate}
-                  onChange={handleOrderFieldChange('endDate')}
-                  className={formErrors.endDate ? 'input-invalid' : ''}
-                />
-                {formErrors.endDate ? <div className="field-error">{formErrors.endDate}</div> : null}
-              </div>
-            </div>
-
-            <div className="order-items-editor">
-              <div className="order-items-editor-header">
-                <div className="modal-title" style={{ fontSize: 16 }}>Изделия в заказе</div>
-                  <Button variant="secondary" size="sm" onClick={addItem} disabled={savingOrder}>Добавить изделие</Button>
-              </div>
-
-              {orderForm.items.map((item, index) => {
-                const itemErrors = formErrors.items[index] || {};
-                return (
-                  <div key={item.clientKey || item.itemId || index} className="order-item-editor-card">
-                    <div className="order-item-editor-card-header">
-                      <div>
-                        <div className="order-item-editor-title">Изделие {index + 1}</div>
-                        <div className="order-item-editor-subtitle">Отдельный QR и отдельные комментарии сотрудников</div>
-                      </div>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => requestRemoveItem(index)}
-                        disabled={savingOrder || orderForm.items.length <= 1}
-                      >
-                        Удалить
-                      </Button>
-                    </div>
-
-                    <div className="responsive-form-grid">
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>№ изделия в заказе</label>
-                        <input value={item.itemNumber} onChange={handleItemFieldChange(index, 'itemNumber')} placeholder="1" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>№ изделия</label>
-                        <input value={item.productNumber} onChange={handleItemFieldChange(index, 'productNumber')} placeholder="Артикул или код" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Помещение</label>
-                        <input value={item.room} onChange={handleItemFieldChange(index, 'room')} placeholder="Кухня, спальня" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>№ помещения</label>
-                        <input value={item.roomNumber} onChange={handleItemFieldChange(index, 'roomNumber')} placeholder="Например: 12" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Наименование *</label>
-                        <input
-                          value={item.name}
-                          onChange={handleItemFieldChange(index, 'name')}
-                          className={itemErrors.name ? 'input-invalid' : ''}
-                          placeholder="Например: Шкаф, стол, стул"
-                        />
-                        {itemErrors.name ? <div className="field-error">{itemErrors.name}</div> : null}
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Кол-во *</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={handleItemFieldChange(index, 'quantity')}
-                          className={itemErrors.quantity ? 'input-invalid' : ''}
-                        />
-                        {itemErrors.quantity ? <div className="field-error">{itemErrors.quantity}</div> : null}
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Материал</label>
-                        <input value={item.material} onChange={handleItemFieldChange(index, 'material')} placeholder="ЛДСП, массив, МДФ" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Отгрузка до</label>
-                        <input type="date" value={item.deliveryDate} onChange={handleItemFieldChange(index, 'deliveryDate')} />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Комплектация</label>
-                        <input value={item.packageName} onChange={handleItemFieldChange(index, 'packageName')} placeholder="Фурнитура, стекло, ручки" />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Ссылка на фото</label>
-                        <input value={item.photoLink} onChange={handleItemFieldChange(index, 'photoLink')} placeholder="https://..." />
-                      </div>
-                      <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
-                        <label>Примечания по изделию</label>
-                        <textarea
-                          value={item.notes}
-                          onChange={handleItemFieldChange(index, 'notes')}
-                          placeholder="ТЗ, пожелания, особенности по изделию"
-                          rows={3}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
 
             <div className="modal-actions">
@@ -1698,6 +2099,246 @@ function OrdersWorkspace() {
                 {savingOrder ? (editingOrderId ? 'Сохранение...' : 'Создание...') : (editingOrderId ? 'Сохранить заказ' : 'Создать заказ')}
               </Button>
             </div>
+        </Modal>
+      ) : null}
+
+      {roomEditor ? (
+        <Modal open={Boolean(roomEditor)} onClose={() => !roomEditorSaving && setRoomEditor(null)} closeDisabled={roomEditorSaving} size="lg" className="order-form-modal">
+          <ModalHeader
+            title={roomEditor.sourceGroupKey ? 'Редактирование помещения и изделий' : 'Новое помещение и изделия'}
+            subtitle="В одном заказе может быть несколько помещений. Все изделия помещения сохраняются одним действием."
+            onClose={() => !roomEditorSaving && setRoomEditor(null)}
+            closeDisabled={roomEditorSaving}
+          />
+
+          <div className="responsive-form-grid">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Помещение</label>
+              <input
+                value={roomEditor.room}
+                onChange={handleRoomEditorFieldChange('room')}
+                placeholder="Кухня, спальня, гардероб"
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>№ помещения</label>
+              <input
+                value={roomEditor.roomNumber}
+                onChange={handleRoomEditorFieldChange('roomNumber')}
+                placeholder="Например: 12"
+              />
+            </div>
+          </div>
+
+          <div className="order-items-editor">
+            <div className="order-items-editor-header">
+              <div className="modal-title" style={{ fontSize: 16 }}>Изделия в помещении</div>
+              <Button variant="secondary" size="sm" onClick={addRoomEditorItem} disabled={roomEditorSaving}>Добавить изделие</Button>
+            </div>
+
+            {(roomEditor.items || []).map((item, index) => (
+              <div key={item.clientKey || item.itemId || index} className="order-item-editor-card">
+                <div className="order-item-editor-card-header">
+                  <div>
+                    <div className="order-item-editor-title">Изделие {index + 1}</div>
+                    <div className="order-item-editor-subtitle">Для каждого изделия будет свой QR и история по сотрудникам</div>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => removeRoomEditorItem(index)}
+                    disabled={roomEditorSaving || (roomEditor.items || []).length <= 1}
+                  >
+                    Удалить
+                  </Button>
+                </div>
+
+                <div className="responsive-form-grid">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>№ изделия в заказе</label>
+                    <input value={item.itemNumber} onChange={handleRoomEditorItemFieldChange(index, 'itemNumber')} placeholder="1" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>№ изделия</label>
+                    <input value={item.productNumber} onChange={handleRoomEditorItemFieldChange(index, 'productNumber')} placeholder="Артикул или код" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Наименование *</label>
+                    <input value={item.name} onChange={handleRoomEditorItemFieldChange(index, 'name')} placeholder="Например: Шкаф, стол, тумба" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Кол-во *</label>
+                    <input type="number" min="1" value={item.quantity} onChange={handleRoomEditorItemFieldChange(index, 'quantity')} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Материал</label>
+                    <input value={item.material} onChange={handleRoomEditorItemFieldChange(index, 'material')} placeholder="ЛДСП, массив, МДФ" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Отгрузка до</label>
+                    <input type="date" value={item.deliveryDate} onChange={handleRoomEditorItemFieldChange(index, 'deliveryDate')} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Комплектация</label>
+                    <input value={item.packageName} onChange={handleRoomEditorItemFieldChange(index, 'packageName')} placeholder="Фурнитура, стекло, ручки" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Ссылка / фото</label>
+                    <input value={item.photoLink} onChange={handleRoomEditorItemFieldChange(index, 'photoLink')} placeholder="https://..." />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                    <label>Примечания</label>
+                    <textarea
+                      value={item.notes}
+                      onChange={handleRoomEditorItemFieldChange(index, 'notes')}
+                      placeholder="ТЗ, пожелания, особенности по изделию"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="modal-actions">
+            <Button onClick={() => setRoomEditor(null)} disabled={roomEditorSaving}>Отмена</Button>
+            <Button variant="success" onClick={handleSaveRoomEditor} disabled={roomEditorSaving}>
+              {roomEditorSaving ? 'Сохранение...' : 'Сохранить помещение'}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {attachmentsDialog ? (
+        <Modal open={Boolean(attachmentsDialog)} onClose={() => setAttachmentsDialog(null)} size="lg" className="order-form-modal">
+          <ModalHeader
+            title="Файлы карточки заказа"
+            subtitle={`${attachmentsDialog.orderNumber ? `Заказ № ${attachmentsDialog.orderNumber}` : 'Без номера'}${attachmentsDialog.customer ? ` · ${attachmentsDialog.customer}` : ''}`}
+            onClose={() => setAttachmentsDialog(null)}
+          />
+
+          <div className="order-card-dialog-list">
+            {(currentAttachmentDialogOrder?.attachments || []).length > 0 ? (
+              currentAttachmentDialogOrder.attachments.map((attachment) => {
+                const fileKey = `${attachmentsDialog.orderId}:${attachment.attachmentId}`;
+                const isOpening = attachmentOpeningKey === fileKey;
+                const isDownloading = attachmentOpeningKey === `${fileKey}:download`;
+                const isDeleting = attachmentDeletingKey === fileKey;
+                return (
+                  <div key={attachment.attachmentId} className="order-card-dialog-item">
+                    <div className="order-card-dialog-icon">{getAttachmentIcon(attachment)}</div>
+                    <div className="order-card-dialog-main">
+                      <div className="order-card-dialog-name">{attachment.name}</div>
+                      <div className="order-card-dialog-meta">
+                        {getAttachmentKindLabel(attachment)}
+                        {formatAttachmentSize(attachment.size) ? ` · ${formatAttachmentSize(attachment.size)}` : ''}
+                      </div>
+                    </div>
+                    <div className="order-card-dialog-actions">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="order-card-icon-btn"
+                        onClick={() => handleOpenAttachment(attachmentsDialog.orderId, attachment)}
+                        disabled={isOpening || isDownloading}
+                        title={isImageAttachment(attachment) ? 'Просмотр' : 'Открыть'}
+                        aria-label={isImageAttachment(attachment) ? 'Просмотр' : 'Открыть'}
+                      >
+                        {isOpening ? '...' : '⌕'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleDownloadAttachment(attachmentsDialog.orderId, attachment)}
+                        disabled={isOpening || isDownloading}
+                      >
+                        {isDownloading ? 'Скачивание...' : 'Скачать'}
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => requestDeleteAttachment(attachmentsDialog.orderId, attachment)}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? 'Удаление...' : 'Удалить'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="order-card-empty">Файлы не загружены</div>
+            )}
+          </div>
+        </Modal>
+      ) : null}
+
+      {attachmentPreview ? (
+        <Modal open={Boolean(attachmentPreview)} onClose={closeAttachmentPreview} size="lg" className="order-form-modal">
+          <ModalHeader
+            title={attachmentPreview.name || 'Просмотр файла'}
+            subtitle={attachmentPreview.kindLabel || 'Изображение'}
+            onClose={closeAttachmentPreview}
+          />
+          <div className="attachment-preview-wrap">
+            {attachmentPreview.mode === 'image' ? (
+              <img src={attachmentPreview.url} alt={attachmentPreview.name || 'Изображение'} className="attachment-preview-image" />
+            ) : null}
+            {attachmentPreview.mode === 'pdf' ? (
+              <iframe
+                title={attachmentPreview.name || 'PDF'}
+                src={attachmentPreview.url}
+                className="attachment-preview-frame"
+              />
+            ) : null}
+            {attachmentPreview.mode === 'word' ? (
+              <div
+                className="attachment-preview-document"
+                dangerouslySetInnerHTML={{ __html: attachmentPreview.html || '<p>Пустой документ.</p>' }}
+              />
+            ) : null}
+            {attachmentPreview.mode === 'spreadsheet' ? (
+              <div className="attachment-preview-sheet-view">
+                <div className="attachment-preview-sheet-tabs">
+                  {(attachmentPreview.sheets || []).map((sheet, index) => (
+                    <button
+                      key={`${sheet.name}-${index}`}
+                      type="button"
+                      className={cn(
+                        'attachment-preview-sheet-tab',
+                        index === (attachmentPreview.activeSheetIndex || 0) && 'attachment-preview-sheet-tab-active',
+                      )}
+                      onClick={() => setAttachmentPreview((current) => current ? {
+                        ...current,
+                        activeSheetIndex: index,
+                      } : current)}
+                    >
+                      {sheet.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="attachment-preview-sheet-meta">
+                  Показаны первые {Math.min(
+                    ((attachmentPreview.sheets || [])[attachmentPreview.activeSheetIndex || 0]?.rows || []).length,
+                    100,
+                  )} строк
+                </div>
+                <div className="attachment-preview-table-wrap">
+                  <table className="attachment-preview-table">
+                    <tbody>
+                      {(((attachmentPreview.sheets || [])[attachmentPreview.activeSheetIndex || 0]?.rows) || []).map((row, rowIndex) => (
+                        <tr key={`sheet-row-${rowIndex}`}>
+                          {(Array.isArray(row) ? row : [row]).map((cell, cellIndex) => (
+                            <td key={`sheet-cell-${rowIndex}-${cellIndex}`}>{String(cell ?? '') || ' '}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </Modal>
       ) : null}
 
@@ -1811,14 +2452,15 @@ function OrdersWorkspace() {
         onCancel={() => !deletingOrder && setConfirmDelete(null)}
         loading={deletingOrder}
       />
+
       <ConfirmDialog
-        open={confirmRemoveItemIndex !== null}
-        title="Удалить изделие?"
-        message={confirmRemoveItemIndex !== null ? `Изделие ${confirmRemoveItemIndex + 1} будет удалено из текущего заказа до сохранения формы.` : ''}
-        confirmLabel="Удалить изделие"
-        onConfirm={confirmRemoveItem}
-        onCancel={() => !savingOrder && setConfirmRemoveItemIndex(null)}
-        loading={false}
+        open={Boolean(confirmAttachmentDelete)}
+        title="Удалить файл?"
+        message={confirmAttachmentDelete ? `Файл "${confirmAttachmentDelete.attachmentName}" будет удален из карточки заказа без возможности восстановления.` : ''}
+        confirmLabel="Удалить файл"
+        onConfirm={() => performDeleteAttachment(confirmAttachmentDelete?.orderId || '', confirmAttachmentDelete?.attachmentId || '')}
+        onCancel={() => !attachmentDeletingKey && setConfirmAttachmentDelete(null)}
+        loading={Boolean(confirmAttachmentDelete && attachmentDeletingKey === `${confirmAttachmentDelete.orderId}:${confirmAttachmentDelete.attachmentId}`)}
       />
     </div>
   );

@@ -1,10 +1,18 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const QRCode = require('qrcode');
 const OrderStore = require('../stores/orderStore');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireAdminAccess, requireManagerAccess, requireWriteAccess } = require('../middleware/security');
-const { sanitizeCommentInput, sanitizeOrderInput, sanitizeOrderItemInput } = require('../utils/validators');
+const {
+  sanitizeCommentInput,
+  sanitizeOrderAttachmentInput,
+  sanitizeOrderInput,
+  sanitizeOrderItemInput,
+} = require('../utils/validators');
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { notifyOrderCreated } = require('../services/orderNotifications');
@@ -13,6 +21,121 @@ const {
   verifyTelegramEmployeeSessionToken,
 } = require('../services/telegramWebAppAuth');
 const router = express.Router();
+
+const ORDER_ATTACHMENTS_ROOT = path.join(__dirname, '..', 'uploads', 'order-attachments');
+const ORDER_ATTACHMENT_FILE_SIZE_LIMIT = 20 * 1024 * 1024;
+const ORDER_ATTACHMENT_ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
+]);
+const ORDER_ATTACHMENT_ALLOWED_EXTENSIONS = new Set([
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+]);
+
+function ensureDirectoryExists(directoryPath) {
+  fs.mkdirSync(directoryPath, { recursive: true });
+}
+
+function sanitizeFileNameBase(fileName = '') {
+  const extension = path.extname(fileName || '').toLowerCase();
+  const baseName = path.basename(fileName || '', extension)
+    .replace(/[^\w.-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80);
+  return {
+    baseName: baseName || 'file',
+    extension,
+  };
+}
+
+function normalizeUploadedFileName(fileName = '') {
+  const normalized = String(fileName || '').trim();
+  if (!normalized) return 'file';
+  if (!/[ÐÑÃ]/.test(normalized)) {
+    return normalized;
+  }
+  try {
+    const decoded = Buffer.from(normalized, 'latin1').toString('utf8').trim();
+    if (!decoded) return normalized;
+    if (/[А-Яа-яЁё]/.test(decoded)) {
+      return decoded;
+    }
+    return normalized;
+  } catch {
+    return normalized;
+  }
+}
+
+function isAllowedAttachmentFile(file = {}) {
+  const mimeType = String(file.mimetype || '').trim().toLowerCase();
+  const extension = path.extname(normalizeUploadedFileName(file.originalname || '')).toLowerCase();
+  return ORDER_ATTACHMENT_ALLOWED_MIME_TYPES.has(mimeType) || ORDER_ATTACHMENT_ALLOWED_EXTENSIONS.has(extension);
+}
+
+function createAttachmentUploadError(message, status = 400) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+ensureDirectoryExists(ORDER_ATTACHMENTS_ROOT);
+
+const attachmentStorage = multer.diskStorage({
+  destination(req, file, cb) {
+    try {
+      const orderId = String(req.params?.id || '').trim();
+      if (!orderId) {
+        return cb(createAttachmentUploadError('Не указан заказ для загрузки файла.'));
+      }
+      const order = OrderStore.findById(orderId);
+      if (!order) {
+        return cb(createAttachmentUploadError('Заказ не найден.', 404));
+      }
+      const targetDirectory = path.join(ORDER_ATTACHMENTS_ROOT, orderId);
+      ensureDirectoryExists(targetDirectory);
+      return cb(null, targetDirectory);
+    } catch (error) {
+      return cb(error);
+    }
+  },
+  filename(req, file, cb) {
+    const normalizedOriginalName = normalizeUploadedFileName(file.originalname || 'file');
+    file.originalname = normalizedOriginalName;
+    const { baseName, extension } = sanitizeFileNameBase(normalizedOriginalName);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${baseName}${extension}`);
+  },
+});
+
+const uploadOrderAttachment = multer({
+  storage: attachmentStorage,
+  limits: { fileSize: ORDER_ATTACHMENT_FILE_SIZE_LIMIT, files: 1 },
+  fileFilter(req, file, cb) {
+    if (!isAllowedAttachmentFile(file)) {
+      return cb(createAttachmentUploadError('Разрешены только PDF, Word, Excel и изображения.'));
+    }
+    return cb(null, true);
+  },
+});
 
 function maskTelegramValue(value, { tail = 6 } = {}) {
   const normalized = String(value || '').trim();
@@ -131,10 +254,39 @@ function fail(message, status = 400) {
   throw error;
 }
 
+function parseLegacyDataUrl(dataUrl = '') {
+  const normalized = String(dataUrl || '').trim();
+  const match = normalized.match(/^data:([^;]+);base64,(.+)$/i);
+  if (!match) {
+    return null;
+  }
+  return {
+    mimeType: match[1],
+    buffer: Buffer.from(match[2], 'base64'),
+  };
+}
+
+function resolveOrderAttachmentAbsolutePath(relativePath = '') {
+  const normalized = String(relativePath || '').trim().replace(/\\/g, '/');
+  if (!normalized) return '';
+  const absolutePath = path.resolve(ORDER_ATTACHMENTS_ROOT, normalized);
+  const rootWithSeparator = `${path.resolve(ORDER_ATTACHMENTS_ROOT)}${path.sep}`;
+  if (absolutePath !== path.resolve(ORDER_ATTACHMENTS_ROOT) && !absolutePath.startsWith(rootWithSeparator)) {
+    return '';
+  }
+  return absolutePath;
+}
+
+function deleteStoredAttachmentFile(attachment = {}) {
+  const absolutePath = resolveOrderAttachmentAbsolutePath(attachment.relativePath);
+  if (!absolutePath || !fs.existsSync(absolutePath)) return;
+  fs.unlinkSync(absolutePath);
+}
+
 function sanitizeOrderItemsPayload(payload) {
   if (payload === undefined) return undefined;
-  if (!Array.isArray(payload) || payload.length === 0) {
-    fail('Добавьте хотя бы одно изделие в заказ.');
+  if (!Array.isArray(payload)) {
+    fail('Список изделий должен быть массивом.');
   }
   return payload.map((item, index) => ({
     ...sanitizeOrderItemInput(item || {}),
@@ -437,13 +589,7 @@ router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
 router.post('/orders', requireManagerAccess(), (req, res) => {
   try {
     const { orderNumber, customer, name, quantity, material, notes, orderDate, startDate, endDate } = sanitizeOrderInput(req.body || {});
-    const items = sanitizeOrderItemsPayload(req.body?.items) || [{
-      itemNumber: '1',
-      quantity,
-      name,
-      material,
-      notes,
-    }];
+    const items = sanitizeOrderItemsPayload(req.body?.items) || [];
     const order = OrderStore.create({
       orderNumber,
       customer,
@@ -501,6 +647,133 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
   }
 });
 
+router.get('/orders/:id/attachments/:attachmentId/file', requireWriteAccess, (req, res) => {
+  try {
+    const attachment = OrderStore.getAttachment(req.params.id, req.params.attachmentId);
+    if (attachment === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (attachment === false) {
+      return res.status(404).json({ message: 'Файл карточки заказа не найден.' });
+    }
+
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(attachment.name || 'attachment')}`);
+    if (attachment.type) {
+      res.type(attachment.type);
+    }
+
+    if (attachment.content) {
+      const legacyFile = parseLegacyDataUrl(attachment.content);
+      if (!legacyFile) {
+        return res.status(404).json({ message: 'Файл карточки заказа поврежден.' });
+      }
+      if (!attachment.type) {
+        res.type(legacyFile.mimeType);
+      }
+      return res.send(legacyFile.buffer);
+    }
+
+    const absolutePath = resolveOrderAttachmentAbsolutePath(attachment.relativePath);
+    if (!absolutePath || !fs.existsSync(absolutePath)) {
+      return res.status(404).json({ message: 'Файл карточки заказа не найден на диске.' });
+    }
+    return res.sendFile(absolutePath);
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось открыть файл карточки заказа.' });
+  }
+});
+
+router.post('/orders/:id/attachments', requireManagerAccess(), (req, res) => {
+  uploadOrderAttachment.single('file')(req, res, (uploadError) => {
+    try {
+      if (uploadError) {
+        throw uploadError;
+      }
+      if (!req.file) {
+        fail('Выберите файл для загрузки.');
+      }
+
+      const normalizedFileName = normalizeUploadedFileName(req.file.originalname || '');
+      const relativePath = path.relative(ORDER_ATTACHMENTS_ROOT, req.file.path).replace(/\\/g, '/');
+      const attachment = sanitizeOrderAttachmentInput({
+        name: normalizedFileName,
+        type: req.file.mimetype || 'application/octet-stream',
+        size: req.file.size,
+        storedName: req.file.filename,
+        relativePath,
+        uploadedAt: new Date().toISOString(),
+      });
+      const createdAttachment = OrderStore.addAttachment(req.params.id, attachment);
+      if (createdAttachment === null) {
+        deleteStoredAttachmentFile({ relativePath });
+        return res.status(404).json({ message: 'Заказ не найден.' });
+      }
+      if (createdAttachment === false) {
+        deleteStoredAttachmentFile({ relativePath });
+        return res.status(400).json({ message: 'Не удалось сохранить файл карточки заказа.' });
+      }
+
+      addActivityLog({
+        action: 'order.attachment.create',
+        entityType: 'order',
+        entityId: req.params.id,
+        entityName: attachment.name || '',
+        actor: getRequestActor(req),
+        message: 'Файл карточки заказа загружен.',
+        details: {
+          attachmentId: createdAttachment.attachmentId,
+          fileName: createdAttachment.name,
+          size: createdAttachment.size,
+          type: createdAttachment.type,
+        },
+      });
+
+      res.status(201).json(createdAttachment);
+    } catch (error) {
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      const isMulterLimit = error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE';
+      res.status(error.status || (isMulterLimit ? 400 : 500)).json({
+        message: isMulterLimit
+          ? `Размер файла не должен превышать ${Math.round(ORDER_ATTACHMENT_FILE_SIZE_LIMIT / (1024 * 1024))} МБ.`
+          : (error.message || 'Не удалось сохранить файл карточки заказа.'),
+      });
+    }
+  });
+});
+
+router.delete('/orders/:id/attachments/:attachmentId', requireManagerAccess(), (req, res) => {
+  try {
+    const deletedAttachment = OrderStore.deleteAttachment(req.params.id, req.params.attachmentId);
+    if (deletedAttachment === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (deletedAttachment === false) {
+      return res.status(404).json({ message: 'Файл карточки заказа не найден.' });
+    }
+
+    deleteStoredAttachmentFile(deletedAttachment);
+
+    addActivityLog({
+      action: 'order.attachment.delete',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: deletedAttachment.name || req.params.attachmentId,
+      actor: getRequestActor(req),
+      message: 'Файл карточки заказа удален.',
+      details: {
+        attachmentId: deletedAttachment.attachmentId,
+        fileName: deletedAttachment.name,
+      },
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось удалить файл карточки заказа.' });
+  }
+});
+
 router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
   try {
     const db = require('../stores/store');
@@ -508,6 +781,9 @@ router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
     const idx = data.orders.findIndex(o => o._id === req.params.id);
     if (idx === -1) return res.status(404).json({ message: 'Order not found' });
     const deletedOrder = data.orders[idx];
+    for (const attachment of deletedOrder.attachments || []) {
+      deleteStoredAttachmentFile(attachment);
+    }
     data.orders.splice(idx, 1);
     db.save();
     addActivityLog({

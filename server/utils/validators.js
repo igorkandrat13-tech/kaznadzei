@@ -88,6 +88,21 @@ function normalizeBoolean(value, fieldName) {
   return value;
 }
 
+function normalizeAttachmentRelativePath(value, fieldName, options = {}) {
+  const normalized = normalizeString(value, fieldName, {
+    required: options.required,
+    maxLength: options.maxLength || 500,
+  });
+  if (!normalized) {
+    return '';
+  }
+  const sanitized = normalized.replace(/\\/g, '/');
+  if (sanitized.startsWith('/') || sanitized.includes('..')) {
+    fail(`Поле "${fieldName}" содержит некорректный путь.`);
+  }
+  return sanitized;
+}
+
 function normalizeUrl(value, fieldName, options = {}) {
   const normalized = normalizeString(value, fieldName, {
     required: options.required,
@@ -147,19 +162,19 @@ function sanitizeOrderInput(payload, options = {}) {
     data.orderNumber = normalizeString(payload.orderNumber, 'orderNumber', { required: !partial, maxLength: 80 });
   }
   if (!partial || payload.name !== undefined) {
-    data.name = normalizeString(payload.name, 'name', { required: !partial, maxLength: 120 });
+    data.name = normalizeString(payload.name, 'name', { required: false, maxLength: 120 });
   }
   if (!partial || payload.customer !== undefined) {
     data.customer = normalizeString(payload.customer, 'customer', { maxLength: 120 });
   }
   if (!partial || payload.quantity !== undefined) {
-    data.quantity = normalizePositiveInt(payload.quantity, 'quantity', { required: !partial, min: 1 });
+    data.quantity = normalizePositiveInt(payload.quantity, 'quantity', { required: false, min: 1 });
   }
   if (!partial || payload.material !== undefined) {
-    data.material = normalizeString(payload.material, 'material', { maxLength: 120 });
+    data.material = normalizeString(payload.material, 'material', { required: false, maxLength: 120 });
   }
   if (!partial || payload.notes !== undefined) {
-    data.notes = normalizeString(payload.notes, 'notes', { maxLength: 2000 });
+    data.notes = normalizeString(payload.notes, 'notes', { required: false, maxLength: 2000 });
   }
   if (!partial || payload.orderDate !== undefined) {
     data.orderDate = normalizeDate(payload.orderDate, 'orderDate', { allowUndefined: partial });
@@ -173,6 +188,46 @@ function sanitizeOrderInput(payload, options = {}) {
 
   if (data.startDate && data.endDate && data.endDate < data.startDate) {
     fail('Дата окончания не может быть раньше даты начала.');
+  }
+
+  return data;
+}
+
+function sanitizeOrderAttachmentInput(payload, options = {}) {
+  const partial = options.partial === true;
+  const data = {};
+
+  if (!partial || payload.attachmentId !== undefined) {
+    data.attachmentId = normalizeString(payload.attachmentId, 'attachmentId', { maxLength: 80 });
+  }
+  if (!partial || payload.name !== undefined) {
+    data.name = normalizeString(payload.name, 'name', { required: !partial, maxLength: 255 });
+  }
+  if (!partial || payload.type !== undefined) {
+    data.type = normalizeString(payload.type, 'type', { maxLength: 120 });
+  }
+  if (!partial || payload.size !== undefined) {
+    data.size = normalizePositiveInt(payload.size, 'size', { required: !partial, min: 1 });
+  }
+  if (!partial || payload.storedName !== undefined) {
+    data.storedName = normalizeString(payload.storedName, 'storedName', { maxLength: 255 });
+  }
+  if (!partial || payload.relativePath !== undefined) {
+    data.relativePath = normalizeAttachmentRelativePath(payload.relativePath, 'relativePath', { maxLength: 500 });
+  }
+  if (!partial || payload.uploadedAt !== undefined) {
+    data.uploadedAt = normalizeString(payload.uploadedAt, 'uploadedAt', { maxLength: 80 });
+  }
+  if (!partial || payload.content !== undefined) {
+    const content = normalizeString(payload.content, 'content', { required: false, maxLength: 15 * 1024 * 1024 });
+    if (content && !/^data:[^;]+;base64,[A-Za-z0-9+/=]+$/i.test(content)) {
+      fail('Поле "content" должно быть data URL в base64.');
+    }
+    data.content = content;
+  }
+
+  if (!partial && !data.content && !data.relativePath) {
+    fail('Для вложения требуется содержимое файла или путь к нему.');
   }
 
   return data;
@@ -351,6 +406,7 @@ module.exports = {
   sanitizeColorInput,
   sanitizeCommentInput,
   sanitizeEmployeeInput,
+  sanitizeOrderAttachmentInput,
   sanitizeOrderInput,
   sanitizeOrderItemInput,
   sanitizeProcessStepInput,
