@@ -5,6 +5,7 @@ import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { ORDER_STAGE_LEGEND, ORDER_STAGE_SECONDARY_HEADERS } from './orderStageLegend';
 import { useRoleConfig } from './RoleConfigContext';
+import { Button, Modal, ModalHeader } from './ui';
 import useEscapeKey from './useEscapeKey';
 
 const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
@@ -906,8 +907,8 @@ function OrdersWorkspace() {
             <h2 className="section-header-title">📋 Единая таблица заказов</h2>
           </div>
           <div className="section-header-actions">
-            <button className="btn btn-primary" onClick={openCreateForm}>➕ Новый заказ</button>
-            <button className="btn btn-secondary" onClick={exportRowsToCsv}>Экспорт CSV</button>
+            <Button variant="primary" onClick={openCreateForm}>➕ Новый заказ</Button>
+            <Button variant="secondary" onClick={exportRowsToCsv}>Экспорт CSV</Button>
           </div>
         </div>
 
@@ -1151,15 +1152,13 @@ function OrdersWorkspace() {
       </div>
 
       {showForm ? (
-        <div className="modal-overlay" onClick={savingOrder ? undefined : closeForm}>
-          <div className="modal-window modal-window-lg order-form-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <div className="modal-title">{editingOrderId ? 'Редактирование заказа' : 'Новый заказ'}</div>
-                <div className="modal-subtitle">Один заказ может содержать несколько изделий. QR формируется для каждого изделия отдельно.</div>
-              </div>
-              <button className="btn btn-small modal-close-btn" onClick={closeForm} disabled={savingOrder}>✕</button>
-            </div>
+        <Modal open={showForm} onClose={closeForm} closeDisabled={savingOrder} size="lg" className="order-form-modal">
+          <ModalHeader
+            title={editingOrderId ? 'Редактирование заказа' : 'Новый заказ'}
+            subtitle="Один заказ может содержать несколько изделий. QR формируется для каждого изделия отдельно."
+            onClose={closeForm}
+            closeDisabled={savingOrder}
+          />
 
             <div className="responsive-form-grid">
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1209,7 +1208,7 @@ function OrdersWorkspace() {
             <div className="order-items-editor">
               <div className="order-items-editor-header">
                 <div className="modal-title" style={{ fontSize: 16 }}>Изделия в заказе</div>
-                <button className="btn btn-secondary btn-small" onClick={addItem} disabled={savingOrder}>Добавить изделие</button>
+                  <Button variant="secondary" size="sm" onClick={addItem} disabled={savingOrder}>Добавить изделие</Button>
               </div>
 
               {orderForm.items.map((item, index) => {
@@ -1221,13 +1220,14 @@ function OrdersWorkspace() {
                         <div className="order-item-editor-title">Изделие {index + 1}</div>
                         <div className="order-item-editor-subtitle">Отдельный QR и отдельные комментарии сотрудников</div>
                       </div>
-                      <button
-                        className="btn btn-danger btn-small"
+                      <Button
+                        variant="danger"
+                        size="sm"
                         onClick={() => requestRemoveItem(index)}
                         disabled={savingOrder || orderForm.items.length <= 1}
                       >
                         Удалить
-                      </button>
+                      </Button>
                     </div>
 
                     <div className="responsive-form-grid">
@@ -1300,118 +1300,113 @@ function OrdersWorkspace() {
             </div>
 
             <div className="modal-actions">
-              <button className="btn" onClick={closeForm} disabled={savingOrder}>Отмена</button>
-              <button className="btn btn-success" onClick={handleSubmit} disabled={!isFormValid || savingOrder}>
+              <Button onClick={closeForm} disabled={savingOrder}>Отмена</Button>
+              <Button variant="success" onClick={handleSubmit} disabled={!isFormValid || savingOrder}>
                 {savingOrder ? (editingOrderId ? 'Сохранение...' : 'Создание...') : (editingOrderId ? 'Сохранить заказ' : 'Создать заказ')}
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+        </Modal>
       ) : null}
 
       {qrPreview ? (
-        <div className="modal-overlay" onClick={downloadingKey ? undefined : () => setQrPreview(null)}>
-          <div className="modal-window modal-window-sm qr-preview-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-title mb-16">QR-код заказа {qrPreview.orderNumber ? `№ ${qrPreview.orderNumber}` : ''}</div>
-            <div className="modal-subtitle mb-16">
-              {qrPreview.itemName || 'Изделие'}{qrPreview.itemNumber ? ` · позиция ${qrPreview.itemNumber}` : ''}
-            </div>
+        <Modal open={Boolean(qrPreview)} onClose={() => setQrPreview(null)} closeDisabled={Boolean(downloadingKey)} size="sm" className="qr-preview-modal">
+          <div className="modal-title mb-16">QR-код заказа {qrPreview.orderNumber ? `№ ${qrPreview.orderNumber}` : ''}</div>
+          <div className="modal-subtitle mb-16">
+            {qrPreview.itemName || 'Изделие'}{qrPreview.itemNumber ? ` · позиция ${qrPreview.itemNumber}` : ''}
+          </div>
             <img
               src={`/api/orders/${qrPreview.orderId}/items/${qrPreview.itemId}/qrcode`}
               alt="QR Code"
               className="qr-image"
             />
             <div className="modal-actions modal-actions-between">
-              <button className="btn btn-secondary" onClick={() => setQrPreview(null)} disabled={Boolean(downloadingKey)}>
+              <Button variant="secondary" onClick={() => setQrPreview(null)} disabled={Boolean(downloadingKey)}>
                 Закрыть
-              </button>
+              </Button>
               <div className="modal-actions-group">
-                <button
-                  className="btn btn-primary"
+                <Button
+                  variant="primary"
                   onClick={() => handleDownloadQr(qrPreview.orderId, qrPreview.itemId, qrPreview.fileNameBase)}
                   disabled={downloadingKey === `${qrPreview.orderId}:${qrPreview.itemId}`}
                 >
                   {downloadingKey === `${qrPreview.orderId}:${qrPreview.itemId}` ? 'Скачивание...' : 'Скачать'}
-                </button>
-                <button className="btn btn-secondary" onClick={handlePrintQr}>
+                </Button>
+                <Button variant="secondary" onClick={handlePrintQr}>
                   Печать
-                </button>
+                </Button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       ) : null}
 
       {orderActionsOrder ? (
-        <div className="modal-overlay" onClick={() => setOrderActionsOrder(null)}>
-          <div className="modal-window modal-window-sm" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <div className="modal-title">Действия над заказом</div>
-                <div className="modal-subtitle">
-                  {orderActionsOrder.orderNumber ? `Заказ № ${orderActionsOrder.orderNumber}` : 'Без номера'}
-                  {orderActionsOrder.customer ? ` · ${orderActionsOrder.customer}` : ''}
-                </div>
-              </div>
-              <button className="btn btn-small modal-close-btn" onClick={() => setOrderActionsOrder(null)}>✕</button>
-            </div>
+        <Modal open={Boolean(orderActionsOrder)} onClose={() => setOrderActionsOrder(null)} size="sm">
+          <ModalHeader
+            title="Действия над заказом"
+            subtitle={
+              <>
+                {orderActionsOrder.orderNumber ? `Заказ № ${orderActionsOrder.orderNumber}` : 'Без номера'}
+                {orderActionsOrder.customer ? ` · ${orderActionsOrder.customer}` : ''}
+              </>
+            }
+            onClose={() => setOrderActionsOrder(null)}
+          />
 
             <div className="order-actions-modal-list">
-              <button
-                className="btn btn-primary order-actions-modal-btn"
-                type="button"
+              <Button
+                variant="primary"
+                className="order-actions-modal-btn"
                 onClick={() => {
                   setOrderActionsOrder(null);
                   openEditForm(orderActionsOrder);
                 }}
               >
                 Редактировать весь заказ
-              </button>
+              </Button>
               {Array.isArray(orderActionsOrder.items) && orderActionsOrder.items.length > 0 ? (
                 <div className="order-actions-qr-section">
                   <div className="order-actions-qr-title">QR-коды изделий</div>
                   <div className="order-actions-qr-list">
                     {orderActionsOrder.items.map((item, index) => (
-                      <button
+                      <Button
                         key={item.itemId || `${orderActionsOrder._id || orderActionsOrder.orderNumber || 'order'}-${index}`}
-                        className="btn btn-secondary order-actions-modal-btn"
-                        type="button"
+                        variant="secondary"
+                        className="order-actions-modal-btn"
                         onClick={() => {
                           setOrderActionsOrder(null);
                           openQrPreview(orderActionsOrder, item);
                         }}
                       >
                         {`QR ${String(item.name || '').trim() || `изделие ${index + 1}`}`}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
               ) : null}
               {(orderDraftKeys[orderActionsOrder._id || orderActionsOrder.orderNumber || ''] || []).length > 0 ? (
-                <button
-                  className="btn btn-secondary order-actions-modal-btn"
-                  type="button"
+                <Button
+                  variant="secondary"
+                  className="order-actions-modal-btn"
                   onClick={() => {
                     cancelOrderInlineEdits(orderActionsOrder._id || orderActionsOrder.orderNumber || '');
                     setOrderActionsOrder(null);
                   }}
                 >
                   Отменить быстрые правки по заказу
-                </button>
+                </Button>
               ) : null}
-              <button
-                className="btn btn-danger order-actions-modal-btn"
-                type="button"
+              <Button
+                variant="danger"
+                className="order-actions-modal-btn"
                 onClick={() => {
                   requestDelete(orderActionsOrder);
                   setOrderActionsOrder(null);
                 }}
               >
                 Удалить заказ
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+        </Modal>
       ) : null}
 
       <ConfirmDialog

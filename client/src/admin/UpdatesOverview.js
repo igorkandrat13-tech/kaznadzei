@@ -1,5 +1,6 @@
 import React from 'react';
 import { HelpTooltip, SectionHeader, SettingsHint } from '../adminUI';
+import { Button } from '../ui';
 
 function UpdatesOverview({
   updateStatus,
@@ -26,30 +27,28 @@ function UpdatesOverview({
         description="Проверка удаленного Git-репозитория и установка новых изменений"
         actions={
           <>
-            <button className="btn btn-primary" onClick={onRefresh} disabled={checkingUpdates || installingUpdates}>
+            <Button variant="primary" onClick={onRefresh} disabled={checkingUpdates || installingUpdates}>
               {checkingUpdates ? 'Проверка...' : 'Проверить обновления'}
-            </button>
-            <button
-              className="btn btn-success"
+            </Button>
+            <Button
+              variant="success"
               onClick={onInstall}
               disabled={installingUpdates || checkingUpdates || !updateStatus?.canInstall || !updateStatus?.updatesAvailable}
             >
               {installingUpdates ? 'Установка...' : 'Установить обновления'}
-            </button>
-            <button
-              className="btn"
+            </Button>
+            <Button
               onClick={onRestartService}
               disabled={restartingService || checkingUpdates || !updateStatus?.systemctlAvailable}
             >
               {restartingService ? 'Перезапуск...' : 'Перезапустить сервис'}
-            </button>
-            <button
-              className="btn"
+            </Button>
+            <Button
               onClick={onShowServiceDetails}
               disabled={loadingServiceDetails || checkingUpdates || !updateStatus?.systemctlAvailable}
             >
               {loadingServiceDetails ? 'Загрузка...' : 'Статус и логи'}
-            </button>
+            </Button>
           </>
         }
       />
@@ -92,9 +91,9 @@ function UpdatesOverview({
           />
           Разрешить self-update из интерфейса
         </label>
-        <button className="btn btn-success" onClick={onSaveUpdateSettings} disabled={savingUpdateSettings}>
+        <Button variant="success" onClick={onSaveUpdateSettings} disabled={savingUpdateSettings}>
           {savingUpdateSettings ? 'Сохранение...' : 'Сохранить настройки обновления'}
-        </button>
+        </Button>
       </div>
       {updateMessage && <div className="settings-alert settings-alert-success">{updateMessage}</div>}
       {updateError && <div className="settings-alert settings-alert-error" style={{ whiteSpace: 'pre-wrap' }}>{updateError}</div>}

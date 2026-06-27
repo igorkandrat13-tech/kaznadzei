@@ -1,5 +1,5 @@
 import React from 'react';
-import useEscapeKey from './useEscapeKey';
+import { Button, Modal, ModalHeader } from './ui';
 
 function ConfirmDialog({
   open,
@@ -12,39 +12,24 @@ function ConfirmDialog({
   loading = false,
   variant = 'danger',
 }) {
-  if (!open) return null;
-
-  useEscapeKey(() => {
-    if (!loading) onCancel();
-  });
-
   return (
-    <div className="modal-overlay" onClick={loading ? undefined : onCancel}>
-      <div className="modal-window confirm-dialog" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <div>
-            <div className="modal-title">{title}</div>
-            {message ? <div className="modal-subtitle confirm-dialog-message">{message}</div> : null}
-          </div>
-          <button className="btn btn-small modal-close-btn" onClick={onCancel} disabled={loading}>
-            ✕
-          </button>
-        </div>
+    <Modal open={open} onClose={onCancel} closeDisabled={loading} size="md" className="confirm-dialog">
+      <ModalHeader
+        title={title}
+        subtitle={message ? <span className="confirm-dialog-message">{message}</span> : null}
+        onClose={onCancel}
+        closeDisabled={loading}
+      />
 
-        <div className="modal-actions">
-          <button className="btn" onClick={onCancel} disabled={loading}>
-            {cancelLabel}
-          </button>
-          <button
-            className={`btn ${variant === 'danger' ? 'confirm-dialog-danger' : 'btn-primary'}`}
-            onClick={onConfirm}
-            disabled={loading}
-          >
-            {loading ? 'Выполнение...' : confirmLabel}
-          </button>
-        </div>
+      <div className="modal-actions">
+        <Button onClick={onCancel} disabled={loading}>
+          {cancelLabel}
+        </Button>
+        <Button variant={variant === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} disabled={loading}>
+          {loading ? 'Выполнение...' : confirmLabel}
+        </Button>
       </div>
-    </div>
+    </Modal>
   );
 }
 

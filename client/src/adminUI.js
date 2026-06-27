@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button } from './ui';
 
 export const emptyEmployeeForm = {
   fullName: '',
@@ -22,11 +23,11 @@ export function SettingsHeader({ title, onBack, activeRole, onTabChange, tabs = 
     <div className="card settings-header-card">
       <div className="settings-header-top">
         <h2>{title}</h2>
-        <button className="btn" onClick={onBack}>← Назад</button>
+        <Button onClick={onBack}>← Назад</Button>
       </div>
       <div className="tabs">
         {tabs.map(tab => (
-          <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => onTabChange(tab.key)}>
+          <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => onTabChange(tab.key)} type="button">
             {tab.label}
           </button>
         ))}
