@@ -719,7 +719,7 @@ const OrderStore = {
       }
     }
 
-    if (!changed) return false;
+    if (!changed) return [];
 
     for (const orderId of touchedOrderIds) {
       const order = db.orders.find((currentOrder) => currentOrder._id === orderId);

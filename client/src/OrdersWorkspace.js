@@ -1332,8 +1332,7 @@ function OrdersWorkspace() {
                     );
                     const isCarpenterAutoHighlightSuppressed = Boolean(
                       carpenterClearMark?.updatedAt
-                      && latestCarpenterAutoAt
-                      && carpenterClearMark.updatedAt >= latestCarpenterAutoAt
+                      && (!latestCarpenterAutoAt || carpenterClearMark.updatedAt >= latestCarpenterAutoAt)
                     );
                     const hasCarpenterAutoHighlight = Boolean((carpenterAssignment || workerStageForText) && !isCarpenterAutoHighlightSuppressed);
                     const workerCellText = String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—';
