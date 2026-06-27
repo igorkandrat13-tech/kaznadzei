@@ -120,6 +120,21 @@ function normalizeManualStageMarks(source = {}) {
   }, {});
 }
 
+function normalizeManualStageClears(source = {}) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
+
+  return Object.entries(source).reduce((acc, [columnKey, clearMeta]) => {
+    const normalizedColumnKey = String(columnKey || '').trim();
+    if (!normalizedColumnKey || !clearMeta || typeof clearMeta !== 'object') return acc;
+
+    acc[normalizedColumnKey] = {
+      updatedAt: clearMeta.updatedAt || new Date().toISOString(),
+      updatedBy: String(clearMeta.updatedBy || '').trim(),
+    };
+    return acc;
+  }, {});
+}
+
 function getManualStageLegendKey(manualStageMarks = {}) {
   const marks = Object.values(normalizeManualStageMarks(manualStageMarks));
   if (marks.length === 0) return '';
@@ -249,6 +264,7 @@ function buildOrderItem(source = {}, options = {}) {
     : buildInitialStages({ activateFirstStage: options.activateFirstStage === true });
   const workerAssignments = mergeWorkerAssignments(source.workerAssignments, stages);
   const manualStageMarks = normalizeManualStageMarks(source.manualStageMarks);
+  const manualStageClears = normalizeManualStageClears(source.manualStageClears);
   const quantity = Number(source.quantity) || 1;
   return {
     itemId: String(source.itemId || source._id || id()).trim(),
@@ -266,6 +282,7 @@ function buildOrderItem(source = {}, options = {}) {
     comments: normalizeComments(source.comments),
     workerAssignments,
     manualStageMarks,
+    manualStageClears,
     stages,
     overallStatus: calculateItemOverallStatus(stages, manualStageMarks),
     createdAt: source.createdAt || new Date().toISOString(),
@@ -350,6 +367,7 @@ function ensureOrderShape(order) {
         notes: order.notes,
         comments: order.comments,
         manualStageMarks: order.manualStageMarks,
+        manualStageClears: order.manualStageClears,
         stages: order.stages,
         overallStatus: order.overallStatus,
         createdAt: order.createdAt,
@@ -365,6 +383,7 @@ function ensureOrderShape(order) {
       notes: item?.notes || (index === 0 ? order.notes : item?.notes),
       comments: Array.isArray(item?.comments) ? item.comments : (index === 0 ? order.comments : []),
       manualStageMarks: item?.manualStageMarks || (index === 0 ? order.manualStageMarks : {}),
+      manualStageClears: item?.manualStageClears || (index === 0 ? order.manualStageClears : {}),
       stages: Array.isArray(item?.stages) ? item.stages : (index === 0 ? order.stages : []),
       createdAt: item?.createdAt || order.createdAt,
     }, { defaultItemNumber: getDefaultItemNumber(index), index }));
@@ -540,7 +559,7 @@ const OrderStore = {
     const nextAssignment = {
       employeeId,
       employeeName,
-      scannedAt: currentAssignment.scannedAt || scannedAt,
+      scannedAt,
     };
     if (JSON.stringify(currentAssignment) !== JSON.stringify(nextAssignment)) {
       item.workerAssignments[role] = nextAssignment;
@@ -602,6 +621,7 @@ const OrderStore = {
           ...item,
           workerAssignments: item?.workerAssignments || currentItem?.workerAssignments || {},
           manualStageMarks: item?.manualStageMarks || currentItem?.manualStageMarks || {},
+          manualStageClears: item?.manualStageClears || currentItem?.manualStageClears || {},
         }, {
           defaultItemNumber: getDefaultItemNumber(index),
           index,
@@ -647,13 +667,27 @@ const OrderStore = {
       if (!item) continue;
 
       const currentMarks = normalizeManualStageMarks(item.manualStageMarks);
+      const currentClears = normalizeManualStageClears(item.manualStageClears);
       item.manualStageMarks = { ...currentMarks };
+      item.manualStageClears = { ...currentClears };
       const currentMark = item.manualStageMarks[columnKey];
+      const currentClear = item.manualStageClears[columnKey];
       let itemChanged = false;
 
       if (shouldClear) {
+        const nextClear = {
+          updatedAt: new Date().toISOString(),
+          updatedBy: String(actor || '').trim(),
+        };
         if (currentMark) {
           delete item.manualStageMarks[columnKey];
+          itemChanged = true;
+        }
+        if (JSON.stringify({ ...currentClear, updatedAt: undefined }) !== JSON.stringify({ ...nextClear, updatedAt: undefined })) {
+          item.manualStageClears[columnKey] = nextClear;
+          itemChanged = true;
+        } else if (!currentClear?.updatedAt) {
+          item.manualStageClears[columnKey] = nextClear;
           itemChanged = true;
         }
       } else {
@@ -662,6 +696,10 @@ const OrderStore = {
           updatedAt: new Date().toISOString(),
           updatedBy: String(actor || '').trim(),
         };
+        if (currentClear) {
+          delete item.manualStageClears[columnKey];
+          itemChanged = true;
+        }
         if (JSON.stringify({ ...currentMark, updatedAt: undefined }) !== JSON.stringify({ ...nextMark, updatedAt: undefined })) {
           item.manualStageMarks[columnKey] = nextMark;
           itemChanged = true;
@@ -673,6 +711,7 @@ const OrderStore = {
 
       if (itemChanged) {
         item.manualStageMarks = normalizeManualStageMarks(item.manualStageMarks);
+        item.manualStageClears = normalizeManualStageClears(item.manualStageClears);
         item.overallStatus = calculateItemOverallStatus(item.stages, item.manualStageMarks);
         item.updatedAt = new Date().toISOString();
         touchedOrderIds.add(orderId);
