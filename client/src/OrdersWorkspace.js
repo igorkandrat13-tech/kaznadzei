@@ -27,11 +27,13 @@ const ORDER_PRIMARY_HEADERS = [
   'Примечания',
   'СТОЛЯР',
   'Начало изготовления',
-  'Окончание',
+  'Окончание изготовления',
   'Время изготовления',
 ];
 const CARPENTER_STAGE_LEGEND_KEY = 'postpaint';
 const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_COMPLETE_STAGE_LEGEND_KEY = 'ready';
+const ORDER_COMPLETE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_COMPLETE_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
 const MANUAL_STAGE_TEXT_COLOR_MAP = ORDER_STAGE_SECONDARY_HEADERS.reduce((acc, item) => {
   if (item.legendKey && !acc[item.legendKey]) {
@@ -1566,7 +1568,7 @@ function OrdersWorkspace() {
       'Примечания',
       'СТОЛЯР',
       'Начало изготовления',
-      'Окончание',
+      'Окончание изготовления',
       'Время изготовления',
     ];
 
@@ -1829,11 +1831,18 @@ function OrdersWorkspace() {
                       'startDate',
                       `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
                     );
+                    const completedMetaCellStyle = orderManufacturingMeta.isCompleted
+                      ? {
+                          background: legendColorMap[ORDER_COMPLETE_STAGE_LEGEND_KEY] || '#8BC34A',
+                          color: ORDER_COMPLETE_STAGE_TEXT_HEX,
+                        }
+                      : undefined;
                     const endDateMetaCellProps = getManualStageCellProps(
                       key,
                       item,
                       'endDate',
                       `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                      completedMetaCellStyle,
                     );
                     const durationMetaCellProps = getManualStageCellProps(
                       key,
