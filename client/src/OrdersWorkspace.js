@@ -1311,17 +1311,18 @@ function OrdersWorkspace() {
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                     const commentPreview = getCommentPreview(item.comments);
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+                    const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
                     const workerCellText = String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—';
                     const workerCellTitle = carpenterAssignment?.employeeName
                       ? 'Сотрудник взял изделие в работу по QR'
                       : (workerStageForText?.stepName || activeStage?.stepName || '');
-                    const carpenterCellStyle = (carpenterAssignment || carpenterActiveStage || activeStage)
+                    const carpenterCellStyle = hasCarpenterAutoHighlight
                       ? {
                           background: legendColorMap[CARPENTER_STAGE_LEGEND_KEY] || '#C37C8E',
                           color: CARPENTER_STAGE_TEXT_HEX,
                         }
                       : undefined;
-                    const carpenterCellClassName = `${(carpenterAssignment || carpenterActiveStage || activeStage) ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
+                    const carpenterCellClassName = `${hasCarpenterAutoHighlight ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
                     const roomCellProps = getManualStageCellProps(key, item, 'room', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const roomNumberCellProps = getManualStageCellProps(key, item, 'roomNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const itemNumberCellProps = getManualStageCellProps(key, item, 'itemNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
