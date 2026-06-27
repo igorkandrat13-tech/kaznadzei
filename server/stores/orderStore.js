@@ -1,6 +1,7 @@
 const { load, save, id } = require('./store');
 const ProcessStepStore = require('./processStepStore');
 const RoleStore = require('./roleStore');
+const EmployeeStore = require('./employeeStore');
 
 function compareSteps(a, b) {
   const roleOrder = RoleStore.findAll({ includeDeleted: true }).map(role => role.key);
@@ -9,6 +10,34 @@ function compareSteps(a, b) {
   const roleDiff = (aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex);
   if (roleDiff !== 0) return roleDiff;
   return a.order - b.order;
+}
+
+function getEmployeeDisplayName(employee) {
+  const fullName = String(employee?.fullName || '').trim();
+  if (fullName) return fullName;
+
+  const telegramName = [
+    String(employee?.telegramFirstName || '').trim(),
+    String(employee?.telegramLastName || '').trim(),
+  ].filter(Boolean).join(' ').trim();
+  if (telegramName) return telegramName;
+
+  const username = String(employee?.telegramUsername || '').trim();
+  if (username) {
+    return username.startsWith('@') ? username : `@${username}`;
+  }
+
+  return '';
+}
+
+function getStageEmployeeName(stage = {}) {
+  const currentName = String(stage.employeeName || '').trim();
+  if (currentName) return currentName;
+
+  const employeeId = String(stage.employeeId || '').trim();
+  if (!employeeId) return '';
+
+  return getEmployeeDisplayName(EmployeeStore.findById(employeeId));
 }
 
 function buildInitialStages() {
@@ -65,6 +94,9 @@ function syncSingleOrderStages(order, steps) {
       stepId: step._id,
       stepName: step.stepName,
       role: step.role,
+      employeeId: String(matchedStage?.employeeId || '').trim(),
+      employeeName: getStageEmployeeName(matchedStage),
+      startedAt: matchedStage?.startedAt || null,
     };
   });
 
@@ -95,7 +127,7 @@ function cloneStages(stages = []) {
       status: stage.status,
       completedAt: stage.completedAt || null,
       employeeId: stage.employeeId || '',
-      employeeName: stage.employeeName || '',
+      employeeName: getStageEmployeeName(stage),
       startedAt: stage.startedAt || null,
     }))
     : [];

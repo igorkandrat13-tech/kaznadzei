@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
-import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
+import { getOrderStatusMeta } from './statusMeta';
 import {
   buildTelegramOrderPath,
   closeTelegramWebApp,
@@ -277,9 +277,6 @@ function OrderDetail() {
   const currentRoleComment = telegramEmployee?.role
     ? (selectedItem?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
     : '';
-  const roleStages = telegramEmployee?.role
-    ? (selectedItem?.stages || []).filter(stage => stage.role === telegramEmployee.role)
-    : [];
   const detailItems = order ? [
     { label: 'Номер заказа', value: order.orderNumber || '—' },
     { label: 'Заказчик', value: order.customer || '—' },
@@ -468,43 +465,6 @@ function OrderDetail() {
             </div>
           </div>
 
-          <div className="telegram-stage-section">
-            <div className="telegram-comment-title">Этапы по вашей роли</div>
-
-            {!sessionLoading && !telegramEmployee && (
-              <div className="telegram-comment-placeholder">
-                После проверки доступа здесь появится статус изделия по вашей роли.
-              </div>
-            )}
-
-            {telegramEmployee && roleStages.length === 0 && (
-              <div className="telegram-comment-placeholder">
-                Для вашей роли в этом заказе пока нет назначенных этапов.
-              </div>
-            )}
-
-            {telegramEmployee && roleStages.length > 0 && (
-              <div className="telegram-stage-list">
-                {roleStages.map((stage) => {
-                  const stageMeta = getStageStatusMeta(stage.status);
-                  return (
-                    <div key={stage.stepId} className="telegram-stage-card">
-                      <div className="telegram-stage-card-top">
-                        <div>
-                          <div className="telegram-stage-card-title">{stage.stepName}</div>
-                          <div className="telegram-stage-card-subtitle">Текущий статус</div>
-                        </div>
-                        <span className={stageMeta.className}>{stageMeta.label}</span>
-                      </div>
-                      <div className="telegram-comment-placeholder" style={{ marginTop: 10 }}>
-                        При открытии изделия по QR статус "В работе" выставляется автоматически. Из Telegram доступен только комментарий.
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </>
       ) : (
         <div className="table-scroll">

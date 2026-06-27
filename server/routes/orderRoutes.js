@@ -42,6 +42,30 @@ function logTelegramOrderDebug(event, details = {}) {
   console.log(`[telegram-order] ${event}`, JSON.stringify(details));
 }
 
+function getTelegramEmployeeDisplayName(employee, telegramUser = null) {
+  const fullName = String(employee?.fullName || '').trim();
+  if (fullName) return fullName;
+
+  const employeeTelegramName = [
+    String(employee?.telegramFirstName || '').trim(),
+    String(employee?.telegramLastName || '').trim(),
+  ].filter(Boolean).join(' ').trim();
+  if (employeeTelegramName) return employeeTelegramName;
+
+  const telegramUserName = [
+    String(telegramUser?.first_name || '').trim(),
+    String(telegramUser?.last_name || '').trim(),
+  ].filter(Boolean).join(' ').trim();
+  if (telegramUserName) return telegramUserName;
+
+  const username = String(employee?.telegramUsername || telegramUser?.username || '').trim();
+  if (username) {
+    return username.startsWith('@') ? username : `@${username}`;
+  }
+
+  return '';
+}
+
 function resolveTelegramEmployee(token, payload, context = {}) {
   const payloadDebug = getTelegramPayloadDebug(payload);
   if (payload?.sessionToken) {
@@ -65,7 +89,10 @@ function resolveTelegramEmployee(token, payload, context = {}) {
         employeeId: employeeBySession._id,
         employeeRole: employeeBySession.role,
       });
-      return employeeBySession;
+      return {
+        ...employeeBySession,
+        fullName: getTelegramEmployeeDisplayName(employeeBySession),
+      };
     } catch (sessionError) {
       const hasTelegramAuthPayload = Boolean(String(payload?.initData || '').trim() || payload?.unsafeUser?.id);
       logTelegramOrderDebug('resolve.session-token-failed', {
@@ -90,7 +117,12 @@ function resolveTelegramEmployee(token, payload, context = {}) {
     employeeId: employee?._id || '',
     employeeRole: employee?.role || '',
   });
-  return employee;
+  if (!employee) return employee;
+
+  return {
+    ...employee,
+    fullName: getTelegramEmployeeDisplayName(employee, telegramUser),
+  };
 }
 
 function fail(message, status = 400) {
