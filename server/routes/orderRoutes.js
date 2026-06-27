@@ -7,7 +7,7 @@ const { requireManagerAccess, requireWriteAccess } = require('../middleware/secu
 const { sanitizeCommentInput, sanitizeOrderInput, sanitizeOrderItemInput } = require('../utils/validators');
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
-const { notifyOrderCreated, notifyNextStage, notifyOrderCompleted } = require('../services/orderNotifications');
+const { notifyOrderCreated } = require('../services/orderNotifications');
 const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
@@ -267,113 +267,6 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
   }
 });
 
-router.post('/orders/:id/telegram-stage-status', (req, res) => {
-  try {
-    const token = String(SettingsStore.get().telegramBotToken || '').trim();
-    if (!token) {
-      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
-    }
-
-    const context = {
-      route: 'telegram-stage-status',
-      orderId: String(req.params.id || ''),
-      itemId: String(req.body?.itemId || '').trim(),
-      stepId: String(req.body?.stepId || '').trim(),
-      requestedStatus: String(req.body?.status || '').trim(),
-    };
-    const employee = resolveTelegramEmployee(token, req.body || {}, context);
-    if (!employee) {
-      logTelegramOrderDebug('telegram-stage-status.reject.employee-not-found', context);
-      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
-    }
-
-    const order = OrderStore.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-
-    const stepId = String(req.body?.stepId || '').trim();
-    const status = String(req.body?.status || '').trim();
-    const allowedStatuses = ['pending', 'in_progress', 'completed'];
-
-    if (!stepId) {
-      return res.status(400).json({ message: 'Не указан этап заказа.' });
-    }
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Некорректный статус этапа.' });
-    }
-
-    const item = getOrderItemOrFail(order, context.itemId);
-    const stage = (item.stages || []).find(itemStage => itemStage.stepId === stepId);
-    if (!stage) {
-      return res.status(404).json({ message: 'Этап заказа не найден.' });
-    }
-
-    if (stage.role !== employee.role) {
-      return res.status(403).json({ message: 'Можно менять только статус этапа своей роли.' });
-    }
-
-    const updatedOrder = context.itemId
-      ? OrderStore.updateStageStatus(req.params.id, context.itemId, stepId, status)
-      : OrderStore.updateStageStatus(req.params.id, stepId, status);
-    if (!updatedOrder) {
-      return res.status(404).json({ message: 'Не удалось обновить статус этапа.' });
-    }
-    const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
-
-    logTelegramOrderDebug('telegram-stage-status.success', {
-      ...context,
-      employeeId: employee._id,
-      employeeRole: employee.role,
-    });
-
-    addActivityLog({
-      action: 'order.stage.telegram',
-      entityType: 'order',
-      entityId: req.params.id,
-      entityName: updatedItem.name || updatedOrder.name || '',
-      actor: {
-        type: 'telegram',
-        role: employee.role,
-        name: employee.fullName,
-        label: `TG: ${employee.fullName}`,
-      },
-      message: `Статус этапа "${stage.stepName || stepId}" изменен из Telegram.`,
-      details: { itemId: updatedItem.itemId, stepId, stepName: stage.stepName || '', status },
-    });
-
-    if (status === 'completed') {
-      notifyNextStage(updatedOrder, stepId).catch(() => {});
-      if (updatedOrder.overallStatus === 'completed') {
-        notifyOrderCompleted(updatedOrder).catch(() => {});
-      }
-    }
-
-    res.json({
-      ok: true,
-      order: updatedOrder,
-      item: updatedItem,
-      stage: (updatedItem.stages || []).find(itemStage => itemStage.stepId === stepId) || null,
-      employee: {
-        _id: employee._id,
-        fullName: employee.fullName,
-        role: employee.role,
-      },
-    });
-  } catch (error) {
-    logTelegramOrderDebug('telegram-stage-status.error', {
-      route: 'telegram-stage-status',
-      orderId: String(req.params.id || ''),
-      stepId: String(req.body?.stepId || '').trim(),
-      requestedStatus: String(req.body?.status || '').trim(),
-      ...getTelegramPayloadDebug(req.body || {}),
-      message: error.message || 'Не удалось обновить статус этапа из Telegram.',
-    });
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить статус этапа из Telegram.' });
-  }
-});
-
 router.post('/orders/:id/telegram-item-scan', (req, res) => {
   try {
     const token = String(SettingsStore.get().telegramBotToken || '').trim();
@@ -505,7 +398,7 @@ router.post('/orders', requireManagerAccess(), (req, res) => {
       action: 'order.create',
       entityType: 'order',
       entityId: order._id,
-      entityName: order.name || '',
+      entityName: OrderStore.getOrderPrimaryName(order) || '',
       actor: getRequestActor(req),
       message: 'Создан новый заказ.',
       details: {
@@ -535,13 +428,13 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
       action: 'order.update',
       entityType: 'order',
       entityId: req.params.id,
-      entityName: nextOrder?.name || '',
+      entityName: OrderStore.getOrderPrimaryName(nextOrder) || '',
       actor: getRequestActor(req),
       message: 'Заказ обновлен.',
       details: {
         changedFields: Object.keys({ ...updates, ...(items ? { items: true } : {}) }),
         orderNumber: nextOrder?.orderNumber || '',
-        notesChanged: previousOrder.notes !== nextOrder.notes,
+        notesChanged: OrderStore.getOrderPrimaryNotes(previousOrder) !== OrderStore.getOrderPrimaryNotes(nextOrder),
       },
     });
     res.json(nextOrder);
@@ -563,7 +456,7 @@ router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
       action: 'order.delete',
       entityType: 'order',
       entityId: req.params.id,
-      entityName: deletedOrder?.name || '',
+      entityName: OrderStore.getOrderPrimaryName(deletedOrder) || '',
       actor: getRequestActor(req),
       message: 'Заказ удален.',
       details: {
@@ -572,48 +465,6 @@ router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
       },
     });
     res.json({ message: 'Deleted' });
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-});
-
-router.patch('/orders/:id/stages/:stepId', requireWriteAccess, (req, res) => {
-  try {
-    const itemId = String(req.body?.itemId || '').trim();
-    const { status } = req.body;
-    const allowedStatuses = ['pending', 'in_progress', 'completed'];
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status' });
-    }
-    const order = itemId
-      ? OrderStore.updateStageStatus(req.params.id, itemId, req.params.stepId, status)
-      : OrderStore.updateStageStatus(req.params.id, req.params.stepId, status);
-    if (order === null) return res.status(404).json({ message: 'Order not found' });
-    if (order === false) return res.status(404).json({ message: 'Stage not found' });
-    const item = OrderStore.getOrderItem(order, itemId);
-    const stage = ((item?.stages) || (order.stages || [])).find(stageItem => stageItem.stepId === req.params.stepId);
-    addActivityLog({
-      action: 'order.stage.update',
-      entityType: 'order',
-      entityId: req.params.id,
-      entityName: item?.name || order.name || '',
-      actor: getRequestActor(req, { label: 'Сотрудник' }),
-      message: `Статус этапа "${stage?.stepName || req.params.stepId}" изменен.`,
-      details: {
-        itemId: item?.itemId || '',
-        stepId: req.params.stepId,
-        stepName: stage?.stepName || '',
-        role: stage?.role || '',
-        status,
-      },
-    });
-    if (status === 'completed') {
-      notifyNextStage(order, req.params.stepId).catch(() => {});
-      if (order.overallStatus === 'completed') {
-        notifyOrderCompleted(order).catch(() => {});
-      }
-    }
-    res.json(order);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

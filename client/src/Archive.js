@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
+import { getOrderOverallStatus, getOrderPrimaryMaterial, getOrderPrimaryName, getOrderPrimaryQuantity, getOrderStages } from './orderSelectors';
 import { getOrderStatusMeta, ORDER_STATUS_OPTIONS } from './statusMeta';
 import { useRoleConfig } from './RoleConfigContext';
 
@@ -9,7 +10,7 @@ function getRoleShortLabel(role, roleTabs = []) {
 }
 
 function getRoleProgressInfo(order, role, roleTabs = []) {
-  const stages = Array.isArray(order?.stages) ? order.stages : [];
+  const stages = getOrderStages(order);
   const roleStages = stages.filter(stage => stage.role === role);
   const total = roleStages.length;
   const roleLabel = getRoleShortLabel(role, roleTabs);
@@ -89,19 +90,20 @@ function Archive() {
   };
 
   const filtered = orders.filter(o => {
-    if (statusFilter !== 'all' && o.overallStatus !== statusFilter) return false;
+    if (statusFilter !== 'all' && getOrderOverallStatus(o) !== statusFilter) return false;
     if (roleFilter !== 'all') {
-      const activeStage = (o.stages || []).find(stage => stage.status === 'in_progress')
-        || (o.stages || []).find(stage => stage.status !== 'completed');
+      const stages = getOrderStages(o);
+      const activeStage = stages.find(stage => stage.status === 'in_progress')
+        || stages.find(stage => stage.status !== 'completed');
       if ((activeStage?.role || '') !== roleFilter) return false;
     }
     if (search) {
       const q = search.toLowerCase();
       const match = [
         o.orderNumber,
-        o.name,
+        getOrderPrimaryName(o),
         o.customer,
-        o.material,
+        getOrderPrimaryMaterial(o),
       ].join(' ').toLowerCase();
       if (!match.includes(q)) return false;
     }
@@ -204,16 +206,16 @@ function Archive() {
                 <tr key={order._id}>
                   <td><strong>{order.orderNumber || '—'}</strong></td>
                   <td>{order.customer || '—'}</td>
-                  <td><strong>{order.name}</strong></td>
-                  <td>{order.quantity || 1}</td>
-                  <td>{order.material || '—'}</td>
+                  <td><strong>{getOrderPrimaryName(order) || '—'}</strong></td>
+                  <td>{getOrderPrimaryQuantity(order)}</td>
+                  <td>{getOrderPrimaryMaterial(order) || '—'}</td>
                   <td className="date-cell">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td>
                   <td className="date-cell">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
                   <td className="date-cell">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
                   <td>{calcDuration(order.startDate, order.endDate) || '—'}</td>
                   <td>
-                    <span className={getOrderStatusMeta(order.overallStatus).className}>
-                      {getOrderStatusMeta(order.overallStatus).label}
+                    <span className={getOrderStatusMeta(getOrderOverallStatus(order)).className}>
+                      {getOrderStatusMeta(getOrderOverallStatus(order)).label}
                     </span>
                   </td>
                   <td>{renderArchiveRoleProgress(order)}</td>
@@ -226,12 +228,12 @@ function Archive() {
 
         <div className="mobile-card-list">
           {filtered.map(order => {
-            const statusMeta = getOrderStatusMeta(order.overallStatus);
+            const statusMeta = getOrderStatusMeta(getOrderOverallStatus(order));
             return (
               <div key={order._id} className="mobile-order-card">
                 <div className="mobile-order-card-header">
                   <div>
-                    <div className="mobile-order-card-title">{order.name}</div>
+                    <div className="mobile-order-card-title">{getOrderPrimaryName(order) || '—'}</div>
                     <div className="mobile-order-card-subtitle">
                       {order.orderNumber || 'Без номера'} · {order.customer || 'Заказчик не указан'}
                     </div>
@@ -246,11 +248,11 @@ function Archive() {
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Количество</div>
-                    <div className="mobile-order-card-value">{order.quantity || 1}</div>
+                    <div className="mobile-order-card-value">{getOrderPrimaryQuantity(order)}</div>
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Материал</div>
-                    <div className="mobile-order-card-value">{order.material || '—'}</div>
+                    <div className="mobile-order-card-value">{getOrderPrimaryMaterial(order) || '—'}</div>
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Дата заказа</div>

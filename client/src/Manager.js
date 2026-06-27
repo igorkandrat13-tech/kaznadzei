@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { getOrderOverallStatus, getOrderPrimaryMaterial, getOrderPrimaryName, getOrderPrimaryNotes, getOrderPrimaryQuantity, getOrderStages } from './orderSelectors';
 import { getOrderStatusMeta, getStageStatusMeta } from './statusMeta';
 import ConfirmDialog from './ConfirmDialog';
 import { useRoleConfig } from './RoleConfigContext';
@@ -56,7 +57,7 @@ function getRoleShortLabel(role, roleTabs = []) {
 }
 
 function getRoleProgressInfo(order, role, roleTabs = []) {
-  const stages = Array.isArray(order?.stages) ? order.stages : [];
+  const stages = getOrderStages(order);
   const roleStages = stages.filter(stage => stage.role === role);
   const total = roleStages.length;
   const roleLabel = getRoleShortLabel(role, roleTabs);
@@ -237,7 +238,7 @@ function Manager() {
   };
 
   const getCurrentResponsibleRole = (order) => {
-    const stages = Array.isArray(order?.stages) ? order.stages : [];
+    const stages = getOrderStages(order);
     const activeStage = stages.find(stage => stage.status === 'in_progress')
       || stages.find(stage => stage.status !== 'completed');
     return activeStage?.role || '';
@@ -267,16 +268,16 @@ function Manager() {
   };
 
   const filteredOrders = orders.filter(order => {
-    if (statusFilter !== 'all' && order.overallStatus !== statusFilter) return false;
+    if (statusFilter !== 'all' && getOrderOverallStatus(order) !== statusFilter) return false;
     if (roleFilter !== 'all' && getCurrentResponsibleRole(order) !== roleFilter) return false;
     if (search.trim()) {
       const query = search.trim().toLowerCase();
       const haystack = [
         order.orderNumber,
         order.customer,
-        order.name,
-        order.material,
-        order.notes,
+        getOrderPrimaryName(order),
+        getOrderPrimaryMaterial(order),
+        getOrderPrimaryNotes(order),
       ].join(' ').toLowerCase();
       if (!haystack.includes(query)) return false;
     }
@@ -334,15 +335,15 @@ function Manager() {
     setForm({
       orderNumber: order.orderNumber || '',
       customer: order.customer || '',
-      name: order.name || '',
-      quantity: order.quantity || 1,
-      material: order.material || '',
-      notes: order.notes || '',
+      name: getOrderPrimaryName(order) || '',
+      quantity: getOrderPrimaryQuantity(order),
+      material: getOrderPrimaryMaterial(order) || '',
+      notes: getOrderPrimaryNotes(order) || '',
       orderDate: order.orderDate || '',
       startDate: order.startDate || '',
       endDate: order.endDate || '',
     });
-    const nextStages = Array.isArray(order.stages) ? order.stages : [];
+    const nextStages = getOrderStages(order);
     setFormStages(nextStages);
     setActiveStageRole(getInitialStageRoleTab(nextStages, allRoleTabs));
     setEditingId(order._id);
@@ -353,7 +354,7 @@ function Manager() {
     setError('');
     setConfirmDelete({
       id: order._id,
-      name: order.name || 'Без названия',
+      name: getOrderPrimaryName(order) || 'Без названия',
       customer: order.customer || 'Заказчик не указан',
     });
   };
@@ -434,10 +435,10 @@ function Manager() {
     setError('');
     setManagerCommentModal({
       orderId: order._id,
-      orderName: order.name || 'Без названия',
+      orderName: getOrderPrimaryName(order) || 'Без названия',
       customer: order.customer || 'Заказчик не указан',
-      currentNotes: String(order.notes || ''),
-      draftNotes: String(order.notes || ''),
+      currentNotes: String(getOrderPrimaryNotes(order) || ''),
+      draftNotes: String(getOrderPrimaryNotes(order) || ''),
     });
   };
 
@@ -535,7 +536,7 @@ function Manager() {
 
     return (
       <details className="manager-actions-menu order-number-action-menu">
-        <summary className={triggerClassName} aria-label={`Действия для заказа ${order.orderNumber || order.name || ''}`}>
+        <summary className={triggerClassName} aria-label={`Действия для заказа ${order.orderNumber || getOrderPrimaryName(order) || ''}`}>
           <span className="order-number-action-label">{order.orderNumber || '—'}</span>
           <span className="order-number-action-caret">▾</span>
         </summary>
@@ -642,9 +643,9 @@ function Manager() {
                 <tr key={order._id}>
                   <td>{renderOrderActionMenu(order)}</td>
                   <td>{order.customer || '—'}</td>
-                  <td><strong>{order.name}</strong></td>
-                  <td>{order.quantity || 1}</td>
-                  <td>{order.material || '—'}</td>
+                  <td><strong>{getOrderPrimaryName(order) || '—'}</strong></td>
+                  <td>{getOrderPrimaryQuantity(order)}</td>
+                  <td>{getOrderPrimaryMaterial(order) || '—'}</td>
                   <td className="date-cell">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td>
                   <td className="date-cell">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
                   <td className="date-cell">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
@@ -652,10 +653,10 @@ function Manager() {
                   <td>{renderManagerRoleProgress(order)}</td>
                   <td className="comment-cell">
                     <button
-                      className={`manager-comment-trigger ${String(order.notes || '').trim() ? 'manager-comment-trigger-active' : ''}`}
+                      className={`manager-comment-trigger ${String(getOrderPrimaryNotes(order) || '').trim() ? 'manager-comment-trigger-active' : ''}`}
                       onClick={() => openManagerCommentModal(order)}
                     >
-                      {String(order.notes || '').trim() ? 'Есть комментарий' : 'Нет комментария'}
+                      {String(getOrderPrimaryNotes(order) || '').trim() ? 'Есть комментарий' : 'Нет комментария'}
                     </button>
                   </td>
                 </tr>
@@ -667,12 +668,12 @@ function Manager() {
 
         <div className="mobile-card-list">
           {filteredOrders.map(order => {
-            const statusMeta = getOrderStatusMeta(order.overallStatus);
+            const statusMeta = getOrderStatusMeta(getOrderOverallStatus(order));
             return (
               <div key={order._id} className="mobile-order-card">
                 <div className="mobile-order-card-header">
                   <div>
-                    <div className="mobile-order-card-title">{order.name}</div>
+                    <div className="mobile-order-card-title">{getOrderPrimaryName(order) || '—'}</div>
                     <div className="mobile-order-card-subtitle">
                       {order.orderNumber || 'Без номера'} · {order.customer || 'Заказчик не указан'}
                     </div>
@@ -687,11 +688,11 @@ function Manager() {
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Количество</div>
-                    <div className="mobile-order-card-value">{order.quantity || 1}</div>
+                    <div className="mobile-order-card-value">{getOrderPrimaryQuantity(order)}</div>
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Материал</div>
-                    <div className="mobile-order-card-value">{order.material || '—'}</div>
+                    <div className="mobile-order-card-value">{getOrderPrimaryMaterial(order) || '—'}</div>
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Дата заказа</div>
@@ -719,14 +720,14 @@ function Manager() {
                 <div className="mobile-order-card-note">
                   <div className="mobile-order-card-label">Комментарий менеджера</div>
                   <button
-                    className={`manager-comment-trigger ${String(order.notes || '').trim() ? 'manager-comment-trigger-active' : ''}`}
+                    className={`manager-comment-trigger ${String(getOrderPrimaryNotes(order) || '').trim() ? 'manager-comment-trigger-active' : ''}`}
                     onClick={() => openManagerCommentModal(order)}
                   >
-                    {String(order.notes || '').trim() ? 'Открыть комментарий' : 'Добавить комментарий'}
+                    {String(getOrderPrimaryNotes(order) || '').trim() ? 'Открыть комментарий' : 'Добавить комментарий'}
                   </button>
-                  {order.notes ? (
+                  {getOrderPrimaryNotes(order) ? (
                     <div className="mobile-order-card-value" style={{ marginTop: 8 }}>
-                      {getManagerCommentPreview(order.notes)}
+                      {getManagerCommentPreview(getOrderPrimaryNotes(order))}
                     </div>
                   ) : null}
                 </div>

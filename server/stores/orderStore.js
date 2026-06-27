@@ -222,26 +222,60 @@ function buildOrderItem(source = {}, options = {}) {
   };
 }
 
-function syncLegacyFields(order) {
-  const primaryItem = Array.isArray(order.items) && order.items.length > 0 ? order.items[0] : null;
-  if (!primaryItem) {
-    order.name = order.name || '';
-    order.quantity = Number(order.quantity) || 1;
-    order.material = order.material || '';
-    order.notes = order.notes || '';
-    order.comments = normalizeComments(order.comments);
-    order.stages = cloneStages(order.stages);
-    order.overallStatus = calculateOverallStatus(order.stages);
-    return;
+function getOrderPrimaryItem(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  return items[0] || null;
+}
+
+function getOrderStages(order) {
+  const primaryItem = getOrderPrimaryItem(order);
+  if (Array.isArray(primaryItem?.stages)) return primaryItem.stages;
+  return Array.isArray(order?.stages) ? cloneStages(order.stages) : [];
+}
+
+function getOrderComments(order) {
+  const primaryItem = getOrderPrimaryItem(order);
+  if (Array.isArray(primaryItem?.comments)) return normalizeComments(primaryItem.comments);
+  return normalizeComments(order?.comments);
+}
+
+function getOrderOverallStatus(order) {
+  const primaryItem = getOrderPrimaryItem(order);
+  return primaryItem?.overallStatus || calculateOverallStatus(getOrderStages(order));
+}
+
+function getOrderPrimaryName(order) {
+  const primaryItem = getOrderPrimaryItem(order);
+  return String(primaryItem?.name || order?.name || '').trim();
+}
+
+function getOrderPrimaryQuantity(order) {
+  const primaryItem = getOrderPrimaryItem(order);
+  return Number(primaryItem?.quantity || order?.quantity) || 1;
+}
+
+function getOrderPrimaryMaterial(order) {
+  const primaryItem = getOrderPrimaryItem(order);
+  return String(primaryItem?.material || order?.material || '').trim();
+}
+
+function getOrderPrimaryNotes(order) {
+  const primaryItem = getOrderPrimaryItem(order);
+  return String(primaryItem?.notes || order?.notes || '').trim();
+}
+
+function cleanupLegacyOrderFields(order) {
+  const legacyKeys = ['name', 'quantity', 'material', 'notes', 'comments', 'stages', 'overallStatus'];
+  let changed = false;
+
+  for (const key of legacyKeys) {
+    if (Object.prototype.hasOwnProperty.call(order, key)) {
+      delete order[key];
+      changed = true;
+    }
   }
 
-  order.name = primaryItem.name || '';
-  order.quantity = primaryItem.quantity || 1;
-  order.material = primaryItem.material || '';
-  order.notes = primaryItem.notes || '';
-  order.comments = normalizeComments(primaryItem.comments);
-  order.stages = cloneStages(primaryItem.stages);
-  order.overallStatus = primaryItem.overallStatus || calculateOverallStatus(primaryItem.stages);
+  return changed;
 }
 
 function ensureOrderShape(order) {
@@ -300,25 +334,7 @@ function ensureOrderShape(order) {
     changed = true;
   }
 
-  const snapshotBeforeSync = JSON.stringify({
-    name: order.name,
-    quantity: order.quantity,
-    material: order.material,
-    notes: order.notes,
-    comments: order.comments,
-    stages: order.stages,
-    overallStatus: order.overallStatus,
-  });
-  syncLegacyFields(order);
-  if (snapshotBeforeSync !== JSON.stringify({
-    name: order.name,
-    quantity: order.quantity,
-    material: order.material,
-    notes: order.notes,
-    comments: order.comments,
-    stages: order.stages,
-    overallStatus: order.overallStatus,
-  })) {
+  if (cleanupLegacyOrderFields(order)) {
     changed = true;
   }
 
@@ -347,7 +363,6 @@ function getOrderItem(order, itemId) {
 function syncOrderStatus(order) {
   if (!order) return;
   ensureOrderShape(order);
-  syncLegacyFields(order);
 }
 
 const OrderStore = {
@@ -391,7 +406,6 @@ const OrderStore = {
       createdAt,
       items,
     };
-    syncLegacyFields(order);
     db.orders.push(order);
     save();
     return order;
@@ -449,34 +463,6 @@ const OrderStore = {
     syncOrderStatus(order);
     save();
     return item.comments;
-  },
-
-  updateStageStatus(orderId, itemIdOrStepId, stepIdOrStatus, maybeStatus) {
-    const db = load();
-    ensureOrders(db);
-    const order = db.orders.find(o => o._id === orderId);
-    if (!order) return null;
-    const hasItemId = maybeStatus !== undefined;
-    const item = getOrderItem(order, hasItemId ? itemIdOrStepId : '');
-    if (!item) return null;
-    const stepId = hasItemId ? stepIdOrStatus : itemIdOrStepId;
-    const status = hasItemId ? maybeStatus : stepIdOrStatus;
-    const stage = (item.stages || []).find(s => s.stepId === stepId);
-    if (!stage) return false;
-    stage.status = status;
-    stage.completedAt = status === 'completed' ? new Date().toISOString() : null;
-    if (status === 'pending') {
-      stage.employeeId = '';
-      stage.employeeName = '';
-      stage.startedAt = null;
-    } else if (status === 'in_progress' && !stage.startedAt) {
-      stage.startedAt = new Date().toISOString();
-    }
-    item.overallStatus = calculateOverallStatus(item.stages);
-    item.updatedAt = new Date().toISOString();
-    syncOrderStatus(order);
-    save();
-    return order;
   },
 
   markItemRoleInProgress(orderId, itemId, role, employee = {}) {
@@ -600,7 +586,9 @@ const OrderStore = {
           changed = true;
         }
       }
-      syncLegacyFields(order);
+      if (cleanupLegacyOrderFields(order)) {
+        changed = true;
+      }
     }
 
     if (changed) {
@@ -616,7 +604,15 @@ const OrderStore = {
 
   buildInitialStages,
   calculateOverallStatus,
+  getOrderComments,
   getOrderItem,
+  getOrderOverallStatus,
+  getOrderPrimaryItem,
+  getOrderPrimaryMaterial,
+  getOrderPrimaryName,
+  getOrderPrimaryNotes,
+  getOrderPrimaryQuantity,
+  getOrderStages,
   ensureOrders,
 };
 

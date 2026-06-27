@@ -226,39 +226,10 @@ seedDemoMultiItemOrders();
 (function migrate() {
   const orders = OrderStore.findAll();
   const employees = EmployeeStore.findAll();
-  const steps = ProcessStepStore.findAll();
   const settings = SettingsStore.get();
   let changed = OrderStore.ensureOrders(require('./server/stores/store').load());
   for (const [index, o] of orders.entries()) {
     if (!o.orderNumber) { o.orderNumber = buildFallbackOrderNumber(o, index); changed = true; }
-    if (!o.customer) { o.customer = ''; changed = true; }
-    if (!o.quantity) { o.quantity = 1; changed = true; }
-    if (!o.material) { o.material = ''; changed = true; }
-    if (!o.notes) { o.notes = ''; changed = true; }
-    if (!o.orderDate) { o.orderDate = o.createdAt ? o.createdAt.split('T')[0] : ''; changed = true; }
-    if (!o.startDate) { o.startDate = ''; changed = true; }
-    if (!o.endDate) { o.endDate = ''; changed = true; }
-    if (!Array.isArray(o.comments)) { o.comments = []; changed = true; }
-    if (!Array.isArray(o.stages) || o.stages.length === 0) {
-      o.stages = OrderStore.buildInitialStages({ activateFirstStage: true });
-      changed = true;
-    }
-    if (Array.isArray(o.stages)) {
-      for (const stage of o.stages) {
-        if (stage.stepId) continue;
-        const matchedStep = steps.find(step => step.stepName === stage.stepName && step.role === stage.role)
-          || steps.find(step => step.stepName === stage.stepName);
-        if (matchedStep) {
-          stage.stepId = matchedStep._id;
-          changed = true;
-        }
-      }
-    }
-    const overallStatus = OrderStore.calculateOverallStatus(o.stages);
-    if (o.overallStatus !== overallStatus) {
-      o.overallStatus = overallStatus;
-      changed = true;
-    }
   }
 
   for (const employee of employees) {

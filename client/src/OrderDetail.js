@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { getOrderOverallStatus, getOrderPrimaryItem } from './orderSelectors';
 import { getOrderStatusMeta } from './statusMeta';
 import {
   buildTelegramOrderPath,
@@ -272,21 +273,22 @@ function OrderDetail() {
     ? ((Array.isArray(order.items) ? order.items : []).find(item => item.itemId === itemId)
       || (Array.isArray(order.items) ? order.items[0] : null))
     : null;
-  const statusMeta = getOrderStatusMeta(selectedItem?.overallStatus || order?.overallStatus);
-  const orderNotes = String(selectedItem?.notes || order?.notes || '').trim();
+  const primaryItem = getOrderPrimaryItem(order);
+  const statusMeta = getOrderStatusMeta(selectedItem?.overallStatus || getOrderOverallStatus(order));
+  const orderNotes = String(selectedItem?.notes || primaryItem?.notes || '').trim();
   const currentRoleComment = telegramEmployee?.role
     ? (selectedItem?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
     : '';
   const detailItems = order ? [
     { label: 'Номер заказа', value: order.orderNumber || '—' },
     { label: 'Заказчик', value: order.customer || '—' },
-    { label: 'Изделие', value: selectedItem?.name || order.name || '—' },
+    { label: 'Изделие', value: selectedItem?.name || primaryItem?.name || '—' },
     { label: '№ изделия в заказе', value: selectedItem?.itemNumber || '—' },
     { label: 'Артикул изделия', value: selectedItem?.productNumber || '—' },
     { label: 'Помещение', value: selectedItem?.room || '—' },
     { label: '№ помещения', value: selectedItem?.roomNumber || '—' },
-    { label: 'Кол-во', value: selectedItem?.quantity || order.quantity || 1 },
-    { label: 'Материал', value: selectedItem?.material || order.material || '—' },
+    { label: 'Кол-во', value: selectedItem?.quantity || primaryItem?.quantity || 1 },
+    { label: 'Материал', value: selectedItem?.material || primaryItem?.material || '—' },
     { label: 'Комплектация', value: selectedItem?.packageName || '—' },
     { label: 'Отгрузка до', value: selectedItem?.deliveryDate ? new Date(selectedItem.deliveryDate).toLocaleDateString() : '—' },
     { label: 'Дата заказа', value: order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—' },
@@ -409,7 +411,7 @@ function OrderDetail() {
 
   return (
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
-      <h2>{telegramMode ? `Изделие: ${selectedItem?.name || order.name}` : `📋 Изделие: ${selectedItem?.name || order.name}`}</h2>
+      <h2>{telegramMode ? `Изделие: ${selectedItem?.name || primaryItem?.name || '—'}` : `📋 Изделие: ${selectedItem?.name || primaryItem?.name || '—'}`}</h2>
       {telegramMode && (
         <p className="telegram-order-subtitle">Актуальная информация по изделию в заказе.</p>
       )}
@@ -472,15 +474,15 @@ function OrderDetail() {
             <tbody>
               <tr><td><strong>Номер заказа</strong></td><td>{order.orderNumber || '—'}</td></tr>
               <tr><td><strong>Заказчик</strong></td><td>{order.customer || '—'}</td></tr>
-              <tr><td><strong>Изделие</strong></td><td>{selectedItem?.name || order.name}</td></tr>
+              <tr><td><strong>Изделие</strong></td><td>{selectedItem?.name || primaryItem?.name || '—'}</td></tr>
               <tr><td><strong>№ изделия в заказе</strong></td><td>{selectedItem?.itemNumber || '—'}</td></tr>
               <tr><td><strong>Артикул изделия</strong></td><td>{selectedItem?.productNumber || '—'}</td></tr>
               <tr><td><strong>Помещение</strong></td><td>{selectedItem?.room || '—'}</td></tr>
               <tr><td><strong>№ помещения</strong></td><td>{selectedItem?.roomNumber || '—'}</td></tr>
-              <tr><td><strong>Кол-во изделий</strong></td><td>{selectedItem?.quantity || order.quantity || 1}</td></tr>
-              <tr><td><strong>Материал</strong></td><td>{selectedItem?.material || order.material || '—'}</td></tr>
+              <tr><td><strong>Кол-во изделий</strong></td><td>{selectedItem?.quantity || primaryItem?.quantity || 1}</td></tr>
+              <tr><td><strong>Материал</strong></td><td>{selectedItem?.material || primaryItem?.material || '—'}</td></tr>
               <tr><td><strong>Комплектация</strong></td><td>{selectedItem?.packageName || '—'}</td></tr>
-              <tr><td><strong>Примечания</strong></td><td>{selectedItem?.notes || order.notes || '—'}</td></tr>
+              <tr><td><strong>Примечания</strong></td><td>{selectedItem?.notes || primaryItem?.notes || '—'}</td></tr>
               <tr><td><strong>Дата заказа</strong></td><td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td></tr>
               <tr><td><strong>Начало изготовления</strong></td><td>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td></tr>
               <tr><td><strong>Окончание изготовления</strong></td><td>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td></tr>

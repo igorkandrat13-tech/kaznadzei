@@ -4,6 +4,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { ORDER_STAGE_LEGEND, ORDER_STAGE_SECONDARY_HEADERS } from './orderStageLegend';
+import { getOrderPrimaryName } from './orderSelectors';
 import { useRoleConfig } from './RoleConfigContext';
 import { Button, Modal, ModalHeader } from './ui';
 import useEscapeKey from './useEscapeKey';
@@ -688,7 +689,7 @@ function OrdersWorkspace() {
     setConfirmDelete({
       id: order._id,
       orderNumber: order.orderNumber || '',
-      name: order.name || '',
+      name: getOrderPrimaryName(order) || '',
       customer: order.customer || '',
     });
   };

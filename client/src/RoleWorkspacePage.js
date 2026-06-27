@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import WorkshopPage from './WorkshopPage';
 import { getOrderStatusMeta } from './statusMeta';
+import { getOrderOverallStatus } from './orderSelectors';
 import { useRoleConfig } from './RoleConfigContext';
 import { apiFetch, parseJsonSafely } from './api';
 
@@ -30,10 +31,9 @@ function RoleWorkspacePage() {
     role: roleMeta.key,
     title: `${roleMeta.icon || '🧩'} ${roleMeta.shortTitle || roleMeta.plainLabel}`,
     description: roleMeta.description || '',
-    showStages: false,
     summaryColumnTitle: 'Статус',
     renderSummaryCell: (order) => {
-      const badge = getOrderStatusMeta(order?.overallStatus || 'pending');
+      const badge = getOrderStatusMeta(getOrderOverallStatus(order));
       return <span className={badge.className}>{badge.label}</span>;
     },
   };
