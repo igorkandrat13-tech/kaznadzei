@@ -65,6 +65,17 @@ function getItemActiveRoleStage(item, role) {
   return (item?.stages || []).find((stage) => stage.role === role && stage.status === 'in_progress') || null;
 }
 
+function getItemActiveStage(item) {
+  return (item?.stages || []).find((stage) => stage.status === 'in_progress') || null;
+}
+
+function getItemAssignedStage(item) {
+  const stages = Array.isArray(item?.stages) ? item.stages : [];
+  return stages.find((stage) => stage.status === 'in_progress' && String(stage.employeeName || '').trim())
+    || stages.find((stage) => String(stage.employeeName || '').trim())
+    || null;
+}
+
 function escapeCsvValue(value) {
   const normalized = String(value ?? '');
   if (normalized.includes('"') || normalized.includes(';') || normalized.includes('\n')) {
@@ -318,6 +329,8 @@ function OrdersWorkspace() {
           const overallStatus = item?.overallStatus || order?.overallStatus || 'pending';
           const currentRole = (item?.stages || []).find(stage => stage.status === 'in_progress')?.role || '';
           const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
+          const activeStage = getItemActiveStage(item);
+          const assignedStage = getItemAssignedStage(item);
           const haystack = [
             order.orderNumber,
             order.customer,
@@ -344,6 +357,8 @@ function OrdersWorkspace() {
             item,
             overallStatus,
             currentRole,
+            activeStage,
+            assignedStage,
             carpenterActiveStage,
           };
         })
@@ -1027,7 +1042,7 @@ function OrdersWorkspace() {
               <table className="orders-table unified-orders-table unified-orders-body-table">
                 {renderOrdersColGroup()}
                 <tbody onMouseLeave={() => setHoveredOrderId('')}>
-                  {rows.map(({ key, order, item, carpenterActiveStage }) => {
+                  {rows.map(({ key, order, item, carpenterActiveStage, activeStage, assignedStage }) => {
                     const inlineDraft = inlineDrafts[key] || null;
                     const isInlineEditing = Boolean(inlineDraft);
                     const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
@@ -1042,14 +1057,16 @@ function OrdersWorkspace() {
                     const isOrderInlineEditing = Boolean(orderInlineDraft);
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                     const commentPreview = getCommentPreview(item.comments);
-                    const carpenterCellText = String(carpenterActiveStage?.employeeName || '').trim() || '—';
-                    const carpenterCellStyle = carpenterActiveStage
+                    const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+                    const workerCellText = String(workerStageForText?.employeeName || '').trim() || '—';
+                    const workerCellTitle = workerStageForText?.stepName || activeStage?.stepName || '';
+                    const carpenterCellStyle = (carpenterActiveStage || activeStage)
                       ? {
                           background: legendColorMap[CARPENTER_STAGE_LEGEND_KEY] || '#C37C8E',
                           color: CARPENTER_STAGE_TEXT_HEX,
                         }
                       : undefined;
-                    const carpenterCellClassName = `${carpenterActiveStage ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
+                    const carpenterCellClassName = `${(carpenterActiveStage || activeStage) ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
                     return (
                       <tr
                         key={key}
@@ -1133,8 +1150,8 @@ function OrdersWorkspace() {
                             </>
                           )}
                         </td>
-                        <td className={carpenterCellClassName} style={carpenterCellStyle} title={carpenterActiveStage?.stepName || ''}>
-                          {carpenterCellText}
+                        <td className={carpenterCellClassName} style={carpenterCellStyle} title={workerCellTitle}>
+                          {workerCellText}
                         </td>
                         {isFirstOrderRow ? (
                           <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
