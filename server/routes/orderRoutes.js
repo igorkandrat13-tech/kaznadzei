@@ -363,7 +363,10 @@ router.post('/orders/:id/telegram-item-scan', (req, res) => {
       return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
     }
 
-    const updatedOrder = OrderStore.markItemRoleInProgress(req.params.id, context.itemId, employee.role);
+    const updatedOrder = OrderStore.markItemRoleInProgress(req.params.id, context.itemId, employee.role, {
+      _id: employee._id,
+      fullName: employee.fullName,
+    });
     if (!updatedOrder) {
       return res.status(404).json({ message: 'Заказ не найден.' });
     }

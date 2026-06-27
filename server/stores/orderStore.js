@@ -20,6 +20,9 @@ function buildInitialStages() {
     role: step.role,
     status: activateFirstStage && index === 0 ? 'in_progress' : 'pending',
     completedAt: null,
+    employeeId: '',
+    employeeName: '',
+    startedAt: activateFirstStage && index === 0 ? new Date().toISOString() : null,
   }));
 }
 
@@ -50,6 +53,9 @@ function syncSingleOrderStages(order, steps) {
         role: step.role,
         status: 'pending',
         completedAt: null,
+        employeeId: '',
+        employeeName: '',
+        startedAt: null,
       };
     }
 
@@ -88,6 +94,9 @@ function cloneStages(stages = []) {
       role: stage.role,
       status: stage.status,
       completedAt: stage.completedAt || null,
+      employeeId: stage.employeeId || '',
+      employeeName: stage.employeeName || '',
+      startedAt: stage.startedAt || null,
     }))
     : [];
 }
@@ -367,6 +376,13 @@ const OrderStore = {
     if (!stage) return false;
     stage.status = status;
     stage.completedAt = status === 'completed' ? new Date().toISOString() : null;
+    if (status === 'pending') {
+      stage.employeeId = '';
+      stage.employeeName = '';
+      stage.startedAt = null;
+    } else if (status === 'in_progress' && !stage.startedAt) {
+      stage.startedAt = new Date().toISOString();
+    }
     item.overallStatus = calculateOverallStatus(item.stages);
     item.updatedAt = new Date().toISOString();
     syncOrderStatus(order);
@@ -374,7 +390,7 @@ const OrderStore = {
     return order;
   },
 
-  markItemRoleInProgress(orderId, itemId, role) {
+  markItemRoleInProgress(orderId, itemId, role, employee = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find(o => o._id === orderId);
@@ -388,9 +404,27 @@ const OrderStore = {
     if (!stageToActivate) {
       return order;
     }
+    let changed = false;
     if (stageToActivate.status !== 'in_progress') {
       stageToActivate.status = 'in_progress';
       stageToActivate.completedAt = null;
+      changed = true;
+    }
+    const employeeId = String(employee.employeeId || employee._id || '').trim();
+    const employeeName = String(employee.employeeName || employee.fullName || '').trim();
+    if (employeeId && stageToActivate.employeeId !== employeeId) {
+      stageToActivate.employeeId = employeeId;
+      changed = true;
+    }
+    if (employeeName && stageToActivate.employeeName !== employeeName) {
+      stageToActivate.employeeName = employeeName;
+      changed = true;
+    }
+    if (!stageToActivate.startedAt) {
+      stageToActivate.startedAt = new Date().toISOString();
+      changed = true;
+    }
+    if (changed) {
       item.overallStatus = calculateOverallStatus(item.stages);
       item.updatedAt = new Date().toISOString();
       syncOrderStatus(order);

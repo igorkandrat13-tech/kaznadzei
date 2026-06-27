@@ -29,6 +29,8 @@ const ORDER_PRIMARY_HEADERS = [
   'Окончание',
   'Время изготовления',
 ];
+const CARPENTER_STAGE_LEGEND_KEY = 'postpaint';
+const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
 
 function getCommentPreview(comments = []) {
   if (!Array.isArray(comments) || comments.length === 0) return '—';
@@ -57,6 +59,10 @@ function formatManufacturingTime(startDate, endDate) {
 
   const diffDays = Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
   return String(diffDays);
+}
+
+function getItemActiveRoleStage(item, role) {
+  return (item?.stages || []).find((stage) => stage.role === role && stage.status === 'in_progress') || null;
 }
 
 function escapeCsvValue(value) {
@@ -311,6 +317,7 @@ function OrdersWorkspace() {
         .map(item => {
           const overallStatus = item?.overallStatus || order?.overallStatus || 'pending';
           const currentRole = (item?.stages || []).find(stage => stage.status === 'in_progress')?.role || '';
+          const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
           const haystack = [
             order.orderNumber,
             order.customer,
@@ -337,6 +344,7 @@ function OrdersWorkspace() {
             item,
             overallStatus,
             currentRole,
+            carpenterActiveStage,
           };
         })
         .filter(Boolean);
@@ -1019,7 +1027,7 @@ function OrdersWorkspace() {
               <table className="orders-table unified-orders-table unified-orders-body-table">
                 {renderOrdersColGroup()}
                 <tbody onMouseLeave={() => setHoveredOrderId('')}>
-                  {rows.map(({ key, order, item }) => {
+                  {rows.map(({ key, order, item, carpenterActiveStage }) => {
                     const inlineDraft = inlineDrafts[key] || null;
                     const isInlineEditing = Boolean(inlineDraft);
                     const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
@@ -1027,12 +1035,21 @@ function OrdersWorkspace() {
                     const isLastOrderRow = lastOrderRowKeys[orderId] === key;
                     const orderRowSpan = orderRowSpans[key] || 1;
                     const isHoveredOrder = hoveredOrderId === orderId;
-                    const regularOrderClass = `order-filled-cell${isHoveredOrder ? ` order-outline-cell${isFirstOrderRow ? ' order-outline-top' : ''}${isLastOrderRow ? ' order-outline-bottom' : ''}` : ''}`.trim();
+                    const orderOutlineClass = `${isHoveredOrder ? `order-outline-cell${isFirstOrderRow ? ' order-outline-top' : ''}${isLastOrderRow ? ' order-outline-bottom' : ''}` : ''}`.trim();
+                    const regularOrderClass = `order-filled-cell ${orderOutlineClass}`.trim();
                     const currentOrderDraftKeys = orderDraftKeys[orderId] || [];
                     const orderInlineDraft = currentOrderDraftKeys.length > 0 ? inlineDrafts[currentOrderDraftKeys[0]] : null;
                     const isOrderInlineEditing = Boolean(orderInlineDraft);
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                     const commentPreview = getCommentPreview(item.comments);
+                    const carpenterCellText = String(carpenterActiveStage?.employeeName || '').trim() || '—';
+                    const carpenterCellStyle = carpenterActiveStage
+                      ? {
+                          background: legendColorMap[CARPENTER_STAGE_LEGEND_KEY] || '#C37C8E',
+                          color: CARPENTER_STAGE_TEXT_HEX,
+                        }
+                      : undefined;
+                    const carpenterCellClassName = `${carpenterActiveStage ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
                     return (
                       <tr
                         key={key}
@@ -1116,7 +1133,9 @@ function OrdersWorkspace() {
                             </>
                           )}
                         </td>
-                        <td className={regularOrderClass}>—</td>
+                        <td className={carpenterCellClassName} style={carpenterCellStyle} title={carpenterActiveStage?.stepName || ''}>
+                          {carpenterCellText}
+                        </td>
                         {isFirstOrderRow ? (
                           <td rowSpan={orderRowSpan} className={`merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`}>
                             <div className="merged-order-meta-content">{formatDateDisplay(order.startDate)}</div>
