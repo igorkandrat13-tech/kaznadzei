@@ -1769,6 +1769,7 @@ function OrdersWorkspace() {
                     const orderManufacturingMeta = getOrderManufacturingMeta(order);
                     const orderAttachments = Array.isArray(order.attachments) ? order.attachments : [];
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+                    const carpenterManualMark = getItemManualStageMark(item, 'carpenter');
                     const carpenterClearMark = getItemManualStageClear(item, 'carpenter');
                     const latestCarpenterAutoAt = getLatestAutoHighlightAt(
                       carpenterAssignment?.scannedAt,
@@ -1780,10 +1781,14 @@ function OrdersWorkspace() {
                       && (!latestCarpenterAutoAt || carpenterClearMark.updatedAt >= latestCarpenterAutoAt)
                     );
                     const hasCarpenterAutoHighlight = Boolean((carpenterAssignment || workerStageForText) && !isCarpenterAutoHighlightSuppressed);
-                    const workerCellText = String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—';
-                    const workerCellTitle = carpenterAssignment?.employeeName
+                    const workerCellText = isCarpenterAutoHighlightSuppressed && !carpenterManualMark
+                      ? '—'
+                      : (String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—');
+                    const workerCellTitle = isCarpenterAutoHighlightSuppressed && !carpenterManualMark
+                      ? ''
+                      : (carpenterAssignment?.employeeName
                       ? 'Сотрудник взял изделие в работу по QR'
-                      : (workerStageForText?.stepName || activeStage?.stepName || '');
+                      : (workerStageForText?.stepName || activeStage?.stepName || ''));
                     const carpenterCellStyle = hasCarpenterAutoHighlight
                       ? {
                           background: legendColorMap[CARPENTER_STAGE_LEGEND_KEY] || '#C37C8E',

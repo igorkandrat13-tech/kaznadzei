@@ -8,7 +8,7 @@ const MANUAL_STAGE_STATUS = {
   unprocessed: 'pending',
   ready: 'completed',
 };
-const ORDER_MANUAL_STAGE_COLUMN_KEYS = [
+const ORDER_MANUFACTURING_STAGE_COLUMN_KEYS = [
   'room',
   'roomNumber',
   'itemNumber',
@@ -419,7 +419,7 @@ function deriveOrderManufacturingMeta(order = {}) {
   for (const item of items) {
     const manualStageMarks = normalizeManualStageMarks(item?.manualStageMarks);
 
-    for (const columnKey of ORDER_MANUAL_STAGE_COLUMN_KEYS) {
+    for (const columnKey of ORDER_MANUFACTURING_STAGE_COLUMN_KEYS) {
       const mark = manualStageMarks[columnKey];
       if (mark?.updatedAt) {
         markTimestamps.push(String(mark.updatedAt));

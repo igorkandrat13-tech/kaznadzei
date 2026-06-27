@@ -2,13 +2,7 @@ function getOrderItems(order) {
   return Array.isArray(order?.items) ? order.items : [];
 }
 
-const ORDER_ORDER_LEVEL_MANUAL_STAGE_COLUMN_KEYS = [
-  'orderNumber',
-  'customer',
-  'orderCard',
-];
-
-const ORDER_ITEM_LEVEL_MANUAL_STAGE_COLUMN_KEYS = [
+const ORDER_MANUFACTURING_STAGE_COLUMN_KEYS = [
   'room',
   'roomNumber',
   'itemNumber',
@@ -73,32 +67,14 @@ function getOrderPrimaryNotes(order) {
 function getOrderManufacturingMeta(order) {
   const items = getOrderItems(order);
   const timestamps = [];
-  const primaryItem = getOrderPrimaryItem(order);
   let isCompleted = items.length > 0;
-
-  if (primaryItem) {
-    const orderLevelMarks = primaryItem?.manualStageMarks && typeof primaryItem.manualStageMarks === 'object'
-      ? primaryItem.manualStageMarks
-      : {};
-
-    ORDER_ORDER_LEVEL_MANUAL_STAGE_COLUMN_KEYS.forEach((columnKey) => {
-      const updatedAt = String(orderLevelMarks[columnKey]?.updatedAt || '').trim();
-      if (updatedAt) {
-        timestamps.push(updatedAt);
-      } else {
-        isCompleted = false;
-      }
-    });
-  } else {
-    isCompleted = false;
-  }
 
   items.forEach((item) => {
     const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
       ? item.manualStageMarks
       : {};
 
-    ORDER_ITEM_LEVEL_MANUAL_STAGE_COLUMN_KEYS.forEach((columnKey) => {
+    ORDER_MANUFACTURING_STAGE_COLUMN_KEYS.forEach((columnKey) => {
       const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
       if (updatedAt) {
         timestamps.push(updatedAt);

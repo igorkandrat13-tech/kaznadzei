@@ -23,6 +23,17 @@ function getInstallCommandArgs(cwd) {
   return hasPackageLock(cwd) ? ['ci'] : ['install'];
 }
 
+function isNpmCiLockSyncError(errorText = '') {
+  const text = String(errorText || '').toLowerCase();
+  return text.includes('npm ci')
+    && (
+      text.includes('package.json and package-lock.json')
+      || text.includes('missing:')
+      || text.includes('eusage')
+      || text.includes('npm-shrinkwrap.json are in sync')
+    );
+}
+
 function getConfiguredServiceName() {
   return (process.env.SYSTEMD_SERVICE_NAME || 'kaznadzei').trim();
 }
@@ -333,6 +344,34 @@ async function stashTrackedGitChanges() {
   };
 }
 
+async function installDependenciesWithFallback(cwd, logs, label = '') {
+  const preferredArgs = getInstallCommandArgs(cwd);
+  const suffix = label ? ` (${label})` : '';
+
+  logs.push(`npm ${preferredArgs.join(' ')}${suffix}`);
+  try {
+    await runFile(getNpmCommand(), preferredArgs, cwd);
+    return {
+      usedFallback: false,
+      fallbackReason: '',
+    };
+  } catch (error) {
+    const errorText = getErrorText(error);
+    if (preferredArgs[0] !== 'ci' || !isNpmCiLockSyncError(errorText)) {
+      throw error;
+    }
+
+    logs.push(`npm ci${suffix} не выполнен: обнаружен рассинхрон package-lock, переключаюсь на npm install${suffix}`);
+    logs.push(`npm install${suffix}`);
+    await runFile(getNpmCommand(), ['install'], cwd);
+
+    return {
+      usedFallback: true,
+      fallbackReason: errorText,
+    };
+  }
+}
+
 async function getUpdateStatus() {
   const gitVersion = await hasGit();
   const status = {
@@ -525,30 +564,30 @@ router.post('/updates/install', requireAdminAccess(), async (req, res) => {
     logs.push(`git pull --ff-only origin ${statusBefore.targetRef.replace('origin/', '')}`);
     await runFile(getGitCommand(), ['pull', '--ff-only', 'origin', statusBefore.targetRef.replace('origin/', '')], PROJECT_ROOT);
 
-    const rootInstallArgs = getInstallCommandArgs(PROJECT_ROOT);
-    logs.push(`npm ${rootInstallArgs.join(' ')}`);
-    await runFile(getNpmCommand(), rootInstallArgs, PROJECT_ROOT);
+    const rootInstallResult = await installDependenciesWithFallback(PROJECT_ROOT, logs);
 
-    const clientInstallArgs = getInstallCommandArgs(CLIENT_ROOT);
-    logs.push(`npm ${clientInstallArgs.join(' ')} (client)`);
-    await runFile(getNpmCommand(), clientInstallArgs, CLIENT_ROOT);
+    const clientInstallResult = await installDependenciesWithFallback(CLIENT_ROOT, logs, 'client');
 
     logs.push('npm run build (client)');
     await runFile(getNpmCommand(), ['run', 'build'], CLIENT_ROOT);
 
     const statusAfter = await getUpdateStatus();
+    const installFallbackMessage = rootInstallResult.usedFallback || clientInstallResult.usedFallback
+      ? ' При установке зависимостей обнаружен рассинхрон lock-файла, поэтому updater автоматически переключился с npm ci на npm install.'
+      : '';
     const stashMessage = stashResult.created
       ? ` Локальные изменения временно сохранены в ${stashResult.stashEntry}. При необходимости их можно вернуть командой git stash pop ${stashResult.stashEntry}.`
       : '';
     res.json({
       ok: true,
       updated: true,
-      message: `Обновления установлены, клиент пересобран. Перезапустите приложение для применения изменений.${stashMessage}`,
+      message: `Обновления установлены, клиент пересобран. Перезапустите приложение для применения изменений.${installFallbackMessage}${stashMessage}`,
       logs,
       status: statusAfter,
       stashCreated: stashResult.created,
       stashEntry: stashResult.stashEntry,
       stashedFiles: stashResult.dirtyFiles,
+      installFallbackUsed: rootInstallResult.usedFallback || clientInstallResult.usedFallback,
     });
   } catch (error) {
     res.status(500).json({
