@@ -624,18 +624,29 @@ function OrdersWorkspace() {
     setManualStageSaving(true);
     setError('');
     try {
-      const res = await apiFetch('/api/orders/manual-stage-marks', {
+      const payload = {
+        legendKey,
+        selections: selectedStageSelections.map(({ orderId, itemId, columnKey }) => ({
+          orderId,
+          itemId,
+          columnKey,
+        })),
+      };
+      let res = await apiFetch('/api/orders/manual-stage-marks', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          legendKey,
-          selections: selectedStageSelections.map(({ orderId, itemId, columnKey }) => ({
-            orderId,
-            itemId,
-            columnKey,
-          })),
-        }),
+        body: JSON.stringify(payload),
       });
+
+      // Some test/proxy environments do not expose PATCH consistently.
+      if (res.status === 404 || res.status === 405) {
+        res = await apiFetch('/api/orders/manual-stage-marks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
       if (!res.ok) {
         setError(await getErrorMessage(res, 'Не удалось обновить ручные этапные отметки.'));
         return;

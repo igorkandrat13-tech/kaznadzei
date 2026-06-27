@@ -194,7 +194,7 @@ router.post('/orders/:id/comments', requireWriteAccess, (req, res) => {
   }
 });
 
-router.patch('/orders/manual-stage-marks', requireAdminAccess(), (req, res) => {
+function handleManualStageMarks(req, res) {
   try {
     const legendKey = String(req.body?.legendKey || '').trim();
     const selections = Array.isArray(req.body?.selections) ? req.body.selections : [];
@@ -247,7 +247,10 @@ router.patch('/orders/manual-stage-marks', requireAdminAccess(), (req, res) => {
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить ручные этапные отметки.' });
   }
-});
+}
+
+router.patch('/orders/manual-stage-marks', requireAdminAccess(), handleManualStageMarks);
+router.post('/orders/manual-stage-marks', requireAdminAccess(), handleManualStageMarks);
 
 router.post('/orders/:id/telegram-comment', (req, res) => {
   try {
