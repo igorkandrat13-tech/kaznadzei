@@ -56,7 +56,7 @@ function getItemAssignedStage(item) {
     || null;
 }
 
-function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMarks = {}, manualStageClears = {}) {
+function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMarks = {}) {
   const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
   if (updatedAt) return updatedAt;
 
@@ -72,12 +72,7 @@ function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMark
     carpenterActiveStage?.startedAt,
     workerStageForText?.startedAt,
   );
-  const isAutoHighlightSuppressed = Boolean(
-    manualStageClears[columnKey]?.updatedAt
-    && (!latestAutoAt || manualStageClears[columnKey].updatedAt >= latestAutoAt)
-  );
-
-  return ((carpenterAssignment || workerStageForText) && !isAutoHighlightSuppressed)
+  return (carpenterAssignment || workerStageForText)
     ? latestAutoAt
     : '';
 }
@@ -122,16 +117,11 @@ function getOrderManufacturingMeta(order) {
     const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
       ? item.manualStageMarks
       : {};
-    const manualStageClears = item?.manualStageClears && typeof item.manualStageClears === 'object'
-      ? item.manualStageClears
-      : {};
-
     ORDER_MANUFACTURING_STAGE_COLUMN_KEYS.forEach((columnKey) => {
       const updatedAt = getItemEffectiveManufacturingTimestamp(
         item,
         columnKey,
         manualStageMarks,
-        manualStageClears,
       );
       if (updatedAt) {
         timestamps.push(updatedAt);

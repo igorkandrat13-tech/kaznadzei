@@ -174,7 +174,6 @@ function getItemAssignedStage(item = {}) {
 
 function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpers = {}) {
   const manualStageMarks = helpers.manualStageMarks || normalizeManualStageMarks(item?.manualStageMarks);
-  const manualStageClears = helpers.manualStageClears || normalizeManualStageClears(item?.manualStageClears);
   const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
   if (updatedAt) return updatedAt;
 
@@ -191,12 +190,7 @@ function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpe
     carpenterActiveStage?.startedAt,
     workerStageForText?.startedAt,
   );
-  const isAutoHighlightSuppressed = Boolean(
-    manualStageClears[columnKey]?.updatedAt
-    && (!latestAutoAt || manualStageClears[columnKey].updatedAt >= latestAutoAt)
-  );
-
-  return ((carpenterAssignment || workerStageForText) && !isAutoHighlightSuppressed)
+  return (carpenterAssignment || workerStageForText)
     ? latestAutoAt
     : '';
 }
@@ -922,23 +916,15 @@ const OrderStore = {
       item.manualStageMarks = { ...currentMarks };
       item.manualStageClears = { ...currentClears };
       const currentMark = item.manualStageMarks[columnKey];
-      const currentClear = item.manualStageClears[columnKey];
       let itemChanged = false;
 
       if (shouldClear) {
-        const nextClear = {
-          updatedAt: new Date().toISOString(),
-          updatedBy: String(actor || '').trim(),
-        };
         if (currentMark) {
           delete item.manualStageMarks[columnKey];
           itemChanged = true;
         }
-        if (JSON.stringify({ ...currentClear, updatedAt: undefined }) !== JSON.stringify({ ...nextClear, updatedAt: undefined })) {
-          item.manualStageClears[columnKey] = nextClear;
-          itemChanged = true;
-        } else if (!currentClear?.updatedAt) {
-          item.manualStageClears[columnKey] = nextClear;
+        if (item.manualStageClears[columnKey]) {
+          delete item.manualStageClears[columnKey];
           itemChanged = true;
         }
       } else {

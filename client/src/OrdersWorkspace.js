@@ -297,11 +297,6 @@ function getItemManualStageMark(item, columnKey) {
   return item.manualStageMarks[columnKey] || null;
 }
 
-function getItemManualStageClear(item, columnKey) {
-  if (!item?.manualStageClears || typeof item.manualStageClears !== 'object') return null;
-  return item.manualStageClears[columnKey] || null;
-}
-
 function getLatestAutoHighlightAt(...timestamps) {
   return timestamps
     .map((value) => String(value || '').trim())
@@ -2267,26 +2262,16 @@ function OrdersWorkspace() {
                     const packageStats = getPackageStats(item.packageItems, item.packageName);
                     const attachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId);
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
-                    const carpenterManualMark = getItemManualStageMark(item, 'carpenter');
-                    const carpenterClearMark = getItemManualStageClear(item, 'carpenter');
                     const latestCarpenterAutoAt = getLatestAutoHighlightAt(
                       carpenterAssignment?.scannedAt,
                       carpenterActiveStage?.startedAt,
                       workerStageForText?.startedAt,
                     );
-                    const isCarpenterAutoHighlightSuppressed = Boolean(
-                      carpenterClearMark?.updatedAt
-                      && (!latestCarpenterAutoAt || carpenterClearMark.updatedAt >= latestCarpenterAutoAt)
-                    );
-                    const hasCarpenterAutoHighlight = Boolean((carpenterAssignment || workerStageForText) && !isCarpenterAutoHighlightSuppressed);
-                    const workerCellText = isCarpenterAutoHighlightSuppressed && !carpenterManualMark
-                      ? '—'
-                      : (String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—');
-                    const workerCellTitle = isCarpenterAutoHighlightSuppressed && !carpenterManualMark
-                      ? ''
-                      : (carpenterAssignment?.employeeName
+                    const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
+                    const workerCellText = String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—';
+                    const workerCellTitle = carpenterAssignment?.employeeName
                       ? 'Сотрудник взял изделие в работу по QR'
-                      : (workerStageForText?.stepName || activeStage?.stepName || ''));
+                      : (workerStageForText?.stepName || activeStage?.stepName || '');
                     const carpenterCellStyle = hasCarpenterAutoHighlight
                       ? {
                           background: legendColorMap[CARPENTER_STAGE_LEGEND_KEY] || '#C37C8E',
