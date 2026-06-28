@@ -539,17 +539,63 @@ table tr:hover td {
 }
 
 .order-primary-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: inherit;
+  color: #8fd2ff;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  border-bottom: 1px dashed currentColor;
+  transition: color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
 }
 
 .order-primary-title-button:hover {
-  text-decoration: underline;
+  color: #b9e6ff;
+  border-bottom-color: currentColor;
+}
+
+.order-primary-title-button:focus-visible {
+  outline: 2px solid rgba(143, 210, 255, 0.45);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.order-primary-title-button-text {
+  min-width: 0;
+}
+
+.order-primary-title-button-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(143, 210, 255, 0.16);
+  border: 1px solid rgba(143, 210, 255, 0.28);
+  color: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+body[data-theme='light'] .order-primary-title-button {
+  color: #156aa8;
+}
+
+body[data-theme='light'] .order-primary-title-button:hover {
+  color: #0f82cc;
+}
+
+body[data-theme='light'] .order-primary-title-button-badge {
+  background: rgba(21, 106, 168, 0.08);
+  border-color: rgba(21, 106, 168, 0.22);
 }
 
 .order-primary-subtitle {
