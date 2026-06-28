@@ -2567,7 +2567,7 @@ function OrdersWorkspace() {
                                   aria-label="Открыть QR-код изделия"
                                 >
                                   <span className="order-primary-title-button-text"><strong>{item.name || '—'}</strong></span>
-                                  <span className="order-primary-title-button-badge" aria-hidden="true">QR</span>
+                                  <span className="order-primary-title-button-badge" aria-hidden="true" />
                                 </button>
                               ) : (
                                 <strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong>
