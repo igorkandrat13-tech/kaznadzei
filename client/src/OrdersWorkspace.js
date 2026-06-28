@@ -53,6 +53,8 @@ const ORDER_COMPLETE_STAGE_LEGEND_KEY = 'ready';
 const ORDER_COMPLETE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_COMPLETE_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_PACKAGE_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_PACKAGE_COLUMN_INDEX);
 const ORDER_PACKAGE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_PACKAGE_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
+const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
 const ATTACHMENT_SCOPE_CONFIG = {
   order: {
@@ -155,6 +157,10 @@ function getItemAttachments(item = {}, scope = '') {
 
 function getAttachmentTargetKey(orderId = '', itemId = '', scope = '') {
   return `${String(scope || 'order').trim().toLowerCase()}:${String(orderId || '').trim()}:${String(itemId || '').trim()}`;
+}
+
+function isOrdersHeaderLeftAlignedColumn(columnIndex = -1) {
+  return columnIndex === ORDER_NAME_COLUMN_INDEX || columnIndex === ORDER_NOTES_COLUMN_INDEX;
 }
 
 function createPackageItemId() {
@@ -697,12 +703,19 @@ function OrdersWorkspace() {
   }, [colors]);
 
   const secondaryHeaderCells = useMemo(() => {
+    let startIndex = 0;
     return ORDER_STAGE_SECONDARY_HEADERS.map((item) => {
       const hex = item.legendKey ? (legendColorMap[item.legendKey] || '#FFFFFF') : '';
+      const span = Number(item.colSpan) || 1;
+      const cellStartIndex = startIndex;
+      const cellEndIndex = cellStartIndex + span - 1;
+      startIndex += span;
       return {
         ...item,
         hex,
         textColor: item.textHex || '#000000',
+        startIndex: cellStartIndex,
+        endIndex: cellEndIndex,
       };
     });
   }, [legendColorMap]);
@@ -2333,7 +2346,13 @@ function OrdersWorkspace() {
                 <thead>
                   <tr className="xlsx-header-row xlsx-header-row-primary">
                     {ORDER_PRIMARY_HEADERS.map((label, index) => (
-                      <th key={`primary-header-${index}`} className="xlsx-header-primary-cell">
+                      <th
+                        key={`primary-header-${index}`}
+                        className={cn(
+                          'xlsx-header-primary-cell',
+                          isOrdersHeaderLeftAlignedColumn(index) ? 'xlsx-header-cell-left' : 'xlsx-header-cell-center',
+                        )}
+                      >
                         {label || '\u00A0'}
                       </th>
                     ))}
@@ -2343,8 +2362,15 @@ function OrdersWorkspace() {
                       <th
                         key={`${cell.label}-${index}`}
                         colSpan={cell.colSpan || 1}
-                        className={`xlsx-header-secondary-cell${cell.legendKey ? ' xlsx-header-secondary-cell-colored' : ''}${(cell.colSpan || 1) > 1 ? ' xlsx-header-secondary-cell-merged' : ''}`}
-                        style={{ background: cell.hex, color: cell.textColor }}
+                        className={cn(
+                          'xlsx-header-secondary-cell',
+                          cell.legendKey && 'xlsx-header-secondary-cell-colored',
+                          (cell.colSpan || 1) > 1 && 'xlsx-header-secondary-cell-merged',
+                          (isOrdersHeaderLeftAlignedColumn(cell.startIndex) || isOrdersHeaderLeftAlignedColumn(cell.endIndex))
+                            ? 'xlsx-header-cell-left'
+                            : 'xlsx-header-cell-center',
+                        )}
+                        style={{ background: cell.hex, color: '#000000' }}
                       >
                         {cell.label}
                       </th>
@@ -2416,7 +2442,7 @@ function OrdersWorkspace() {
                     const packageCellPropsBase = getManualStageCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle, { disabled: isInlineEditing });
                     const packageCellProps = {
                       ...packageCellPropsBase,
-                      className: cn(packageCellPropsBase.className, 'package-cell', packageStats.pending > 0 && 'package-cell-attention'),
+                      className: cn(packageCellPropsBase.className, 'package-cell'),
                     };
                     const paintCellProps = getManualStageCellProps(key, item, 'paint', `order-card-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const photoCellProps = getManualStageCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
@@ -2601,6 +2627,15 @@ function OrdersWorkspace() {
                             >
                               ✎
                             </Button>
+                            {packageStats.pending > 0 ? (
+                              <span
+                                className="package-cell-attention-icon"
+                                title={`Не исполнено: ${packageStats.pending} из ${packageStats.total}`}
+                                aria-hidden="true"
+                              >
+                                !
+                              </span>
+                            ) : null}
                             <span
                               className={cn('package-cell-summary-badge', packageStats.pending > 0 && 'package-cell-summary-badge-attention')}
                               title={packageStats.total > 0 ? `Не исполнено: ${packageStats.pending} из ${packageStats.total}` : 'Позиции комплектации не добавлены'}
