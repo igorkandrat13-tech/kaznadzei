@@ -22,9 +22,9 @@ const ORDER_PRIMARY_HEADERS = [
   'Комплектация заказа',
   'Материал',
   'Отгрузка до',
-  'Покраска',
-  'Ссылка / фото',
   'Примечания',
+  'Ссылка / фото',
+  'Покраска',
   'СТОЛЯР',
   'Начало изготовления',
   'Окончание изготовления',
@@ -54,6 +54,24 @@ const ORDER_COMPLETE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) 
 const ORDER_PACKAGE_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_PACKAGE_COLUMN_INDEX);
 const ORDER_PACKAGE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_PACKAGE_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
+const ATTACHMENT_SCOPE_CONFIG = {
+  order: {
+    field: 'attachments',
+    dialogTitle: 'Файлы карточки заказа',
+    addButtonTitle: 'Загрузить файл карточки заказа',
+    openButtonTitle: 'Открыть файлы карточки заказа',
+    emptyTitle: 'Файлы и ссылки карточки заказа не прикреплены',
+    deleteMessage: 'Файл будет удален из карточки изделия без возможности восстановления.',
+  },
+  paint: {
+    field: 'paintAttachments',
+    dialogTitle: 'Файлы покраски',
+    addButtonTitle: 'Загрузить файл покраски',
+    openButtonTitle: 'Открыть файлы покраски',
+    emptyTitle: 'Файлы и ссылки покраски не прикреплены',
+    deleteMessage: 'Файл будет удален из раздела покраски без возможности восстановления.',
+  },
+};
 const MANUAL_STAGE_TEXT_COLOR_MAP = ORDER_STAGE_SECONDARY_HEADERS.reduce((acc, item) => {
   if (item.legendKey && !acc[item.legendKey]) {
     acc[item.legendKey] = item.textHex || '#000000';
@@ -126,8 +144,17 @@ function getAttachmentLinkUrl(attachment = {}) {
   return String(attachment.url || '').trim();
 }
 
-function getAttachmentTargetKey(orderId = '', itemId = '') {
-  return `${String(orderId || '').trim()}:${String(itemId || '').trim()}`;
+function getAttachmentScopeConfig(scope = '') {
+  return ATTACHMENT_SCOPE_CONFIG[String(scope || '').trim().toLowerCase()] || ATTACHMENT_SCOPE_CONFIG.order;
+}
+
+function getItemAttachments(item = {}, scope = '') {
+  const fieldName = getAttachmentScopeConfig(scope).field;
+  return Array.isArray(item?.[fieldName]) ? item[fieldName] : [];
+}
+
+function getAttachmentTargetKey(orderId = '', itemId = '', scope = '') {
+  return `${String(scope || 'order').trim().toLowerCase()}:${String(orderId || '').trim()}:${String(itemId || '').trim()}`;
 }
 
 function createPackageItemId() {
@@ -847,6 +874,10 @@ function OrdersWorkspace() {
     if (!order) return null;
     return (order.items || []).find((currentItem) => currentItem.itemId === attachmentsDialog?.itemId) || null;
   }, [attachmentsDialog?.itemId, attachmentsDialog?.orderId, orders]);
+  const currentAttachmentDialogAttachments = useMemo(
+    () => getItemAttachments(currentAttachmentDialogItem, attachmentsDialog?.scope),
+    [attachmentsDialog?.scope, currentAttachmentDialogItem],
+  );
 
   const clearSelectedStageCells = useCallback(() => {
     setSelectedStageCellKeys([]);
@@ -1066,9 +1097,9 @@ function OrdersWorkspace() {
       <col className="col-package" />
       <col className="col-material" />
       <col className="col-delivery-date" />
-      <col className="col-paint" />
-      <col className="col-photo" />
       <col className="col-notes" />
+      <col className="col-photo" />
+      <col className="col-paint" />
       <col className="col-carpenter" />
       <col className="col-start-date" />
       <col className="col-end-date" />
@@ -1199,8 +1230,9 @@ function OrdersWorkspace() {
     setAttachmentPreviewState(null);
   }, [setAttachmentPreviewState]);
 
-  const openAttachmentsDialog = useCallback((order, item) => {
+  const openAttachmentsDialog = useCallback((order, item, scope = 'order') => {
     if (!order?._id || !item?.itemId) return;
+    const attachmentScope = String(scope || 'order').trim().toLowerCase();
     setAttachmentsDialog({
       orderId: order._id,
       itemId: item.itemId,
@@ -1208,6 +1240,7 @@ function OrdersWorkspace() {
       customer: order.customer || '',
       itemNumber: item.itemNumber || '',
       itemName: item.name || '',
+      scope: attachmentScope,
     });
     setAttachmentLinkDraft({ name: '', url: '' });
   }, []);
@@ -1574,17 +1607,21 @@ function OrdersWorkspace() {
     }
   };
 
-  const handleUploadOrderAttachment = async (order, item, file, { overwrite = false } = {}) => {
+  const handleUploadOrderAttachment = async (order, item, file, { overwrite = false, scope = 'order' } = {}) => {
     if (!order?._id || !item?.itemId || !file) return;
 
-    const targetKey = getAttachmentTargetKey(order._id, item.itemId);
+    const attachmentScope = String(scope || 'order').trim().toLowerCase();
+    const scopeConfig = getAttachmentScopeConfig(attachmentScope);
+    const targetKey = getAttachmentTargetKey(order._id, item.itemId, attachmentScope);
     setAttachmentUploadingTargetKey(targetKey);
     setError('');
     try {
       const formData = new FormData();
       formData.append('file', file);
-
-      const res = await apiFetch(`/api/orders/${order._id}/items/${item.itemId}/attachments${overwrite ? '?overwrite=1' : ''}`, {
+      const query = new URLSearchParams();
+      if (overwrite) query.set('overwrite', '1');
+      if (attachmentScope === 'paint') query.set('scope', 'paint');
+      const res = await apiFetch(`/api/orders/${order._id}/items/${item.itemId}/attachments${query.toString() ? `?${query.toString()}` : ''}`, {
         method: 'POST',
         body: formData,
       });
@@ -1599,17 +1636,18 @@ function OrdersWorkspace() {
             itemNumber: item.itemNumber || '',
             attachmentName: data?.existingAttachment?.name || file.name || 'Файл',
             file,
+            scope: attachmentScope,
           });
           return;
         }
-        setError(data?.message || 'Не удалось загрузить файл карточки заказа.');
+        setError(data?.message || `Не удалось загрузить файл ${scopeConfig.dialogTitle.toLowerCase()}.`);
         return;
       }
 
       setConfirmAttachmentOverwrite(null);
       await fetchOrders();
     } catch (uploadError) {
-      setError(uploadError.message || 'Не удалось загрузить файл карточки заказа.');
+      setError(uploadError.message || `Не удалось загрузить файл ${scopeConfig.dialogTitle.toLowerCase()}.`);
     } finally {
       setAttachmentUploadingTargetKey('');
     }
@@ -1621,16 +1659,21 @@ function OrdersWorkspace() {
     setAttachmentLinkDraft((current) => ({ ...current, [field]: value }));
   };
 
-  const handleUploadOrderAttachmentLink = async ({ orderId, itemId, name, url, overwrite = false }) => {
+  const handleUploadOrderAttachmentLink = async ({ orderId, itemId, name, url, overwrite = false, scope = 'order' }) => {
     if (!orderId || !itemId) return;
-    const targetKey = getAttachmentTargetKey(orderId, itemId);
+    const attachmentScope = String(scope || 'order').trim().toLowerCase();
+    const scopeConfig = getAttachmentScopeConfig(attachmentScope);
+    const targetKey = getAttachmentTargetKey(orderId, itemId, attachmentScope);
     setAttachmentUploadingTargetKey(targetKey);
     setError('');
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/link${overwrite ? '?overwrite=1' : ''}`, {
+      const query = new URLSearchParams();
+      if (overwrite) query.set('overwrite', '1');
+      if (attachmentScope === 'paint') query.set('scope', 'paint');
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/link${query.toString() ? `?${query.toString()}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, url }),
+        body: JSON.stringify({ name, url, scope: attachmentScope }),
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
@@ -1645,42 +1688,45 @@ function OrdersWorkspace() {
             attachmentName: data?.existingAttachment?.name || name || 'Ссылка',
             name,
             url,
+            scope: attachmentScope,
           });
           return;
         }
-        setError(data?.message || 'Не удалось сохранить ссылку в карточке заказа.');
+        setError(data?.message || `Не удалось сохранить ссылку для "${scopeConfig.dialogTitle.toLowerCase()}".`);
         return;
       }
       setAttachmentLinkDraft({ name: '', url: '' });
       setConfirmAttachmentOverwrite(null);
       await fetchOrders();
     } catch (uploadError) {
-      setError(uploadError.message || 'Не удалось сохранить ссылку в карточке заказа.');
+      setError(uploadError.message || `Не удалось сохранить ссылку для "${scopeConfig.dialogTitle.toLowerCase()}".`);
     } finally {
       setAttachmentUploadingTargetKey('');
     }
   };
 
-  const handleOpenAttachment = async (orderId, itemId, attachment) => {
+  const handleOpenAttachment = async (orderId, itemId, attachment, scope = 'order') => {
     if (!orderId || !itemId || !attachment?.attachmentId) return;
+    const attachmentScope = String(scope || 'order').trim().toLowerCase();
 
     if (isLinkAttachment(attachment)) {
       const targetUrl = getAttachmentLinkUrl(attachment);
       if (!targetUrl) {
-        setError('Ссылка в карточке заказа пустая.');
+        setError('Ссылка пустая.');
         return;
       }
       window.open(targetUrl, '_blank', 'noopener,noreferrer');
       return;
     }
 
-    const openKey = `${getAttachmentTargetKey(orderId, itemId)}:${attachment.attachmentId}`;
+    const query = attachmentScope === 'paint' ? '?scope=paint' : '';
+    const openKey = `${getAttachmentTargetKey(orderId, itemId, attachmentScope)}:${attachment.attachmentId}`;
     setAttachmentOpeningKey(openKey);
     setError('');
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachment.attachmentId}/file`);
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachment.attachmentId}/file${query}`);
       if (!res.ok) {
-        setError(await getErrorMessage(res, 'Не удалось открыть файл карточки заказа.'));
+        setError(await getErrorMessage(res, 'Не удалось открыть вложение.'));
         return;
       }
 
@@ -1696,6 +1742,7 @@ function OrdersWorkspace() {
           kindLabel: getAttachmentKindLabel(attachment),
           sizeLabel: formatAttachmentSize(attachment.size),
           url: blobUrl,
+          scope: attachmentScope,
         });
         return;
       }
@@ -1711,6 +1758,7 @@ function OrdersWorkspace() {
           kindLabel: getAttachmentKindLabel(attachment),
           sizeLabel: formatAttachmentSize(attachment.size),
           url: blobUrl,
+          scope: attachmentScope,
         });
         return;
       }
@@ -1728,6 +1776,7 @@ function OrdersWorkspace() {
           kindLabel: getAttachmentKindLabel(attachment),
           sizeLabel: formatAttachmentSize(attachment.size),
           html: result.value || '<p>Пустой документ.</p>',
+          scope: attachmentScope,
         });
         return;
       }
@@ -1758,38 +1807,41 @@ function OrdersWorkspace() {
           sizeLabel: formatAttachmentSize(attachment.size),
           sheets,
           activeSheetIndex: 0,
+          scope: attachmentScope,
         });
         return;
       }
 
-      await handleDownloadAttachment(orderId, itemId, attachment);
+      await handleDownloadAttachment(orderId, itemId, attachment, attachmentScope);
     } catch (openError) {
-      setError(openError.message || 'Не удалось открыть файл карточки заказа.');
+      setError(openError.message || 'Не удалось открыть вложение.');
     } finally {
       setAttachmentOpeningKey('');
     }
   };
 
-  const handleDownloadAttachment = async (orderId, itemId, attachment) => {
+  const handleDownloadAttachment = async (orderId, itemId, attachment, scope = 'order') => {
     if (!orderId || !itemId || !attachment?.attachmentId) return;
+    const attachmentScope = String(scope || 'order').trim().toLowerCase();
 
     if (isLinkAttachment(attachment)) {
       const targetUrl = getAttachmentLinkUrl(attachment);
       if (!targetUrl) {
-        setError('Ссылка в карточке заказа пустая.');
+        setError('Ссылка пустая.');
         return;
       }
       window.open(targetUrl, '_blank', 'noopener,noreferrer');
       return;
     }
 
-    const downloadKey = `${getAttachmentTargetKey(orderId, itemId)}:${attachment.attachmentId}:download`;
+    const query = attachmentScope === 'paint' ? '?scope=paint' : '';
+    const downloadKey = `${getAttachmentTargetKey(orderId, itemId, attachmentScope)}:${attachment.attachmentId}:download`;
     setAttachmentOpeningKey(downloadKey);
     setError('');
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachment.attachmentId}/file`);
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachment.attachmentId}/file${query}`);
       if (!res.ok) {
-        setError(await getErrorMessage(res, 'Не удалось скачать файл карточки заказа.'));
+        setError(await getErrorMessage(res, 'Не удалось скачать вложение.'));
         return;
       }
 
@@ -1807,12 +1859,13 @@ function OrdersWorkspace() {
     }
   };
 
-  const handleAttachmentInputChange = async (order, item, event) => {
+  const handleAttachmentInputChange = async (order, item, event, scope = 'order') => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    const attachmentScope = String(scope || 'order').trim().toLowerCase();
 
-    const duplicateAttachment = (item.attachments || []).find((attachment) => (
+    const duplicateAttachment = getItemAttachments(item, attachmentScope).find((attachment) => (
       getAttachmentNameKey(attachment.name) === getAttachmentNameKey(file.name)
     ));
     if (duplicateAttachment) {
@@ -1824,10 +1877,11 @@ function OrdersWorkspace() {
         itemNumber: item.itemNumber || '',
         attachmentName: duplicateAttachment.name || file.name || 'Файл',
         file,
+        scope: attachmentScope,
       });
       return;
     }
-    await handleUploadOrderAttachment(order, item, file);
+    await handleUploadOrderAttachment(order, item, file, { scope: attachmentScope });
   };
 
   const performOverwriteAttachment = async () => {
@@ -1843,6 +1897,7 @@ function OrdersWorkspace() {
         name: confirmAttachmentOverwrite?.name || '',
         url: confirmAttachmentOverwrite?.url || '',
         overwrite: true,
+        scope: confirmAttachmentOverwrite?.scope || 'order',
       });
       return;
     }
@@ -1856,21 +1911,26 @@ function OrdersWorkspace() {
       return;
     }
 
-    await handleUploadOrderAttachment(order, item, file, { overwrite: true });
+    await handleUploadOrderAttachment(order, item, file, {
+      overwrite: true,
+      scope: confirmAttachmentOverwrite?.scope || 'order',
+    });
   };
 
-  const performDeleteAttachment = async (orderId, itemId, attachmentId) => {
+  const performDeleteAttachment = async (orderId, itemId, attachmentId, scope = 'order') => {
     if (!orderId || !itemId || !attachmentId) return;
 
-    const deleteKey = `${getAttachmentTargetKey(orderId, itemId)}:${attachmentId}`;
+    const attachmentScope = String(scope || 'order').trim().toLowerCase();
+    const query = attachmentScope === 'paint' ? '?scope=paint' : '';
+    const deleteKey = `${getAttachmentTargetKey(orderId, itemId, attachmentScope)}:${attachmentId}`;
     setAttachmentDeletingKey(deleteKey);
     setError('');
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachmentId}`, {
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachmentId}${query}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
-        setError(await getErrorMessage(res, 'Не удалось удалить файл карточки заказа.'));
+        setError(await getErrorMessage(res, 'Не удалось удалить вложение.'));
         return;
       }
       setConfirmAttachmentDelete(null);
@@ -1880,14 +1940,59 @@ function OrdersWorkspace() {
     }
   };
 
-  const requestDeleteAttachment = (orderId, itemId, attachment) => {
+  const requestDeleteAttachment = (orderId, itemId, attachment, scope = 'order') => {
     if (!orderId || !itemId || !attachment?.attachmentId) return;
     setConfirmAttachmentDelete({
       orderId,
       itemId,
       attachmentId: attachment.attachmentId,
       attachmentName: attachment.name || 'Файл',
+      scope: String(scope || 'order').trim().toLowerCase(),
     });
+  };
+
+  const renderAttachmentCellControls = ({ order, item, scope = 'order', attachments = [], targetKey = '', disabled = false }) => {
+    const scopeConfig = getAttachmentScopeConfig(scope);
+    const isUploading = attachmentUploadingTargetKey === targetKey;
+    return (
+      <div className="order-card-cell-content">
+        <input
+          ref={(node) => {
+            if (node) {
+              attachmentInputRefs.current[targetKey] = node;
+            } else {
+              delete attachmentInputRefs.current[targetKey];
+            }
+          }}
+          type="file"
+          className="order-card-file-input"
+          accept={ORDER_CARD_ATTACHMENT_ACCEPT}
+          onChange={(event) => handleAttachmentInputChange(order, item, event, scope)}
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          className="order-card-icon-btn"
+          onClick={() => attachmentInputRefs.current[targetKey]?.click()}
+          disabled={disabled || isUploading}
+          title={scopeConfig.addButtonTitle}
+          aria-label={scopeConfig.addButtonTitle}
+        >
+          {isUploading ? '...' : '+'}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="order-card-count-btn"
+          onClick={() => openAttachmentsDialog(order, item, scope)}
+          disabled={disabled}
+          title={attachments.length > 0 ? scopeConfig.openButtonTitle : scopeConfig.emptyTitle}
+          aria-label={scopeConfig.openButtonTitle}
+        >
+          {attachments.length}
+        </Button>
+      </div>
+    );
   };
 
   const requestDelete = (order) => {
@@ -2065,9 +2170,9 @@ function OrdersWorkspace() {
       'Комплектация заказа',
       'Материал',
       'Отгрузка до',
-      'Покраска',
-      'Ссылка / фото',
       'Примечания',
+      'Ссылка / фото',
+      'Покраска',
       'СТОЛЯР',
       'Начало изготовления',
       'Окончание изготовления',
@@ -2086,13 +2191,13 @@ function OrdersWorkspace() {
           item.itemNumber || '',
           item.quantity || '',
           item.name || '',
-          (item.attachments || []).map((attachment) => attachment.name).join(', '),
+          getItemAttachments(item, 'order').map((attachment) => attachment.name).join(', '),
           `${getPackageStats(item.packageItems, item.packageName).pending}/${getPackageStats(item.packageItems, item.packageName).total}`,
           item.material || '',
           item.deliveryDate || '',
-          '',
-          item.photoLink || '',
           item.notes || '',
+          item.photoLink || '',
+          getItemAttachments(item, 'paint').map((attachment) => attachment.name).join(', '),
           '',
           manufacturingMeta.startDate || '',
           manufacturingMeta.endDate || '',
@@ -2271,9 +2376,11 @@ function OrdersWorkspace() {
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                     const commentPreview = getCommentPreview(item.comments);
                     const orderManufacturingMeta = getOrderManufacturingMeta(order);
-                    const itemAttachments = Array.isArray(item.attachments) ? item.attachments : [];
+                    const itemAttachments = getItemAttachments(item, 'order');
+                    const paintAttachments = getItemAttachments(item, 'paint');
                     const packageStats = getPackageStats(item.packageItems, item.packageName);
-                    const attachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId);
+                    const orderAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'order');
+                    const paintAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'paint');
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
                     const latestCarpenterAutoAt = getLatestAutoHighlightAt(
                       carpenterAssignment?.scannedAt,
@@ -2310,7 +2417,7 @@ function OrdersWorkspace() {
                       ...packageCellPropsBase,
                       className: cn(packageCellPropsBase.className, 'package-cell', packageStats.pending > 0 && 'package-cell-attention'),
                     };
-                    const paintCellProps = getManualStageCellProps(key, item, 'paint', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const paintCellProps = getManualStageCellProps(key, item, 'paint', `order-card-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const photoCellProps = getManualStageCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const notesCellProps = getManualStageCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const carpenterCellProps = getManualStageCellProps(key, item, 'carpenter', carpenterCellClassName, carpenterCellStyle, { disabled: isInlineEditing });
@@ -2450,46 +2557,14 @@ function OrdersWorkspace() {
                           )}
                         </td>
                         <td {...orderCardCellProps}>
-                          <div className="order-card-cell-content">
-                            <input
-                              ref={(node) => {
-                                if (node) {
-                                  attachmentInputRefs.current[attachmentTargetKey] = node;
-                                } else {
-                                  delete attachmentInputRefs.current[attachmentTargetKey];
-                                }
-                              }}
-                              type="file"
-                              className="order-card-file-input"
-                              accept={ORDER_CARD_ATTACHMENT_ACCEPT}
-                              onChange={(event) => handleAttachmentInputChange(order, item, event)}
-                            />
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="order-card-icon-btn"
-                              onClick={() => attachmentInputRefs.current[attachmentTargetKey]?.click()}
-                              disabled={isPlaceholder || attachmentUploadingTargetKey === attachmentTargetKey}
-                              title="Загрузить файл"
-                              aria-label="Загрузить файл"
-                            >
-                              {attachmentUploadingTargetKey === attachmentTargetKey ? '...' : '+'}
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="order-card-icon-btn"
-                              onClick={() => openAttachmentsDialog(order, item)}
-                              disabled={isPlaceholder}
-                              title={itemAttachments.length > 0 ? 'Просмотр файлов' : 'Файлы не прикреплены'}
-                              aria-label="Просмотр файлов"
-                            >
-                              ⌕
-                            </Button>
-                            <span className="order-card-summary-badge" title={itemAttachments.length > 0 ? `Файлов и ссылок прикреплено: ${itemAttachments.length}` : 'Файлы и ссылки не прикреплены'}>
-                              {itemAttachments.length}
-                            </span>
-                          </div>
+                          {renderAttachmentCellControls({
+                            order,
+                            item,
+                            scope: 'order',
+                            attachments: itemAttachments,
+                            targetKey: orderAttachmentTargetKey,
+                            disabled: isPlaceholder,
+                          })}
                         </td>
                         <td {...packageCellProps}>
                           <div className="package-cell-content">
@@ -2517,14 +2592,6 @@ function OrdersWorkspace() {
                         </td>
                         <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
                         <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
-                        <td {...paintCellProps}>—</td>
-                        <td {...photoCellProps}>
-                          {isInlineEditing ? (
-                            <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
-                          ) : item.photoLink ? (
-                            <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a>
-                          ) : '—'}
-                        </td>
                         <td {...notesCellProps}>
                           {isInlineEditing ? (
                             <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
@@ -2536,6 +2603,23 @@ function OrdersWorkspace() {
                               {item.notes || (commentPreview !== '—' ? null : '—')}
                             </>
                           )}
+                        </td>
+                        <td {...photoCellProps}>
+                          {isInlineEditing ? (
+                            <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
+                          ) : item.photoLink ? (
+                            <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a>
+                          ) : '—'}
+                        </td>
+                        <td {...paintCellProps}>
+                          {renderAttachmentCellControls({
+                            order,
+                            item,
+                            scope: 'paint',
+                            attachments: paintAttachments,
+                            targetKey: paintAttachmentTargetKey,
+                            disabled: isPlaceholder,
+                          })}
                         </td>
                         <td {...carpenterCellProps} title={workerCellTitle}>
                           {isPlaceholder ? '—' : workerCellText}
@@ -2918,7 +3002,7 @@ function OrdersWorkspace() {
       {attachmentsDialog ? (
         <Modal open={Boolean(attachmentsDialog)} onClose={() => setAttachmentsDialog(null)} size="lg" className="order-form-modal">
           <ModalHeader
-            title="Файлы изделия"
+            title={getAttachmentScopeConfig(attachmentsDialog.scope).dialogTitle}
             subtitle={`${attachmentsDialog.orderNumber ? `Заказ № ${attachmentsDialog.orderNumber}` : 'Без номера'}${attachmentsDialog.customer ? ` · ${attachmentsDialog.customer}` : ''}${attachmentsDialog.itemName ? ` · ${attachmentsDialog.itemName}` : ''}${attachmentsDialog.itemNumber ? ` · позиция ${attachmentsDialog.itemNumber}` : ''}`}
             onClose={() => setAttachmentsDialog(null)}
           />
@@ -2949,19 +3033,20 @@ function OrdersWorkspace() {
                     itemId: attachmentsDialog.itemId,
                     name: attachmentLinkDraft.name,
                     url: attachmentLinkDraft.url,
+                    scope: attachmentsDialog.scope || 'order',
                   })}
-                  disabled={attachmentUploadingTargetKey === getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId)}
+                  disabled={attachmentUploadingTargetKey === getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId, attachmentsDialog.scope || 'order')}
                 >
-                  {attachmentUploadingTargetKey === getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId) ? 'Сохранение...' : 'Добавить ссылку'}
+                  {attachmentUploadingTargetKey === getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId, attachmentsDialog.scope || 'order') ? 'Сохранение...' : 'Добавить ссылку'}
                 </Button>
               </div>
             </div>
           </div>
 
           <div className="order-card-dialog-list">
-            {(currentAttachmentDialogItem?.attachments || []).length > 0 ? (
-              currentAttachmentDialogItem.attachments.map((attachment) => {
-                const fileKey = `${getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId)}:${attachment.attachmentId}`;
+            {currentAttachmentDialogAttachments.length > 0 ? (
+              currentAttachmentDialogAttachments.map((attachment) => {
+                const fileKey = `${getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId, attachmentsDialog.scope || 'order')}:${attachment.attachmentId}`;
                 const isOpening = attachmentOpeningKey === fileKey;
                 const isDownloading = attachmentOpeningKey === `${fileKey}:download`;
                 const isDeleting = attachmentDeletingKey === fileKey;
@@ -2972,7 +3057,7 @@ function OrdersWorkspace() {
                       <button
                         type="button"
                         className="order-card-dialog-open"
-                        onClick={() => handleOpenAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment)}
+                        onClick={() => handleOpenAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment, attachmentsDialog.scope || 'order')}
                         disabled={isOpening || isDownloading}
                         title={isImageAttachment(attachment) ? 'Просмотр' : 'Открыть'}
                         aria-label={isImageAttachment(attachment) ? 'Просмотр файла' : 'Открыть файл'}
@@ -2989,7 +3074,7 @@ function OrdersWorkspace() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => handleDownloadAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment)}
+                        onClick={() => handleDownloadAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment, attachmentsDialog.scope || 'order')}
                         disabled={isOpening || isDownloading}
                       >
                         {isLinkAttachment(attachment) ? 'Перейти' : (isDownloading ? 'Скачивание...' : 'Скачать')}
@@ -2997,7 +3082,7 @@ function OrdersWorkspace() {
                       <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => requestDeleteAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment)}
+                        onClick={() => requestDeleteAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment, attachmentsDialog.scope || 'order')}
                         disabled={isDeleting}
                       >
                         {isDeleting ? 'Удаление...' : 'Удалить'}
@@ -3007,7 +3092,7 @@ function OrdersWorkspace() {
                 );
               })
             ) : (
-              <div className="order-card-empty">Файлы не загружены</div>
+              <div className="order-card-empty">{getAttachmentScopeConfig(attachmentsDialog.scope).emptyTitle}</div>
             )}
           </div>
         </Modal>
@@ -3032,10 +3117,10 @@ function OrdersWorkspace() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => handleDownloadAttachment(attachmentPreview.orderId, attachmentPreview.itemId, attachmentPreview.attachment)}
-                  disabled={attachmentOpeningKey === `${getAttachmentTargetKey(attachmentPreview.orderId, attachmentPreview.itemId)}:${attachmentPreview.attachment.attachmentId}:download`}
+                  onClick={() => handleDownloadAttachment(attachmentPreview.orderId, attachmentPreview.itemId, attachmentPreview.attachment, attachmentPreview.scope || 'order')}
+                  disabled={attachmentOpeningKey === `${getAttachmentTargetKey(attachmentPreview.orderId, attachmentPreview.itemId, attachmentPreview.scope || 'order')}:${attachmentPreview.attachment.attachmentId}:download`}
                 >
-                  {attachmentOpeningKey === `${getAttachmentTargetKey(attachmentPreview.orderId, attachmentPreview.itemId)}:${attachmentPreview.attachment.attachmentId}:download` ? 'Скачивание...' : 'Скачать'}
+                  {attachmentOpeningKey === `${getAttachmentTargetKey(attachmentPreview.orderId, attachmentPreview.itemId, attachmentPreview.scope || 'order')}:${attachmentPreview.attachment.attachmentId}:download` ? 'Скачивание...' : 'Скачать'}
                 </Button>
               ) : null}
             </div>
@@ -3239,11 +3324,11 @@ function OrdersWorkspace() {
       <ConfirmDialog
         open={Boolean(confirmAttachmentDelete)}
         title="Удалить файл?"
-        message={confirmAttachmentDelete ? `Файл "${confirmAttachmentDelete.attachmentName}" будет удален из карточки изделия без возможности восстановления.` : ''}
+        message={confirmAttachmentDelete ? `Файл "${confirmAttachmentDelete.attachmentName}" ${getAttachmentScopeConfig(confirmAttachmentDelete.scope).deleteMessage}` : ''}
         confirmLabel="Удалить файл"
-        onConfirm={() => performDeleteAttachment(confirmAttachmentDelete?.orderId || '', confirmAttachmentDelete?.itemId || '', confirmAttachmentDelete?.attachmentId || '')}
+        onConfirm={() => performDeleteAttachment(confirmAttachmentDelete?.orderId || '', confirmAttachmentDelete?.itemId || '', confirmAttachmentDelete?.attachmentId || '', confirmAttachmentDelete?.scope || 'order')}
         onCancel={() => !attachmentDeletingKey && setConfirmAttachmentDelete(null)}
-        loading={Boolean(confirmAttachmentDelete && attachmentDeletingKey === `${getAttachmentTargetKey(confirmAttachmentDelete.orderId, confirmAttachmentDelete.itemId)}:${confirmAttachmentDelete.attachmentId}`)}
+        loading={Boolean(confirmAttachmentDelete && attachmentDeletingKey === `${getAttachmentTargetKey(confirmAttachmentDelete.orderId, confirmAttachmentDelete.itemId, confirmAttachmentDelete.scope || 'order')}:${confirmAttachmentDelete.attachmentId}`)}
       />
 
       <ConfirmDialog
@@ -3253,7 +3338,7 @@ function OrdersWorkspace() {
         confirmLabel={confirmAttachmentOverwrite?.kind === 'link' ? 'Перезаписать ссылку' : 'Перезаписать файл'}
         onConfirm={performOverwriteAttachment}
         onCancel={() => !attachmentUploadingTargetKey && setConfirmAttachmentOverwrite(null)}
-        loading={Boolean(confirmAttachmentOverwrite && attachmentUploadingTargetKey === getAttachmentTargetKey(confirmAttachmentOverwrite.orderId, confirmAttachmentOverwrite.itemId))}
+        loading={Boolean(confirmAttachmentOverwrite && attachmentUploadingTargetKey === getAttachmentTargetKey(confirmAttachmentOverwrite.orderId, confirmAttachmentOverwrite.itemId, confirmAttachmentOverwrite.scope || 'order'))}
       />
     </div>
   );

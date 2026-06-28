@@ -247,6 +247,12 @@ function findAttachmentIndexByName(attachments = [], attachmentName = '') {
   ));
 }
 
+function getAttachmentFieldName(scope = '') {
+  return String(scope || '').trim().toLowerCase() === 'paint'
+    ? 'paintAttachments'
+    : 'attachments';
+}
+
 function getManualStageLegendKey(manualStageMarks = {}) {
   const marks = Object.values(normalizeManualStageMarks(manualStageMarks));
   if (marks.length === 0) return '';
@@ -441,6 +447,7 @@ function buildOrderItem(source = {}, options = {}) {
     photoLink: String(source.photoLink || source.link || '').trim(),
     notes: String(source.notes || '').trim(),
     attachments: normalizeOrderAttachments(source.attachments),
+    paintAttachments: normalizeOrderAttachments(source.paintAttachments),
     comments: normalizeComments(source.comments),
     workerAssignments,
     manualStageMarks,
@@ -1015,6 +1022,12 @@ const OrderStore = {
           item.attachments = JSON.parse(nextAttachments);
           changed = true;
         }
+        const currentPaintAttachments = JSON.stringify(item.paintAttachments || []);
+        const nextPaintAttachments = JSON.stringify(normalizeOrderAttachments(item.paintAttachments));
+        if (currentPaintAttachments !== nextPaintAttachments) {
+          item.paintAttachments = JSON.parse(nextPaintAttachments);
+          changed = true;
+        }
       }
       const manufacturingMeta = deriveOrderManufacturingMeta(order);
       if (order.startDate !== manufacturingMeta.startDate) {
@@ -1038,7 +1051,7 @@ const OrderStore = {
     return this.findAll().length;
   },
 
-  saveAttachment(orderId, itemId, attachment = {}, { overwrite = false } = {}) {
+  saveAttachment(orderId, itemId, attachment = {}, { overwrite = false, scope = '' } = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1055,7 +1068,8 @@ const OrderStore = {
       return { status: 'invalid' };
     }
 
-    const currentAttachments = normalizeOrderAttachments(item.attachments);
+    const attachmentFieldName = getAttachmentFieldName(scope);
+    const currentAttachments = normalizeOrderAttachments(item[attachmentFieldName]);
     const duplicateIndex = findAttachmentIndexByName(currentAttachments, normalizedAttachment.name);
 
     if (duplicateIndex !== -1) {
@@ -1072,7 +1086,7 @@ const OrderStore = {
         attachmentId: existingAttachment.attachmentId,
       };
       currentAttachments[duplicateIndex] = overwrittenAttachment;
-      item.attachments = normalizeOrderAttachments(currentAttachments);
+      item[attachmentFieldName] = normalizeOrderAttachments(currentAttachments);
       item.updatedAt = new Date().toISOString();
       syncOrderStatus(order);
       save();
@@ -1083,7 +1097,7 @@ const OrderStore = {
       };
     }
 
-    item.attachments = normalizeOrderAttachments([...(item.attachments || []), normalizedAttachment]);
+    item[attachmentFieldName] = normalizeOrderAttachments([...(item[attachmentFieldName] || []), normalizedAttachment]);
     item.updatedAt = new Date().toISOString();
     syncOrderStatus(order);
     save();
@@ -1094,7 +1108,7 @@ const OrderStore = {
     };
   },
 
-  deleteAttachment(orderId, itemId, attachmentId) {
+  deleteAttachment(orderId, itemId, attachmentId, { scope = '' } = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1103,19 +1117,20 @@ const OrderStore = {
     if (!item) return 'item_not_found';
 
     const normalizedAttachmentId = String(attachmentId || '').trim();
-    const currentAttachments = normalizeOrderAttachments(item.attachments);
+    const attachmentFieldName = getAttachmentFieldName(scope);
+    const currentAttachments = normalizeOrderAttachments(item[attachmentFieldName]);
     const deletedAttachment = currentAttachments.find((attachment) => attachment.attachmentId === normalizedAttachmentId) || null;
     const nextAttachments = currentAttachments.filter((attachment) => attachment.attachmentId !== normalizedAttachmentId);
     if (!deletedAttachment) return false;
 
-    item.attachments = nextAttachments;
+    item[attachmentFieldName] = nextAttachments;
     item.updatedAt = new Date().toISOString();
     syncOrderStatus(order);
     save();
     return deletedAttachment;
   },
 
-  getAttachment(orderId, itemId, attachmentId) {
+  getAttachment(orderId, itemId, attachmentId, { scope = '' } = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1124,7 +1139,8 @@ const OrderStore = {
     if (!item) return 'item_not_found';
 
     const normalizedAttachmentId = String(attachmentId || '').trim();
-    return normalizeOrderAttachments(item.attachments).find((attachment) => attachment.attachmentId === normalizedAttachmentId) || false;
+    const attachmentFieldName = getAttachmentFieldName(scope);
+    return normalizeOrderAttachments(item[attachmentFieldName]).find((attachment) => attachment.attachmentId === normalizedAttachmentId) || false;
   },
 
   buildInitialStages,

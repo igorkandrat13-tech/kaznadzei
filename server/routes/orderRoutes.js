@@ -51,6 +51,18 @@ const ORDER_ATTACHMENT_ALLOWED_EXTENSIONS = new Set([
   '.bmp',
 ]);
 
+function getAttachmentScope(req = {}) {
+  return String(req.query?.scope || req.body?.scope || '').trim().toLowerCase() === 'paint'
+    ? 'paint'
+    : 'order';
+}
+
+function getAttachmentScopeLabel(scope = '') {
+  return scope === 'paint'
+    ? 'покраски'
+    : 'карточки заказа';
+}
+
 function ensureDirectoryExists(directoryPath) {
   fs.mkdirSync(directoryPath, { recursive: true });
 }
@@ -649,7 +661,9 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
 
 router.get('/orders/:id/items/:itemId/attachments/:attachmentId/file', requireWriteAccess, (req, res) => {
   try {
-    const attachment = OrderStore.getAttachment(req.params.id, req.params.itemId, req.params.attachmentId);
+    const attachmentScope = getAttachmentScope(req);
+    const attachmentScopeLabel = getAttachmentScopeLabel(attachmentScope);
+    const attachment = OrderStore.getAttachment(req.params.id, req.params.itemId, req.params.attachmentId, { scope: attachmentScope });
     if (attachment === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
     }
@@ -657,7 +671,7 @@ router.get('/orders/:id/items/:itemId/attachments/:attachmentId/file', requireWr
       return res.status(404).json({ message: 'Изделие заказа не найдено.' });
     }
     if (attachment === false) {
-      return res.status(404).json({ message: 'Файл карточки заказа не найден.' });
+      return res.status(404).json({ message: `Файл ${attachmentScopeLabel} не найден.` });
     }
 
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(attachment.name || 'attachment')}`);
@@ -672,7 +686,7 @@ router.get('/orders/:id/items/:itemId/attachments/:attachmentId/file', requireWr
     if (attachment.content) {
       const legacyFile = parseLegacyDataUrl(attachment.content);
       if (!legacyFile) {
-        return res.status(404).json({ message: 'Файл карточки заказа поврежден.' });
+        return res.status(404).json({ message: `Файл ${attachmentScopeLabel} поврежден.` });
       }
       if (!attachment.type) {
         res.type(legacyFile.mimeType);
@@ -682,17 +696,19 @@ router.get('/orders/:id/items/:itemId/attachments/:attachmentId/file', requireWr
 
     const absolutePath = resolveOrderAttachmentAbsolutePath(attachment.relativePath);
     if (!absolutePath || !fs.existsSync(absolutePath)) {
-      return res.status(404).json({ message: 'Файл карточки заказа не найден на диске.' });
+      return res.status(404).json({ message: `Файл ${attachmentScopeLabel} не найден на диске.` });
     }
     return res.sendFile(absolutePath);
   } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось открыть файл карточки заказа.' });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось открыть вложение.' });
   }
 });
 
 router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (req, res) => {
   uploadOrderAttachment.single('file')(req, res, (uploadError) => {
     try {
+      const attachmentScope = getAttachmentScope(req);
+      const attachmentScopeLabel = getAttachmentScopeLabel(attachmentScope);
       if (uploadError) {
         throw uploadError;
       }
@@ -711,7 +727,10 @@ router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (re
         relativePath,
         uploadedAt: new Date().toISOString(),
       });
-      const attachmentResult = OrderStore.saveAttachment(req.params.id, req.params.itemId, attachment, { overwrite: overwriteRequested });
+      const attachmentResult = OrderStore.saveAttachment(req.params.id, req.params.itemId, attachment, {
+        overwrite: overwriteRequested,
+        scope: attachmentScope,
+      });
       if (attachmentResult.status === 'order_not_found') {
         deleteStoredAttachmentFile({ relativePath });
         return res.status(404).json({ message: 'Заказ не найден.' });
@@ -722,12 +741,12 @@ router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (re
       }
       if (attachmentResult.status === 'invalid') {
         deleteStoredAttachmentFile({ relativePath });
-        return res.status(400).json({ message: 'Не удалось сохранить файл карточки заказа.' });
+        return res.status(400).json({ message: `Не удалось сохранить файл ${attachmentScopeLabel}.` });
       }
       if (attachmentResult.status === 'conflict') {
         deleteStoredAttachmentFile({ relativePath });
         return res.status(409).json({
-          message: `Файл "${normalizedFileName}" уже загружен в карточку заказа. Подтвердите перезапись.`,
+          message: `Файл "${normalizedFileName}" уже загружен в разделе ${attachmentScopeLabel}. Подтвердите перезапись.`,
           code: 'ATTACHMENT_NAME_EXISTS',
           existingAttachment: attachmentResult.existingAttachment || null,
         });
@@ -746,8 +765,8 @@ router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (re
         entityName: savedAttachment?.name || attachment.name || '',
         actor: getRequestActor(req),
         message: attachmentResult.status === 'overwritten'
-          ? 'Файл карточки заказа перезаписан.'
-          : 'Файл карточки заказа загружен.',
+          ? `Файл ${attachmentScopeLabel} перезаписан.`
+          : `Файл ${attachmentScopeLabel} загружен.`,
         details: {
           itemId: req.params.itemId || '',
           attachmentId: savedAttachment?.attachmentId || '',
@@ -755,6 +774,7 @@ router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (re
           size: savedAttachment?.size || 0,
           type: savedAttachment?.type || '',
           overwritten: attachmentResult.status === 'overwritten',
+          scope: attachmentScope,
         },
       });
 
@@ -770,7 +790,7 @@ router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (re
       res.status(error.status || (isMulterLimit ? 400 : 500)).json({
         message: isMulterLimit
           ? `Размер файла не должен превышать ${Math.round(ORDER_ATTACHMENT_FILE_SIZE_LIMIT / (1024 * 1024))} МБ.`
-          : (error.message || 'Не удалось сохранить файл карточки заказа.'),
+          : (error.message || 'Не удалось сохранить вложение.'),
       });
     }
   });
@@ -778,6 +798,8 @@ router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (re
 
 router.post('/orders/:id/items/:itemId/attachments/link', requireManagerAccess(), (req, res) => {
   try {
+    const attachmentScope = getAttachmentScope(req);
+    const attachmentScopeLabel = getAttachmentScopeLabel(attachmentScope);
     const overwriteRequested = ['1', 'true', 'yes'].includes(String(req.query?.overwrite || req.body?.overwrite || '').trim().toLowerCase());
     const attachment = sanitizeOrderAttachmentInput({
       name: req.body?.name,
@@ -785,7 +807,10 @@ router.post('/orders/:id/items/:itemId/attachments/link', requireManagerAccess()
       uploadedAt: new Date().toISOString(),
       url: req.body?.url,
     });
-    const attachmentResult = OrderStore.saveAttachment(req.params.id, req.params.itemId, attachment, { overwrite: overwriteRequested });
+    const attachmentResult = OrderStore.saveAttachment(req.params.id, req.params.itemId, attachment, {
+      overwrite: overwriteRequested,
+      scope: attachmentScope,
+    });
     if (attachmentResult.status === 'order_not_found') {
       return res.status(404).json({ message: 'Заказ не найден.' });
     }
@@ -793,11 +818,11 @@ router.post('/orders/:id/items/:itemId/attachments/link', requireManagerAccess()
       return res.status(404).json({ message: 'Изделие заказа не найдено.' });
     }
     if (attachmentResult.status === 'invalid') {
-      return res.status(400).json({ message: 'Не удалось сохранить ссылку карточки заказа.' });
+      return res.status(400).json({ message: `Не удалось сохранить ссылку ${attachmentScopeLabel}.` });
     }
     if (attachmentResult.status === 'conflict') {
       return res.status(409).json({
-        message: `Вложение "${attachment.name}" уже загружено в карточку заказа. Подтвердите перезапись.`,
+        message: `Вложение "${attachment.name}" уже загружено в разделе ${attachmentScopeLabel}. Подтвердите перезапись.`,
         code: 'ATTACHMENT_NAME_EXISTS',
         existingAttachment: attachmentResult.existingAttachment || null,
       });
@@ -811,14 +836,15 @@ router.post('/orders/:id/items/:itemId/attachments/link', requireManagerAccess()
       entityName: savedAttachment?.name || attachment.name || '',
       actor: getRequestActor(req),
       message: attachmentResult.status === 'overwritten'
-        ? 'Ссылка карточки заказа перезаписана.'
-        : 'Ссылка карточки заказа добавлена.',
+        ? `Ссылка ${attachmentScopeLabel} перезаписана.`
+        : `Ссылка ${attachmentScopeLabel} добавлена.`,
       details: {
         itemId: req.params.itemId || '',
         attachmentId: savedAttachment?.attachmentId || '',
         fileName: savedAttachment?.name || '',
         url: savedAttachment?.url || '',
         overwritten: attachmentResult.status === 'overwritten',
+        scope: attachmentScope,
       },
     });
 
@@ -827,13 +853,15 @@ router.post('/orders/:id/items/:itemId/attachments/link', requireManagerAccess()
       overwritten: attachmentResult.status === 'overwritten',
     });
   } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось сохранить ссылку карточки заказа.' });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось сохранить ссылку.' });
   }
 });
 
 router.delete('/orders/:id/items/:itemId/attachments/:attachmentId', requireManagerAccess(), (req, res) => {
   try {
-    const deletedAttachment = OrderStore.deleteAttachment(req.params.id, req.params.itemId, req.params.attachmentId);
+    const attachmentScope = getAttachmentScope(req);
+    const attachmentScopeLabel = getAttachmentScopeLabel(attachmentScope);
+    const deletedAttachment = OrderStore.deleteAttachment(req.params.id, req.params.itemId, req.params.attachmentId, { scope: attachmentScope });
     if (deletedAttachment === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
     }
@@ -841,7 +869,7 @@ router.delete('/orders/:id/items/:itemId/attachments/:attachmentId', requireMana
       return res.status(404).json({ message: 'Изделие заказа не найдено.' });
     }
     if (deletedAttachment === false) {
-      return res.status(404).json({ message: 'Файл карточки заказа не найден.' });
+      return res.status(404).json({ message: `Файл ${attachmentScopeLabel} не найден.` });
     }
 
     deleteStoredAttachmentFile(deletedAttachment);
@@ -852,17 +880,18 @@ router.delete('/orders/:id/items/:itemId/attachments/:attachmentId', requireMana
       entityId: req.params.id,
       entityName: deletedAttachment.name || req.params.attachmentId,
       actor: getRequestActor(req),
-      message: 'Файл карточки заказа удален.',
+      message: `Файл ${attachmentScopeLabel} удален.`,
       details: {
         itemId: req.params.itemId || '',
         attachmentId: deletedAttachment.attachmentId,
         fileName: deletedAttachment.name,
+        scope: attachmentScope,
       },
     });
 
     res.json({ ok: true });
   } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось удалить файл карточки заказа.' });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось удалить вложение.' });
   }
 });
 
