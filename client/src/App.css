@@ -2014,11 +2014,11 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .unified-orders-table col.col-customer {
-  width: 184px;
+  width: 174px;
 }
 
 .unified-orders-table col.col-room {
-  width: 116px;
+  width: 128px;
 }
 
 .unified-orders-table col.col-room-number,
@@ -2109,11 +2109,15 @@ body[data-theme='light'] .order-primary-title-button-badge {
   align-items: center;
   justify-content: center;
   width: 100%;
+  min-width: 0;
 }
 
 .merged-order-customer-text,
 .merged-order-customer-input {
   text-align: center;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .merged-order-customer-text {
@@ -2121,6 +2125,9 @@ body[data-theme='light'] .order-primary-title-button-badge {
   align-items: center;
   justify-content: center;
   width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .unified-orders-table td.merged-order-meta-cell {
