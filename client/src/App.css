@@ -1815,12 +1815,6 @@ body[data-theme='light'] .order-primary-title-button-badge {
   line-height: 1.3;
 }
 
-.unified-orders-table thead {
-  position: sticky;
-  top: var(--orders-sticky-offset);
-  z-index: 9;
-}
-
 .unified-orders-table th {
   position: static;
   background: linear-gradient(180deg, rgba(241, 245, 249, 0.98), rgba(233, 239, 245, 0.98));

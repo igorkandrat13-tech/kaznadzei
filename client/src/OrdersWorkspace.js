@@ -619,9 +619,11 @@ function OrdersWorkspace() {
   const [confirmAttachmentDelete, setConfirmAttachmentDelete] = useState(null);
   const [confirmAttachmentOverwrite, setConfirmAttachmentOverwrite] = useState(null);
   const [attachmentLinkDraft, setAttachmentLinkDraft] = useState({ name: '', url: '' });
+  const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
   const attachmentInputRefs = useRef({});
+  const syncingScrollRef = useRef(false);
 
   const fetchOrders = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) {
@@ -993,6 +995,16 @@ function OrdersWorkspace() {
       bodyNode?.removeEventListener('scroll', updateToolbarPosition);
     };
   }, [isAdmin, selectedStageSelections.length, selectedStageCellKeys, manualStageLegendDraft]);
+
+  const syncHorizontalScroll = useCallback((source, target) => {
+    if (!source || !target) return;
+    if (syncingScrollRef.current) return;
+    syncingScrollRef.current = true;
+    target.scrollLeft = source.scrollLeft;
+    window.requestAnimationFrame(() => {
+      syncingScrollRef.current = false;
+    });
+  }, []);
 
   const handleManualStageCellClick = useCallback((event, rowKey, columnKey) => {
     if (!isAdmin || manualStageSaving) return;
@@ -2323,11 +2335,13 @@ function OrdersWorkspace() {
         {loading ? (
           <div className="mobile-empty-state">Загрузка таблицы...</div>
         ) : (
+          <>
             <div
-              ref={bodyScrollRef}
-              className="table-scroll unified-orders-body-scroll"
+              ref={headerScrollRef}
+              className="table-scroll unified-orders-header-scroll"
+              onScroll={() => syncHorizontalScroll(headerScrollRef.current, bodyScrollRef.current)}
             >
-              <table className="orders-table unified-orders-table unified-orders-body-table">
+              <table className="orders-table unified-orders-table unified-orders-header-table">
                 {renderOrdersColGroup()}
                 <thead>
                   <tr className="xlsx-header-row xlsx-header-row-primary">
@@ -2363,6 +2377,15 @@ function OrdersWorkspace() {
                     ))}
                   </tr>
                 </thead>
+              </table>
+            </div>
+            <div
+              ref={bodyScrollRef}
+              className="table-scroll unified-orders-body-scroll"
+              onScroll={() => syncHorizontalScroll(bodyScrollRef.current, headerScrollRef.current)}
+            >
+              <table className="orders-table unified-orders-table unified-orders-body-table">
+                {renderOrdersColGroup()}
                 <tbody onMouseLeave={() => setHoveredOrderId('')}>
                   {rows.map(({ key, order, item, carpenterActiveStage, carpenterAssignment, activeStage, assignedStage, isPlaceholder }) => {
                     const inlineDraft = inlineDrafts[key] || null;
