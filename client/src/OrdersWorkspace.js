@@ -2395,8 +2395,9 @@ function OrdersWorkspace() {
                     const isLastOrderRow = lastOrderRowKeys[orderId] === key;
                     const orderRowSpan = orderRowSpans[key] || 1;
                     const isHoveredOrder = hoveredOrderId === orderId;
+                    const orderGroupClass = `order-group-cell${isFirstOrderRow ? ' order-group-top' : ''}${isLastOrderRow ? ' order-group-bottom' : ''}`.trim();
                     const orderOutlineClass = `${isHoveredOrder ? `order-outline-cell${isFirstOrderRow ? ' order-outline-top' : ''}${isLastOrderRow ? ' order-outline-bottom' : ''}` : ''}`.trim();
-                    const regularOrderClass = `order-filled-cell ${orderOutlineClass}`.trim();
+                    const regularOrderClass = `order-filled-cell ${orderGroupClass} ${orderOutlineClass}`.trim();
                     const currentOrderDraftKeys = orderDraftKeys[orderId] || [];
                     const orderInlineDraft = currentOrderDraftKeys.length > 0 ? inlineDrafts[currentOrderDraftKeys[0]] : null;
                     const isOrderInlineEditing = Boolean(orderInlineDraft);
@@ -2425,7 +2426,7 @@ function OrdersWorkspace() {
                           color: CARPENTER_STAGE_TEXT_HEX,
                         }
                       : undefined;
-                    const carpenterCellClassName = `${hasCarpenterAutoHighlight ? '' : 'order-filled-cell'} ${orderOutlineClass}`.trim();
+                    const carpenterCellClassName = `${hasCarpenterAutoHighlight ? '' : 'order-filled-cell'} ${orderGroupClass} ${orderOutlineClass}`.trim();
                     const roomCellProps = getManualStageCellProps(key, item, 'room', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const roomNumberCellProps = getManualStageCellProps(key, item, 'roomNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const itemNumberCellProps = getManualStageCellProps(key, item, 'itemNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
@@ -2439,6 +2440,10 @@ function OrdersWorkspace() {
                           color: ORDER_PACKAGE_STAGE_TEXT_HEX,
                         }
                       : undefined;
+                    const packageSummaryBadgeStyle = {
+                      background: legendColorMap[ORDER_PACKAGE_STAGE_LEGEND_KEY] || '#99E5FF',
+                      color: ORDER_PACKAGE_STAGE_TEXT_HEX,
+                    };
                     const packageCellPropsBase = getManualStageCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle, { disabled: isInlineEditing });
                     const packageCellProps = {
                       ...packageCellPropsBase,
@@ -2452,7 +2457,7 @@ function OrdersWorkspace() {
                       key,
                       item,
                       'orderNumber',
-                      `sticky-col sticky-col-1 merged-order-cell merged-order-number-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`,
+                      `sticky-col sticky-col-1 merged-order-cell merged-order-number-cell order-filled-cell order-group-cell order-group-top order-group-bottom order-group-left${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`,
                       undefined,
                       { disabled: isOrderInlineEditing },
                     );
@@ -2460,7 +2465,7 @@ function OrdersWorkspace() {
                       key,
                       item,
                       'customer',
-                      `sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                      `sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell order-filled-cell order-group-cell order-group-top order-group-bottom${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
                       undefined,
                       { disabled: isOrderInlineEditing },
                     );
@@ -2481,7 +2486,7 @@ function OrdersWorkspace() {
                       key,
                       item,
                       'startDate',
-                      `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                      `merged-order-cell merged-order-meta-cell order-filled-cell order-group-cell order-group-top order-group-bottom${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
                       startDateMetaCellStyle,
                     );
                     const completedMetaCellStyle = orderManufacturingMeta.isCompleted
@@ -2502,14 +2507,14 @@ function OrdersWorkspace() {
                       key,
                       item,
                       'endDate',
-                      `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                      `merged-order-cell merged-order-meta-cell order-filled-cell order-group-cell order-group-top order-group-bottom${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
                       completedMetaCellStyle,
                     );
                     const durationMetaCellProps = getManualStageCellProps(
                       key,
                       item,
                       'duration',
-                      `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`,
+                      `merged-order-cell merged-order-meta-cell order-filled-cell order-group-cell order-group-top order-group-bottom order-group-right${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`,
                       durationMetaCellStyle,
                     );
                     return (
@@ -2627,6 +2632,13 @@ function OrdersWorkspace() {
                             >
                               ✎
                             </Button>
+                            <span
+                              className={cn('package-cell-summary-badge', packageStats.pending > 0 && 'package-cell-summary-badge-attention')}
+                              style={packageSummaryBadgeStyle}
+                              title={packageStats.total > 0 ? `Не исполнено: ${packageStats.pending} из ${packageStats.total}` : 'Позиции комплектации не добавлены'}
+                            >
+                              {packageStats.pending}/{packageStats.total}
+                            </span>
                             {packageStats.pending > 0 ? (
                               <span
                                 className="package-cell-attention-icon"
@@ -2636,12 +2648,6 @@ function OrdersWorkspace() {
                                 !
                               </span>
                             ) : null}
-                            <span
-                              className={cn('package-cell-summary-badge', packageStats.pending > 0 && 'package-cell-summary-badge-attention')}
-                              title={packageStats.total > 0 ? `Не исполнено: ${packageStats.pending} из ${packageStats.total}` : 'Позиции комплектации не добавлены'}
-                            >
-                              {packageStats.pending}/{packageStats.total}
-                            </span>
                           </div>
                         </td>
                         <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>

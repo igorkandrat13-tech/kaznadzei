@@ -46,8 +46,7 @@ body::before {
 }
 
 .App-header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 50;
   background:
     linear-gradient(135deg, rgba(8, 20, 36, 0.96), rgba(12, 28, 48, 0.92));
@@ -310,7 +309,7 @@ table tr:hover td {
 
 .unified-orders-header-scroll {
   position: sticky;
-  top: 92px;
+  top: 0;
   z-index: 12;
   overflow-y: hidden;
   padding-bottom: 0;
@@ -541,7 +540,7 @@ table tr:hover td {
 
 .order-primary-title-button {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   width: 100%;
   max-width: 100%;
@@ -574,9 +573,11 @@ table tr:hover td {
   display: inline-block;
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.25;
+  word-break: break-word;
 }
 
 .order-primary-title-button-badge {
@@ -584,6 +585,7 @@ table tr:hover td {
   align-items: center;
   justify-content: center;
   position: relative;
+  align-self: flex-start;
   flex: 0 0 16px;
   width: 16px;
   min-width: 16px;
@@ -1785,10 +1787,13 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .unified-orders-table {
-  --orders-sticky-offset: 92px;
-  --orders-header-primary-height: 42px;
-  --orders-header-secondary-height: 36px;
+  --orders-sticky-offset: 0px;
+  --orders-header-primary-height: 48px;
+  --orders-header-secondary-height: 42px;
   --orders-col-order-number-width: 92px;
+  --orders-cell-divider-color: rgba(126, 191, 255, 0.18);
+  --orders-group-divider-color: rgba(126, 191, 255, 0.62);
+  --orders-hover-outline-color: rgba(126, 191, 255, 0.96);
   min-width: 1450px;
   width: 100%;
   table-layout: fixed;
@@ -1810,8 +1815,30 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .unified-orders-table td {
-  font-size: 14px;
-  line-height: 1.3;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.unified-orders-table tbody td {
+  border-right: 1px solid var(--orders-cell-divider-color);
+  border-bottom: 1px solid var(--orders-cell-divider-color);
+  background-clip: padding-box;
+}
+
+.unified-orders-table tbody td.order-group-top {
+  border-top: 2px solid var(--orders-group-divider-color);
+}
+
+.unified-orders-table tbody td.order-group-bottom {
+  border-bottom: 2px solid var(--orders-group-divider-color);
+}
+
+.unified-orders-table tbody td.order-group-left {
+  border-left: 2px solid var(--orders-group-divider-color);
+}
+
+.unified-orders-table tbody td.order-group-right {
+  border-right: 2px solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table th {
@@ -1820,8 +1847,8 @@ body[data-theme='light'] .order-primary-title-button-badge {
   background: linear-gradient(180deg, rgba(241, 245, 249, 0.98), rgba(233, 239, 245, 0.98));
   text-transform: none;
   color: #000000;
-  font-size: 12px;
-  line-height: 1.1;
+  font-size: 14px;
+  line-height: 1.15;
 }
 
 .unified-orders-table .xlsx-header-primary-cell {
@@ -1840,7 +1867,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   z-index: 3;
   background: linear-gradient(180deg, rgba(235, 241, 247, 0.98), rgba(228, 236, 244, 0.98));
   color: #000000;
-  font-size: 11px;
+  font-size: 13px;
   white-space: normal;
   min-height: var(--orders-header-secondary-height);
   height: var(--orders-header-secondary-height);
@@ -2029,7 +2056,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .unified-orders-table col.col-name {
-  width: 132px;
+  width: 188px;
 }
 
 .unified-orders-table col.col-item-actions {
@@ -2287,7 +2314,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   justify-content: center;
   flex-wrap: nowrap;
   gap: 6px;
-  min-height: 32px;
+  min-height: 34px;
   min-width: 0;
   max-width: 100%;
   width: 100%;
@@ -2332,20 +2359,17 @@ body[data-theme='light'] .order-primary-title-button-badge {
   min-height: 30px;
   padding: 0 10px;
   border-radius: 9px;
-  background: rgba(255, 244, 207, 0.92);
-  color: #000000;
   border: 1px solid rgba(0, 0, 0, 0.48);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1;
   box-sizing: border-box;
 }
 
 .package-cell-summary-badge-attention {
-  background: #ffd37a;
-  color: #000000;
   border-color: rgba(0, 0, 0, 0.62);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.22);
 }
 
 .order-card-file-input {
@@ -2854,52 +2878,52 @@ body[data-theme='light'] .attachment-preview-table td {
   inset: 0;
   pointer-events: none;
   border-style: solid;
-  border-color: rgba(126, 191, 255, 0.96);
+  border-color: var(--orders-hover-outline-color);
   border-width: 0;
 }
 
 .order-outline-top {
-  box-shadow: inset 0 2px 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-bottom {
-  box-shadow: inset 0 -2px 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 -3px 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-left {
-  box-shadow: inset 2px 0 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 3px 0 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-right {
-  box-shadow: inset -2px 0 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset -3px 0 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-top.order-outline-bottom {
-  box-shadow: inset 0 2px 0 rgba(126, 191, 255, 0.96), inset 0 -2px 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset 0 -3px 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-top.order-outline-left {
-  box-shadow: inset 0 2px 0 rgba(126, 191, 255, 0.96), inset 2px 0 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset 3px 0 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-top.order-outline-right {
-  box-shadow: inset 0 2px 0 rgba(126, 191, 255, 0.96), inset -2px 0 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset -3px 0 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-bottom.order-outline-left {
-  box-shadow: inset 0 -2px 0 rgba(126, 191, 255, 0.96), inset 2px 0 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 -3px 0 var(--orders-hover-outline-color), inset 3px 0 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-bottom.order-outline-right {
-  box-shadow: inset 0 -2px 0 rgba(126, 191, 255, 0.96), inset -2px 0 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 -3px 0 var(--orders-hover-outline-color), inset -3px 0 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-top.order-outline-bottom.order-outline-left {
-  box-shadow: inset 0 2px 0 rgba(126, 191, 255, 0.96), inset 0 -2px 0 rgba(126, 191, 255, 0.96), inset 2px 0 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset 0 -3px 0 var(--orders-hover-outline-color), inset 3px 0 0 var(--orders-hover-outline-color);
 }
 
 .order-outline-top.order-outline-bottom.order-outline-right {
-  box-shadow: inset 0 2px 0 rgba(126, 191, 255, 0.96), inset 0 -2px 0 rgba(126, 191, 255, 0.96), inset -2px 0 0 rgba(126, 191, 255, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset 0 -3px 0 var(--orders-hover-outline-color), inset -3px 0 0 var(--orders-hover-outline-color);
 }
 
 .sticky-col.order-outline-cell {
@@ -2907,19 +2931,19 @@ body[data-theme='light'] .attachment-preview-table td {
 }
 
 .sticky-col.order-outline-top::after {
-  border-top-width: 2px;
+  border-top-width: 3px;
 }
 
 .sticky-col.order-outline-bottom::after {
-  border-bottom-width: 2px;
+  border-bottom-width: 3px;
 }
 
 .sticky-col.order-outline-left::after {
-  border-left-width: 2px;
+  border-left-width: 3px;
 }
 
 .sticky-col.order-outline-right::after {
-  border-right-width: 2px;
+  border-right-width: 3px;
 }
 
 .xlsx-order-cell-meta {
@@ -4690,56 +4714,62 @@ body[data-theme='light'] .sticky-col {
   box-shadow: 1px 0 0 rgba(103, 149, 196, 0.14);
 }
 
+body[data-theme='light'] .unified-orders-table {
+  --orders-cell-divider-color: rgba(103, 149, 196, 0.18);
+  --orders-group-divider-color: rgba(62, 123, 179, 0.52);
+  --orders-hover-outline-color: rgba(62, 123, 179, 0.96);
+}
+
 body[data-theme='light'] .unified-orders-table tbody .merged-order-cell.sticky-col {
   background: rgba(255, 255, 255, 0.99);
 }
 
 body[data-theme='light'] .order-outline-top {
-  box-shadow: inset 0 2px 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-bottom {
-  box-shadow: inset 0 -2px 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 -3px 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-left {
-  box-shadow: inset 2px 0 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 3px 0 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-right {
-  box-shadow: inset -2px 0 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset -3px 0 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-top.order-outline-bottom {
-  box-shadow: inset 0 2px 0 rgba(62, 123, 179, 0.96), inset 0 -2px 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset 0 -3px 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-top.order-outline-left {
-  box-shadow: inset 0 2px 0 rgba(62, 123, 179, 0.96), inset 2px 0 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset 3px 0 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-top.order-outline-right {
-  box-shadow: inset 0 2px 0 rgba(62, 123, 179, 0.96), inset -2px 0 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset -3px 0 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-bottom.order-outline-left {
-  box-shadow: inset 0 -2px 0 rgba(62, 123, 179, 0.96), inset 2px 0 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 -3px 0 var(--orders-hover-outline-color), inset 3px 0 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-bottom.order-outline-right {
-  box-shadow: inset 0 -2px 0 rgba(62, 123, 179, 0.96), inset -2px 0 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 -3px 0 var(--orders-hover-outline-color), inset -3px 0 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-top.order-outline-bottom.order-outline-left {
-  box-shadow: inset 0 2px 0 rgba(62, 123, 179, 0.96), inset 0 -2px 0 rgba(62, 123, 179, 0.96), inset 2px 0 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset 0 -3px 0 var(--orders-hover-outline-color), inset 3px 0 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .order-outline-top.order-outline-bottom.order-outline-right {
-  box-shadow: inset 0 2px 0 rgba(62, 123, 179, 0.96), inset 0 -2px 0 rgba(62, 123, 179, 0.96), inset -2px 0 0 rgba(62, 123, 179, 0.96);
+  box-shadow: inset 0 3px 0 var(--orders-hover-outline-color), inset 0 -3px 0 var(--orders-hover-outline-color), inset -3px 0 0 var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .sticky-col.order-outline-cell::after {
-  border-color: rgba(62, 123, 179, 0.96);
+  border-color: var(--orders-hover-outline-color);
 }
 
 body[data-theme='light'] .unified-orders-table tbody td.order-filled-cell,
@@ -5412,11 +5442,11 @@ body[data-theme='light'] .home-auth-status-pending {
 
 @media (max-width: 1024px) {
   .unified-orders-header-scroll {
-    top: 84px;
+    top: 0;
   }
 
   .unified-orders-table {
-    --orders-sticky-offset: 84px;
+    --orders-sticky-offset: 0px;
   }
 
   .App-header {
@@ -5497,11 +5527,11 @@ body[data-theme='light'] .home-auth-status-pending {
 
 @media (max-width: 768px) {
   .unified-orders-header-scroll {
-    top: 66px;
+    top: 0;
   }
 
   .unified-orders-table {
-    --orders-sticky-offset: 66px;
+    --orders-sticky-offset: 0px;
   }
 
   .App-header {
