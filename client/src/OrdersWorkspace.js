@@ -297,6 +297,11 @@ function getItemManualStageMark(item, columnKey) {
   return item.manualStageMarks[columnKey] || null;
 }
 
+function getItemManualStageClear(item, columnKey) {
+  if (!item?.manualStageClears || typeof item.manualStageClears !== 'object') return null;
+  return item.manualStageClears[columnKey] || null;
+}
+
 function getLatestAutoHighlightAt(...timestamps) {
   return timestamps
     .map((value) => String(value || '').trim())
@@ -1016,6 +1021,7 @@ function OrdersWorkspace() {
 
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
+    const manualClear = getItemManualStageClear(item, columnKey);
     const isSelected = selectedStageCellKeys.includes(buildManualStageCellKey(rowKey, columnKey));
     const className = cn(
       baseClassName,
@@ -1023,20 +1029,27 @@ function OrdersWorkspace() {
       isAdmin && !disabled ? 'manual-stage-cell-selectable' : '',
       isSelected ? 'manual-stage-cell-selected' : '',
     );
-    const style = manualMark
+    const style = manualClear
+      ? undefined
+      : manualMark
       ? {
           ...(baseStyle || {}),
           background: legendColorMap[manualMark.legendKey] || '#FFFFFF',
           color: MANUAL_STAGE_TEXT_COLOR_MAP[manualMark.legendKey] || '#000000',
         }
       : baseStyle;
+    const title = manualMark?.legendKey
+      ? `${manualMark.legendKey}${manualMark.updatedAt ? ` • ${new Date(manualMark.updatedAt).toLocaleString()}` : ''}`
+      : (manualClear
+          ? `Сброшено${manualClear.updatedAt ? ` • ${new Date(manualClear.updatedAt).toLocaleString()}` : ''}`
+          : undefined);
 
     return {
       className,
       style,
       onClick: isAdmin && !disabled ? (event) => handleManualStageCellClick(event, rowKey, columnKey) : undefined,
       'data-manual-stage-cell-key': buildManualStageCellKey(rowKey, columnKey),
-      title: manualMark?.legendKey ? `${manualMark.legendKey}${manualMark.updatedAt ? ` • ${new Date(manualMark.updatedAt).toLocaleString()}` : ''}` : undefined,
+      title,
     };
   }, [handleManualStageCellClick, isAdmin, legendColorMap, selectedStageCellKeys]);
 

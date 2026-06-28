@@ -174,6 +174,9 @@ function getItemAssignedStage(item = {}) {
 
 function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpers = {}) {
   const manualStageMarks = helpers.manualStageMarks || normalizeManualStageMarks(item?.manualStageMarks);
+  const manualStageClears = helpers.manualStageClears || normalizeManualStageClears(item?.manualStageClears);
+  if (manualStageClears[columnKey]) return '';
+
   const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
   if (updatedAt) return updatedAt;
 
@@ -916,6 +919,7 @@ const OrderStore = {
       item.manualStageMarks = { ...currentMarks };
       item.manualStageClears = { ...currentClears };
       const currentMark = item.manualStageMarks[columnKey];
+      const currentClear = item.manualStageClears[columnKey];
       let itemChanged = false;
 
       if (shouldClear) {
@@ -923,8 +927,18 @@ const OrderStore = {
           delete item.manualStageMarks[columnKey];
           itemChanged = true;
         }
-        if (item.manualStageClears[columnKey]) {
-          delete item.manualStageClears[columnKey];
+        if (!currentClear) {
+          item.manualStageClears[columnKey] = {
+            updatedAt: new Date().toISOString(),
+            updatedBy: String(actor || '').trim(),
+          };
+          itemChanged = true;
+        } else if (!currentClear.updatedAt || currentClear.updatedBy !== String(actor || '').trim()) {
+          item.manualStageClears[columnKey] = {
+            ...currentClear,
+            updatedAt: currentClear.updatedAt || new Date().toISOString(),
+            updatedBy: String(actor || '').trim(),
+          };
           itemChanged = true;
         }
       } else {

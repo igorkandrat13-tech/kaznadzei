@@ -56,7 +56,9 @@ function getItemAssignedStage(item) {
     || null;
 }
 
-function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMarks = {}) {
+function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMarks = {}, manualStageClears = {}) {
+  if (manualStageClears[columnKey]) return '';
+
   const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
   if (updatedAt) return updatedAt;
 
@@ -117,11 +119,15 @@ function getOrderManufacturingMeta(order) {
     const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
       ? item.manualStageMarks
       : {};
+    const manualStageClears = item?.manualStageClears && typeof item.manualStageClears === 'object'
+      ? item.manualStageClears
+      : {};
     ORDER_MANUFACTURING_STAGE_COLUMN_KEYS.forEach((columnKey) => {
       const updatedAt = getItemEffectiveManufacturingTimestamp(
         item,
         columnKey,
         manualStageMarks,
+        manualStageClears,
       );
       if (updatedAt) {
         timestamps.push(updatedAt);
