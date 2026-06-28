@@ -139,16 +139,27 @@ function normalizePackageItems(items = [], legacyPackageName = '') {
     .split(/[\n,;]+/g)
     .map((token) => token.trim())
     .filter(Boolean)
-    .map((name) => ({
+    .map((token) => {
+      const isCompleted = /^(\+|\[x\]|x\s+|✓\s+|✔\s+)/i.test(token);
+      const normalizedName = token
+        .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|✓\s+|✔\s+)/i, '')
+        .trim();
+      return {
+        id: createPackageItemId(),
+        name: normalizedName || token,
+        isCompleted,
+        completedAt: isCompleted ? new Date().toISOString().split('T')[0] : null,
+      };
+    })
+    .filter((item) => item.name)
+    .map((item) => ({
       id: createPackageItemId(),
-      name,
-      isCompleted: false,
-      completedAt: null,
+      ...item,
     }));
 }
 
 function getPackageSummary(items = []) {
-  return normalizePackageItems(items).map((item) => item.name).join(', ');
+  return normalizePackageItems(items).map((item) => `${item.isCompleted ? '+' : '-'} ${item.name}`).join('; ');
 }
 
 function getPackageStats(items = [], legacyPackageName = '') {

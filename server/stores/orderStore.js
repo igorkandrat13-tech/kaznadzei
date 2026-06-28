@@ -376,18 +376,27 @@ function normalizePackageItems(source = [], legacyPackageName = '') {
     .filter(Boolean);
   if (legacyTokens.length === 0) return [];
 
-  return legacyTokens.map((name) => ({
+  return legacyTokens.map((token) => {
+    const isCompleted = /^(\+|\[x\]|x\s+|✓\s+|✔\s+)/i.test(token);
+    const normalizedName = token
+      .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|✓\s+|✔\s+)/i, '')
+      .trim();
+    return {
+      id: id(),
+      name: normalizedName || token,
+      isCompleted,
+      completedAt: isCompleted ? new Date().toISOString().split('T')[0] : null,
+    };
+  }).filter((item) => item.name).map((item) => ({
     id: id(),
-    name,
-    isCompleted: false,
-    completedAt: null,
+    ...item,
   }));
 }
 
 function getPackageSummary(packageItems = []) {
   return normalizePackageItems(packageItems)
-    .map((item) => item.name)
-    .join(', ');
+    .map((item) => `${item.isCompleted ? '+' : '-'} ${item.name}`)
+    .join('; ');
 }
 
 function cloneStages(stages = []) {

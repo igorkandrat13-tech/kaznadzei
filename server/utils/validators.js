@@ -268,7 +268,7 @@ function sanitizeOrderItemInput(payload, options = {}) {
     data.deliveryDate = normalizeDate(payload.deliveryDate, 'deliveryDate', { allowUndefined: partial });
   }
   if (!partial || payload.packageName !== undefined) {
-    data.packageName = normalizeString(payload.packageName, 'packageName', { maxLength: 160 });
+    data.packageName = normalizeString(payload.packageName, 'packageName', { maxLength: 1000 });
   }
   if (!partial || payload.packageItems !== undefined) {
     if (payload.packageItems === undefined && partial) {
