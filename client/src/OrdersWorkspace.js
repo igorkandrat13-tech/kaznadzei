@@ -111,6 +111,10 @@ function getAttachmentLinkUrl(attachment = {}) {
   return String(attachment.url || '').trim();
 }
 
+function getAttachmentTargetKey(orderId = '', itemId = '') {
+  return `${String(orderId || '').trim()}:${String(itemId || '').trim()}`;
+}
+
 function formatAttachmentSize(size) {
   const numericSize = Number(size) || 0;
   if (numericSize <= 0) return '';
@@ -448,7 +452,7 @@ function OrdersWorkspace() {
   const [colors, setColors] = useState([]);
   const [roomEditor, setRoomEditor] = useState(null);
   const [roomEditorSaving, setRoomEditorSaving] = useState(false);
-  const [attachmentUploadingOrderId, setAttachmentUploadingOrderId] = useState('');
+  const [attachmentUploadingTargetKey, setAttachmentUploadingTargetKey] = useState('');
   const [attachmentDeletingKey, setAttachmentDeletingKey] = useState('');
   const [attachmentOpeningKey, setAttachmentOpeningKey] = useState('');
   const [attachmentsDialog, setAttachmentsDialog] = useState(null);
@@ -711,10 +715,11 @@ function OrdersWorkspace() {
       orders.flatMap(order => (order.items || []).map(item => String(item.room || '').trim()).filter(Boolean))
     )).sort((a, b) => a.localeCompare(b, 'ru'));
   }, [orders]);
-  const currentAttachmentDialogOrder = useMemo(
-    () => orders.find((order) => order._id === attachmentsDialog?.orderId) || null,
-    [attachmentsDialog?.orderId, orders],
-  );
+  const currentAttachmentDialogItem = useMemo(() => {
+    const order = orders.find((currentOrder) => currentOrder._id === attachmentsDialog?.orderId) || null;
+    if (!order) return null;
+    return (order.items || []).find((currentItem) => currentItem.itemId === attachmentsDialog?.itemId) || null;
+  }, [attachmentsDialog?.itemId, attachmentsDialog?.orderId, orders]);
 
   const clearSelectedStageCells = useCallback(() => {
     setSelectedStageCellKeys([]);
@@ -1059,12 +1064,15 @@ function OrdersWorkspace() {
     setAttachmentPreviewState(null);
   }, [setAttachmentPreviewState]);
 
-  const openAttachmentsDialog = useCallback((order) => {
-    if (!order?._id) return;
+  const openAttachmentsDialog = useCallback((order, item) => {
+    if (!order?._id || !item?.itemId) return;
     setAttachmentsDialog({
       orderId: order._id,
+      itemId: item.itemId,
       orderNumber: order.orderNumber || '',
       customer: order.customer || '',
+      itemNumber: item.itemNumber || '',
+      itemName: item.name || '',
     });
     setAttachmentLinkDraft({ name: '', url: '' });
   }, []);
@@ -1086,7 +1094,7 @@ function OrdersWorkspace() {
       setConfirmAttachmentDelete(null);
       return;
     }
-    if (confirmAttachmentOverwrite && !attachmentUploadingOrderId) {
+    if (confirmAttachmentOverwrite && !attachmentUploadingTargetKey) {
       setConfirmAttachmentOverwrite(null);
       return;
     }
@@ -1318,16 +1326,17 @@ function OrdersWorkspace() {
     }
   };
 
-  const handleUploadOrderAttachment = async (order, file, { overwrite = false } = {}) => {
-    if (!order?._id || !file) return;
+  const handleUploadOrderAttachment = async (order, item, file, { overwrite = false } = {}) => {
+    if (!order?._id || !item?.itemId || !file) return;
 
-    setAttachmentUploadingOrderId(order._id);
+    const targetKey = getAttachmentTargetKey(order._id, item.itemId);
+    setAttachmentUploadingTargetKey(targetKey);
     setError('');
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await apiFetch(`/api/orders/${order._id}/attachments${overwrite ? '?overwrite=1' : ''}`, {
+      const res = await apiFetch(`/api/orders/${order._id}/items/${item.itemId}/attachments${overwrite ? '?overwrite=1' : ''}`, {
         method: 'POST',
         body: formData,
       });
@@ -1336,7 +1345,10 @@ function OrdersWorkspace() {
         if (res.status === 409 && !overwrite) {
           setConfirmAttachmentOverwrite({
             orderId: order._id,
+            itemId: item.itemId,
             orderNumber: order.orderNumber || '',
+            itemName: item.name || '',
+            itemNumber: item.itemNumber || '',
             attachmentName: data?.existingAttachment?.name || file.name || 'Файл',
             file,
           });
@@ -1351,7 +1363,7 @@ function OrdersWorkspace() {
     } catch (uploadError) {
       setError(uploadError.message || 'Не удалось загрузить файл карточки заказа.');
     } finally {
-      setAttachmentUploadingOrderId('');
+      setAttachmentUploadingTargetKey('');
     }
   };
 
@@ -1361,12 +1373,13 @@ function OrdersWorkspace() {
     setAttachmentLinkDraft((current) => ({ ...current, [field]: value }));
   };
 
-  const handleUploadOrderAttachmentLink = async ({ orderId, name, url, overwrite = false }) => {
-    if (!orderId) return;
-    setAttachmentUploadingOrderId(orderId);
+  const handleUploadOrderAttachmentLink = async ({ orderId, itemId, name, url, overwrite = false }) => {
+    if (!orderId || !itemId) return;
+    const targetKey = getAttachmentTargetKey(orderId, itemId);
+    setAttachmentUploadingTargetKey(targetKey);
     setError('');
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/attachments/link${overwrite ? '?overwrite=1' : ''}`, {
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/link${overwrite ? '?overwrite=1' : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, url }),
@@ -1377,7 +1390,10 @@ function OrdersWorkspace() {
           setConfirmAttachmentOverwrite({
             kind: 'link',
             orderId,
+            itemId,
             orderNumber: attachmentsDialog?.orderNumber || '',
+            itemName: attachmentsDialog?.itemName || '',
+            itemNumber: attachmentsDialog?.itemNumber || '',
             attachmentName: data?.existingAttachment?.name || name || 'Ссылка',
             name,
             url,
@@ -1393,12 +1409,12 @@ function OrdersWorkspace() {
     } catch (uploadError) {
       setError(uploadError.message || 'Не удалось сохранить ссылку в карточке заказа.');
     } finally {
-      setAttachmentUploadingOrderId('');
+      setAttachmentUploadingTargetKey('');
     }
   };
 
-  const handleOpenAttachment = async (orderId, attachment) => {
-    if (!orderId || !attachment?.attachmentId) return;
+  const handleOpenAttachment = async (orderId, itemId, attachment) => {
+    if (!orderId || !itemId || !attachment?.attachmentId) return;
 
     if (isLinkAttachment(attachment)) {
       const targetUrl = getAttachmentLinkUrl(attachment);
@@ -1410,11 +1426,11 @@ function OrdersWorkspace() {
       return;
     }
 
-    const openKey = `${orderId}:${attachment.attachmentId}`;
+    const openKey = `${getAttachmentTargetKey(orderId, itemId)}:${attachment.attachmentId}`;
     setAttachmentOpeningKey(openKey);
     setError('');
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/attachments/${attachment.attachmentId}/file`);
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachment.attachmentId}/file`);
       if (!res.ok) {
         setError(await getErrorMessage(res, 'Не удалось открыть файл карточки заказа.'));
         return;
@@ -1425,6 +1441,7 @@ function OrdersWorkspace() {
         const blobUrl = window.URL.createObjectURL(blob);
         setAttachmentPreviewState({
           orderId,
+          itemId,
           attachment,
           mode: 'image',
           name: attachment.name || 'Изображение',
@@ -1439,6 +1456,7 @@ function OrdersWorkspace() {
         const blobUrl = window.URL.createObjectURL(blob);
         setAttachmentPreviewState({
           orderId,
+          itemId,
           attachment,
           mode: 'pdf',
           name: attachment.name || 'PDF',
@@ -1455,6 +1473,7 @@ function OrdersWorkspace() {
         const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
         setAttachmentPreviewState({
           orderId,
+          itemId,
           attachment,
           mode: 'word',
           name: attachment.name || 'Word',
@@ -1483,6 +1502,7 @@ function OrdersWorkspace() {
         });
         setAttachmentPreviewState({
           orderId,
+          itemId,
           attachment,
           mode: 'spreadsheet',
           name: attachment.name || 'Excel',
@@ -1494,7 +1514,7 @@ function OrdersWorkspace() {
         return;
       }
 
-      await handleDownloadAttachment(orderId, attachment);
+      await handleDownloadAttachment(orderId, itemId, attachment);
     } catch (openError) {
       setError(openError.message || 'Не удалось открыть файл карточки заказа.');
     } finally {
@@ -1502,8 +1522,8 @@ function OrdersWorkspace() {
     }
   };
 
-  const handleDownloadAttachment = async (orderId, attachment) => {
-    if (!orderId || !attachment?.attachmentId) return;
+  const handleDownloadAttachment = async (orderId, itemId, attachment) => {
+    if (!orderId || !itemId || !attachment?.attachmentId) return;
 
     if (isLinkAttachment(attachment)) {
       const targetUrl = getAttachmentLinkUrl(attachment);
@@ -1515,11 +1535,11 @@ function OrdersWorkspace() {
       return;
     }
 
-    const downloadKey = `${orderId}:${attachment.attachmentId}:download`;
+    const downloadKey = `${getAttachmentTargetKey(orderId, itemId)}:${attachment.attachmentId}:download`;
     setAttachmentOpeningKey(downloadKey);
     setError('');
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/attachments/${attachment.attachmentId}/file`);
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachment.attachmentId}/file`);
       if (!res.ok) {
         setError(await getErrorMessage(res, 'Не удалось скачать файл карточки заказа.'));
         return;
@@ -1539,34 +1559,39 @@ function OrdersWorkspace() {
     }
   };
 
-  const handleAttachmentInputChange = async (order, event) => {
+  const handleAttachmentInputChange = async (order, item, event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
 
-    const duplicateAttachment = (order.attachments || []).find((attachment) => (
+    const duplicateAttachment = (item.attachments || []).find((attachment) => (
       getAttachmentNameKey(attachment.name) === getAttachmentNameKey(file.name)
     ));
     if (duplicateAttachment) {
       setConfirmAttachmentOverwrite({
         orderId: order._id || '',
+        itemId: item.itemId || '',
         orderNumber: order.orderNumber || '',
+        itemName: item.name || '',
+        itemNumber: item.itemNumber || '',
         attachmentName: duplicateAttachment.name || file.name || 'Файл',
         file,
       });
       return;
     }
-    await handleUploadOrderAttachment(order, file);
+    await handleUploadOrderAttachment(order, item, file);
   };
 
   const performOverwriteAttachment = async () => {
     const orderId = String(confirmAttachmentOverwrite?.orderId || '').trim();
+    const itemId = String(confirmAttachmentOverwrite?.itemId || '').trim();
     const file = confirmAttachmentOverwrite?.file;
-    if (!orderId) return;
+    if (!orderId || !itemId) return;
 
     if (confirmAttachmentOverwrite?.kind === 'link') {
       await handleUploadOrderAttachmentLink({
         orderId,
+        itemId,
         name: confirmAttachmentOverwrite?.name || '',
         url: confirmAttachmentOverwrite?.url || '',
         overwrite: true,
@@ -1577,22 +1602,23 @@ function OrdersWorkspace() {
     if (!file) return;
 
     const order = orders.find((currentOrder) => currentOrder._id === orderId);
-    if (!order) {
-      setError('Заказ для перезаписи файла не найден.');
+    const item = (order?.items || []).find((currentItem) => currentItem.itemId === itemId) || null;
+    if (!order || !item) {
+      setError('Изделие для перезаписи файла не найдено.');
       return;
     }
 
-    await handleUploadOrderAttachment(order, file, { overwrite: true });
+    await handleUploadOrderAttachment(order, item, file, { overwrite: true });
   };
 
-  const performDeleteAttachment = async (orderId, attachmentId) => {
-    if (!orderId || !attachmentId) return;
+  const performDeleteAttachment = async (orderId, itemId, attachmentId) => {
+    if (!orderId || !itemId || !attachmentId) return;
 
-    const deleteKey = `${orderId}:${attachmentId}`;
+    const deleteKey = `${getAttachmentTargetKey(orderId, itemId)}:${attachmentId}`;
     setAttachmentDeletingKey(deleteKey);
     setError('');
     try {
-      const res = await apiFetch(`/api/orders/${orderId}/attachments/${attachmentId}`, {
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/${attachmentId}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -1606,10 +1632,11 @@ function OrdersWorkspace() {
     }
   };
 
-  const requestDeleteAttachment = (orderId, attachment) => {
-    if (!orderId || !attachment?.attachmentId) return;
+  const requestDeleteAttachment = (orderId, itemId, attachment) => {
+    if (!orderId || !itemId || !attachment?.attachmentId) return;
     setConfirmAttachmentDelete({
       orderId,
+      itemId,
       attachmentId: attachment.attachmentId,
       attachmentName: attachment.name || 'Файл',
     });
@@ -1809,7 +1836,7 @@ function OrdersWorkspace() {
           item.itemNumber || '',
           item.quantity || '',
           item.name || '',
-          (order.attachments || []).map((attachment) => attachment.name).join(', '),
+          (item.attachments || []).map((attachment) => attachment.name).join(', '),
           item.deliveryDate || '',
           item.material || '',
           item.packageName || '',
@@ -1994,7 +2021,8 @@ function OrdersWorkspace() {
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                     const commentPreview = getCommentPreview(item.comments);
                     const orderManufacturingMeta = getOrderManufacturingMeta(order);
-                    const orderAttachments = Array.isArray(order.attachments) ? order.attachments : [];
+                    const itemAttachments = Array.isArray(item.attachments) ? item.attachments : [];
+                    const attachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId);
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
                     const carpenterManualMark = getItemManualStageMark(item, 'carpenter');
                     const carpenterClearMark = getItemManualStageClear(item, 'carpenter');
@@ -2175,39 +2203,40 @@ function OrdersWorkspace() {
                             <input
                               ref={(node) => {
                                 if (node) {
-                                  attachmentInputRefs.current[order._id] = node;
+                                  attachmentInputRefs.current[attachmentTargetKey] = node;
                                 } else {
-                                  delete attachmentInputRefs.current[order._id];
+                                  delete attachmentInputRefs.current[attachmentTargetKey];
                                 }
                               }}
                               type="file"
                               className="order-card-file-input"
                               accept={ORDER_CARD_ATTACHMENT_ACCEPT}
-                              onChange={(event) => handleAttachmentInputChange(order, event)}
+                              onChange={(event) => handleAttachmentInputChange(order, item, event)}
                             />
                             <Button
                               variant="secondary"
                               size="sm"
                               className="order-card-icon-btn"
-                              onClick={() => attachmentInputRefs.current[order._id]?.click()}
-                              disabled={attachmentUploadingOrderId === order._id}
+                              onClick={() => attachmentInputRefs.current[attachmentTargetKey]?.click()}
+                              disabled={isPlaceholder || attachmentUploadingTargetKey === attachmentTargetKey}
                               title="Загрузить файл"
                               aria-label="Загрузить файл"
                             >
-                              {attachmentUploadingOrderId === order._id ? '...' : '+'}
+                              {attachmentUploadingTargetKey === attachmentTargetKey ? '...' : '+'}
                             </Button>
                             <Button
                               variant="secondary"
                               size="sm"
                               className="order-card-icon-btn"
-                              onClick={() => openAttachmentsDialog(order)}
-                              title={orderAttachments.length > 0 ? 'Просмотр файлов' : 'Файлы не прикреплены'}
+                              onClick={() => openAttachmentsDialog(order, item)}
+                              disabled={isPlaceholder}
+                              title={itemAttachments.length > 0 ? 'Просмотр файлов' : 'Файлы не прикреплены'}
                               aria-label="Просмотр файлов"
                             >
                               ⌕
                             </Button>
-                            <span className="order-card-summary-badge" title={orderAttachments.length > 0 ? `Файлов и ссылок прикреплено: ${orderAttachments.length}` : 'Файлы и ссылки не прикреплены'}>
-                              {orderAttachments.length}
+                            <span className="order-card-summary-badge" title={itemAttachments.length > 0 ? `Файлов и ссылок прикреплено: ${itemAttachments.length}` : 'Файлы и ссылки не прикреплены'}>
+                              {itemAttachments.length}
                             </span>
                           </div>
                         </td>
@@ -2543,8 +2572,8 @@ function OrdersWorkspace() {
       {attachmentsDialog ? (
         <Modal open={Boolean(attachmentsDialog)} onClose={() => setAttachmentsDialog(null)} size="lg" className="order-form-modal">
           <ModalHeader
-            title="Файлы карточки заказа"
-            subtitle={`${attachmentsDialog.orderNumber ? `Заказ № ${attachmentsDialog.orderNumber}` : 'Без номера'}${attachmentsDialog.customer ? ` · ${attachmentsDialog.customer}` : ''}`}
+            title="Файлы изделия"
+            subtitle={`${attachmentsDialog.orderNumber ? `Заказ № ${attachmentsDialog.orderNumber}` : 'Без номера'}${attachmentsDialog.customer ? ` · ${attachmentsDialog.customer}` : ''}${attachmentsDialog.itemName ? ` · ${attachmentsDialog.itemName}` : ''}${attachmentsDialog.itemNumber ? ` · позиция ${attachmentsDialog.itemNumber}` : ''}`}
             onClose={() => setAttachmentsDialog(null)}
           />
 
@@ -2571,21 +2600,22 @@ function OrdersWorkspace() {
                   variant="secondary"
                   onClick={() => handleUploadOrderAttachmentLink({
                     orderId: attachmentsDialog.orderId,
+                    itemId: attachmentsDialog.itemId,
                     name: attachmentLinkDraft.name,
                     url: attachmentLinkDraft.url,
                   })}
-                  disabled={attachmentUploadingOrderId === attachmentsDialog.orderId}
+                  disabled={attachmentUploadingTargetKey === getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId)}
                 >
-                  {attachmentUploadingOrderId === attachmentsDialog.orderId ? 'Сохранение...' : 'Добавить ссылку'}
+                  {attachmentUploadingTargetKey === getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId) ? 'Сохранение...' : 'Добавить ссылку'}
                 </Button>
               </div>
             </div>
           </div>
 
           <div className="order-card-dialog-list">
-            {(currentAttachmentDialogOrder?.attachments || []).length > 0 ? (
-              currentAttachmentDialogOrder.attachments.map((attachment) => {
-                const fileKey = `${attachmentsDialog.orderId}:${attachment.attachmentId}`;
+            {(currentAttachmentDialogItem?.attachments || []).length > 0 ? (
+              currentAttachmentDialogItem.attachments.map((attachment) => {
+                const fileKey = `${getAttachmentTargetKey(attachmentsDialog.orderId, attachmentsDialog.itemId)}:${attachment.attachmentId}`;
                 const isOpening = attachmentOpeningKey === fileKey;
                 const isDownloading = attachmentOpeningKey === `${fileKey}:download`;
                 const isDeleting = attachmentDeletingKey === fileKey;
@@ -2596,7 +2626,7 @@ function OrdersWorkspace() {
                       <button
                         type="button"
                         className="order-card-dialog-open"
-                        onClick={() => handleOpenAttachment(attachmentsDialog.orderId, attachment)}
+                        onClick={() => handleOpenAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment)}
                         disabled={isOpening || isDownloading}
                         title={isImageAttachment(attachment) ? 'Просмотр' : 'Открыть'}
                         aria-label={isImageAttachment(attachment) ? 'Просмотр файла' : 'Открыть файл'}
@@ -2613,7 +2643,7 @@ function OrdersWorkspace() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => handleDownloadAttachment(attachmentsDialog.orderId, attachment)}
+                        onClick={() => handleDownloadAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment)}
                         disabled={isOpening || isDownloading}
                       >
                         {isLinkAttachment(attachment) ? 'Перейти' : (isDownloading ? 'Скачивание...' : 'Скачать')}
@@ -2621,7 +2651,7 @@ function OrdersWorkspace() {
                       <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => requestDeleteAttachment(attachmentsDialog.orderId, attachment)}
+                        onClick={() => requestDeleteAttachment(attachmentsDialog.orderId, attachmentsDialog.itemId, attachment)}
                         disabled={isDeleting}
                       >
                         {isDeleting ? 'Удаление...' : 'Удалить'}
@@ -2656,10 +2686,10 @@ function OrdersWorkspace() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => handleDownloadAttachment(attachmentPreview.orderId, attachmentPreview.attachment)}
-                  disabled={attachmentOpeningKey === `${attachmentPreview.orderId}:${attachmentPreview.attachment.attachmentId}:download`}
+                  onClick={() => handleDownloadAttachment(attachmentPreview.orderId, attachmentPreview.itemId, attachmentPreview.attachment)}
+                  disabled={attachmentOpeningKey === `${getAttachmentTargetKey(attachmentPreview.orderId, attachmentPreview.itemId)}:${attachmentPreview.attachment.attachmentId}:download`}
                 >
-                  {attachmentOpeningKey === `${attachmentPreview.orderId}:${attachmentPreview.attachment.attachmentId}:download` ? 'Скачивание...' : 'Скачать'}
+                  {attachmentOpeningKey === `${getAttachmentTargetKey(attachmentPreview.orderId, attachmentPreview.itemId)}:${attachmentPreview.attachment.attachmentId}:download` ? 'Скачивание...' : 'Скачать'}
                 </Button>
               ) : null}
             </div>
@@ -2863,21 +2893,21 @@ function OrdersWorkspace() {
       <ConfirmDialog
         open={Boolean(confirmAttachmentDelete)}
         title="Удалить файл?"
-        message={confirmAttachmentDelete ? `Файл "${confirmAttachmentDelete.attachmentName}" будет удален из карточки заказа без возможности восстановления.` : ''}
+        message={confirmAttachmentDelete ? `Файл "${confirmAttachmentDelete.attachmentName}" будет удален из карточки изделия без возможности восстановления.` : ''}
         confirmLabel="Удалить файл"
-        onConfirm={() => performDeleteAttachment(confirmAttachmentDelete?.orderId || '', confirmAttachmentDelete?.attachmentId || '')}
+        onConfirm={() => performDeleteAttachment(confirmAttachmentDelete?.orderId || '', confirmAttachmentDelete?.itemId || '', confirmAttachmentDelete?.attachmentId || '')}
         onCancel={() => !attachmentDeletingKey && setConfirmAttachmentDelete(null)}
-        loading={Boolean(confirmAttachmentDelete && attachmentDeletingKey === `${confirmAttachmentDelete.orderId}:${confirmAttachmentDelete.attachmentId}`)}
+        loading={Boolean(confirmAttachmentDelete && attachmentDeletingKey === `${getAttachmentTargetKey(confirmAttachmentDelete.orderId, confirmAttachmentDelete.itemId)}:${confirmAttachmentDelete.attachmentId}`)}
       />
 
       <ConfirmDialog
         open={Boolean(confirmAttachmentOverwrite)}
         title="Перезаписать файл?"
-        message={confirmAttachmentOverwrite ? `${confirmAttachmentOverwrite.kind === 'link' ? 'Ссылка' : 'Файл'} "${confirmAttachmentOverwrite.attachmentName}" уже загружен${confirmAttachmentOverwrite.orderNumber ? ` в заказ № ${confirmAttachmentOverwrite.orderNumber}` : ''}.\nСтарая версия будет заменена новой.` : ''}
+        message={confirmAttachmentOverwrite ? `${confirmAttachmentOverwrite.kind === 'link' ? 'Ссылка' : 'Файл'} "${confirmAttachmentOverwrite.attachmentName}" уже загружен${confirmAttachmentOverwrite.orderNumber ? ` в заказ № ${confirmAttachmentOverwrite.orderNumber}` : ''}${confirmAttachmentOverwrite.itemName ? ` · ${confirmAttachmentOverwrite.itemName}` : ''}${confirmAttachmentOverwrite.itemNumber ? ` · позиция ${confirmAttachmentOverwrite.itemNumber}` : ''}.\nСтарая версия будет заменена новой.` : ''}
         confirmLabel={confirmAttachmentOverwrite?.kind === 'link' ? 'Перезаписать ссылку' : 'Перезаписать файл'}
         onConfirm={performOverwriteAttachment}
-        onCancel={() => !attachmentUploadingOrderId && setConfirmAttachmentOverwrite(null)}
-        loading={Boolean(confirmAttachmentOverwrite && attachmentUploadingOrderId === confirmAttachmentOverwrite.orderId)}
+        onCancel={() => !attachmentUploadingTargetKey && setConfirmAttachmentOverwrite(null)}
+        loading={Boolean(confirmAttachmentOverwrite && attachmentUploadingTargetKey === getAttachmentTargetKey(confirmAttachmentOverwrite.orderId, confirmAttachmentOverwrite.itemId))}
       />
     </div>
   );

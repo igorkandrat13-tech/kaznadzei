@@ -394,6 +394,7 @@ function buildOrderItem(source = {}, options = {}) {
     packageName: String(source.packageName || source.package || '').trim(),
     photoLink: String(source.photoLink || source.link || '').trim(),
     notes: String(source.notes || '').trim(),
+    attachments: normalizeOrderAttachments(source.attachments),
     comments: normalizeComments(source.comments),
     workerAssignments,
     manualStageMarks,
@@ -519,7 +520,6 @@ function cleanupLegacyOrderFields(order) {
 function ensureOrderShape(order) {
   if (!order || typeof order !== 'object') return false;
 
-  let changed = false;
   const sourceItems = Array.isArray(order.items) ? order.items : [];
 
   if (!Array.isArray(order.items) || order.items.length === 0) {
@@ -565,6 +565,17 @@ function ensureOrderShape(order) {
     }
   }
 
+  const legacyOrderAttachments = normalizeOrderAttachments(order.attachments);
+  if (legacyOrderAttachments.length > 0 && Array.isArray(order.items) && order.items.length > 0) {
+    const primaryItem = order.items[0];
+    const primaryAttachments = normalizeOrderAttachments(primaryItem.attachments);
+    if (primaryAttachments.length === 0) {
+      primaryItem.attachments = legacyOrderAttachments;
+      primaryItem.updatedAt = new Date().toISOString();
+      changed = true;
+    }
+  }
+
   if (!order.orderDate) {
     order.orderDate = order.createdAt ? String(order.createdAt).split('T')[0] : '';
     changed = true;
@@ -573,9 +584,8 @@ function ensureOrderShape(order) {
     order.customer = '';
     changed = true;
   }
-  const normalizedAttachments = normalizeOrderAttachments(order.attachments);
-  if (JSON.stringify(order.attachments || []) !== JSON.stringify(normalizedAttachments)) {
-    order.attachments = normalizedAttachments;
+  if (JSON.stringify(order.attachments || []) !== JSON.stringify([])) {
+    order.attachments = [];
     changed = true;
   }
   const manufacturingMeta = deriveOrderManufacturingMeta(order);
@@ -662,9 +672,12 @@ const OrderStore = {
       startDate: '',
       endDate: '',
       createdAt,
-      attachments: normalizeOrderAttachments(data.attachments),
+      attachments: [],
       items,
     };
+    if (Array.isArray(order.items) && order.items.length > 0 && Array.isArray(data.attachments) && data.attachments.length > 0) {
+      order.items[0].attachments = normalizeOrderAttachments(data.attachments);
+    }
     syncOrderStatus(order);
     db.orders.push(order);
     save();
@@ -791,7 +804,11 @@ const OrderStore = {
     if (updates.customer !== undefined) order.customer = updates.customer;
     if (updates.orderDate !== undefined) order.orderDate = updates.orderDate;
     if (updates.attachments !== undefined) {
-      order.attachments = normalizeOrderAttachments(updates.attachments);
+      const primaryItem = getOrderItem(order);
+      if (primaryItem) {
+        primaryItem.attachments = normalizeOrderAttachments(updates.attachments);
+        primaryItem.updatedAt = new Date().toISOString();
+      }
     }
 
     if (Array.isArray(updates.items)) {
@@ -941,11 +958,13 @@ const OrderStore = {
       if (cleanupLegacyOrderFields(order)) {
         changed = true;
       }
-      const currentAttachments = JSON.stringify(order.attachments || []);
-      const nextAttachments = JSON.stringify(normalizeOrderAttachments(order.attachments));
-      if (currentAttachments !== nextAttachments) {
-        order.attachments = JSON.parse(nextAttachments);
-        changed = true;
+      for (const item of order.items || []) {
+        const currentAttachments = JSON.stringify(item.attachments || []);
+        const nextAttachments = JSON.stringify(normalizeOrderAttachments(item.attachments));
+        if (currentAttachments !== nextAttachments) {
+          item.attachments = JSON.parse(nextAttachments);
+          changed = true;
+        }
       }
       const manufacturingMeta = deriveOrderManufacturingMeta(order);
       if (order.startDate !== manufacturingMeta.startDate) {
@@ -969,12 +988,16 @@ const OrderStore = {
     return this.findAll().length;
   },
 
-  saveAttachment(orderId, attachment = {}, { overwrite = false } = {}) {
+  saveAttachment(orderId, itemId, attachment = {}, { overwrite = false } = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
     if (!order) {
       return { status: 'order_not_found' };
+    }
+    const item = getOrderItem(order, itemId);
+    if (!item) {
+      return { status: 'item_not_found' };
     }
 
     const normalizedAttachment = normalizeOrderAttachments([attachment])[0];
@@ -982,7 +1005,7 @@ const OrderStore = {
       return { status: 'invalid' };
     }
 
-    const currentAttachments = normalizeOrderAttachments(order.attachments);
+    const currentAttachments = normalizeOrderAttachments(item.attachments);
     const duplicateIndex = findAttachmentIndexByName(currentAttachments, normalizedAttachment.name);
 
     if (duplicateIndex !== -1) {
@@ -999,7 +1022,9 @@ const OrderStore = {
         attachmentId: existingAttachment.attachmentId,
       };
       currentAttachments[duplicateIndex] = overwrittenAttachment;
-      order.attachments = normalizeOrderAttachments(currentAttachments);
+      item.attachments = normalizeOrderAttachments(currentAttachments);
+      item.updatedAt = new Date().toISOString();
+      syncOrderStatus(order);
       save();
       return {
         status: 'overwritten',
@@ -1008,7 +1033,9 @@ const OrderStore = {
       };
     }
 
-    order.attachments = normalizeOrderAttachments([...(order.attachments || []), normalizedAttachment]);
+    item.attachments = normalizeOrderAttachments([...(item.attachments || []), normalizedAttachment]);
+    item.updatedAt = new Date().toISOString();
+    syncOrderStatus(order);
     save();
     return {
       status: 'created',
@@ -1017,31 +1044,37 @@ const OrderStore = {
     };
   },
 
-  deleteAttachment(orderId, attachmentId) {
+  deleteAttachment(orderId, itemId, attachmentId) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
     if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return 'item_not_found';
 
     const normalizedAttachmentId = String(attachmentId || '').trim();
-    const currentAttachments = normalizeOrderAttachments(order.attachments);
+    const currentAttachments = normalizeOrderAttachments(item.attachments);
     const deletedAttachment = currentAttachments.find((attachment) => attachment.attachmentId === normalizedAttachmentId) || null;
     const nextAttachments = currentAttachments.filter((attachment) => attachment.attachmentId !== normalizedAttachmentId);
     if (!deletedAttachment) return false;
 
-    order.attachments = nextAttachments;
+    item.attachments = nextAttachments;
+    item.updatedAt = new Date().toISOString();
+    syncOrderStatus(order);
     save();
     return deletedAttachment;
   },
 
-  getAttachment(orderId, attachmentId) {
+  getAttachment(orderId, itemId, attachmentId) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
     if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return 'item_not_found';
 
     const normalizedAttachmentId = String(attachmentId || '').trim();
-    return normalizeOrderAttachments(order.attachments).find((attachment) => attachment.attachmentId === normalizedAttachmentId) || false;
+    return normalizeOrderAttachments(item.attachments).find((attachment) => attachment.attachmentId === normalizedAttachmentId) || false;
   },
 
   buildInitialStages,

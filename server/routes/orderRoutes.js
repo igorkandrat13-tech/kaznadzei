@@ -647,11 +647,14 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
   }
 });
 
-router.get('/orders/:id/attachments/:attachmentId/file', requireWriteAccess, (req, res) => {
+router.get('/orders/:id/items/:itemId/attachments/:attachmentId/file', requireWriteAccess, (req, res) => {
   try {
-    const attachment = OrderStore.getAttachment(req.params.id, req.params.attachmentId);
+    const attachment = OrderStore.getAttachment(req.params.id, req.params.itemId, req.params.attachmentId);
     if (attachment === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (attachment === 'item_not_found') {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
     }
     if (attachment === false) {
       return res.status(404).json({ message: 'Файл карточки заказа не найден.' });
@@ -687,7 +690,7 @@ router.get('/orders/:id/attachments/:attachmentId/file', requireWriteAccess, (re
   }
 });
 
-router.post('/orders/:id/attachments', requireManagerAccess(), (req, res) => {
+router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (req, res) => {
   uploadOrderAttachment.single('file')(req, res, (uploadError) => {
     try {
       if (uploadError) {
@@ -708,10 +711,14 @@ router.post('/orders/:id/attachments', requireManagerAccess(), (req, res) => {
         relativePath,
         uploadedAt: new Date().toISOString(),
       });
-      const attachmentResult = OrderStore.saveAttachment(req.params.id, attachment, { overwrite: overwriteRequested });
+      const attachmentResult = OrderStore.saveAttachment(req.params.id, req.params.itemId, attachment, { overwrite: overwriteRequested });
       if (attachmentResult.status === 'order_not_found') {
         deleteStoredAttachmentFile({ relativePath });
         return res.status(404).json({ message: 'Заказ не найден.' });
+      }
+      if (attachmentResult.status === 'item_not_found') {
+        deleteStoredAttachmentFile({ relativePath });
+        return res.status(404).json({ message: 'Изделие заказа не найдено.' });
       }
       if (attachmentResult.status === 'invalid') {
         deleteStoredAttachmentFile({ relativePath });
@@ -742,6 +749,7 @@ router.post('/orders/:id/attachments', requireManagerAccess(), (req, res) => {
           ? 'Файл карточки заказа перезаписан.'
           : 'Файл карточки заказа загружен.',
         details: {
+          itemId: req.params.itemId || '',
           attachmentId: savedAttachment?.attachmentId || '',
           fileName: savedAttachment?.name || '',
           size: savedAttachment?.size || 0,
@@ -768,7 +776,7 @@ router.post('/orders/:id/attachments', requireManagerAccess(), (req, res) => {
   });
 });
 
-router.post('/orders/:id/attachments/link', requireManagerAccess(), (req, res) => {
+router.post('/orders/:id/items/:itemId/attachments/link', requireManagerAccess(), (req, res) => {
   try {
     const overwriteRequested = ['1', 'true', 'yes'].includes(String(req.query?.overwrite || req.body?.overwrite || '').trim().toLowerCase());
     const attachment = sanitizeOrderAttachmentInput({
@@ -777,9 +785,12 @@ router.post('/orders/:id/attachments/link', requireManagerAccess(), (req, res) =
       uploadedAt: new Date().toISOString(),
       url: req.body?.url,
     });
-    const attachmentResult = OrderStore.saveAttachment(req.params.id, attachment, { overwrite: overwriteRequested });
+    const attachmentResult = OrderStore.saveAttachment(req.params.id, req.params.itemId, attachment, { overwrite: overwriteRequested });
     if (attachmentResult.status === 'order_not_found') {
       return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (attachmentResult.status === 'item_not_found') {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
     }
     if (attachmentResult.status === 'invalid') {
       return res.status(400).json({ message: 'Не удалось сохранить ссылку карточки заказа.' });
@@ -803,6 +814,7 @@ router.post('/orders/:id/attachments/link', requireManagerAccess(), (req, res) =
         ? 'Ссылка карточки заказа перезаписана.'
         : 'Ссылка карточки заказа добавлена.',
       details: {
+        itemId: req.params.itemId || '',
         attachmentId: savedAttachment?.attachmentId || '',
         fileName: savedAttachment?.name || '',
         url: savedAttachment?.url || '',
@@ -819,11 +831,14 @@ router.post('/orders/:id/attachments/link', requireManagerAccess(), (req, res) =
   }
 });
 
-router.delete('/orders/:id/attachments/:attachmentId', requireManagerAccess(), (req, res) => {
+router.delete('/orders/:id/items/:itemId/attachments/:attachmentId', requireManagerAccess(), (req, res) => {
   try {
-    const deletedAttachment = OrderStore.deleteAttachment(req.params.id, req.params.attachmentId);
+    const deletedAttachment = OrderStore.deleteAttachment(req.params.id, req.params.itemId, req.params.attachmentId);
     if (deletedAttachment === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (deletedAttachment === 'item_not_found') {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
     }
     if (deletedAttachment === false) {
       return res.status(404).json({ message: 'Файл карточки заказа не найден.' });
@@ -839,6 +854,7 @@ router.delete('/orders/:id/attachments/:attachmentId', requireManagerAccess(), (
       actor: getRequestActor(req),
       message: 'Файл карточки заказа удален.',
       details: {
+        itemId: req.params.itemId || '',
         attachmentId: deletedAttachment.attachmentId,
         fileName: deletedAttachment.name,
       },
@@ -857,8 +873,10 @@ router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
     const idx = data.orders.findIndex(o => o._id === req.params.id);
     if (idx === -1) return res.status(404).json({ message: 'Order not found' });
     const deletedOrder = data.orders[idx];
-    for (const attachment of deletedOrder.attachments || []) {
-      deleteStoredAttachmentFile(attachment);
+    for (const item of deletedOrder.items || []) {
+      for (const attachment of item.attachments || []) {
+        deleteStoredAttachmentFile(attachment);
+      }
     }
     data.orders.splice(idx, 1);
     db.save();
