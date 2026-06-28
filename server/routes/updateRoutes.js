@@ -12,11 +12,72 @@ const CLIENT_ROOT = path.join(PROJECT_ROOT, 'client');
 const DEFAULT_PATH = process.platform === 'win32'
   ? process.env.PATH
   : '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+const INSTALL_JOB_FILE = path.join(PROJECT_ROOT, '.update-install-job.json');
+const INSTALL_JOB_STALE_MS = 2 * 60 * 1000;
 
-let installInProgress = false;
 let installJobSequence = 0;
-let currentInstallJob = null;
-let lastInstallJob = null;
+let activeInstallJobId = '';
+
+function readInstallJob() {
+  try {
+    if (!fs.existsSync(INSTALL_JOB_FILE)) return null;
+    return JSON.parse(fs.readFileSync(INSTALL_JOB_FILE, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeInstallJob(job) {
+  fs.writeFileSync(INSTALL_JOB_FILE, JSON.stringify(job, null, 2));
+}
+
+function finalizeStaleInstallJob(job) {
+  if (!job || job.status !== 'running' || activeInstallJobId === job.id) {
+    return job;
+  }
+
+  const updatedAtTime = new Date(job.updatedAt || job.startedAt || 0).getTime();
+  if (!updatedAtTime || (Date.now() - updatedAtTime) < INSTALL_JOB_STALE_MS) {
+    return job;
+  }
+
+  const failedJob = {
+    ...job,
+    status: 'failed',
+    finishedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    message: 'Установка обновлений была прервана.',
+    details: 'Фоновая задача не обновляла статус слишком долго. Вероятно, процесс был перезапущен или завершился аварийно.',
+    logs: [
+      ...(Array.isArray(job.logs) ? job.logs : []),
+      'Задача автоматически переведена в ошибку из-за отсутствия heartbeat.',
+    ].slice(-200),
+  };
+  writeInstallJob(failedJob);
+  return failedJob;
+}
+
+function getStoredInstallJob() {
+  return finalizeStaleInstallJob(readInstallJob());
+}
+
+function updateInstallJob(jobId, updater) {
+  const currentJob = readInstallJob();
+  if (!currentJob || currentJob.id !== jobId) return null;
+  const nextJob = typeof updater === 'function'
+    ? updater(currentJob)
+    : { ...currentJob, ...updater };
+  const normalizedJob = {
+    ...nextJob,
+    updatedAt: new Date().toISOString(),
+  };
+  writeInstallJob(normalizedJob);
+  return normalizedJob;
+}
+
+function isInstallInProgress() {
+  return getStoredInstallJob()?.status === 'running';
+}
 
 function getInstallJobSnapshot(job) {
   if (!job) return null;
@@ -25,6 +86,7 @@ function getInstallJobSnapshot(job) {
     status: job.status,
     startedAt: job.startedAt,
     finishedAt: job.finishedAt,
+    updatedAt: job.updatedAt,
     message: job.message,
     details: job.details,
     logs: [...job.logs],
@@ -37,22 +99,23 @@ function getInstallJobSnapshot(job) {
   };
 }
 
-function appendInstallJobLog(job, message) {
-  if (!job) return;
+function appendInstallJobLog(jobId, message) {
   const normalizedMessage = String(message || '').trim();
   if (!normalizedMessage) return;
-  job.logs.push(normalizedMessage);
-  if (job.logs.length > 200) {
-    job.logs.splice(0, job.logs.length - 200);
-  }
+  updateInstallJob(jobId, (job) => ({
+    ...job,
+    logs: [...(Array.isArray(job.logs) ? job.logs : []), normalizedMessage].slice(-200),
+  }));
 }
 
 function createInstallJob(statusBefore = null) {
+  const createdAt = new Date().toISOString();
   const job = {
     id: `install-${Date.now()}-${++installJobSequence}`,
     status: 'running',
-    startedAt: new Date().toISOString(),
+    startedAt: createdAt,
     finishedAt: '',
+    updatedAt: createdAt,
     message: 'Установка обновлений запущена.',
     details: '',
     logs: [],
@@ -63,12 +126,12 @@ function createInstallJob(statusBefore = null) {
     stashedFiles: [],
     installFallbackUsed: false,
   };
-  currentInstallJob = job;
-  lastInstallJob = job;
+  activeInstallJobId = job.id;
+  writeInstallJob(job);
   return job;
 }
 
-function finishInstallJob(job, {
+function finishInstallJob(jobId, {
   status = 'failed',
   message = '',
   details = '',
@@ -78,17 +141,18 @@ function finishInstallJob(job, {
   stashedFiles = [],
   installFallbackUsed = false,
 } = {}) {
-  if (!job) return;
-  job.status = status;
-  job.finishedAt = new Date().toISOString();
-  job.message = String(message || '').trim();
-  job.details = String(details || '').trim();
-  job.statusAfter = statusAfter;
-  job.stashCreated = Boolean(stashCreated);
-  job.stashEntry = String(stashEntry || '').trim();
-  job.stashedFiles = Array.isArray(stashedFiles) ? [...stashedFiles] : [];
-  job.installFallbackUsed = Boolean(installFallbackUsed);
-  lastInstallJob = job;
+  updateInstallJob(jobId, (job) => ({
+    ...job,
+    status,
+    finishedAt: new Date().toISOString(),
+    message: String(message || '').trim(),
+    details: String(details || '').trim(),
+    statusAfter,
+    stashCreated: Boolean(stashCreated),
+    stashEntry: String(stashEntry || '').trim(),
+    stashedFiles: Array.isArray(stashedFiles) ? [...stashedFiles] : [],
+    installFallbackUsed: Boolean(installFallbackUsed),
+  }));
 }
 
 function hasPackageLock(cwd) {
@@ -449,6 +513,8 @@ async function installDependenciesWithFallback(cwd, logs, label = '') {
 }
 
 async function getUpdateStatus() {
+  const installJob = getStoredInstallJob();
+  const installInProgress = installJob?.status === 'running';
   const gitVersion = await hasGit();
   const status = {
     enabled: isSelfUpdateEnabled(),
@@ -473,7 +539,7 @@ async function getUpdateStatus() {
     dirtyTrackedFiles: [],
     canInstall: false,
     installInProgress,
-    installJob: getInstallJobSnapshot(currentInstallJob || lastInstallJob),
+    installJob: getInstallJobSnapshot(installJob),
     fetchError: '',
     message: '',
   };
@@ -561,13 +627,20 @@ async function getUpdateStatus() {
   return status;
 }
 
-async function runInstallJob(job) {
+async function runInstallJob(jobId) {
   try {
+    updateInstallJob(jobId, (job) => ({
+      ...job,
+      message: 'Проверяю состояние репозитория перед установкой.',
+    }));
     const statusBefore = await getUpdateStatus();
-    job.statusBefore = statusBefore;
+    updateInstallJob(jobId, (job) => ({
+      ...job,
+      statusBefore,
+    }));
 
     if (!statusBefore.gitAvailable || !statusBefore.isRepo || !statusBefore.hasRemote || !statusBefore.targetRef) {
-      finishInstallJob(job, {
+      finishInstallJob(jobId, {
         status: 'failed',
         message: 'Не удалось подготовить установку обновлений.',
         details: statusBefore.message || 'Не выполнены предварительные условия установки.',
@@ -577,7 +650,7 @@ async function runInstallJob(job) {
     }
 
     if (!statusBefore.updatesAvailable) {
-      finishInstallJob(job, {
+      finishInstallJob(jobId, {
         status: 'completed',
         message: 'Новых обновлений нет.',
         statusAfter: statusBefore,
@@ -587,7 +660,7 @@ async function runInstallJob(job) {
 
     const stashResult = await stashTrackedGitChanges();
     if (stashResult.error) {
-      finishInstallJob(job, {
+      finishInstallJob(jobId, {
         status: 'failed',
         message: 'Не удалось подготовить локальный репозиторий к обновлению.',
         details: stashResult.error,
@@ -596,19 +669,42 @@ async function runInstallJob(job) {
       return;
     }
     if (stashResult.created) {
-      appendInstallJobLog(job, `git stash push -m "${stashResult.stashEntry}"`);
-      appendInstallJobLog(job, `Временно сохранены локальные изменения: ${stashResult.dirtyFiles.join(', ')}`);
+      appendInstallJobLog(jobId, `git stash push -m "${stashResult.stashEntry}"`);
+      appendInstallJobLog(jobId, `Временно сохранены локальные изменения: ${stashResult.dirtyFiles.join(', ')}`);
     }
 
-    appendInstallJobLog(job, `git pull --ff-only origin ${statusBefore.targetRef.replace('origin/', '')}`);
+    updateInstallJob(jobId, (job) => ({
+      ...job,
+      message: 'Получаю и применяю изменения из удалённого репозитория.',
+      stashCreated: stashResult.created,
+      stashEntry: stashResult.stashEntry,
+      stashedFiles: stashResult.dirtyFiles,
+    }));
+    appendInstallJobLog(jobId, `git pull --ff-only origin ${statusBefore.targetRef.replace('origin/', '')}`);
     await runFile(getGitCommand(), ['pull', '--ff-only', 'origin', statusBefore.targetRef.replace('origin/', '')], PROJECT_ROOT);
 
-    const rootInstallResult = await installDependenciesWithFallback(PROJECT_ROOT, job.logs);
-    const clientInstallResult = await installDependenciesWithFallback(CLIENT_ROOT, job.logs, 'client');
+    updateInstallJob(jobId, (job) => ({
+      ...job,
+      message: 'Обновляю зависимости проекта и клиента.',
+    }));
+    const rootLogs = [];
+    const rootInstallResult = await installDependenciesWithFallback(PROJECT_ROOT, rootLogs);
+    rootLogs.forEach((entry) => appendInstallJobLog(jobId, entry));
+    const clientLogs = [];
+    const clientInstallResult = await installDependenciesWithFallback(CLIENT_ROOT, clientLogs, 'client');
+    clientLogs.forEach((entry) => appendInstallJobLog(jobId, entry));
 
-    appendInstallJobLog(job, 'npm run build (client)');
+    updateInstallJob(jobId, (job) => ({
+      ...job,
+      message: 'Собираю клиент после обновления.',
+    }));
+    appendInstallJobLog(jobId, 'npm run build (client)');
     await runFile(getNpmCommand(), ['run', 'build'], CLIENT_ROOT);
 
+    updateInstallJob(jobId, (job) => ({
+      ...job,
+      message: 'Проверяю итоговый статус после установки.',
+    }));
     const statusAfter = await getUpdateStatus();
     const installFallbackUsed = rootInstallResult.usedFallback || clientInstallResult.usedFallback;
     const installFallbackMessage = installFallbackUsed
@@ -618,7 +714,7 @@ async function runInstallJob(job) {
       ? ` Локальные изменения временно сохранены в ${stashResult.stashEntry}. При необходимости их можно вернуть командой git stash pop ${stashResult.stashEntry}.`
       : '';
 
-    finishInstallJob(job, {
+    finishInstallJob(jobId, {
       status: 'completed',
       message: `Обновления установлены, клиент пересобран. Перезапустите приложение для применения изменений.${installFallbackMessage}${stashMessage}`,
       statusAfter,
@@ -628,19 +724,22 @@ async function runInstallJob(job) {
       installFallbackUsed,
     });
   } catch (error) {
-    appendInstallJobLog(job, `Ошибка: ${getErrorText(error)}`);
-    finishInstallJob(job, {
+    appendInstallJobLog(jobId, `Ошибка: ${getErrorText(error)}`);
+    finishInstallJob(jobId, {
       status: 'failed',
       message: 'Не удалось установить обновления.',
       details: getErrorText(error),
     });
   } finally {
-    installInProgress = false;
-    currentInstallJob = null;
+    if (activeInstallJobId === jobId) {
+      activeInstallJobId = '';
+    }
   }
 }
 
 router.get('/updates/status', requireAdminAccess(), async (req, res) => {
+  const installJob = getStoredInstallJob();
+  const installInProgress = installJob?.status === 'running';
   if (!isSelfUpdateEnabled()) {
     return res.json({
       enabled: false,
@@ -662,6 +761,7 @@ router.get('/updates/status', requireAdminAccess(), async (req, res) => {
       behind: 0,
       canInstall: false,
       installInProgress,
+      installJob: getInstallJobSnapshot(installJob),
       message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true в .env.',
     });
   }
@@ -675,9 +775,10 @@ router.get('/updates/status', requireAdminAccess(), async (req, res) => {
 });
 
 router.get('/updates/install-status', requireAdminAccess(), (req, res) => {
+  const installJob = getStoredInstallJob();
   res.json({
-    installInProgress,
-    installJob: getInstallJobSnapshot(currentInstallJob || lastInstallJob),
+    installInProgress: installJob?.status === 'running',
+    installJob: getInstallJobSnapshot(installJob),
   });
 });
 
@@ -686,44 +787,25 @@ router.post('/updates/install', requireAdminAccess(), async (req, res) => {
     return res.status(403).json({ message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true в .env.' });
   }
 
-  if (installInProgress) {
-    return res.status(409).json({ message: 'Установка обновлений уже выполняется.' });
+  const installJob = getStoredInstallJob();
+  if (installJob?.status === 'running') {
+    return res.status(409).json({
+      message: 'Установка обновлений уже выполняется.',
+      installJob: getInstallJobSnapshot(installJob),
+    });
   }
 
   try {
-    const statusBefore = await getUpdateStatus();
-
-    if (!statusBefore.gitAvailable) {
-      return res.status(400).json({ message: statusBefore.message, status: statusBefore });
-    }
-    if (!statusBefore.isRepo) {
-      return res.status(400).json({ message: statusBefore.message, status: statusBefore });
-    }
-    if (!statusBefore.hasRemote || !statusBefore.targetRef) {
-      return res.status(400).json({ message: statusBefore.message, status: statusBefore });
-    }
-
-    if (!statusBefore.updatesAvailable) {
-      return res.json({ ok: true, updated: false, message: 'Новых обновлений нет.', logs: [], status: statusBefore });
-    }
-
-    if (installInProgress) {
-      return res.status(409).json({
-        message: 'Установка обновлений уже выполняется.',
-        installJob: getInstallJobSnapshot(currentInstallJob || lastInstallJob),
-      });
-    }
-
-    installInProgress = true;
-    const job = createInstallJob(statusBefore);
-    appendInstallJobLog(job, 'Фоновая установка обновлений запущена.');
-    runInstallJob(job).catch(() => {});
+    const job = createInstallJob();
+    appendInstallJobLog(job.id, 'Фоновая установка обновлений запущена.');
+    setImmediate(() => {
+      runInstallJob(job.id).catch(() => {});
+    });
 
     res.status(202).json({
       ok: true,
       accepted: true,
       message: 'Установка обновлений запущена в фоне. Статус можно отслеживать из интерфейса без риска получить 504 от прокси.',
-      status: statusBefore,
       installJob: getInstallJobSnapshot(job),
     });
   } catch (error) {

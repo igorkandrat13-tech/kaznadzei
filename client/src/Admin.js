@@ -311,10 +311,12 @@ function Admin() {
           fetchUpdateStatus();
         }
       }
+      return { nextJob, inProgress };
     } catch (error) {
       if (!silent) {
         setUpdateError(error.message || 'Не удалось получить статус установки обновлений');
       }
+      return { nextJob: null, inProgress: false };
     }
   };
 
@@ -324,6 +326,13 @@ function Admin() {
     try {
       const res = await apiFetch('/api/updates/install', { method: 'POST' });
       const data = await parseJsonSafely(res);
+      if (res.status === 504) {
+        const installState = await fetchInstallJobStatus({ silent: true });
+        if (installState?.inProgress) {
+          setUpdateMessage('Установка обновлений уже запущена. Продолжаю отслеживать её статус после ответа прокси с таймаутом.');
+          return;
+        }
+      }
       if (res.status === 409 && data?.installJob) {
         setInstallJob(data.installJob);
         setInstallingUpdates(data.installJob.status === 'running');
@@ -336,7 +345,15 @@ function Admin() {
       setInstallingUpdates(Boolean(data?.installJob?.status === 'running' || res.status === 202));
       setUpdateMessage(data?.message || 'Установка обновлений запущена');
     } catch (error) {
-      setUpdateError(error.message || 'Не удалось установить обновления');
+      const errorText = error.message || 'Не удалось установить обновления';
+      if (errorText.includes('504 Gateway Time-out')) {
+        const installState = await fetchInstallJobStatus({ silent: true });
+        if (installState?.inProgress) {
+          setUpdateMessage('Установка обновлений уже запущена. Продолжаю отслеживать её статус после ответа прокси с таймаутом.');
+          return;
+        }
+      }
+      setUpdateError(errorText);
       setInstallingUpdates(false);
     }
   };

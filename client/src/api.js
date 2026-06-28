@@ -48,6 +48,13 @@ export async function parseJsonSafely(response) {
   try {
     return JSON.parse(text);
   } catch {
+    const trimmed = text.trim();
+    if (/^<!doctype html|^<html[\s>]/i.test(trimmed)) {
+      const titleMatch = trimmed.match(/<title>([^<]+)<\/title>/i);
+      const headingMatch = trimmed.match(/<h1>([^<]+)<\/h1>/i);
+      const htmlMessage = titleMatch?.[1] || headingMatch?.[1] || `HTTP ${response.status}`;
+      return { message: htmlMessage };
+    }
     return { message: text };
   }
 }
