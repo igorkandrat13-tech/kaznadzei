@@ -270,6 +270,26 @@ function sanitizeOrderItemInput(payload, options = {}) {
   if (!partial || payload.packageName !== undefined) {
     data.packageName = normalizeString(payload.packageName, 'packageName', { maxLength: 160 });
   }
+  if (!partial || payload.packageItems !== undefined) {
+    if (payload.packageItems === undefined && partial) {
+      data.packageItems = undefined;
+    } else {
+      if (!Array.isArray(payload.packageItems)) {
+        fail('Поле "packageItems" должно быть массивом.');
+      }
+      data.packageItems = payload.packageItems.map((item, index) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          fail(`Поле "packageItems[${index}]" должно быть объектом.`);
+        }
+        return {
+          id: normalizeString(item.id, `packageItems[${index}].id`, { maxLength: 80 }),
+          name: normalizeString(item.name, `packageItems[${index}].name`, { required: true, maxLength: 160 }),
+          isCompleted: item.isCompleted === undefined ? false : normalizeBoolean(item.isCompleted, `packageItems[${index}].isCompleted`),
+          completedAt: item.completedAt === undefined ? null : normalizeDate(item.completedAt, `packageItems[${index}].completedAt`, { allowUndefined: true }),
+        };
+      });
+    }
+  }
   if (!partial || payload.photoLink !== undefined) {
     data.photoLink = normalizeString(payload.photoLink, 'photoLink', { maxLength: 500 });
   }

@@ -19,9 +19,9 @@ const ORDER_PRIMARY_HEADERS = [
   'Кол-во изделй',
   'Наименование',
   'Карточка заказа',
-  'Отгрузка до',
-  'Материал',
   'Комплектация заказа',
+  'Материал',
+  'Отгрузка до',
   'Покраска',
   'Ссылка / фото',
   'Примечания',
@@ -113,6 +113,99 @@ function getAttachmentLinkUrl(attachment = {}) {
 
 function getAttachmentTargetKey(orderId = '', itemId = '') {
   return `${String(orderId || '').trim()}:${String(itemId || '').trim()}`;
+}
+
+function createPackageItemId() {
+  return `package-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizePackageItems(items = [], legacyPackageName = '') {
+  const sourceItems = Array.isArray(items) ? items : [];
+  const normalizedItems = sourceItems.reduce((acc, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
+    const name = String(item.name || '').trim();
+    if (!name) return acc;
+    acc.push({
+      id: String(item.id || createPackageItemId()).trim(),
+      name,
+      isCompleted: Boolean(item.isCompleted),
+      completedAt: item.isCompleted ? (String(item.completedAt || '').trim() || new Date().toISOString().split('T')[0]) : null,
+    });
+    return acc;
+  }, []);
+  if (normalizedItems.length > 0) return normalizedItems;
+
+  return String(legacyPackageName || '')
+    .split(/[\n,;]+/g)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((name) => ({
+      id: createPackageItemId(),
+      name,
+      isCompleted: false,
+      completedAt: null,
+    }));
+}
+
+function getPackageSummary(items = []) {
+  return normalizePackageItems(items).map((item) => item.name).join(', ');
+}
+
+function getPackageStats(items = [], legacyPackageName = '') {
+  const normalizedItems = normalizePackageItems(items, legacyPackageName);
+  const total = normalizedItems.length;
+  const completed = normalizedItems.filter((item) => item.isCompleted).length;
+  const pending = Math.max(0, total - completed);
+  return { total, completed, pending, items: normalizedItems };
+}
+
+function getUsedItemNumbers(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => String(item?.itemNumber || '').trim())
+    .filter(Boolean);
+}
+
+function getNextAvailableItemNumber(usedNumbers = new Set()) {
+  let nextNumber = 1;
+  while (usedNumbers.has(String(nextNumber))) {
+    nextNumber += 1;
+  }
+  const value = String(nextNumber);
+  usedNumbers.add(value);
+  return value;
+}
+
+function assignAutoItemNumbers(items = [], existingItems = []) {
+  const usedNumbers = new Set(getUsedItemNumbers(existingItems));
+  for (const item of items) {
+    if (item?.itemId) {
+      const itemNumber = String(item.itemNumber || '').trim();
+      if (itemNumber) {
+        usedNumbers.add(itemNumber);
+      }
+    }
+  }
+
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const explicitItemNumber = String(item?.itemNumber || '').trim();
+    if (item?.itemId && explicitItemNumber) {
+      return {
+        ...item,
+        itemNumber: explicitItemNumber,
+      };
+    }
+    if (explicitItemNumber && !usedNumbers.has(explicitItemNumber)) {
+      usedNumbers.add(explicitItemNumber);
+      return {
+        ...item,
+        itemNumber: explicitItemNumber,
+      };
+    }
+    return {
+      ...item,
+      itemNumber: getNextAvailableItemNumber(usedNumbers),
+    };
+  });
 }
 
 function formatAttachmentSize(size) {
@@ -220,6 +313,7 @@ function createInlineDraft(row) {
     deliveryDate: row.item.deliveryDate || '',
     material: row.item.material || '',
     packageName: row.item.packageName || '',
+    packageItems: normalizePackageItems(row.item.packageItems, row.item.packageName),
     photoLink: row.item.photoLink || '',
     notes: row.item.notes || '',
   };
@@ -235,6 +329,7 @@ const EMPTY_ITEM = {
   material: '',
   deliveryDate: '',
   packageName: '',
+  packageItems: [],
   photoLink: '',
   notes: '',
 };
@@ -276,6 +371,7 @@ function mapItemToRoomEditorItem(item = {}, index = 0) {
     material: item.material || '',
     deliveryDate: item.deliveryDate || '',
     packageName: item.packageName || '',
+    packageItems: normalizePackageItems(item.packageItems, item.packageName),
     photoLink: item.photoLink || '',
     notes: item.notes || '',
   };
@@ -344,7 +440,8 @@ function buildOrderItemsPayload(items = []) {
     quantity: Number(item.quantity) || 1,
     material: String(item.material || '').trim(),
     deliveryDate: String(item.deliveryDate || '').trim(),
-    packageName: String(item.packageName || '').trim(),
+    packageName: getPackageSummary(item.packageItems || []) || String(item.packageName || '').trim(),
+    packageItems: normalizePackageItems(item.packageItems, item.packageName),
     photoLink: String(item.photoLink || '').trim(),
     notes: String(item.notes || '').trim(),
   }));
@@ -376,6 +473,7 @@ function mapOrderToForm(order) {
         material: item.material || '',
         deliveryDate: item.deliveryDate || '',
         packageName: item.packageName || '',
+        packageItems: normalizePackageItems(item.packageItems, item.packageName),
         photoLink: item.photoLink || '',
         notes: item.notes || '',
       }))
@@ -452,6 +550,8 @@ function OrdersWorkspace() {
   const [colors, setColors] = useState([]);
   const [roomEditor, setRoomEditor] = useState(null);
   const [roomEditorSaving, setRoomEditorSaving] = useState(false);
+  const [packageEditor, setPackageEditor] = useState(null);
+  const [packageEditorSaving, setPackageEditorSaving] = useState(false);
   const [attachmentUploadingTargetKey, setAttachmentUploadingTargetKey] = useState('');
   const [attachmentDeletingKey, setAttachmentDeletingKey] = useState('');
   const [attachmentOpeningKey, setAttachmentOpeningKey] = useState('');
@@ -581,6 +681,7 @@ function OrdersWorkspace() {
         deliveryDate: '',
         material: '',
         packageName: '',
+        packageItems: [],
         photoLink: '',
         notes: '',
         comments: [],
@@ -928,9 +1029,9 @@ function OrdersWorkspace() {
       <col className="col-quantity" />
       <col className="col-name" />
       <col className="col-item-actions" />
-      <col className="col-delivery-date" />
-      <col className="col-material" />
       <col className="col-package" />
+      <col className="col-material" />
+      <col className="col-delivery-date" />
       <col className="col-paint" />
       <col className="col-photo" />
       <col className="col-notes" />
@@ -1077,6 +1178,21 @@ function OrdersWorkspace() {
     setAttachmentLinkDraft({ name: '', url: '' });
   }, []);
 
+  const openPackageEditor = useCallback((order, item) => {
+    if (!order?._id || !item?.itemId) return;
+    setError('');
+    setPackageEditor({
+      orderId: order._id,
+      itemId: item.itemId,
+      orderNumber: order.orderNumber || '',
+      customer: order.customer || '',
+      itemName: item.name || '',
+      itemNumber: item.itemNumber || '',
+      newItemName: '',
+      items: normalizePackageItems(item.packageItems, item.packageName),
+    });
+  }, []);
+
   useEscapeKey(() => {
     if (selectedStageCellKeys.length > 0 && !manualStageSaving) {
       clearSelectedStageCells();
@@ -1088,6 +1204,10 @@ function OrdersWorkspace() {
     }
     if (roomEditor && !roomEditorSaving) {
       setRoomEditor(null);
+      return;
+    }
+    if (packageEditor && !packageEditorSaving) {
+      setPackageEditor(null);
       return;
     }
     if (confirmAttachmentDelete && !attachmentDeletingKey) {
@@ -1117,7 +1237,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || packageEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -1235,6 +1355,102 @@ function OrdersWorkspace() {
     });
   };
 
+  const handlePackageEditorDraftChange = (event) => {
+    const value = event.target.value;
+    setError('');
+    setPackageEditor((current) => current ? { ...current, newItemName: value } : current);
+  };
+
+  const addPackageEditorItem = () => {
+    const nextName = String(packageEditor?.newItemName || '').trim();
+    if (!nextName) {
+      setError('Укажите позицию комплектации.');
+      return;
+    }
+    setError('');
+    setPackageEditor((current) => current ? {
+      ...current,
+      newItemName: '',
+      items: [
+        ...(current.items || []),
+        {
+          id: createPackageItemId(),
+          name: nextName,
+          isCompleted: false,
+          completedAt: null,
+        },
+      ],
+    } : current);
+  };
+
+  const togglePackageEditorItem = (packageItemId) => {
+    setError('');
+    setPackageEditor((current) => current ? {
+      ...current,
+      items: (current.items || []).map((item) => (
+        item.id === packageItemId
+          ? {
+              ...item,
+              isCompleted: !item.isCompleted,
+              completedAt: !item.isCompleted ? new Date().toISOString().split('T')[0] : null,
+            }
+          : item
+      )),
+    } : current);
+  };
+
+  const removePackageEditorItem = (packageItemId) => {
+    setError('');
+    setPackageEditor((current) => current ? {
+      ...current,
+      items: (current.items || []).filter((item) => item.id !== packageItemId),
+    } : current);
+  };
+
+  const savePackageEditor = async () => {
+    if (!packageEditor || packageEditorSaving) return;
+    const order = orders.find((currentOrder) => currentOrder._id === packageEditor.orderId);
+    const targetItem = (order?.items || []).find((item) => item.itemId === packageEditor.itemId) || null;
+    if (!order || !targetItem) {
+      setError('Изделие для сохранения комплектации не найдено.');
+      return;
+    }
+
+    const nextPackageItems = normalizePackageItems(packageEditor.items);
+    const payload = {
+      orderNumber: order.orderNumber || '',
+      customer: order.customer || '',
+      orderDate: order.orderDate || '',
+      items: buildOrderItemsPayload((order.items || []).map((item) => (
+        item.itemId === packageEditor.itemId
+          ? {
+              ...item,
+              packageItems: nextPackageItems,
+              packageName: getPackageSummary(nextPackageItems),
+            }
+          : item
+      ))),
+    };
+
+    setPackageEditorSaving(true);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${order._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось сохранить комплектацию изделия.'));
+        return;
+      }
+      setPackageEditor(null);
+      await fetchOrders();
+    } finally {
+      setPackageEditorSaving(false);
+    }
+  };
+
   const addRoomEditorItem = () => {
     setRoomEditor((current) => current ? {
       ...current,
@@ -1290,15 +1506,13 @@ function OrdersWorkspace() {
     const preservedItems = roomEditor.mode === 'edit'
       ? (baseOrder.items || []).filter((item) => buildRoomGroupKey(item.room, item.roomNumber) !== roomEditor.sourceGroupKey)
       : [...(baseOrder.items || [])];
-    const nextRoomItems = buildOrderItemsPayload((roomEditor.items || []).map((item) => ({
+    const preparedRoomItems = assignAutoItemNumbers((roomEditor.items || []).map((item) => ({
       ...item,
       room: roomValue,
       roomNumber: roomNumberValue,
-    })));
-    const nextItems = [...preservedItems, ...nextRoomItems].map((item, index) => ({
-      ...item,
-      itemNumber: String(item.itemNumber || index + 1).trim() || String(index + 1),
-    }));
+    })), preservedItems);
+    const nextRoomItems = buildOrderItemsPayload(preparedRoomItems);
+    const nextItems = buildOrderItemsPayload([...preservedItems, ...nextRoomItems]);
 
     const payload = {
       orderNumber: String(baseOrder.orderNumber || '').trim(),
@@ -1734,6 +1948,7 @@ function OrdersWorkspace() {
             deliveryDate: String(draft.deliveryDate || '').trim(),
             material: String(draft.material || '').trim(),
             packageName: String(draft.packageName || '').trim(),
+            packageItems: normalizePackageItems(draft.packageItems, draft.packageName),
             photoLink: String(draft.photoLink || '').trim(),
             notes: String(draft.notes || '').trim(),
           }
@@ -1754,6 +1969,7 @@ function OrdersWorkspace() {
         deliveryDate: item.deliveryDate || '',
         material: item.material || '',
         packageName: item.packageName || '',
+        packageItems: normalizePackageItems(item.packageItems, item.packageName),
         photoLink: item.photoLink || '',
         notes: item.notes || '',
       })),
@@ -1812,9 +2028,9 @@ function OrdersWorkspace() {
       'Кол-во изделй',
       'Наименование',
       'Карточка заказа',
-      'Отгрузка до',
-      'Материал',
       'Комплектация заказа',
+      'Материал',
+      'Отгрузка до',
       'Покраска',
       'Ссылка / фото',
       'Примечания',
@@ -1837,9 +2053,9 @@ function OrdersWorkspace() {
           item.quantity || '',
           item.name || '',
           (item.attachments || []).map((attachment) => attachment.name).join(', '),
-          item.deliveryDate || '',
+          `${getPackageStats(item.packageItems, item.packageName).pending}/${getPackageStats(item.packageItems, item.packageName).total}`,
           item.material || '',
-          item.packageName || '',
+          item.deliveryDate || '',
           '',
           item.photoLink || '',
           item.notes || '',
@@ -2022,6 +2238,7 @@ function OrdersWorkspace() {
                     const commentPreview = getCommentPreview(item.comments);
                     const orderManufacturingMeta = getOrderManufacturingMeta(order);
                     const itemAttachments = Array.isArray(item.attachments) ? item.attachments : [];
+                    const packageStats = getPackageStats(item.packageItems, item.packageName);
                     const attachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId);
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
                     const carpenterManualMark = getItemManualStageMark(item, 'carpenter');
@@ -2058,7 +2275,11 @@ function OrdersWorkspace() {
                     const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const materialCellProps = getManualStageCellProps(key, item, 'material', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const packageCellProps = getManualStageCellProps(key, item, 'packageName', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const packageCellPropsBase = getManualStageCellProps(key, item, 'packageName', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const packageCellProps = {
+                      ...packageCellPropsBase,
+                      className: cn(packageCellPropsBase.className, 'package-cell', packageStats.pending > 0 && 'package-cell-attention'),
+                    };
                     const paintCellProps = getManualStageCellProps(key, item, 'paint', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const photoCellProps = getManualStageCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const notesCellProps = getManualStageCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
@@ -2240,9 +2461,32 @@ function OrdersWorkspace() {
                             </span>
                           </div>
                         </td>
-                        <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
+                        <td {...packageCellProps}>
+                          <div className="package-cell-content">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="order-card-icon-btn"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openPackageEditor(order, item);
+                              }}
+                              disabled={isPlaceholder}
+                              title="Редактировать комплектацию"
+                              aria-label="Редактировать комплектацию"
+                            >
+                              ✎
+                            </Button>
+                            <span
+                              className={cn('package-cell-summary-badge', packageStats.pending > 0 && 'package-cell-summary-badge-attention')}
+                              title={packageStats.total > 0 ? `Не исполнено: ${packageStats.pending} из ${packageStats.total}` : 'Позиции комплектации не добавлены'}
+                            >
+                              {packageStats.pending}/{packageStats.total}
+                            </span>
+                          </div>
+                        </td>
                         <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
-                        <td {...packageCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
+                        <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
                         <td {...paintCellProps}>—</td>
                         <td {...photoCellProps}>
                           {isInlineEditing ? (
@@ -2516,7 +2760,7 @@ function OrdersWorkspace() {
                 <div className="responsive-form-grid">
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>№ изделия в заказе</label>
-                    <input value={item.itemNumber} onChange={handleRoomEditorItemFieldChange(index, 'itemNumber')} placeholder="1" />
+                    <input value={item.itemNumber || 'Автоматически при сохранении'} readOnly />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>№ изделия</label>
@@ -2538,14 +2782,6 @@ function OrdersWorkspace() {
                     <label>Отгрузка до</label>
                     <input type="date" value={item.deliveryDate} onChange={handleRoomEditorItemFieldChange(index, 'deliveryDate')} />
                   </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Комплектация</label>
-                    <input value={item.packageName} onChange={handleRoomEditorItemFieldChange(index, 'packageName')} placeholder="Фурнитура, стекло, ручки" />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Ссылка / фото</label>
-                    <input value={item.photoLink} onChange={handleRoomEditorItemFieldChange(index, 'photoLink')} placeholder="https://..." />
-                  </div>
                   <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
                     <label>Примечания</label>
                     <textarea
@@ -2564,6 +2800,86 @@ function OrdersWorkspace() {
             <Button onClick={() => setRoomEditor(null)} disabled={roomEditorSaving}>Отмена</Button>
             <Button variant="success" onClick={handleSaveRoomEditor} disabled={roomEditorSaving}>
               {roomEditorSaving ? 'Сохранение...' : (roomEditor.mode === 'item' ? 'Сохранить изделия' : (roomEditor.mode === 'edit' ? 'Сохранить изменения' : 'Сохранить помещение'))}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {packageEditor ? (
+        <Modal open={Boolean(packageEditor)} onClose={() => !packageEditorSaving && setPackageEditor(null)} closeDisabled={packageEditorSaving} size="lg" className="order-form-modal">
+          <ModalHeader
+            title="Комплектация изделия"
+            subtitle={`${packageEditor.orderNumber ? `Заказ № ${packageEditor.orderNumber}` : 'Без номера'}${packageEditor.customer ? ` · ${packageEditor.customer}` : ''}${packageEditor.itemName ? ` · ${packageEditor.itemName}` : ''}${packageEditor.itemNumber ? ` · позиция ${packageEditor.itemNumber}` : ''}`}
+            onClose={() => !packageEditorSaving && setPackageEditor(null)}
+            closeDisabled={packageEditorSaving}
+          />
+
+          <div className="package-editor-toolbar">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Новая позиция</label>
+              <input
+                value={packageEditor.newItemName}
+                onChange={handlePackageEditorDraftChange}
+                placeholder="Например: стекло, шпон, ручки"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addPackageEditorItem();
+                  }
+                }}
+              />
+            </div>
+            <div className="package-editor-toolbar-actions">
+              <Button variant="secondary" onClick={addPackageEditorItem} disabled={packageEditorSaving}>Добавить позицию</Button>
+            </div>
+          </div>
+
+          <div className="package-editor-summary">
+            Не исполнено: {getPackageStats(packageEditor.items).pending} из {getPackageStats(packageEditor.items).total}
+          </div>
+
+          <div className="package-editor-list">
+            {(packageEditor.items || []).length > 0 ? (
+              packageEditor.items.map((packageItem) => (
+                <label key={packageItem.id} className={cn('package-editor-item', packageItem.isCompleted && 'package-editor-item-completed')}>
+                  <div className="package-editor-item-main">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(packageItem.isCompleted)}
+                      onChange={() => togglePackageEditorItem(packageItem.id)}
+                      disabled={packageEditorSaving}
+                    />
+                    <div className="package-editor-item-text">
+                      <span className="package-editor-item-name">{packageItem.name}</span>
+                      <span className="package-editor-item-meta">
+                        {packageItem.isCompleted
+                          ? `Готово${packageItem.completedAt ? ` · ${formatDateDisplay(packageItem.completedAt)}` : ''}`
+                          : 'В работе'}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      removePackageEditorItem(packageItem.id);
+                    }}
+                    disabled={packageEditorSaving}
+                  >
+                    Удалить
+                  </Button>
+                </label>
+              ))
+            ) : (
+              <div className="order-card-empty">Позиции комплектации пока не добавлены.</div>
+            )}
+          </div>
+
+          <div className="modal-actions">
+            <Button onClick={() => setPackageEditor(null)} disabled={packageEditorSaving}>Отмена</Button>
+            <Button variant="success" onClick={savePackageEditor} disabled={packageEditorSaving}>
+              {packageEditorSaving ? 'Сохранение...' : 'Сохранить комплектацию'}
             </Button>
           </div>
         </Modal>

@@ -352,6 +352,44 @@ function normalizeComments(source = []) {
     .filter(comment => comment.role && comment.text);
 }
 
+function normalizePackageItems(source = [], legacyPackageName = '') {
+  const sourceItems = Array.isArray(source) ? source : [];
+  const normalizedItems = sourceItems.reduce((acc, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
+    const name = String(item.name || '').trim();
+    if (!name) return acc;
+    acc.push({
+      id: String(item.id || item.packageItemId || id()).trim(),
+      name,
+      isCompleted: Boolean(item.isCompleted),
+      completedAt: item.isCompleted ? (item.completedAt || new Date().toISOString().split('T')[0]) : null,
+    });
+    return acc;
+  }, []);
+  if (normalizedItems.length > 0) {
+    return normalizedItems;
+  }
+
+  const legacyTokens = String(legacyPackageName || '')
+    .split(/[\n,;]+/g)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (legacyTokens.length === 0) return [];
+
+  return legacyTokens.map((name) => ({
+    id: id(),
+    name,
+    isCompleted: false,
+    completedAt: null,
+  }));
+}
+
+function getPackageSummary(packageItems = []) {
+  return normalizePackageItems(packageItems)
+    .map((item) => item.name)
+    .join(', ');
+}
+
 function cloneStages(stages = []) {
   return Array.isArray(stages)
     ? stages.map(stage => ({
@@ -381,6 +419,7 @@ function buildOrderItem(source = {}, options = {}) {
   const manualStageMarks = normalizeManualStageMarks(source.manualStageMarks);
   const manualStageClears = normalizeManualStageClears(source.manualStageClears);
   const quantity = Number(source.quantity) || 1;
+  const packageItems = normalizePackageItems(source.packageItems, source.packageName || source.package);
   return {
     itemId: String(source.itemId || source._id || id()).trim(),
     itemNumber: String(source.itemNumber || source.orderItemNumber || options.defaultItemNumber || '').trim() || getDefaultItemNumber(options.index || 0),
@@ -391,7 +430,8 @@ function buildOrderItem(source = {}, options = {}) {
     name: String(source.name || '').trim(),
     deliveryDate: String(source.deliveryDate || source.shipmentDate || '').trim(),
     material: String(source.material || '').trim(),
-    packageName: String(source.packageName || source.package || '').trim(),
+    packageName: getPackageSummary(packageItems),
+    packageItems,
     photoLink: String(source.photoLink || source.link || '').trim(),
     notes: String(source.notes || '').trim(),
     attachments: normalizeOrderAttachments(source.attachments),
@@ -519,6 +559,7 @@ function cleanupLegacyOrderFields(order) {
 
 function ensureOrderShape(order) {
   if (!order || typeof order !== 'object') return false;
+  let changed = false;
 
   const sourceItems = Array.isArray(order.items) ? order.items : [];
 
