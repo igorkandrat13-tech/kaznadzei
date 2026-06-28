@@ -4,6 +4,7 @@ import { Button } from '../ui';
 
 function UpdatesOverview({
   updateStatus,
+  installJob,
   updateMessage,
   updateError,
   checkingUpdates,
@@ -99,6 +100,27 @@ function UpdatesOverview({
       {updateError && <div className="settings-alert settings-alert-error" style={{ whiteSpace: 'pre-wrap' }}>{updateError}</div>}
       {updateStatus?.enabled ? (
         <>
+          {installJob ? (
+            <div className="card" style={{ marginBottom: 12, background: '#f8fafc' }}>
+              <div className="service-details-title">
+                Установка обновлений: {installJob.status === 'running' ? 'выполняется' : installJob.status === 'completed' ? 'завершена' : 'ошибка'}
+              </div>
+              <div className="settings-hint" style={{ marginBottom: 8 }}>
+                {installJob.message || 'Статус установки обновлений пока не получен.'}
+              </div>
+              {installJob.startedAt ? (
+                <div className="settings-hint" style={{ marginBottom: 8 }}>
+                  Запущено: {new Date(installJob.startedAt).toLocaleString()}
+                  {installJob.finishedAt ? ` · Завершено: ${new Date(installJob.finishedAt).toLocaleString()}` : ''}
+                </div>
+              ) : null}
+              {Array.isArray(installJob.logs) && installJob.logs.length > 0 ? (
+                <pre className="service-details-console service-details-console-logs" style={{ maxHeight: 240 }}>
+                  {installJob.logs.join('\n')}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
           <div className="overview-stats-grid mt-16">
             <div className="overview-stat-card"><strong>Git:</strong> {updateStatus?.gitAvailable ? (updateStatus.gitVersion || 'установлен') : 'не найден'}</div>
             <div className="overview-stat-card"><strong>systemd:</strong> {updateStatus?.systemctlAvailable ? 'доступен' : 'недоступен'}</div>

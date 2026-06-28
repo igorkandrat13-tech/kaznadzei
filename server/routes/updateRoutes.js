@@ -14,6 +14,82 @@ const DEFAULT_PATH = process.platform === 'win32'
   : '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
 let installInProgress = false;
+let installJobSequence = 0;
+let currentInstallJob = null;
+let lastInstallJob = null;
+
+function getInstallJobSnapshot(job) {
+  if (!job) return null;
+  return {
+    id: job.id,
+    status: job.status,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+    message: job.message,
+    details: job.details,
+    logs: [...job.logs],
+    statusBefore: job.statusBefore,
+    statusAfter: job.statusAfter,
+    stashCreated: job.stashCreated,
+    stashEntry: job.stashEntry,
+    stashedFiles: [...job.stashedFiles],
+    installFallbackUsed: job.installFallbackUsed,
+  };
+}
+
+function appendInstallJobLog(job, message) {
+  if (!job) return;
+  const normalizedMessage = String(message || '').trim();
+  if (!normalizedMessage) return;
+  job.logs.push(normalizedMessage);
+  if (job.logs.length > 200) {
+    job.logs.splice(0, job.logs.length - 200);
+  }
+}
+
+function createInstallJob(statusBefore = null) {
+  const job = {
+    id: `install-${Date.now()}-${++installJobSequence}`,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    finishedAt: '',
+    message: 'Установка обновлений запущена.',
+    details: '',
+    logs: [],
+    statusBefore,
+    statusAfter: null,
+    stashCreated: false,
+    stashEntry: '',
+    stashedFiles: [],
+    installFallbackUsed: false,
+  };
+  currentInstallJob = job;
+  lastInstallJob = job;
+  return job;
+}
+
+function finishInstallJob(job, {
+  status = 'failed',
+  message = '',
+  details = '',
+  statusAfter = null,
+  stashCreated = false,
+  stashEntry = '',
+  stashedFiles = [],
+  installFallbackUsed = false,
+} = {}) {
+  if (!job) return;
+  job.status = status;
+  job.finishedAt = new Date().toISOString();
+  job.message = String(message || '').trim();
+  job.details = String(details || '').trim();
+  job.statusAfter = statusAfter;
+  job.stashCreated = Boolean(stashCreated);
+  job.stashEntry = String(stashEntry || '').trim();
+  job.stashedFiles = Array.isArray(stashedFiles) ? [...stashedFiles] : [];
+  job.installFallbackUsed = Boolean(installFallbackUsed);
+  lastInstallJob = job;
+}
 
 function hasPackageLock(cwd) {
   return fs.existsSync(path.join(cwd, 'package-lock.json'));
@@ -397,6 +473,7 @@ async function getUpdateStatus() {
     dirtyTrackedFiles: [],
     canInstall: false,
     installInProgress,
+    installJob: getInstallJobSnapshot(currentInstallJob || lastInstallJob),
     fetchError: '',
     message: '',
   };
@@ -484,6 +561,85 @@ async function getUpdateStatus() {
   return status;
 }
 
+async function runInstallJob(job) {
+  try {
+    const statusBefore = await getUpdateStatus();
+    job.statusBefore = statusBefore;
+
+    if (!statusBefore.gitAvailable || !statusBefore.isRepo || !statusBefore.hasRemote || !statusBefore.targetRef) {
+      finishInstallJob(job, {
+        status: 'failed',
+        message: 'Не удалось подготовить установку обновлений.',
+        details: statusBefore.message || 'Не выполнены предварительные условия установки.',
+        statusAfter: statusBefore,
+      });
+      return;
+    }
+
+    if (!statusBefore.updatesAvailable) {
+      finishInstallJob(job, {
+        status: 'completed',
+        message: 'Новых обновлений нет.',
+        statusAfter: statusBefore,
+      });
+      return;
+    }
+
+    const stashResult = await stashTrackedGitChanges();
+    if (stashResult.error) {
+      finishInstallJob(job, {
+        status: 'failed',
+        message: 'Не удалось подготовить локальный репозиторий к обновлению.',
+        details: stashResult.error,
+        statusAfter: statusBefore,
+      });
+      return;
+    }
+    if (stashResult.created) {
+      appendInstallJobLog(job, `git stash push -m "${stashResult.stashEntry}"`);
+      appendInstallJobLog(job, `Временно сохранены локальные изменения: ${stashResult.dirtyFiles.join(', ')}`);
+    }
+
+    appendInstallJobLog(job, `git pull --ff-only origin ${statusBefore.targetRef.replace('origin/', '')}`);
+    await runFile(getGitCommand(), ['pull', '--ff-only', 'origin', statusBefore.targetRef.replace('origin/', '')], PROJECT_ROOT);
+
+    const rootInstallResult = await installDependenciesWithFallback(PROJECT_ROOT, job.logs);
+    const clientInstallResult = await installDependenciesWithFallback(CLIENT_ROOT, job.logs, 'client');
+
+    appendInstallJobLog(job, 'npm run build (client)');
+    await runFile(getNpmCommand(), ['run', 'build'], CLIENT_ROOT);
+
+    const statusAfter = await getUpdateStatus();
+    const installFallbackUsed = rootInstallResult.usedFallback || clientInstallResult.usedFallback;
+    const installFallbackMessage = installFallbackUsed
+      ? ' При установке зависимостей обнаружен рассинхрон lock-файла, поэтому updater автоматически переключился с npm ci на npm install.'
+      : '';
+    const stashMessage = stashResult.created
+      ? ` Локальные изменения временно сохранены в ${stashResult.stashEntry}. При необходимости их можно вернуть командой git stash pop ${stashResult.stashEntry}.`
+      : '';
+
+    finishInstallJob(job, {
+      status: 'completed',
+      message: `Обновления установлены, клиент пересобран. Перезапустите приложение для применения изменений.${installFallbackMessage}${stashMessage}`,
+      statusAfter,
+      stashCreated: stashResult.created,
+      stashEntry: stashResult.stashEntry,
+      stashedFiles: stashResult.dirtyFiles,
+      installFallbackUsed,
+    });
+  } catch (error) {
+    appendInstallJobLog(job, `Ошибка: ${getErrorText(error)}`);
+    finishInstallJob(job, {
+      status: 'failed',
+      message: 'Не удалось установить обновления.',
+      details: getErrorText(error),
+    });
+  } finally {
+    installInProgress = false;
+    currentInstallJob = null;
+  }
+}
+
 router.get('/updates/status', requireAdminAccess(), async (req, res) => {
   if (!isSelfUpdateEnabled()) {
     return res.json({
@@ -518,6 +674,13 @@ router.get('/updates/status', requireAdminAccess(), async (req, res) => {
   }
 });
 
+router.get('/updates/install-status', requireAdminAccess(), (req, res) => {
+  res.json({
+    installInProgress,
+    installJob: getInstallJobSnapshot(currentInstallJob || lastInstallJob),
+  });
+});
+
 router.post('/updates/install', requireAdminAccess(), async (req, res) => {
   if (!isSelfUpdateEnabled()) {
     return res.status(403).json({ message: 'Self-update отключен. Включите ENABLE_SELF_UPDATE=true в .env.' });
@@ -526,9 +689,6 @@ router.post('/updates/install', requireAdminAccess(), async (req, res) => {
   if (installInProgress) {
     return res.status(409).json({ message: 'Установка обновлений уже выполняется.' });
   }
-
-  installInProgress = true;
-  const logs = [];
 
   try {
     const statusBefore = await getUpdateStatus();
@@ -544,59 +704,33 @@ router.post('/updates/install', requireAdminAccess(), async (req, res) => {
     }
 
     if (!statusBefore.updatesAvailable) {
-      return res.json({ ok: true, updated: false, message: 'Новых обновлений нет.', logs, status: statusBefore });
+      return res.json({ ok: true, updated: false, message: 'Новых обновлений нет.', logs: [], status: statusBefore });
     }
 
-    const stashResult = await stashTrackedGitChanges();
-    if (stashResult.error) {
-      return res.status(500).json({
-        message: 'Не удалось подготовить локальный репозиторий к обновлению.',
-        details: stashResult.error,
-        logs,
-        status: statusBefore,
+    if (installInProgress) {
+      return res.status(409).json({
+        message: 'Установка обновлений уже выполняется.',
+        installJob: getInstallJobSnapshot(currentInstallJob || lastInstallJob),
       });
     }
-    if (stashResult.created) {
-      logs.push(`git stash push -m "${stashResult.stashEntry}"`);
-      logs.push(`Временно сохранены локальные изменения: ${stashResult.dirtyFiles.join(', ')}`);
-    }
 
-    logs.push(`git pull --ff-only origin ${statusBefore.targetRef.replace('origin/', '')}`);
-    await runFile(getGitCommand(), ['pull', '--ff-only', 'origin', statusBefore.targetRef.replace('origin/', '')], PROJECT_ROOT);
+    installInProgress = true;
+    const job = createInstallJob(statusBefore);
+    appendInstallJobLog(job, 'Фоновая установка обновлений запущена.');
+    runInstallJob(job).catch(() => {});
 
-    const rootInstallResult = await installDependenciesWithFallback(PROJECT_ROOT, logs);
-
-    const clientInstallResult = await installDependenciesWithFallback(CLIENT_ROOT, logs, 'client');
-
-    logs.push('npm run build (client)');
-    await runFile(getNpmCommand(), ['run', 'build'], CLIENT_ROOT);
-
-    const statusAfter = await getUpdateStatus();
-    const installFallbackMessage = rootInstallResult.usedFallback || clientInstallResult.usedFallback
-      ? ' При установке зависимостей обнаружен рассинхрон lock-файла, поэтому updater автоматически переключился с npm ci на npm install.'
-      : '';
-    const stashMessage = stashResult.created
-      ? ` Локальные изменения временно сохранены в ${stashResult.stashEntry}. При необходимости их можно вернуть командой git stash pop ${stashResult.stashEntry}.`
-      : '';
-    res.json({
+    res.status(202).json({
       ok: true,
-      updated: true,
-      message: `Обновления установлены, клиент пересобран. Перезапустите приложение для применения изменений.${installFallbackMessage}${stashMessage}`,
-      logs,
-      status: statusAfter,
-      stashCreated: stashResult.created,
-      stashEntry: stashResult.stashEntry,
-      stashedFiles: stashResult.dirtyFiles,
-      installFallbackUsed: rootInstallResult.usedFallback || clientInstallResult.usedFallback,
+      accepted: true,
+      message: 'Установка обновлений запущена в фоне. Статус можно отслеживать из интерфейса без риска получить 504 от прокси.',
+      status: statusBefore,
+      installJob: getInstallJobSnapshot(job),
     });
   } catch (error) {
     res.status(500).json({
-      message: 'Не удалось установить обновления.',
+      message: 'Не удалось запустить установку обновлений.',
       details: getErrorText(error),
-      logs,
     });
-  } finally {
-    installInProgress = false;
   }
 });
 

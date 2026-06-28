@@ -34,6 +34,7 @@ function Admin() {
   const [steps, setSteps] = useState([]);
   const [colors, setColors] = useState([]);
   const [updateStatus, setUpdateStatus] = useState(null);
+  const [installJob, setInstallJob] = useState(null);
   const [updateMessage, setUpdateMessage] = useState('');
   const [updateError, setUpdateError] = useState('');
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -172,6 +173,20 @@ function Admin() {
   }, []);
 
   useEffect(() => {
+    if (!installingUpdates) {
+      return undefined;
+    }
+
+    const pollInstallStatus = () => {
+      fetchInstallJobStatus({ silent: true });
+    };
+
+    pollInstallStatus();
+    const intervalId = window.setInterval(pollInstallStatus, 3000);
+    return () => window.clearInterval(intervalId);
+  }, [installingUpdates]);
+
+  useEffect(() => {
     const refreshOverview = () => {
       fetchSteps();
     };
@@ -249,11 +264,57 @@ function Admin() {
       const data = await parseJsonSafely(res);
       if (!res.ok) throw new Error(data?.message || 'Не удалось проверить обновления');
       setUpdateStatus(data);
+      setInstallJob(data?.installJob || null);
+      setInstallingUpdates(Boolean(data?.installInProgress));
       setUpdateMessage(data?.message || '');
     } catch (error) {
       setUpdateError(error.message || 'Не удалось проверить обновления');
     } finally {
       setCheckingUpdates(false);
+    }
+  };
+
+  const fetchInstallJobStatus = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setUpdateError('');
+    }
+    try {
+      const res = await apiFetch('/api/updates/install-status');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) throw new Error(data?.message || 'Не удалось получить статус установки обновлений');
+
+      const nextJob = data?.installJob || null;
+      const inProgress = Boolean(data?.installInProgress && nextJob?.status === 'running');
+      setInstallJob(nextJob);
+      setInstallingUpdates(inProgress);
+
+      if (!nextJob) {
+        return;
+      }
+
+      if (nextJob.status === 'completed') {
+        setUpdateMessage(nextJob.message || 'Обновления установлены');
+        setUpdateError('');
+        if (nextJob.statusAfter) {
+          setUpdateStatus(nextJob.statusAfter);
+        } else if (!inProgress) {
+          fetchUpdateStatus();
+        }
+        return;
+      }
+
+      if (nextJob.status === 'failed') {
+        setUpdateError(nextJob.details || nextJob.message || 'Не удалось установить обновления');
+        if (nextJob.statusAfter) {
+          setUpdateStatus(nextJob.statusAfter);
+        } else if (!inProgress) {
+          fetchUpdateStatus();
+        }
+      }
+    } catch (error) {
+      if (!silent) {
+        setUpdateError(error.message || 'Не удалось получить статус установки обновлений');
+      }
     }
   };
 
@@ -263,12 +324,19 @@ function Admin() {
     try {
       const res = await apiFetch('/api/updates/install', { method: 'POST' });
       const data = await parseJsonSafely(res);
-      if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось установить обновления');
+      if (res.status === 409 && data?.installJob) {
+        setInstallJob(data.installJob);
+        setInstallingUpdates(data.installJob.status === 'running');
+        setUpdateMessage(data?.message || 'Установка обновлений уже выполняется.');
+        return;
+      }
+      if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось запустить установку обновлений');
       setUpdateStatus(data?.status || null);
-      setUpdateMessage(data?.message || 'Обновления установлены');
+      setInstallJob(data?.installJob || null);
+      setInstallingUpdates(Boolean(data?.installJob?.status === 'running' || res.status === 202));
+      setUpdateMessage(data?.message || 'Установка обновлений запущена');
     } catch (error) {
       setUpdateError(error.message || 'Не удалось установить обновления');
-    } finally {
       setInstallingUpdates(false);
     }
   };
@@ -1604,6 +1672,7 @@ function Admin() {
 
           <UpdatesOverview
             updateStatus={updateStatus}
+            installJob={installJob}
             updateMessage={updateMessage}
             updateError={updateError}
             checkingUpdates={checkingUpdates}
