@@ -2066,18 +2066,21 @@ table tr:hover td {
 }
 
 .order-card-cell-content {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: stretch;
+  display: inline-grid;
+  grid-template-columns: 24px auto;
+  align-items: center;
   justify-content: center;
-  gap: 3px;
+  column-gap: 6px;
   min-height: 52px;
   min-width: 0;
-  width: 100%;
+  width: auto;
+  margin: 0 auto;
 }
 
-.order-card-cell-row {
-  display: flex;
+.order-card-cell-actions,
+.order-card-cell-indicators {
+  display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -2228,11 +2231,27 @@ table tr:hover td {
   min-width: 0;
 }
 
+.order-card-dialog-open {
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.order-card-dialog-open:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
 .order-card-dialog-name {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-main);
   word-break: break-word;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .order-card-dialog-meta {
@@ -5538,6 +5557,7 @@ body[data-theme='light'] .home-auth-status-pending {
 
   .order-card-cell-content {
     min-height: 48px;
+    grid-template-columns: 22px auto;
   }
 
   .order-card-icon-btn {

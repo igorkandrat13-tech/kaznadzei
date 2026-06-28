@@ -1982,7 +1982,7 @@ function OrdersWorkspace() {
                                 accept={ORDER_CARD_ATTACHMENT_ACCEPT}
                                 onChange={(event) => handleAttachmentInputChange(order, event)}
                               />
-                              <div className="order-card-cell-row">
+                              <div className="order-card-cell-actions">
                                 <Button
                                   variant="secondary"
                                   size="sm"
@@ -1994,16 +1994,6 @@ function OrdersWorkspace() {
                                 >
                                   {attachmentUploadingOrderId === order._id ? '...' : '+'}
                                 </Button>
-                                <div
-                                  className={`order-card-summary ${orderAttachments.length > 0 ? 'order-card-summary-has-files' : 'order-card-summary-no-files'}`}
-                                  title={orderAttachments.length > 0 ? `Файлов прикреплено: ${orderAttachments.length}` : 'Файлы не прикреплены'}
-                                >
-                                  <span className={`order-card-status-indicator ${orderAttachments.length > 0 ? 'order-card-status-indicator-active' : ''}`}>
-                                    {orderAttachments.length > 0 ? '●' : '○'}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="order-card-cell-row">
                                 <Button
                                   variant="secondary"
                                   size="sm"
@@ -2015,6 +2005,16 @@ function OrdersWorkspace() {
                                 >
                                   ⌕
                                 </Button>
+                              </div>
+                              <div className="order-card-cell-indicators">
+                                <div
+                                  className={`order-card-summary ${orderAttachments.length > 0 ? 'order-card-summary-has-files' : 'order-card-summary-no-files'}`}
+                                  title={orderAttachments.length > 0 ? `Файлов прикреплено: ${orderAttachments.length}` : 'Файлы не прикреплены'}
+                                >
+                                  <span className={`order-card-status-indicator ${orderAttachments.length > 0 ? 'order-card-status-indicator-active' : ''}`}>
+                                    {orderAttachments.length > 0 ? '●' : '○'}
+                                  </span>
+                                </div>
                                 <span className="order-card-summary-badge">{orderAttachments.length}</span>
                               </div>
                             </div>
@@ -2326,24 +2326,22 @@ function OrdersWorkspace() {
                   <div key={attachment.attachmentId} className="order-card-dialog-item">
                     <div className="order-card-dialog-icon">{getAttachmentIcon(attachment)}</div>
                     <div className="order-card-dialog-main">
-                      <div className="order-card-dialog-name">{attachment.name}</div>
+                      <button
+                        type="button"
+                        className="order-card-dialog-open"
+                        onClick={() => handleOpenAttachment(attachmentsDialog.orderId, attachment)}
+                        disabled={isOpening || isDownloading}
+                        title={isImageAttachment(attachment) ? 'Просмотр' : 'Открыть'}
+                        aria-label={isImageAttachment(attachment) ? 'Просмотр файла' : 'Открыть файл'}
+                      >
+                        <span className="order-card-dialog-name">{isOpening ? 'Открытие...' : attachment.name}</span>
+                      </button>
                       <div className="order-card-dialog-meta">
                         {getAttachmentKindLabel(attachment)}
                         {formatAttachmentSize(attachment.size) ? ` · ${formatAttachmentSize(attachment.size)}` : ''}
                       </div>
                     </div>
                     <div className="order-card-dialog-actions">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="order-card-icon-btn"
-                        onClick={() => handleOpenAttachment(attachmentsDialog.orderId, attachment)}
-                        disabled={isOpening || isDownloading}
-                        title={isImageAttachment(attachment) ? 'Просмотр' : 'Открыть'}
-                        aria-label={isImageAttachment(attachment) ? 'Просмотр' : 'Открыть'}
-                      >
-                        {isOpening ? '...' : '⌕'}
-                      </Button>
                       <Button
                         variant="secondary"
                         size="sm"
