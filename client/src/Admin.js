@@ -340,7 +340,9 @@ function Admin() {
         return;
       }
       if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось запустить установку обновлений');
-      setUpdateStatus(data?.status || null);
+      if (data?.status) {
+        setUpdateStatus(data.status);
+      }
       setInstallJob(data?.installJob || null);
       setInstallingUpdates(Boolean(data?.installJob?.status === 'running' || res.status === 202));
       setUpdateMessage(data?.message || 'Установка обновлений запущена');

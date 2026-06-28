@@ -1891,7 +1891,7 @@ table tr:hover td {
 }
 
 .unified-orders-table col.col-order-number {
-  width: 112px;
+  width: 92px;
 }
 
 .unified-orders-table col.col-customer {
@@ -1899,7 +1899,7 @@ table tr:hover td {
 }
 
 .unified-orders-table col.col-room {
-  width: 80px;
+  width: 100px;
 }
 
 .unified-orders-table col.col-room-number,

@@ -165,59 +165,59 @@ function UpdatesOverview({
       </div>
       {updateMessage && <div className="settings-alert settings-alert-success">{updateMessage}</div>}
       {updateError && <div className="settings-alert settings-alert-error" style={{ whiteSpace: 'pre-wrap' }}>{updateError}</div>}
-      {updateStatus?.enabled ? (
-        <>
-          {installJob ? (
-            <div className="card" style={{ marginBottom: 12, background: '#f8fafc' }}>
-              <div className="service-details-title">
-                Установка обновлений: {installJob.status === 'running' ? 'выполняется' : installJob.status === 'completed' ? 'завершена' : 'ошибка'}
+      {installJob ? (
+        <div className="card" style={{ marginBottom: 12, background: '#f8fafc' }}>
+          <div className="service-details-title">
+            Установка обновлений: {installJob.status === 'running' ? 'выполняется' : installJob.status === 'completed' ? 'завершена' : 'ошибка'}
+          </div>
+          {installProgress ? (
+            <div className={`update-install-statusbar update-install-statusbar-${installProgress.tone}`}>
+              <div className="update-install-statusbar-meta">
+                <span className="update-install-statusbar-label">Этап: {installProgress.label}</span>
+                <span className="update-install-statusbar-percent">{installProgress.percent}%</span>
               </div>
-              {installProgress ? (
-                <div className={`update-install-statusbar update-install-statusbar-${installProgress.tone}`}>
-                  <div className="update-install-statusbar-meta">
-                    <span className="update-install-statusbar-label">Этап: {installProgress.label}</span>
-                    <span className="update-install-statusbar-percent">{installProgress.percent}%</span>
-                  </div>
-                  <div className="update-install-statusbar-track" aria-hidden="true">
-                    <div
-                      className="update-install-statusbar-fill"
-                      style={{ width: `${installProgress.percent}%` }}
-                    />
-                  </div>
-                  <div className="update-install-statusbar-stages">
-                    {INSTALL_PROGRESS_STAGES.map((stage) => {
-                      const stageState = getInstallStageState(stage.key, installProgress.key, installJob.status);
-                      return (
-                        <span
-                          key={stage.key}
-                          className={`update-install-statusbar-stage update-install-statusbar-stage-${stageState}`}
-                        >
-                          {stage.label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                  {installHeartbeatText ? (
-                    <div className="update-install-statusbar-heartbeat">{installHeartbeatText}</div>
-                  ) : null}
-                </div>
-              ) : null}
-              <div className="settings-hint" style={{ marginBottom: 8 }}>
-                {installJob.message || 'Статус установки обновлений пока не получен.'}
+              <div className="update-install-statusbar-track" aria-hidden="true">
+                <div
+                  className="update-install-statusbar-fill"
+                  style={{ width: `${installProgress.percent}%` }}
+                />
               </div>
-              {installJob.startedAt ? (
-                <div className="settings-hint" style={{ marginBottom: 8 }}>
-                  Запущено: {new Date(installJob.startedAt).toLocaleString()}
-                  {installJob.finishedAt ? ` · Завершено: ${new Date(installJob.finishedAt).toLocaleString()}` : ''}
-                </div>
-              ) : null}
-              {Array.isArray(installJob.logs) && installJob.logs.length > 0 ? (
-                <pre className="service-details-console service-details-console-logs" style={{ maxHeight: 240 }}>
-                  {installJob.logs.join('\n')}
-                </pre>
+              <div className="update-install-statusbar-stages">
+                {INSTALL_PROGRESS_STAGES.map((stage) => {
+                  const stageState = getInstallStageState(stage.key, installProgress.key, installJob.status);
+                  return (
+                    <span
+                      key={stage.key}
+                      className={`update-install-statusbar-stage update-install-statusbar-stage-${stageState}`}
+                    >
+                      {stage.label}
+                    </span>
+                  );
+                })}
+              </div>
+              {installHeartbeatText ? (
+                <div className="update-install-statusbar-heartbeat">{installHeartbeatText}</div>
               ) : null}
             </div>
           ) : null}
+          <div className="settings-hint" style={{ marginBottom: 8 }}>
+            {installJob.message || 'Статус установки обновлений пока не получен.'}
+          </div>
+          {installJob.startedAt ? (
+            <div className="settings-hint" style={{ marginBottom: 8 }}>
+              Запущено: {new Date(installJob.startedAt).toLocaleString()}
+              {installJob.finishedAt ? ` · Завершено: ${new Date(installJob.finishedAt).toLocaleString()}` : ''}
+            </div>
+          ) : null}
+          {Array.isArray(installJob.logs) && installJob.logs.length > 0 ? (
+            <pre className="service-details-console service-details-console-logs" style={{ maxHeight: 240 }}>
+              {installJob.logs.join('\n')}
+            </pre>
+          ) : null}
+        </div>
+      ) : null}
+      {updateStatus?.enabled ? (
+        <>
           <div className="overview-stats-grid mt-16">
             <div className="overview-stat-card"><strong>Git:</strong> {updateStatus?.gitAvailable ? (updateStatus.gitVersion || 'установлен') : 'не найден'}</div>
             <div className="overview-stat-card"><strong>systemd:</strong> {updateStatus?.systemctlAvailable ? 'доступен' : 'недоступен'}</div>
