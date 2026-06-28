@@ -1788,6 +1788,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-sticky-offset: 92px;
   --orders-header-primary-height: 42px;
   --orders-header-secondary-height: 36px;
+  --orders-col-order-number-width: 92px;
   min-width: 1450px;
   width: 100%;
   table-layout: fixed;
@@ -2010,7 +2011,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .unified-orders-table col.col-order-number {
-  width: 92px;
+  width: var(--orders-col-order-number-width);
 }
 
 .unified-orders-table col.col-customer {
@@ -3187,7 +3188,7 @@ body[data-theme='light'] .attachment-preview-table td {
 }
 
 .sticky-col-2 {
-  left: 112px;
+  left: var(--orders-col-order-number-width);
 }
 
 .unified-orders-row-editing {
