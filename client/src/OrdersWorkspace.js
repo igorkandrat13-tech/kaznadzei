@@ -307,6 +307,28 @@ function getOrderRoomOptions(order = {}) {
   return Array.from(roomMap.values());
 }
 
+function getRoomEditorItemsForGroup(order = {}, groupKey = '') {
+  const targetKey = String(groupKey || '').trim();
+  if (!targetKey) return [createRoomEditorItem(0)];
+  const roomItems = (order.items || []).filter((item) => buildRoomGroupKey(item.room, item.roomNumber) === targetKey);
+  return roomItems.length > 0
+    ? roomItems.map((roomItem, index) => mapItemToRoomEditorItem(roomItem, index))
+    : [createRoomEditorItem(0)];
+}
+
+function createEditRoomEditorState(order = {}) {
+  const roomOptions = getOrderRoomOptions(order);
+  const selectedRoom = roomOptions[0] || null;
+  return createRoomEditorState({
+    mode: 'edit',
+    orderId: order?._id || '',
+    sourceGroupKey: selectedRoom?.key || '',
+    room: selectedRoom?.room || '',
+    roomNumber: selectedRoom?.roomNumber || '',
+    items: selectedRoom ? getRoomEditorItemsForGroup(order, selectedRoom.key) : [createRoomEditorItem(0)],
+  });
+}
+
 function buildOrderItemsPayload(items = []) {
   return items.map((item, index) => ({
     ...(item.itemId ? { itemId: item.itemId } : {}),
@@ -1005,6 +1027,12 @@ function OrdersWorkspace() {
     }));
   };
 
+  const openEditRoomEditor = (order) => {
+    if (!order?._id) return;
+    setError('');
+    setRoomEditor(createEditRoomEditorState(order));
+  };
+
   const openEditForm = (order) => {
     setError('');
     setEditingOrderId(order._id);
@@ -1146,6 +1174,10 @@ function OrdersWorkspace() {
     setError('');
     setRoomEditor((current) => {
       if (!current) return current;
+      if (current.mode === 'edit') {
+        const nextOrder = orders.find((order) => order._id === nextOrderId);
+        return nextOrder ? createEditRoomEditorState(nextOrder) : createRoomEditorState({ mode: 'edit', orderId: nextOrderId });
+      }
       if (current.mode !== 'item') {
         return { ...current, orderId: nextOrderId };
       }
@@ -1172,6 +1204,9 @@ function OrdersWorkspace() {
         sourceGroupKey: nextGroupKey,
         room: selectedRoom?.room || '',
         roomNumber: selectedRoom?.roomNumber || '',
+        items: current.mode === 'edit'
+          ? (selectedRoom && selectedRoomEditorOrder ? getRoomEditorItemsForGroup(selectedRoomEditorOrder, nextGroupKey) : [createRoomEditorItem(0)])
+          : current.items,
       };
     });
   };
@@ -1244,7 +1279,9 @@ function OrdersWorkspace() {
       return;
     }
 
-    const preservedItems = [...(baseOrder.items || [])];
+    const preservedItems = roomEditor.mode === 'edit'
+      ? (baseOrder.items || []).filter((item) => buildRoomGroupKey(item.room, item.roomNumber) !== roomEditor.sourceGroupKey)
+      : [...(baseOrder.items || [])];
     const nextRoomItems = buildOrderItemsPayload((roomEditor.items || []).map((item) => ({
       ...item,
       room: roomValue,
@@ -2357,10 +2394,12 @@ function OrdersWorkspace() {
       {roomEditor ? (
         <Modal open={Boolean(roomEditor)} onClose={() => !roomEditorSaving && setRoomEditor(null)} closeDisabled={roomEditorSaving} size="lg" className="order-form-modal">
           <ModalHeader
-            title={roomEditor.mode === 'item' ? 'Новое изделие' : 'Новое помещение'}
+            title={roomEditor.mode === 'item' ? 'Новое изделие' : (roomEditor.mode === 'edit' ? 'Редактирование помещений и изделий' : 'Новое помещение')}
             subtitle={roomEditor.mode === 'item'
               ? 'Выберите заказ и помещение, затем добавьте одно или несколько изделий.'
-              : 'Выберите заказ, затем создайте помещение и при необходимости сразу несколько изделий.'}
+              : (roomEditor.mode === 'edit'
+                ? 'Выберите заказ и помещение, затем измените помещение и его изделия.'
+                : 'Выберите заказ, затем создайте помещение и при необходимости сразу несколько изделий.')}
             onClose={() => !roomEditorSaving && setRoomEditor(null)}
             closeDisabled={roomEditorSaving}
           />
@@ -2375,7 +2414,7 @@ function OrdersWorkspace() {
                 ))}
               </select>
             </div>
-            {roomEditor.mode === 'item' ? (
+            {roomEditor.mode === 'item' || roomEditor.mode === 'edit' ? (
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Помещение</label>
                 <select
@@ -2389,7 +2428,8 @@ function OrdersWorkspace() {
                   ))}
                 </select>
               </div>
-            ) : (
+            ) : null}
+            {roomEditor.mode !== 'item' ? (
               <>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Помещение</label>
@@ -2408,12 +2448,14 @@ function OrdersWorkspace() {
                   />
                 </div>
               </>
-            )}
+            ) : null}
           </div>
 
-          {roomEditor.mode === 'item' && roomEditor.orderId && roomEditorRoomOptions.length === 0 ? (
+          {(roomEditor.mode === 'item' || roomEditor.mode === 'edit') && roomEditor.orderId && roomEditorRoomOptions.length === 0 ? (
             <div className="settings-hint" style={{ marginTop: 12 }}>
-              В выбранном заказе пока нет помещений. Сначала создайте помещение.
+              {roomEditor.mode === 'edit'
+                ? 'В выбранном заказе пока нет помещений для редактирования.'
+                : 'В выбранном заказе пока нет помещений. Сначала создайте помещение.'}
             </div>
           ) : null}
 
@@ -2492,7 +2534,7 @@ function OrdersWorkspace() {
           <div className="modal-actions">
             <Button onClick={() => setRoomEditor(null)} disabled={roomEditorSaving}>Отмена</Button>
             <Button variant="success" onClick={handleSaveRoomEditor} disabled={roomEditorSaving}>
-              {roomEditorSaving ? 'Сохранение...' : (roomEditor.mode === 'item' ? 'Сохранить изделия' : 'Сохранить помещение')}
+              {roomEditorSaving ? 'Сохранение...' : (roomEditor.mode === 'item' ? 'Сохранить изделия' : (roomEditor.mode === 'edit' ? 'Сохранить изменения' : 'Сохранить помещение'))}
             </Button>
           </div>
         </Modal>
@@ -2750,6 +2792,17 @@ function OrdersWorkspace() {
                 }}
               >
                 Редактировать весь заказ
+              </Button>
+              <Button
+                variant="secondary"
+                className="order-actions-modal-btn"
+                onClick={() => {
+                  setOrderActionsOrder(null);
+                  openEditRoomEditor(orderActionsOrder);
+                }}
+                disabled={!Array.isArray(orderActionsOrder.items) || orderActionsOrder.items.length === 0}
+              >
+                Редактировать помещения и изделия
               </Button>
               {Array.isArray(orderActionsOrder.items) && orderActionsOrder.items.length > 0 ? (
                 <div className="order-actions-qr-section">
