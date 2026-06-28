@@ -32,6 +32,10 @@ const ORDER_PRIMARY_HEADERS = [
 ];
 const CARPENTER_STAGE_LEGEND_KEY = 'postpaint';
 const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_START_STAGE_LEGEND_KEY = 'postpaint';
+const ORDER_START_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_START_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_DURATION_STAGE_LEGEND_KEY = 'ready';
+const ORDER_DURATION_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_DURATION_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_COMPLETE_STAGE_LEGEND_KEY = 'ready';
 const ORDER_COMPLETE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_COMPLETE_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
@@ -1830,16 +1834,32 @@ function OrdersWorkspace() {
                       'orderCard',
                       `merged-order-cell order-card-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
                     );
+                    const hasManufacturingStart = Boolean(orderManufacturingMeta.startDate);
+                    const startDateMetaCellStyle = hasManufacturingStart
+                      ? {
+                          background: legendColorMap[ORDER_START_STAGE_LEGEND_KEY] || '#D3EAD9',
+                          color: ORDER_START_STAGE_TEXT_HEX,
+                        }
+                      : undefined;
                     const startDateMetaCellProps = getManualStageCellProps(
                       key,
                       item,
                       'startDate',
                       `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                      startDateMetaCellStyle,
                     );
                     const completedMetaCellStyle = orderManufacturingMeta.isCompleted
                       ? {
                           background: legendColorMap[ORDER_COMPLETE_STAGE_LEGEND_KEY] || '#8BC34A',
                           color: ORDER_COMPLETE_STAGE_TEXT_HEX,
+                        }
+                      : undefined;
+                    const durationValue = formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate);
+                    const hasManufacturingDuration = durationValue !== '—';
+                    const durationMetaCellStyle = hasManufacturingDuration
+                      ? {
+                          background: legendColorMap[ORDER_DURATION_STAGE_LEGEND_KEY] || '#F4C2A4',
+                          color: ORDER_DURATION_STAGE_TEXT_HEX,
                         }
                       : undefined;
                     const endDateMetaCellProps = getManualStageCellProps(
@@ -1854,6 +1874,7 @@ function OrdersWorkspace() {
                       item,
                       'duration',
                       `merged-order-cell merged-order-meta-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`,
+                      durationMetaCellStyle,
                     );
                     return (
                       <tr
@@ -2037,7 +2058,7 @@ function OrdersWorkspace() {
                         ) : null}
                         {isFirstOrderRow ? (
                           <td rowSpan={orderRowSpan} {...durationMetaCellProps}>
-                            <div className="merged-order-meta-content">{formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate)}</div>
+                            <div className="merged-order-meta-content">{durationValue}</div>
                           </td>
                         ) : null}
                       </tr>
