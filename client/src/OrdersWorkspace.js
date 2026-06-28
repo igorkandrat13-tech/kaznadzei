@@ -2704,6 +2704,7 @@ function OrdersWorkspace() {
                 </tbody>
               </table>
             </div>
+          </>
         )}
 
         <div className="filters-summary" style={{ marginTop: 12 }}>
