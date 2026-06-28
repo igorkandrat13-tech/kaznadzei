@@ -207,7 +207,7 @@ function sanitizeOrderAttachmentInput(payload, options = {}) {
     data.type = normalizeString(payload.type, 'type', { maxLength: 120 });
   }
   if (!partial || payload.size !== undefined) {
-    data.size = normalizePositiveInt(payload.size, 'size', { required: !partial, min: 1 });
+    data.size = normalizePositiveInt(payload.size, 'size', { required: false, min: 1 });
   }
   if (!partial || payload.storedName !== undefined) {
     data.storedName = normalizeString(payload.storedName, 'storedName', { maxLength: 255 });
@@ -225,9 +225,12 @@ function sanitizeOrderAttachmentInput(payload, options = {}) {
     }
     data.content = content;
   }
+  if (!partial || payload.url !== undefined) {
+    data.url = normalizeUrl(payload.url, 'url', { required: false, maxLength: 2000 });
+  }
 
-  if (!partial && !data.content && !data.relativePath) {
-    fail('Для вложения требуется содержимое файла или путь к нему.');
+  if (!partial && !data.content && !data.relativePath && !data.url) {
+    fail('Для вложения требуется файл или ссылка.');
   }
 
   return data;

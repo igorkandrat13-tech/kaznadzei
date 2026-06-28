@@ -220,7 +220,8 @@ function normalizeOrderAttachments(source = []) {
       : rawName;
     const content = String(attachment.content || '').trim();
     const relativePath = String(attachment.relativePath || '').trim().replace(/\\/g, '/');
-    if (!name || (!content && !relativePath)) return acc;
+    const url = String(attachment.url || '').trim();
+    if (!name || (!content && !relativePath && !url)) return acc;
 
     acc.push({
       attachmentId: String(attachment.attachmentId || attachment._id || id()).trim(),
@@ -230,6 +231,7 @@ function normalizeOrderAttachments(source = []) {
       storedName: String(attachment.storedName || '').trim(),
       relativePath,
       content,
+      url,
       uploadedAt: attachment.uploadedAt || new Date().toISOString(),
     });
     return acc;

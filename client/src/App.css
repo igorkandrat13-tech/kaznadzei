@@ -2066,32 +2066,14 @@ table tr:hover td {
 }
 
 .order-card-cell-content {
-  display: inline-grid;
-  grid-template-columns: 24px auto;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  column-gap: 6px;
-  min-height: 52px;
+  gap: 6px;
+  min-height: 32px;
   min-width: 0;
   width: auto;
   margin: 0 auto;
-}
-
-.order-card-cell-actions,
-.order-card-cell-indicators {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-}
-
-.order-card-summary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
 }
 
 .order-card-icon-btn {
@@ -2124,13 +2106,13 @@ table tr:hover td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  min-height: 16px;
-  padding: 0 4px;
+  min-width: 26px;
+  min-height: 24px;
+  padding: 0 6px;
   border-radius: 999px;
   background: rgba(126, 191, 255, 0.14);
   color: var(--text-main);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -2202,6 +2184,22 @@ table tr:hover td {
 .order-card-dialog-list {
   display: grid;
   gap: 10px;
+}
+
+.order-card-dialog-toolbar {
+  margin-bottom: 14px;
+}
+
+.order-card-link-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(260px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.order-card-link-form-actions {
+  display: flex;
+  align-items: flex-end;
 }
 
 .order-card-dialog-item {
@@ -5556,8 +5554,11 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .order-card-cell-content {
-    min-height: 48px;
-    grid-template-columns: 22px auto;
+    min-height: 40px;
+  }
+
+  .order-card-link-form {
+    grid-template-columns: 1fr;
   }
 
   .order-card-icon-btn {

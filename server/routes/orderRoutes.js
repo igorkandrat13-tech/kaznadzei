@@ -662,6 +662,10 @@ router.get('/orders/:id/attachments/:attachmentId/file', requireWriteAccess, (re
       res.type(attachment.type);
     }
 
+    if (attachment.url) {
+      return res.status(400).json({ message: 'Это вложение является ссылкой. Откройте его как ссылку.' });
+    }
+
     if (attachment.content) {
       const legacyFile = parseLegacyDataUrl(attachment.content);
       if (!legacyFile) {
@@ -762,6 +766,57 @@ router.post('/orders/:id/attachments', requireManagerAccess(), (req, res) => {
       });
     }
   });
+});
+
+router.post('/orders/:id/attachments/link', requireManagerAccess(), (req, res) => {
+  try {
+    const overwriteRequested = ['1', 'true', 'yes'].includes(String(req.query?.overwrite || req.body?.overwrite || '').trim().toLowerCase());
+    const attachment = sanitizeOrderAttachmentInput({
+      name: req.body?.name,
+      type: 'text/uri-list',
+      uploadedAt: new Date().toISOString(),
+      url: req.body?.url,
+    });
+    const attachmentResult = OrderStore.saveAttachment(req.params.id, attachment, { overwrite: overwriteRequested });
+    if (attachmentResult.status === 'order_not_found') {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (attachmentResult.status === 'invalid') {
+      return res.status(400).json({ message: 'Не удалось сохранить ссылку карточки заказа.' });
+    }
+    if (attachmentResult.status === 'conflict') {
+      return res.status(409).json({
+        message: `Вложение "${attachment.name}" уже загружено в карточку заказа. Подтвердите перезапись.`,
+        code: 'ATTACHMENT_NAME_EXISTS',
+        existingAttachment: attachmentResult.existingAttachment || null,
+      });
+    }
+
+    const savedAttachment = attachmentResult.attachment;
+    addActivityLog({
+      action: attachmentResult.status === 'overwritten' ? 'order.attachment.overwrite' : 'order.attachment.create',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: savedAttachment?.name || attachment.name || '',
+      actor: getRequestActor(req),
+      message: attachmentResult.status === 'overwritten'
+        ? 'Ссылка карточки заказа перезаписана.'
+        : 'Ссылка карточки заказа добавлена.',
+      details: {
+        attachmentId: savedAttachment?.attachmentId || '',
+        fileName: savedAttachment?.name || '',
+        url: savedAttachment?.url || '',
+        overwritten: attachmentResult.status === 'overwritten',
+      },
+    });
+
+    res.status(attachmentResult.status === 'overwritten' ? 200 : 201).json({
+      ...savedAttachment,
+      overwritten: attachmentResult.status === 'overwritten',
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось сохранить ссылку карточки заказа.' });
+  }
 });
 
 router.delete('/orders/:id/attachments/:attachmentId', requireManagerAccess(), (req, res) => {

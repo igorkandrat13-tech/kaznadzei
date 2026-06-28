@@ -63,7 +63,7 @@ export const ORDER_STAGE_SECONDARY_HEADERS = [
   { label: 'ТЗ для чертежей', legendKey: 'brief', colSpan: 1, textHex: '#000000' },
   { label: 'Начерчен', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
   { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
-  { label: 'Размеры', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
+  { label: '', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
   { label: 'Готово ТЗ', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
   { label: 'Набирается заготовка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F' },
   { label: 'Укомплектовано', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F' },

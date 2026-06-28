@@ -48,6 +48,7 @@ const MANUAL_STAGE_TEXT_COLOR_MAP = ORDER_STAGE_SECONDARY_HEADERS.reduce((acc, i
 
 function getAttachmentKindLabel(attachment = {}) {
   const type = String(attachment.type || '').toLowerCase();
+  if (isLinkAttachment(attachment)) return 'Ссылка';
   if (type.includes('pdf')) return 'PDF';
   if (type.includes('word') || type.includes('document')) return 'Word';
   if (type.includes('excel') || type.includes('spreadsheet') || type.includes('sheet')) return 'Excel';
@@ -57,6 +58,7 @@ function getAttachmentKindLabel(attachment = {}) {
 
 function getAttachmentIcon(attachment = {}) {
   const type = String(attachment.type || '').toLowerCase();
+  if (isLinkAttachment(attachment)) return 'LINK';
   if (type.includes('pdf')) return 'PDF';
   if (type.includes('word') || type.includes('document')) return 'DOC';
   if (type.includes('excel') || type.includes('spreadsheet') || type.includes('sheet')) return 'XLS';
@@ -95,8 +97,18 @@ function isSpreadsheetAttachment(attachment = {}) {
     || extension === '.xls';
 }
 
+function isLinkAttachment(attachment = {}) {
+  const type = String(attachment.type || '').toLowerCase();
+  const url = String(attachment.url || '').trim();
+  return Boolean(url) || type === 'text/uri-list';
+}
+
 function getAttachmentNameKey(fileName = '') {
   return String(fileName || '').trim().toLowerCase();
+}
+
+function getAttachmentLinkUrl(attachment = {}) {
+  return String(attachment.url || '').trim();
 }
 
 function formatAttachmentSize(size) {
@@ -231,6 +243,24 @@ function createRoomEditorItem(index = 0) {
   };
 }
 
+function createRoomEditorState({
+  mode = 'room',
+  orderId = '',
+  sourceGroupKey = '',
+  room = '',
+  roomNumber = '',
+  items = [createRoomEditorItem(0)],
+} = {}) {
+  return {
+    mode,
+    orderId,
+    sourceGroupKey,
+    room,
+    roomNumber,
+    items,
+  };
+}
+
 function mapItemToRoomEditorItem(item = {}, index = 0) {
   return {
     itemId: item.itemId || '',
@@ -249,6 +279,32 @@ function mapItemToRoomEditorItem(item = {}, index = 0) {
 
 function buildRoomGroupKey(room = '', roomNumber = '') {
   return `${String(room || '').trim()}::${String(roomNumber || '').trim()}`;
+}
+
+function getOrderLabel(order = {}) {
+  const orderNumber = String(order.orderNumber || '').trim();
+  const customer = String(order.customer || '').trim();
+  if (orderNumber && customer) return `№ ${orderNumber} · ${customer}`;
+  if (orderNumber) return `№ ${orderNumber}`;
+  if (customer) return customer;
+  return 'Заказ без номера';
+}
+
+function getOrderRoomOptions(order = {}) {
+  const roomMap = new Map();
+  for (const item of (order.items || [])) {
+    const key = buildRoomGroupKey(item.room, item.roomNumber);
+    if (!key || roomMap.has(key)) continue;
+    const room = String(item.room || '').trim();
+    const roomNumber = String(item.roomNumber || '').trim();
+    roomMap.set(key, {
+      key,
+      room,
+      roomNumber,
+      label: `${room || 'Без названия'}${roomNumber ? ` · № ${roomNumber}` : ''}`,
+    });
+  }
+  return Array.from(roomMap.values());
 }
 
 function buildOrderItemsPayload(items = []) {
@@ -377,6 +433,7 @@ function OrdersWorkspace() {
   const [attachmentPreview, setAttachmentPreview] = useState(null);
   const [confirmAttachmentDelete, setConfirmAttachmentDelete] = useState(null);
   const [confirmAttachmentOverwrite, setConfirmAttachmentOverwrite] = useState(null);
+  const [attachmentLinkDraft, setAttachmentLinkDraft] = useState({ name: '', url: '' });
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
@@ -470,6 +527,18 @@ function OrdersWorkspace() {
       };
     });
   }, [legendColorMap]);
+  const roomEditorOrderOptions = useMemo(
+    () => orders.map((order) => ({ value: order._id || '', label: getOrderLabel(order) })),
+    [orders],
+  );
+  const selectedRoomEditorOrder = useMemo(
+    () => orders.find((order) => order._id === roomEditor?.orderId) || null,
+    [orders, roomEditor],
+  );
+  const roomEditorRoomOptions = useMemo(
+    () => (selectedRoomEditorOrder ? getOrderRoomOptions(selectedRoomEditorOrder) : []),
+    [selectedRoomEditorOrder],
+  );
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -915,6 +984,27 @@ function OrdersWorkspace() {
     setShowForm(true);
   };
 
+  const openCreateRoomEditor = (order = null) => {
+    setError('');
+    setRoomEditor(createRoomEditorState({
+      mode: 'room',
+      orderId: order?._id || '',
+    }));
+  };
+
+  const openCreateItemEditor = (order = null) => {
+    const initialOrderId = order?._id || '';
+    const initialRoomOption = order ? (getOrderRoomOptions(order)[0] || null) : null;
+    setError('');
+    setRoomEditor(createRoomEditorState({
+      mode: 'item',
+      orderId: initialOrderId,
+      sourceGroupKey: initialRoomOption?.key || '',
+      room: initialRoomOption?.room || '',
+      roomNumber: initialRoomOption?.roomNumber || '',
+    }));
+  };
+
   const openEditForm = (order) => {
     setError('');
     setEditingOrderId(order._id);
@@ -948,6 +1038,7 @@ function OrdersWorkspace() {
       orderNumber: order.orderNumber || '',
       customer: order.customer || '',
     });
+    setAttachmentLinkDraft({ name: '', url: '' });
   }, []);
 
   useEscapeKey(() => {
@@ -1044,37 +1135,45 @@ function OrdersWorkspace() {
     }
   };
 
-  const openCreateRoomEditor = (order) => {
-    setError('');
-    setRoomEditor({
-      orderId: order._id || '',
-      sourceGroupKey: '',
-      room: '',
-      roomNumber: '',
-      items: [createRoomEditorItem(0)],
-    });
-  };
-
-  const openEditRoomEditor = (order, item) => {
-    if (!order?._id || !item || item.__placeholder) return;
-    const groupKey = buildRoomGroupKey(item.room, item.roomNumber);
-    const roomItems = (order.items || []).filter((currentItem) => buildRoomGroupKey(currentItem.room, currentItem.roomNumber) === groupKey);
-    setError('');
-    setRoomEditor({
-      orderId: order._id || '',
-      sourceGroupKey: groupKey,
-      room: item.room || '',
-      roomNumber: item.roomNumber || '',
-      items: roomItems.length > 0
-        ? roomItems.map((roomItem, index) => mapItemToRoomEditorItem(roomItem, index))
-        : [createRoomEditorItem(0)],
-    });
-  };
-
   const handleRoomEditorFieldChange = (field) => (event) => {
     const value = event.target.value;
     setError('');
     setRoomEditor((current) => current ? { ...current, [field]: value } : current);
+  };
+
+  const handleRoomEditorOrderChange = (event) => {
+    const nextOrderId = event.target.value;
+    setError('');
+    setRoomEditor((current) => {
+      if (!current) return current;
+      if (current.mode !== 'item') {
+        return { ...current, orderId: nextOrderId };
+      }
+      const nextOrder = orders.find((order) => order._id === nextOrderId);
+      const nextRoomOption = nextOrder ? (getOrderRoomOptions(nextOrder)[0] || null) : null;
+      return {
+        ...current,
+        orderId: nextOrderId,
+        sourceGroupKey: nextRoomOption?.key || '',
+        room: nextRoomOption?.room || '',
+        roomNumber: nextRoomOption?.roomNumber || '',
+      };
+    });
+  };
+
+  const handleRoomEditorRoomSelectChange = (event) => {
+    const nextGroupKey = event.target.value;
+    setError('');
+    setRoomEditor((current) => {
+      if (!current) return current;
+      const selectedRoom = roomEditorRoomOptions.find((option) => option.key === nextGroupKey) || null;
+      return {
+        ...current,
+        sourceGroupKey: nextGroupKey,
+        room: selectedRoom?.room || '',
+        roomNumber: selectedRoom?.roomNumber || '',
+      };
+    });
   };
 
   const handleRoomEditorItemFieldChange = (index, field) => (event) => {
@@ -1113,10 +1212,8 @@ function OrdersWorkspace() {
   const handleSaveRoomEditor = async () => {
     if (!roomEditor || roomEditorSaving) return;
 
-    const roomValue = String(roomEditor.room || '').trim();
-    const roomNumberValue = String(roomEditor.roomNumber || '').trim();
-    if (!roomValue && !roomNumberValue) {
-      setError('Укажите помещение или его номер.');
+    if (!roomEditor.orderId) {
+      setError('Выберите заказ.');
       return;
     }
 
@@ -1128,13 +1225,26 @@ function OrdersWorkspace() {
 
     const baseOrder = orders.find((order) => order._id === roomEditor.orderId);
     if (!baseOrder) {
-      setError('Заказ для редактирования помещения не найден.');
+      setError('Выбранный заказ не найден.');
       return;
     }
 
-    const preservedItems = (baseOrder.items || []).filter((item) => (
-      !roomEditor.sourceGroupKey || buildRoomGroupKey(item.room, item.roomNumber) !== roomEditor.sourceGroupKey
-    ));
+    let roomValue = String(roomEditor.room || '').trim();
+    let roomNumberValue = String(roomEditor.roomNumber || '').trim();
+    if (roomEditor.mode === 'item') {
+      const selectedRoom = getOrderRoomOptions(baseOrder).find((option) => option.key === roomEditor.sourceGroupKey) || null;
+      roomValue = selectedRoom?.room || roomValue;
+      roomNumberValue = selectedRoom?.roomNumber || roomNumberValue;
+      if (!roomEditor.sourceGroupKey || (!roomValue && !roomNumberValue)) {
+        setError('Выберите помещение в заказе.');
+        return;
+      }
+    } else if (!roomValue && !roomNumberValue) {
+      setError('Укажите помещение или его номер.');
+      return;
+    }
+
+    const preservedItems = [...(baseOrder.items || [])];
     const nextRoomItems = buildOrderItemsPayload((roomEditor.items || []).map((item) => ({
       ...item,
       room: roomValue,
@@ -1161,7 +1271,7 @@ function OrdersWorkspace() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        setError(await getErrorMessage(res, 'Не удалось сохранить помещение и изделия.'));
+        setError(await getErrorMessage(res, roomEditor.mode === 'item' ? 'Не удалось сохранить изделия.' : 'Не удалось сохранить помещение и изделия.'));
         return;
       }
       setRoomEditor(null);
@@ -1208,8 +1318,60 @@ function OrdersWorkspace() {
     }
   };
 
+  const handleAttachmentLinkDraftChange = (field) => (event) => {
+    const value = event.target.value;
+    setError('');
+    setAttachmentLinkDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleUploadOrderAttachmentLink = async ({ orderId, name, url, overwrite = false }) => {
+    if (!orderId) return;
+    setAttachmentUploadingOrderId(orderId);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${orderId}/attachments/link${overwrite ? '?overwrite=1' : ''}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, url }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        if (res.status === 409 && !overwrite) {
+          setConfirmAttachmentOverwrite({
+            kind: 'link',
+            orderId,
+            orderNumber: attachmentsDialog?.orderNumber || '',
+            attachmentName: data?.existingAttachment?.name || name || 'Ссылка',
+            name,
+            url,
+          });
+          return;
+        }
+        setError(data?.message || 'Не удалось сохранить ссылку в карточке заказа.');
+        return;
+      }
+      setAttachmentLinkDraft({ name: '', url: '' });
+      setConfirmAttachmentOverwrite(null);
+      await fetchOrders();
+    } catch (uploadError) {
+      setError(uploadError.message || 'Не удалось сохранить ссылку в карточке заказа.');
+    } finally {
+      setAttachmentUploadingOrderId('');
+    }
+  };
+
   const handleOpenAttachment = async (orderId, attachment) => {
     if (!orderId || !attachment?.attachmentId) return;
+
+    if (isLinkAttachment(attachment)) {
+      const targetUrl = getAttachmentLinkUrl(attachment);
+      if (!targetUrl) {
+        setError('Ссылка в карточке заказа пустая.');
+        return;
+      }
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
 
     const openKey = `${orderId}:${attachment.attachmentId}`;
     setAttachmentOpeningKey(openKey);
@@ -1306,6 +1468,16 @@ function OrdersWorkspace() {
   const handleDownloadAttachment = async (orderId, attachment) => {
     if (!orderId || !attachment?.attachmentId) return;
 
+    if (isLinkAttachment(attachment)) {
+      const targetUrl = getAttachmentLinkUrl(attachment);
+      if (!targetUrl) {
+        setError('Ссылка в карточке заказа пустая.');
+        return;
+      }
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     const downloadKey = `${orderId}:${attachment.attachmentId}:download`;
     setAttachmentOpeningKey(downloadKey);
     setError('');
@@ -1353,7 +1525,19 @@ function OrdersWorkspace() {
   const performOverwriteAttachment = async () => {
     const orderId = String(confirmAttachmentOverwrite?.orderId || '').trim();
     const file = confirmAttachmentOverwrite?.file;
-    if (!orderId || !file) return;
+    if (!orderId) return;
+
+    if (confirmAttachmentOverwrite?.kind === 'link') {
+      await handleUploadOrderAttachmentLink({
+        orderId,
+        name: confirmAttachmentOverwrite?.name || '',
+        url: confirmAttachmentOverwrite?.url || '',
+        overwrite: true,
+      });
+      return;
+    }
+
+    if (!file) return;
 
     const order = orders.find((currentOrder) => currentOrder._id === orderId);
     if (!order) {
@@ -1643,7 +1827,9 @@ function OrdersWorkspace() {
             <h2 className="section-header-title">📋 Единая таблица заказов</h2>
           </div>
           <div className="section-header-actions">
-            <Button variant="primary" onClick={openCreateForm}>➕ Новый заказ</Button>
+            <Button variant="primary" onClick={openCreateForm}>Новый заказ</Button>
+            <Button variant="primary" onClick={() => openCreateRoomEditor()}>Новое помещение</Button>
+            <Button variant="primary" onClick={() => openCreateItemEditor()}>Новое изделие</Button>
             <Button variant="secondary" onClick={exportRowsToCsv}>Экспорт CSV</Button>
           </div>
         </div>
@@ -1832,7 +2018,7 @@ function OrdersWorkspace() {
                       key,
                       item,
                       'orderCard',
-                      `merged-order-cell order-card-cell order-filled-cell${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                      `order-card-cell ${regularOrderClass}`,
                     );
                     const hasManufacturingStart = Boolean(orderManufacturingMeta.startDate);
                     const startDateMetaCellStyle = hasManufacturingStart
@@ -1934,25 +2120,6 @@ function OrdersWorkspace() {
                           ) : (
                             <div className="room-cell-content">
                               <div className="room-cell-text">{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</div>
-                              <div className="room-cell-actions">
-                                <button
-                                  type="button"
-                                  className="room-cell-action-btn"
-                                  title="Редактировать помещение и изделия"
-                                  onClick={() => openEditRoomEditor(order, item)}
-                                  disabled={isPlaceholder}
-                                >
-                                  ✎
-                                </button>
-                                <button
-                                  type="button"
-                                  className="room-cell-action-btn"
-                                  title="Добавить помещение и изделия"
-                                  onClick={() => openCreateRoomEditor(order)}
-                                >
-                                  +
-                                </button>
-                              </div>
                             </div>
                           )}
                         </td>
@@ -1966,60 +2133,47 @@ function OrdersWorkspace() {
                             <div className="order-primary-title"><strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong></div>
                           )}
                         </td>
-                        {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} {...orderCardCellProps}>
-                            <div className="order-card-cell-content">
-                              <input
-                                ref={(node) => {
-                                  if (node) {
-                                    attachmentInputRefs.current[order._id] = node;
-                                  } else {
-                                    delete attachmentInputRefs.current[order._id];
-                                  }
-                                }}
-                                type="file"
-                                className="order-card-file-input"
-                                accept={ORDER_CARD_ATTACHMENT_ACCEPT}
-                                onChange={(event) => handleAttachmentInputChange(order, event)}
-                              />
-                              <div className="order-card-cell-actions">
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  className="order-card-icon-btn"
-                                  onClick={() => attachmentInputRefs.current[order._id]?.click()}
-                                  disabled={attachmentUploadingOrderId === order._id}
-                                  title="Загрузить файл"
-                                  aria-label="Загрузить файл"
-                                >
-                                  {attachmentUploadingOrderId === order._id ? '...' : '+'}
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  className="order-card-icon-btn"
-                                  onClick={() => openAttachmentsDialog(order)}
-                                  disabled={orderAttachments.length === 0}
-                                  title={orderAttachments.length > 0 ? 'Просмотр файлов' : 'Файлы не прикреплены'}
-                                  aria-label="Просмотр файлов"
-                                >
-                                  ⌕
-                                </Button>
-                              </div>
-                              <div className="order-card-cell-indicators">
-                                <div
-                                  className={`order-card-summary ${orderAttachments.length > 0 ? 'order-card-summary-has-files' : 'order-card-summary-no-files'}`}
-                                  title={orderAttachments.length > 0 ? `Файлов прикреплено: ${orderAttachments.length}` : 'Файлы не прикреплены'}
-                                >
-                                  <span className={`order-card-status-indicator ${orderAttachments.length > 0 ? 'order-card-status-indicator-active' : ''}`}>
-                                    {orderAttachments.length > 0 ? '●' : '○'}
-                                  </span>
-                                </div>
-                                <span className="order-card-summary-badge">{orderAttachments.length}</span>
-                              </div>
-                            </div>
-                          </td>
-                        ) : null}
+                        <td {...orderCardCellProps}>
+                          <div className="order-card-cell-content">
+                            <input
+                              ref={(node) => {
+                                if (node) {
+                                  attachmentInputRefs.current[order._id] = node;
+                                } else {
+                                  delete attachmentInputRefs.current[order._id];
+                                }
+                              }}
+                              type="file"
+                              className="order-card-file-input"
+                              accept={ORDER_CARD_ATTACHMENT_ACCEPT}
+                              onChange={(event) => handleAttachmentInputChange(order, event)}
+                            />
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="order-card-icon-btn"
+                              onClick={() => attachmentInputRefs.current[order._id]?.click()}
+                              disabled={attachmentUploadingOrderId === order._id}
+                              title="Загрузить файл"
+                              aria-label="Загрузить файл"
+                            >
+                              {attachmentUploadingOrderId === order._id ? '...' : '+'}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="order-card-icon-btn"
+                              onClick={() => openAttachmentsDialog(order)}
+                              title={orderAttachments.length > 0 ? 'Просмотр файлов' : 'Файлы не прикреплены'}
+                              aria-label="Просмотр файлов"
+                            >
+                              ⌕
+                            </Button>
+                            <span className="order-card-summary-badge" title={orderAttachments.length > 0 ? `Файлов и ссылок прикреплено: ${orderAttachments.length}` : 'Файлы и ссылки не прикреплены'}>
+                              {orderAttachments.length}
+                            </span>
+                          </div>
+                        </td>
                         <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
                         <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
                         <td {...packageCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.packageName} onChange={handleInlineChange(key, 'packageName')} /> : (item.packageName || '—')}</td>
@@ -2149,7 +2303,7 @@ function OrdersWorkspace() {
         <Modal open={showForm} onClose={closeForm} closeDisabled={savingOrder} size="lg" className="order-form-modal">
           <ModalHeader
             title={editingOrderId ? 'Редактирование заказа' : 'Новый заказ'}
-            subtitle="Заказ создается без изделий. Помещения и изделия добавляются позже прямо из таблицы заказов."
+            subtitle="Заказ создается без изделий. Помещения и изделия добавляются позже кнопками сверху таблицы."
             onClose={closeForm}
             closeDisabled={savingOrder}
           />
@@ -2203,34 +2357,71 @@ function OrdersWorkspace() {
       {roomEditor ? (
         <Modal open={Boolean(roomEditor)} onClose={() => !roomEditorSaving && setRoomEditor(null)} closeDisabled={roomEditorSaving} size="lg" className="order-form-modal">
           <ModalHeader
-            title={roomEditor.sourceGroupKey ? 'Редактирование помещения и изделий' : 'Новое помещение и изделия'}
-            subtitle="В одном заказе может быть несколько помещений. Все изделия помещения сохраняются одним действием."
+            title={roomEditor.mode === 'item' ? 'Новое изделие' : 'Новое помещение'}
+            subtitle={roomEditor.mode === 'item'
+              ? 'Выберите заказ и помещение, затем добавьте одно или несколько изделий.'
+              : 'Выберите заказ, затем создайте помещение и при необходимости сразу несколько изделий.'}
             onClose={() => !roomEditorSaving && setRoomEditor(null)}
             closeDisabled={roomEditorSaving}
           />
 
           <div className="responsive-form-grid">
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Помещение</label>
-              <input
-                value={roomEditor.room}
-                onChange={handleRoomEditorFieldChange('room')}
-                placeholder="Кухня, спальня, гардероб"
-              />
+              <label>Заказ</label>
+              <select value={roomEditor.orderId} onChange={handleRoomEditorOrderChange}>
+                <option value="">Выберите заказ</option>
+                {roomEditorOrderOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
             </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>№ помещения</label>
-              <input
-                value={roomEditor.roomNumber}
-                onChange={handleRoomEditorFieldChange('roomNumber')}
-                placeholder="Например: 12"
-              />
-            </div>
+            {roomEditor.mode === 'item' ? (
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Помещение</label>
+                <select
+                  value={roomEditor.sourceGroupKey}
+                  onChange={handleRoomEditorRoomSelectChange}
+                  disabled={!roomEditor.orderId || roomEditorRoomOptions.length === 0}
+                >
+                  <option value="">{roomEditor.orderId ? 'Выберите помещение' : 'Сначала выберите заказ'}</option>
+                  {roomEditorRoomOptions.map((option) => (
+                    <option key={option.key} value={option.key}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Помещение</label>
+                  <input
+                    value={roomEditor.room}
+                    onChange={handleRoomEditorFieldChange('room')}
+                    placeholder="Кухня, спальня, гардероб"
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>№ помещения</label>
+                  <input
+                    value={roomEditor.roomNumber}
+                    onChange={handleRoomEditorFieldChange('roomNumber')}
+                    placeholder="Например: 12"
+                  />
+                </div>
+              </>
+            )}
           </div>
+
+          {roomEditor.mode === 'item' && roomEditor.orderId && roomEditorRoomOptions.length === 0 ? (
+            <div className="settings-hint" style={{ marginTop: 12 }}>
+              В выбранном заказе пока нет помещений. Сначала создайте помещение.
+            </div>
+          ) : null}
 
           <div className="order-items-editor">
             <div className="order-items-editor-header">
-              <div className="modal-title" style={{ fontSize: 16 }}>Изделия в помещении</div>
+              <div className="modal-title" style={{ fontSize: 16 }}>
+                {roomEditor.mode === 'item' ? 'Новые изделия в помещении' : 'Изделия в помещении'}
+              </div>
               <Button variant="secondary" size="sm" onClick={addRoomEditorItem} disabled={roomEditorSaving}>Добавить изделие</Button>
             </div>
 
@@ -2239,7 +2430,7 @@ function OrdersWorkspace() {
                 <div className="order-item-editor-card-header">
                   <div>
                     <div className="order-item-editor-title">Изделие {index + 1}</div>
-                    <div className="order-item-editor-subtitle">Для каждого изделия будет свой QR и история по сотрудникам</div>
+                    <div className="order-item-editor-subtitle">Можно сохранить сразу несколько изделий одним действием.</div>
                   </div>
                   <Button
                     variant="danger"
@@ -2301,7 +2492,7 @@ function OrdersWorkspace() {
           <div className="modal-actions">
             <Button onClick={() => setRoomEditor(null)} disabled={roomEditorSaving}>Отмена</Button>
             <Button variant="success" onClick={handleSaveRoomEditor} disabled={roomEditorSaving}>
-              {roomEditorSaving ? 'Сохранение...' : 'Сохранить помещение'}
+              {roomEditorSaving ? 'Сохранение...' : (roomEditor.mode === 'item' ? 'Сохранить изделия' : 'Сохранить помещение')}
             </Button>
           </div>
         </Modal>
@@ -2314,6 +2505,40 @@ function OrdersWorkspace() {
             subtitle={`${attachmentsDialog.orderNumber ? `Заказ № ${attachmentsDialog.orderNumber}` : 'Без номера'}${attachmentsDialog.customer ? ` · ${attachmentsDialog.customer}` : ''}`}
             onClose={() => setAttachmentsDialog(null)}
           />
+
+          <div className="order-card-dialog-toolbar">
+            <div className="order-card-link-form">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Название ссылки</label>
+                <input
+                  value={attachmentLinkDraft.name}
+                  onChange={handleAttachmentLinkDraftChange('name')}
+                  placeholder="Например: папка проекта"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Ссылка</label>
+                <input
+                  value={attachmentLinkDraft.url}
+                  onChange={handleAttachmentLinkDraftChange('url')}
+                  placeholder="https://..."
+                />
+              </div>
+              <div className="order-card-link-form-actions">
+                <Button
+                  variant="secondary"
+                  onClick={() => handleUploadOrderAttachmentLink({
+                    orderId: attachmentsDialog.orderId,
+                    name: attachmentLinkDraft.name,
+                    url: attachmentLinkDraft.url,
+                  })}
+                  disabled={attachmentUploadingOrderId === attachmentsDialog.orderId}
+                >
+                  {attachmentUploadingOrderId === attachmentsDialog.orderId ? 'Сохранение...' : 'Добавить ссылку'}
+                </Button>
+              </div>
+            </div>
+          </div>
 
           <div className="order-card-dialog-list">
             {(currentAttachmentDialogOrder?.attachments || []).length > 0 ? (
@@ -2338,6 +2563,7 @@ function OrdersWorkspace() {
                       </button>
                       <div className="order-card-dialog-meta">
                         {getAttachmentKindLabel(attachment)}
+                        {isLinkAttachment(attachment) && getAttachmentLinkUrl(attachment) ? ` · ${getAttachmentLinkUrl(attachment)}` : ''}
                         {formatAttachmentSize(attachment.size) ? ` · ${formatAttachmentSize(attachment.size)}` : ''}
                       </div>
                     </div>
@@ -2348,7 +2574,7 @@ function OrdersWorkspace() {
                         onClick={() => handleDownloadAttachment(attachmentsDialog.orderId, attachment)}
                         disabled={isOpening || isDownloading}
                       >
-                        {isDownloading ? 'Скачивание...' : 'Скачать'}
+                        {isLinkAttachment(attachment) ? 'Перейти' : (isDownloading ? 'Скачивание...' : 'Скачать')}
                       </Button>
                       <Button
                         variant="danger"
@@ -2594,8 +2820,8 @@ function OrdersWorkspace() {
       <ConfirmDialog
         open={Boolean(confirmAttachmentOverwrite)}
         title="Перезаписать файл?"
-        message={confirmAttachmentOverwrite ? `Файл "${confirmAttachmentOverwrite.attachmentName}" уже загружен${confirmAttachmentOverwrite.orderNumber ? ` в заказ № ${confirmAttachmentOverwrite.orderNumber}` : ''}.\nСтарый файл будет заменен новой версией.` : ''}
-        confirmLabel="Перезаписать файл"
+        message={confirmAttachmentOverwrite ? `${confirmAttachmentOverwrite.kind === 'link' ? 'Ссылка' : 'Файл'} "${confirmAttachmentOverwrite.attachmentName}" уже загружен${confirmAttachmentOverwrite.orderNumber ? ` в заказ № ${confirmAttachmentOverwrite.orderNumber}` : ''}.\nСтарая версия будет заменена новой.` : ''}
+        confirmLabel={confirmAttachmentOverwrite?.kind === 'link' ? 'Перезаписать ссылку' : 'Перезаписать файл'}
         onConfirm={performOverwriteAttachment}
         onCancel={() => !attachmentUploadingOrderId && setConfirmAttachmentOverwrite(null)}
         loading={Boolean(confirmAttachmentOverwrite && attachmentUploadingOrderId === confirmAttachmentOverwrite.orderId)}
