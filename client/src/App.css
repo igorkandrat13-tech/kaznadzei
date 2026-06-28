@@ -1788,8 +1788,8 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-sticky-offset: 92px;
   --orders-header-primary-height: 42px;
   --orders-header-secondary-height: 36px;
-  min-width: 1450px;
-  width: 100%;
+  min-width: 100%;
+  width: max-content;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -1798,6 +1798,8 @@ body[data-theme='light'] .order-primary-title-button-badge {
 .unified-orders-header-table,
 .unified-orders-body-table {
   margin-top: 0;
+  min-width: 100%;
+  width: max-content;
 }
 
 .unified-orders-table th,
@@ -1813,19 +1815,23 @@ body[data-theme='light'] .order-primary-title-button-badge {
   line-height: 1.3;
 }
 
-.unified-orders-table th {
+.unified-orders-table thead {
   position: sticky;
-  z-index: 2;
+  top: var(--orders-sticky-offset);
+  z-index: 9;
+}
+
+.unified-orders-table th {
+  position: static;
   background: linear-gradient(180deg, rgba(241, 245, 249, 0.98), rgba(233, 239, 245, 0.98));
   text-transform: none;
   color: #000000;
   font-size: 12px;
   line-height: 1.1;
+  background-clip: padding-box;
 }
 
 .unified-orders-table .xlsx-header-primary-cell {
-  top: var(--orders-sticky-offset);
-  z-index: 4;
   min-height: var(--orders-header-primary-height);
   height: var(--orders-header-primary-height);
   vertical-align: middle;
@@ -1835,8 +1841,6 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .unified-orders-table .xlsx-header-secondary-cell {
-  top: calc(var(--orders-sticky-offset) + var(--orders-header-primary-height));
-  z-index: 3;
   background: linear-gradient(180deg, rgba(235, 241, 247, 0.98), rgba(228, 236, 244, 0.98));
   color: #000000;
   font-size: 11px;
@@ -1847,6 +1851,12 @@ body[data-theme='light'] .order-primary-title-button-badge {
   padding: 4px 4px;
   overflow: hidden;
   word-break: break-word;
+  background-clip: padding-box;
+  box-shadow: inset 1px 0 0 rgba(15, 23, 42, 0.12);
+}
+
+.unified-orders-table .xlsx-header-row-secondary .xlsx-header-secondary-cell:first-child {
+  box-shadow: none;
 }
 
 .unified-orders-table .xlsx-header-secondary-cell-colored {
@@ -3153,12 +3163,8 @@ body[data-theme='light'] .attachment-preview-table td {
   background-clip: padding-box;
 }
 
-.unified-orders-table thead .sticky-col {
-  z-index: 6;
-}
-
 .unified-orders-table tbody .sticky-col {
-  z-index: 4;
+  z-index: 2;
 }
 
 .unified-orders-table tbody .merged-order-cell.sticky-col {
@@ -4671,6 +4677,7 @@ body[data-theme='light'] .unified-orders-table th {
 body[data-theme='light'] .unified-orders-table .xlsx-header-secondary-cell {
   background: linear-gradient(180deg, rgba(235, 241, 247, 0.99), rgba(228, 236, 244, 0.98));
   color: #000000;
+  box-shadow: inset 1px 0 0 rgba(15, 23, 42, 0.08);
 }
 
 body[data-theme='light'] .unified-orders-table .xlsx-header-secondary-cell-colored {
