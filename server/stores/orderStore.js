@@ -271,6 +271,46 @@ function getManualStageStatus(manualStageMarks = {}) {
   return MANUAL_STAGE_STATUS[legendKey] || 'in_progress';
 }
 
+function isIsoAfter(left = '', right = '') {
+  const leftValue = String(left || '').trim();
+  const rightValue = String(right || '').trim();
+  if (!leftValue || !rightValue) return false;
+  const leftTime = Date.parse(leftValue);
+  const rightTime = Date.parse(rightValue);
+  if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+    return leftValue > rightValue;
+  }
+  return leftTime > rightTime;
+}
+
+function clearOutdatedAutoStageClears(order = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const primaryItem = items[0] || null;
+  if (!primaryItem) return false;
+
+  let changed = false;
+  const manufacturingMeta = deriveOrderManufacturingMeta(order);
+  const metaClears = normalizeManualStageClears(primaryItem.manualStageClears);
+
+  if (metaClears.startDate && isIsoAfter(manufacturingMeta.startAt, metaClears.startDate.updatedAt)) {
+    delete metaClears.startDate;
+    changed = true;
+  }
+  if (metaClears.endDate && isIsoAfter(manufacturingMeta.endAt, metaClears.endDate.updatedAt)) {
+    delete metaClears.endDate;
+    changed = true;
+  }
+  if (metaClears.duration && isIsoAfter(manufacturingMeta.endAt || manufacturingMeta.startAt, metaClears.duration.updatedAt)) {
+    delete metaClears.duration;
+    changed = true;
+  }
+  if (changed) {
+    primaryItem.manualStageClears = normalizeManualStageClears(metaClears);
+  }
+
+  return changed;
+}
+
 function calculateItemOverallStatus(stages, manualStageMarks = {}) {
   const manualStatus = getManualStageStatus(manualStageMarks);
   if (manualStatus) return manualStatus;
@@ -653,6 +693,9 @@ function ensureOrderShape(order) {
     order.endDate = nextEndDate;
     changed = true;
   }
+  if (clearOutdatedAutoStageClears(order)) {
+    changed = true;
+  }
 
   if (cleanupLegacyOrderFields(order)) {
     changed = true;
@@ -840,6 +883,11 @@ const OrderStore = {
       }
     }
     if (changed) {
+      const currentClears = normalizeManualStageClears(item.manualStageClears);
+      if (role === 'carpenter' && currentClears.carpenter) {
+        delete currentClears.carpenter;
+        item.manualStageClears = normalizeManualStageClears(currentClears);
+      }
       item.overallStatus = calculateItemOverallStatus(item.stages, item.manualStageMarks);
       item.updatedAt = new Date().toISOString();
       syncOrderStatus(order);
@@ -871,12 +919,24 @@ const OrderStore = {
         const currentItem = currentItems.find(existingItem => existingItem.itemId === String(item?.itemId || '').trim())
           || currentItems[index]
           || {};
+        const currentPackageItems = normalizePackageItems(currentItem?.packageItems, currentItem?.packageName);
+        const nextPackageItems = normalizePackageItems(item?.packageItems, item?.packageName);
+        const packageItemsChanged = JSON.stringify(currentPackageItems) !== JSON.stringify(nextPackageItems);
+        const nextManualStageClears = normalizeManualStageClears(item?.manualStageClears || currentItem?.manualStageClears || {});
+        if (
+          packageItemsChanged
+          && nextPackageItems.length > 0
+          && nextPackageItems.every((packageItem) => packageItem.isCompleted)
+          && nextManualStageClears.packageName
+        ) {
+          delete nextManualStageClears.packageName;
+        }
         return buildOrderItem({
           ...currentItem,
           ...item,
           workerAssignments: item?.workerAssignments || currentItem?.workerAssignments || {},
           manualStageMarks: item?.manualStageMarks || currentItem?.manualStageMarks || {},
-          manualStageClears: item?.manualStageClears || currentItem?.manualStageClears || {},
+          manualStageClears: nextManualStageClears,
         }, {
           defaultItemNumber: getDefaultItemNumber(index),
           index,
