@@ -1972,7 +1972,7 @@ function OrdersWorkspace() {
         <Button
           variant="secondary"
           size="sm"
-          className="order-card-icon-btn"
+          className="order-card-action-btn order-card-icon-btn"
           onClick={() => attachmentInputRefs.current[targetKey]?.click()}
           disabled={disabled || isUploading}
           title={scopeConfig.addButtonTitle}
@@ -1983,13 +1983,14 @@ function OrdersWorkspace() {
         <Button
           variant="secondary"
           size="sm"
-          className="order-card-count-btn"
+          className="order-card-action-btn order-card-count-btn"
           onClick={() => openAttachmentsDialog(order, item, scope)}
           disabled={disabled}
           title={attachments.length > 0 ? scopeConfig.openButtonTitle : scopeConfig.emptyTitle}
           aria-label={scopeConfig.openButtonTitle}
         >
-          {attachments.length}
+          <span className="order-card-count-btn-icon">⌕</span>
+          <span className="order-card-count-btn-value">{attachments.length}</span>
         </Button>
       </div>
     );
@@ -2553,7 +2554,24 @@ function OrdersWorkspace() {
                           {isInlineEditing ? (
                             <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
                           ) : (
-                            <div className="order-primary-title"><strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong></div>
+                            <div className="order-primary-title">
+                              {item.itemId && !isPlaceholder ? (
+                                <button
+                                  type="button"
+                                  className="order-primary-title-button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openQrPreview(order, item);
+                                  }}
+                                  title="Открыть QR-код изделия"
+                                  aria-label="Открыть QR-код изделия"
+                                >
+                                  <strong>{item.name || '—'}</strong>
+                                </button>
+                              ) : (
+                                <strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td {...orderCardCellProps}>
@@ -2571,7 +2589,7 @@ function OrdersWorkspace() {
                             <Button
                               variant="secondary"
                               size="sm"
-                              className="order-card-icon-btn"
+                              className="order-card-action-btn order-card-icon-btn"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 openPackageEditor(order, item);
@@ -3265,26 +3283,6 @@ function OrdersWorkspace() {
               >
                 Редактировать помещения и изделия
               </Button>
-              {Array.isArray(orderActionsOrder.items) && orderActionsOrder.items.length > 0 ? (
-                <div className="order-actions-qr-section">
-                  <div className="order-actions-qr-title">QR-коды изделий</div>
-                  <div className="order-actions-qr-list">
-                    {orderActionsOrder.items.map((item, index) => (
-                      <Button
-                        key={item.itemId || `${orderActionsOrder._id || orderActionsOrder.orderNumber || 'order'}-${index}`}
-                        variant="secondary"
-                        className="order-actions-modal-btn"
-                        onClick={() => {
-                          setOrderActionsOrder(null);
-                          openQrPreview(orderActionsOrder, item);
-                        }}
-                      >
-                        {`QR ${String(item.name || '').trim() || `изделие ${index + 1}`}`}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
               {(orderDraftKeys[orderActionsOrder._id || orderActionsOrder.orderNumber || ''] || []).length > 0 ? (
                 <Button
                   variant="secondary"

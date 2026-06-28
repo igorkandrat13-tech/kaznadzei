@@ -538,6 +538,20 @@ table tr:hover td {
   line-height: 1.35;
 }
 
+.order-primary-title-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.order-primary-title-button:hover {
+  text-decoration: underline;
+}
+
 .order-primary-subtitle {
   margin-top: 4px;
   font-size: 12px;
@@ -1909,7 +1923,7 @@ table tr:hover td {
 }
 
 .unified-orders-table col.col-name {
-  width: 118px;
+  width: 132px;
 }
 
 .unified-orders-table col.col-item-actions {
@@ -1925,19 +1939,19 @@ table tr:hover td {
 }
 
 .unified-orders-table col.col-package {
-  width: 96px;
+  width: 104px;
 }
 
 .unified-orders-table col.col-paint {
-  width: 66px;
-}
-
-.unified-orders-table col.col-photo {
   width: 96px;
 }
 
+.unified-orders-table col.col-photo {
+  width: 104px;
+}
+
 .unified-orders-table col.col-notes {
-  width: 108px;
+  width: 124px;
 }
 
 .unified-orders-table col.col-carpenter,
@@ -2069,23 +2083,28 @@ table tr:hover td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: nowrap;
   gap: 6px;
   min-height: 32px;
   min-width: 0;
-  width: auto;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
 }
 
+.order-card-action-btn {
+  min-height: 30px;
+  height: 30px;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1;
+}
+
 .order-card-icon-btn {
-  min-width: 24px;
-  width: 24px;
-  min-height: 24px;
-  height: 24px;
+  min-width: 30px;
+  width: 30px;
   padding-left: 0;
   padding-right: 0;
-  font-size: 13px;
-  line-height: 1;
-  border-radius: 8px;
 }
 
 .order-card-status-indicator {
@@ -2117,13 +2136,19 @@ table tr:hover td {
 }
 
 .order-card-count-btn {
-  min-width: 34px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 11px;
+  min-width: 52px;
+  padding: 0 10px;
+  gap: 5px;
+  border-radius: 9px;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 1;
+}
+
+.order-card-count-btn-icon,
+.order-card-count-btn-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .package-cell {
@@ -2134,8 +2159,11 @@ table tr:hover td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: nowrap;
   gap: 6px;
   min-height: 32px;
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
 }
 
@@ -3099,28 +3127,6 @@ body[data-theme='light'] .attachment-preview-table td {
 .order-actions-modal-list {
   display: grid;
   gap: 10px;
-}
-
-.order-actions-qr-section {
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-  border-radius: 12px;
-  background: rgba(12, 24, 40, 0.72);
-  border: 1px solid rgba(132, 190, 255, 0.12);
-}
-
-.order-actions-qr-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.order-actions-qr-list {
-  display: grid;
-  gap: 8px;
 }
 
 .order-actions-modal-btn {
@@ -4884,7 +4890,6 @@ body[data-theme='light'] .manager-stage-name {
 }
 
 body[data-theme='light'] .mobile-empty-state,
-body[data-theme='light'] .order-actions-qr-section,
 body[data-theme='light'] .excel-bulk-toolbar,
 body[data-theme='light'] .order-item-editor-card,
 body[data-theme='light'] .scanner-status-box,
@@ -4917,7 +4922,6 @@ body[data-theme='light'] .order-actions-trigger-attention {
   box-shadow: 0 0 0 1px rgba(74, 182, 150, 0.12);
 }
 
-body[data-theme='light'] .order-actions-qr-title,
 body[data-theme='light'] .excel-legend-label,
 body[data-theme='light'] .panel-soft-message {
   color: #2e5d81;
@@ -5775,22 +5779,20 @@ body[data-theme='light'] .home-auth-status-pending {
     grid-template-columns: 1fr;
   }
 
+  .order-card-action-btn {
+    min-height: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+
   .order-card-icon-btn {
-    min-width: 22px;
-    width: 22px;
-    min-height: 22px;
-    height: 22px;
-    font-size: 12px;
+    min-width: 28px;
+    width: 28px;
   }
 
   .order-card-count-btn {
-    min-width: 30px;
-    height: 22px;
-    padding: 0 7px;
-  }
-
-  .order-card-summary-badge {
-    min-width: 22px;
+    min-width: 46px;
+    padding: 0 8px;
   }
 
   .attachment-preview-toolbar-kind,
