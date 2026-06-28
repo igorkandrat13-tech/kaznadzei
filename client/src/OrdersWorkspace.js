@@ -30,6 +30,19 @@ const ORDER_PRIMARY_HEADERS = [
   'Окончание изготовления',
   'Время изготовления',
 ];
+const ORDER_PACKAGE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа');
+function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
+  if (columnIndex < 0) return '';
+  let currentIndex = 0;
+  for (const cell of ORDER_STAGE_SECONDARY_HEADERS) {
+    const span = Number(cell.colSpan) || 1;
+    if (columnIndex >= currentIndex && columnIndex < currentIndex + span) {
+      return cell.legendKey || '';
+    }
+    currentIndex += span;
+  }
+  return '';
+}
 const CARPENTER_STAGE_LEGEND_KEY = 'postpaint';
 const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_START_STAGE_LEGEND_KEY = 'postpaint';
@@ -38,6 +51,8 @@ const ORDER_DURATION_STAGE_LEGEND_KEY = 'ready';
 const ORDER_DURATION_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_DURATION_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_COMPLETE_STAGE_LEGEND_KEY = 'ready';
 const ORDER_COMPLETE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_COMPLETE_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_PACKAGE_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_PACKAGE_COLUMN_INDEX);
+const ORDER_PACKAGE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_PACKAGE_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
 const MANUAL_STAGE_TEXT_COLOR_MAP = ORDER_STAGE_SECONDARY_HEADERS.reduce((acc, item) => {
   if (item.legendKey && !acc[item.legendKey]) {
@@ -2286,7 +2301,13 @@ function OrdersWorkspace() {
                     const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const materialCellProps = getManualStageCellProps(key, item, 'material', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const packageCellPropsBase = getManualStageCellProps(key, item, 'packageName', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const packageCellStyle = packageStats.total > 0 && packageStats.pending === 0
+                      ? {
+                          background: legendColorMap[ORDER_PACKAGE_STAGE_LEGEND_KEY] || '#99E5FF',
+                          color: ORDER_PACKAGE_STAGE_TEXT_HEX,
+                        }
+                      : undefined;
+                    const packageCellPropsBase = getManualStageCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle, { disabled: isInlineEditing });
                     const packageCellProps = {
                       ...packageCellPropsBase,
                       className: cn(packageCellPropsBase.className, 'package-cell', packageStats.pending > 0 && 'package-cell-attention'),
