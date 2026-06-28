@@ -149,6 +149,58 @@ function normalizeManualStageClears(source = {}) {
   }, {});
 }
 
+function getLatestTimestamp(...timestamps) {
+  return timestamps
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .sort()
+    .at(-1) || '';
+}
+
+function getItemActiveRoleStage(item = {}, role = '') {
+  return (Array.isArray(item?.stages) ? item.stages : []).find((stage) => stage.role === role && stage.status === 'in_progress') || null;
+}
+
+function getItemActiveStage(item = {}) {
+  return (Array.isArray(item?.stages) ? item.stages : []).find((stage) => stage.status === 'in_progress') || null;
+}
+
+function getItemAssignedStage(item = {}) {
+  const stages = Array.isArray(item?.stages) ? item.stages : [];
+  return stages.find((stage) => stage.status === 'in_progress' && getStageEmployeeName(stage))
+    || stages.find((stage) => getStageEmployeeName(stage))
+    || null;
+}
+
+function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpers = {}) {
+  const manualStageMarks = helpers.manualStageMarks || normalizeManualStageMarks(item?.manualStageMarks);
+  const manualStageClears = helpers.manualStageClears || normalizeManualStageClears(item?.manualStageClears);
+  const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
+  if (updatedAt) return updatedAt;
+
+  if (columnKey !== 'carpenter') return '';
+
+  const workerAssignments = helpers.workerAssignments || mergeWorkerAssignments(item?.workerAssignments, item?.stages);
+  const carpenterAssignment = workerAssignments.carpenter || null;
+  const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
+  const activeStage = getItemActiveStage(item);
+  const assignedStage = getItemAssignedStage(item);
+  const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+  const latestAutoAt = getLatestTimestamp(
+    carpenterAssignment?.scannedAt,
+    carpenterActiveStage?.startedAt,
+    workerStageForText?.startedAt,
+  );
+  const isAutoHighlightSuppressed = Boolean(
+    manualStageClears[columnKey]?.updatedAt
+    && (!latestAutoAt || manualStageClears[columnKey].updatedAt >= latestAutoAt)
+  );
+
+  return ((carpenterAssignment || workerStageForText) && !isAutoHighlightSuppressed)
+    ? latestAutoAt
+    : '';
+}
+
 function normalizeOrderAttachments(source = []) {
   if (!Array.isArray(source)) return [];
 
@@ -418,11 +470,17 @@ function deriveOrderManufacturingMeta(order = {}) {
 
   for (const item of items) {
     const manualStageMarks = normalizeManualStageMarks(item?.manualStageMarks);
+    const manualStageClears = normalizeManualStageClears(item?.manualStageClears);
+    const workerAssignments = mergeWorkerAssignments(item?.workerAssignments, item?.stages);
 
     for (const columnKey of ORDER_MANUFACTURING_STAGE_COLUMN_KEYS) {
-      const mark = manualStageMarks[columnKey];
-      if (mark?.updatedAt) {
-        markTimestamps.push(String(mark.updatedAt));
+      const updatedAt = getItemEffectiveManufacturingTimestamp(item, columnKey, {
+        manualStageMarks,
+        manualStageClears,
+        workerAssignments,
+      });
+      if (updatedAt) {
+        markTimestamps.push(updatedAt);
       } else {
         isCompleted = false;
       }

@@ -33,6 +33,55 @@ function getOrderComments(order) {
   return Array.isArray(order?.comments) ? order.comments : [];
 }
 
+function getLatestTimestamp(...timestamps) {
+  return timestamps
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .sort()
+    .at(-1) || '';
+}
+
+function getItemActiveRoleStage(item, role) {
+  return (item?.stages || []).find((stage) => stage.role === role && stage.status === 'in_progress') || null;
+}
+
+function getItemActiveStage(item) {
+  return (item?.stages || []).find((stage) => stage.status === 'in_progress') || null;
+}
+
+function getItemAssignedStage(item) {
+  const stages = Array.isArray(item?.stages) ? item.stages : [];
+  return stages.find((stage) => stage.status === 'in_progress' && String(stage.employeeName || '').trim())
+    || stages.find((stage) => String(stage.employeeName || '').trim())
+    || null;
+}
+
+function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMarks = {}, manualStageClears = {}) {
+  const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
+  if (updatedAt) return updatedAt;
+
+  if (columnKey !== 'carpenter') return '';
+
+  const carpenterAssignment = item?.workerAssignments?.carpenter || null;
+  const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
+  const activeStage = getItemActiveStage(item);
+  const assignedStage = getItemAssignedStage(item);
+  const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+  const latestAutoAt = getLatestTimestamp(
+    carpenterAssignment?.scannedAt,
+    carpenterActiveStage?.startedAt,
+    workerStageForText?.startedAt,
+  );
+  const isAutoHighlightSuppressed = Boolean(
+    manualStageClears[columnKey]?.updatedAt
+    && (!latestAutoAt || manualStageClears[columnKey].updatedAt >= latestAutoAt)
+  );
+
+  return ((carpenterAssignment || workerStageForText) && !isAutoHighlightSuppressed)
+    ? latestAutoAt
+    : '';
+}
+
 function getOrderOverallStatus(order) {
   const items = getOrderItems(order);
   if (items.length === 0) {
@@ -73,9 +122,17 @@ function getOrderManufacturingMeta(order) {
     const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
       ? item.manualStageMarks
       : {};
+    const manualStageClears = item?.manualStageClears && typeof item.manualStageClears === 'object'
+      ? item.manualStageClears
+      : {};
 
     ORDER_MANUFACTURING_STAGE_COLUMN_KEYS.forEach((columnKey) => {
-      const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
+      const updatedAt = getItemEffectiveManufacturingTimestamp(
+        item,
+        columnKey,
+        manualStageMarks,
+        manualStageClears,
+      );
       if (updatedAt) {
         timestamps.push(updatedAt);
       } else {
