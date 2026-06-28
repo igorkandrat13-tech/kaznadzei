@@ -3495,6 +3495,13 @@ body[data-theme='light'] .attachment-preview-table td {
   margin-top: 10px;
 }
 
+.update-install-statusbar-heartbeat {
+  margin-top: 10px;
+  color: #94abc3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .update-install-statusbar-stage {
   display: inline-flex;
   align-items: center;
@@ -4957,6 +4964,10 @@ body[data-theme='light'] .update-install-statusbar-stage {
 
 body[data-theme='light'] .update-install-statusbar-stage-active {
   color: #0f2842;
+}
+
+body[data-theme='light'] .update-install-statusbar-heartbeat {
+  color: #68829d;
 }
 
 body[data-theme='light'] .telegram-log-entry {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { HelpTooltip, SectionHeader, SettingsHint } from '../adminUI';
 import { Button } from '../ui';
 
@@ -36,6 +36,21 @@ function getInstallStageState(stageKey, activeStageKey, installJobStatus) {
   return 'pending';
 }
 
+function formatInstallHeartbeat(updatedAt, nowTs) {
+  const updatedAtTs = new Date(updatedAt || '').getTime();
+  if (!updatedAtTs) return 'Статус ещё не обновлялся';
+
+  const diffSeconds = Math.max(0, Math.floor((nowTs - updatedAtTs) / 1000));
+  if (diffSeconds < 5) return 'Статус обновлён только что';
+  if (diffSeconds < 60) return `Последнее обновление ${diffSeconds} сек назад`;
+
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `Последнее обновление ${diffMinutes} мин назад`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  return `Последнее обновление ${diffHours} ч назад`;
+}
+
 function UpdatesOverview({
   updateStatus,
   installJob,
@@ -55,7 +70,23 @@ function UpdatesOverview({
   onSaveUpdateSettings,
   savingUpdateSettings,
 }) {
+  const [heartbeatNowTs, setHeartbeatNowTs] = useState(() => Date.now());
   const installProgress = installJob ? detectInstallProgressStage(installJob) : null;
+  const installHeartbeatText = installJob?.updatedAt
+    ? formatInstallHeartbeat(installJob.updatedAt, heartbeatNowTs)
+    : '';
+
+  useEffect(() => {
+    if (!installJob?.updatedAt) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setHeartbeatNowTs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [installJob?.updatedAt]);
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -166,6 +197,9 @@ function UpdatesOverview({
                       );
                     })}
                   </div>
+                  {installHeartbeatText ? (
+                    <div className="update-install-statusbar-heartbeat">{installHeartbeatText}</div>
+                  ) : null}
                 </div>
               ) : null}
               <div className="settings-hint" style={{ marginBottom: 8 }}>
