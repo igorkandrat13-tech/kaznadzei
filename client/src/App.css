@@ -3446,6 +3446,98 @@ body[data-theme='light'] .attachment-preview-table td {
   color: #b6f5de;
 }
 
+.update-install-statusbar {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(9, 19, 33, 0.72);
+  border: 1px solid rgba(135, 186, 247, 0.14);
+}
+
+.update-install-statusbar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.update-install-statusbar-label {
+  color: #e6f2ff;
+}
+
+.update-install-statusbar-percent {
+  color: #8fdcff;
+}
+
+.update-install-statusbar-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(126, 156, 196, 0.16);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.update-install-statusbar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4ab8ff 0%, #55d6c2 100%);
+  transition: width 220ms ease;
+}
+
+.update-install-statusbar-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.update-install-statusbar-stage {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(135, 186, 247, 0.14);
+  background: rgba(11, 22, 38, 0.76);
+  color: #7e93aa;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.update-install-statusbar-stage-active {
+  color: #10263d;
+  background: linear-gradient(135deg, rgba(135, 214, 255, 0.96), rgba(126, 237, 205, 0.92));
+  border-color: rgba(129, 230, 217, 0.32);
+}
+
+.update-install-statusbar-stage-completed {
+  color: #dffff1;
+  background: linear-gradient(135deg, rgba(24, 120, 90, 0.96), rgba(43, 164, 120, 0.92));
+  border-color: rgba(96, 224, 177, 0.2);
+}
+
+.update-install-statusbar-stage-failed {
+  color: #ffe0de;
+  background: linear-gradient(135deg, rgba(139, 45, 45, 0.96), rgba(201, 71, 71, 0.9));
+  border-color: rgba(255, 133, 133, 0.22);
+}
+
+.update-install-statusbar-running .update-install-statusbar-fill {
+  background: linear-gradient(90deg, #4ab8ff 0%, #55d6c2 100%);
+}
+
+.update-install-statusbar-completed .update-install-statusbar-fill {
+  background: linear-gradient(90deg, #2fa56f 0%, #53d69b 100%);
+}
+
+.update-install-statusbar-failed .update-install-statusbar-fill {
+  background: linear-gradient(90deg, #d56363 0%, #f29c7b 100%);
+}
+
 .telegram-log-list {
   display: grid;
   gap: 10px;
@@ -4838,6 +4930,33 @@ body[data-theme='light'] .service-details-console-status {
 body[data-theme='light'] .service-details-console-logs {
   background: #eef9f5;
   color: #1d6c57;
+}
+
+body[data-theme='light'] .update-install-statusbar {
+  background: rgba(245, 249, 255, 0.96);
+  border-color: rgba(120, 164, 212, 0.18);
+}
+
+body[data-theme='light'] .update-install-statusbar-label {
+  color: #21405e;
+}
+
+body[data-theme='light'] .update-install-statusbar-percent {
+  color: #2b6ea5;
+}
+
+body[data-theme='light'] .update-install-statusbar-track {
+  background: rgba(166, 189, 217, 0.22);
+}
+
+body[data-theme='light'] .update-install-statusbar-stage {
+  background: rgba(244, 248, 252, 0.96);
+  color: #66809d;
+  border-color: rgba(120, 164, 212, 0.18);
+}
+
+body[data-theme='light'] .update-install-statusbar-stage-active {
+  color: #0f2842;
 }
 
 body[data-theme='light'] .telegram-log-entry {

@@ -2,6 +2,40 @@ import React from 'react';
 import { HelpTooltip, SectionHeader, SettingsHint } from '../adminUI';
 import { Button } from '../ui';
 
+const INSTALL_PROGRESS_STAGES = [
+  { key: 'created', label: 'Запуск', percent: 8 },
+  { key: 'check', label: 'Проверка', percent: 18 },
+  { key: 'pull', label: 'Git', percent: 42 },
+  { key: 'deps', label: 'Зависимости', percent: 68 },
+  { key: 'build', label: 'Сборка', percent: 88 },
+  { key: 'finalize', label: 'Завершение', percent: 96 },
+];
+
+function detectInstallProgressStage(installJob) {
+  const text = `${installJob?.message || ''}\n${Array.isArray(installJob?.logs) ? installJob.logs.join('\n') : ''}`.toLowerCase();
+  if (installJob?.status === 'completed') return { key: 'completed', percent: 100, label: 'Готово', tone: 'completed' };
+  if (text.includes('итоговый статус')) return { key: 'finalize', percent: 96, label: 'Завершение', tone: 'running' };
+  if (text.includes('собираю клиент') || text.includes('npm run build')) return { key: 'build', percent: 88, label: 'Сборка', tone: 'running' };
+  if (text.includes('обновляю зависимости') || text.includes('npm ci') || text.includes('npm install')) return { key: 'deps', percent: 68, label: 'Зависимости', tone: 'running' };
+  if (text.includes('git pull') || text.includes('получаю и применяю изменения')) return { key: 'pull', percent: 42, label: 'Git', tone: 'running' };
+  if (text.includes('проверяю состояние репозитория')) return { key: 'check', percent: 18, label: 'Проверка', tone: 'running' };
+  if (installJob?.status === 'failed') return { key: 'failed', percent: 100, label: 'Ошибка', tone: 'failed' };
+  return { key: 'created', percent: 8, label: 'Запуск', tone: installJob?.status === 'running' ? 'running' : 'idle' };
+}
+
+function getInstallStageState(stageKey, activeStageKey, installJobStatus) {
+  const stageIndex = INSTALL_PROGRESS_STAGES.findIndex((stage) => stage.key === stageKey);
+  const activeIndex = INSTALL_PROGRESS_STAGES.findIndex((stage) => stage.key === activeStageKey);
+  if (installJobStatus === 'completed') return 'completed';
+  if (installJobStatus === 'failed') {
+    if (stageKey === activeStageKey) return 'failed';
+    return activeIndex > stageIndex ? 'completed' : 'pending';
+  }
+  if (activeIndex > stageIndex) return 'completed';
+  if (activeIndex === stageIndex) return 'active';
+  return 'pending';
+}
+
 function UpdatesOverview({
   updateStatus,
   installJob,
@@ -21,6 +55,8 @@ function UpdatesOverview({
   onSaveUpdateSettings,
   savingUpdateSettings,
 }) {
+  const installProgress = installJob ? detectInstallProgressStage(installJob) : null;
+
   return (
     <div className="card" style={{ marginBottom: 20 }}>
       <SectionHeader
@@ -105,6 +141,33 @@ function UpdatesOverview({
               <div className="service-details-title">
                 Установка обновлений: {installJob.status === 'running' ? 'выполняется' : installJob.status === 'completed' ? 'завершена' : 'ошибка'}
               </div>
+              {installProgress ? (
+                <div className={`update-install-statusbar update-install-statusbar-${installProgress.tone}`}>
+                  <div className="update-install-statusbar-meta">
+                    <span className="update-install-statusbar-label">Этап: {installProgress.label}</span>
+                    <span className="update-install-statusbar-percent">{installProgress.percent}%</span>
+                  </div>
+                  <div className="update-install-statusbar-track" aria-hidden="true">
+                    <div
+                      className="update-install-statusbar-fill"
+                      style={{ width: `${installProgress.percent}%` }}
+                    />
+                  </div>
+                  <div className="update-install-statusbar-stages">
+                    {INSTALL_PROGRESS_STAGES.map((stage) => {
+                      const stageState = getInstallStageState(stage.key, installProgress.key, installJob.status);
+                      return (
+                        <span
+                          key={stage.key}
+                          className={`update-install-statusbar-stage update-install-statusbar-stage-${stageState}`}
+                        >
+                          {stage.label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <div className="settings-hint" style={{ marginBottom: 8 }}>
                 {installJob.message || 'Статус установки обновлений пока не получен.'}
               </div>
