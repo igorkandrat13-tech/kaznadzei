@@ -110,31 +110,60 @@ function getOrderPrimaryNotes(order) {
   return primaryItem?.notes || order?.notes || '';
 }
 
+function getItemManufacturingMeta(item) {
+  const sourceItem = item && typeof item === 'object' ? item : {};
+  const manualStageMarks = sourceItem.manualStageMarks && typeof sourceItem.manualStageMarks === 'object'
+    ? sourceItem.manualStageMarks
+    : {};
+  const manualStageClears = sourceItem.manualStageClears && typeof sourceItem.manualStageClears === 'object'
+    ? sourceItem.manualStageClears
+    : {};
+  const timestamps = [];
+  let isCompleted = true;
+
+  ORDER_MANUFACTURING_STAGE_COLUMN_KEYS.forEach((columnKey) => {
+    const updatedAt = getItemEffectiveManufacturingTimestamp(
+      sourceItem,
+      columnKey,
+      manualStageMarks,
+      manualStageClears,
+    );
+    if (updatedAt) {
+      timestamps.push(updatedAt);
+    } else {
+      isCompleted = false;
+    }
+  });
+
+  const sorted = timestamps.slice().sort();
+  const startAt = sorted[0] || '';
+  const endAt = isCompleted ? (sorted.at(-1) || '') : '';
+
+  return {
+    startAt,
+    endAt,
+    startDate: startAt ? startAt.split('T')[0] : '',
+    endDate: endAt ? endAt.split('T')[0] : '',
+    isCompleted,
+  };
+}
+
 function getOrderManufacturingMeta(order) {
   const items = getOrderItems(order);
   const timestamps = [];
   let isCompleted = items.length > 0;
 
   items.forEach((item) => {
-    const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
-      ? item.manualStageMarks
-      : {};
-    const manualStageClears = item?.manualStageClears && typeof item.manualStageClears === 'object'
-      ? item.manualStageClears
-      : {};
-    ORDER_MANUFACTURING_STAGE_COLUMN_KEYS.forEach((columnKey) => {
-      const updatedAt = getItemEffectiveManufacturingTimestamp(
-        item,
-        columnKey,
-        manualStageMarks,
-        manualStageClears,
-      );
-      if (updatedAt) {
-        timestamps.push(updatedAt);
-      } else {
-        isCompleted = false;
-      }
-    });
+    const itemManufacturingMeta = getItemManufacturingMeta(item);
+    if (itemManufacturingMeta.startAt) {
+      timestamps.push(itemManufacturingMeta.startAt);
+    }
+    if (itemManufacturingMeta.endAt) {
+      timestamps.push(itemManufacturingMeta.endAt);
+    }
+    if (!itemManufacturingMeta.isCompleted) {
+      isCompleted = false;
+    }
   });
 
   const sorted = timestamps.slice().sort();
@@ -152,6 +181,7 @@ function getOrderManufacturingMeta(order) {
 
 export {
   getOrderComments,
+  getItemManufacturingMeta,
   getOrderManufacturingMeta,
   getOrderItems,
   getOrderOverallStatus,

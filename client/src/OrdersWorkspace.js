@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { ORDER_STAGE_LEGEND, ORDER_STAGE_SECONDARY_HEADERS } from './orderStageLegend';
-import { getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
+import { getItemManufacturingMeta, getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
 
@@ -23,7 +22,8 @@ const ORDER_PRIMARY_HEADERS = [
   'СТОЛЯР',
   '',
   'Покраска',
-  'Материал',
+  'Начало изготовления изделия',
+  'Окончание изготовления изделия',
   'Начало изготовления заказа',
   'Окончание изготовления заказа',
   'Время изготовления заказа',
@@ -32,6 +32,8 @@ const ORDER_CARD_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Карточка 
 const ORDER_PACKAGE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа');
 const ORDER_CARPENTER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР');
 const ORDER_PAINT_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Покраска');
+const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления изделия');
+const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
 const ORDER_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления заказа');
 const ORDER_COMPLETE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления заказа');
 const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
@@ -49,6 +51,10 @@ function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
 }
 const CARPENTER_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_CARPENTER_COLUMN_INDEX);
 const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_ITEM_START_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_ITEM_START_COLUMN_INDEX);
+const ORDER_ITEM_START_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_ITEM_START_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_ITEM_END_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_ITEM_END_COLUMN_INDEX);
+const ORDER_ITEM_END_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_ITEM_END_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_START_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_START_COLUMN_INDEX);
 const ORDER_START_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_START_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_DURATION_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_DURATION_COLUMN_INDEX);
@@ -610,6 +616,7 @@ function OrdersWorkspace() {
   const [selectedStageCellKeys, setSelectedStageCellKeys] = useState([]);
   const [manualStageToolbarPosition, setManualStageToolbarPosition] = useState(null);
   const [qrPreview, setQrPreview] = useState(null);
+  const [orderPreview, setOrderPreview] = useState(null);
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
   const [hoveredOrderId, setHoveredOrderId] = useState('');
   const [colors, setColors] = useState([]);
@@ -886,6 +893,10 @@ function OrdersWorkspace() {
     if (!order) return null;
     return (order.items || []).find((currentItem) => currentItem.itemId === attachmentsDialog?.itemId) || null;
   }, [attachmentsDialog?.itemId, attachmentsDialog?.orderId, orders]);
+  const orderPreviewMeta = useMemo(
+    () => (orderPreview ? getOrderManufacturingMeta(orderPreview) : null),
+    [orderPreview],
+  );
   const currentAttachmentDialogAttachments = useMemo(
     () => getItemAttachments(currentAttachmentDialogItem, attachmentsDialog?.scope),
     [attachmentsDialog?.scope, currentAttachmentDialogItem],
@@ -1112,7 +1123,8 @@ function OrdersWorkspace() {
       <col className="col-carpenter" />
       <col className="col-photo" />
       <col className="col-paint" />
-      <col className="col-material" />
+      <col className="col-item-start-date" />
+      <col className="col-item-end-date" />
       <col className="col-start-date" />
       <col className="col-end-date" />
       <col className="col-duration" />
@@ -1305,6 +1317,10 @@ function OrdersWorkspace() {
       setAttachmentsDialog(null);
       return;
     }
+    if (orderPreview) {
+      setOrderPreview(null);
+      return;
+    }
     if (orderActionsOrder) {
       setOrderActionsOrder(null);
       return;
@@ -1316,7 +1332,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || packageEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || packageEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || orderPreview || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -2176,7 +2192,8 @@ function OrdersWorkspace() {
       'СТОЛЯР',
       '',
       'Покраска',
-      'Материал',
+      'Начало изготовления изделия',
+      'Окончание изготовления изделия',
       'Начало изготовления заказа',
       'Окончание изготовления заказа',
       'Время изготовления заказа',
@@ -2186,6 +2203,7 @@ function OrdersWorkspace() {
       headers.map(escapeCsvValue).join(';'),
       ...rows.map(({ order, item, carpenterAssignment, carpenterActiveStage, activeStage, assignedStage }) => {
         const manufacturingMeta = getOrderManufacturingMeta(order);
+        const itemManufacturingMeta = getItemManufacturingMeta(item);
         const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
         const packageStats = getPackageStats(item.packageItems, item.packageName);
         const cells = [
@@ -2203,7 +2221,8 @@ function OrdersWorkspace() {
           String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '',
           item.photoLink || '',
           getItemAttachments(item, 'paint').map((attachment) => attachment.name).join(', '),
-          item.material || '',
+          itemManufacturingMeta.startDate || '',
+          itemManufacturingMeta.endDate || '',
           manufacturingMeta.startDate || '',
           manufacturingMeta.endDate || '',
           formatManufacturingTime(manufacturingMeta.startDate, manufacturingMeta.endDate),
@@ -2391,6 +2410,7 @@ function OrdersWorkspace() {
                     const isOrderInlineEditing = Boolean(orderInlineDraft);
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
                     const commentPreview = getCommentPreview(item.comments);
+                    const itemManufacturingMeta = getItemManufacturingMeta(item);
                     const orderManufacturingMeta = getOrderManufacturingMeta(order);
                     const itemAttachments = getItemAttachments(item, 'order');
                     const paintAttachments = getItemAttachments(item, 'paint');
@@ -2421,7 +2441,35 @@ function OrdersWorkspace() {
                     const quantityCellProps = getManualStageCellProps(key, item, 'quantity', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const materialCellProps = getManualStageCellProps(key, item, 'material', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const hasItemManufacturingStart = Boolean(itemManufacturingMeta.startDate);
+                    const itemStartDateCellStyle = hasItemManufacturingStart
+                      ? {
+                          background: legendColorMap[ORDER_ITEM_START_STAGE_LEGEND_KEY] || '#C37C8E',
+                          color: ORDER_ITEM_START_STAGE_TEXT_HEX,
+                        }
+                      : undefined;
+                    const itemStartDateCellProps = getManualStageCellProps(
+                      key,
+                      item,
+                      'itemStartDate',
+                      regularOrderClass,
+                      itemStartDateCellStyle,
+                      { disabled: true },
+                    );
+                    const itemEndDateCellStyle = itemManufacturingMeta.isCompleted
+                      ? {
+                          background: legendColorMap[ORDER_ITEM_END_STAGE_LEGEND_KEY] || '#C37C8E',
+                          color: ORDER_ITEM_END_STAGE_TEXT_HEX,
+                        }
+                      : undefined;
+                    const itemEndDateCellProps = getManualStageCellProps(
+                      key,
+                      item,
+                      'itemEndDate',
+                      regularOrderClass,
+                      itemEndDateCellStyle,
+                      { disabled: true },
+                    );
                     const orderCardActionStyle = {
                       background: legendColorMap[ORDER_CARD_STAGE_LEGEND_KEY] || '#A8D7B6',
                       color: ORDER_CARD_STAGE_TEXT_HEX,
@@ -2530,10 +2578,16 @@ function OrdersWorkspace() {
                           >
                             <div className="merged-order-number-content">
                               <div className="xlsx-order-cell">
-                              {item.itemId ? (
-                                <Link className="order-link-button merged-order-number-link" to={`/order/${order._id}/item/${item.itemId}`}>
+                              {order?._id ? (
+                                <button
+                                  type="button"
+                                  className="order-link-button merged-order-number-link"
+                                  onClick={() => setOrderPreview(order)}
+                                  title="Открыть заказ в режиме чтения"
+                                  aria-label={`Открыть заказ ${order.orderNumber || ''} в режиме чтения`}
+                                >
                                   {(isOrderInlineEditing ? orderInlineDraft?.orderNumber : order.orderNumber) || '—'}
-                                </Link>
+                                </button>
                               ) : (
                                 <div className="merged-order-number-link">{(isOrderInlineEditing ? orderInlineDraft?.orderNumber : order.orderNumber) || '—'}</div>
                               )}
@@ -2677,7 +2731,8 @@ function OrdersWorkspace() {
                             actionStyle: paintActionStyle,
                           })}
                         </td>
-                        <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
+                        <td {...itemStartDateCellProps}>{formatDateDisplay(itemManufacturingMeta.startDate)}</td>
+                        <td {...itemEndDateCellProps}>{formatDateDisplay(itemManufacturingMeta.endDate)}</td>
                         {isFirstOrderRow ? (
                           <td rowSpan={orderRowSpan} {...startDateMetaCellProps}>
                             <div className="merged-order-meta-content">{formatDateDisplay(orderManufacturingMeta.startDate)}</div>
@@ -2698,7 +2753,7 @@ function OrdersWorkspace() {
                   })}
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={18} className="empty-cell">Нет изделий по выбранным фильтрам</td>
+                      <td colSpan={19} className="empty-cell">Нет изделий по выбранным фильтрам</td>
                     </tr>
                   ) : null}
                 </tbody>
@@ -3148,6 +3203,145 @@ function OrdersWorkspace() {
             ) : (
               <div className="order-card-empty">{getAttachmentScopeConfig(attachmentsDialog.scope).emptyTitle}</div>
             )}
+          </div>
+        </Modal>
+      ) : null}
+
+      {orderPreview ? (
+        <Modal open={Boolean(orderPreview)} onClose={() => setOrderPreview(null)} size="xl" className="order-form-modal">
+          <ModalHeader
+            title={orderPreview.orderNumber ? `Заказ № ${orderPreview.orderNumber}` : 'Просмотр заказа'}
+            subtitle={`${orderPreview.customer ? `${orderPreview.customer} · ` : ''}Режим чтения`}
+            onClose={() => setOrderPreview(null)}
+          />
+
+          <div className="panel-info">
+            <div className="panel-info-title">Данные заказа</div>
+            <div className="panel-info-grid">
+              <div className="detail-block">
+                <div className="detail-label">Номер заказа</div>
+                <div className="detail-value">{orderPreview.orderNumber || '—'}</div>
+              </div>
+              <div className="detail-block">
+                <div className="detail-label">Заказчик</div>
+                <div className="detail-value">{orderPreview.customer || '—'}</div>
+              </div>
+              <div className="detail-block">
+                <div className="detail-label">Дата заказа</div>
+                <div className="detail-value">{formatDateDisplay(orderPreview.orderDate)}</div>
+              </div>
+              <div className="detail-block">
+                <div className="detail-label">Начало изготовления</div>
+                <div className="detail-value">{formatDateDisplay(orderPreviewMeta?.startDate)}</div>
+              </div>
+              <div className="detail-block">
+                <div className="detail-label">Окончание изготовления</div>
+                <div className="detail-value">{formatDateDisplay(orderPreviewMeta?.endDate)}</div>
+              </div>
+              <div className="detail-block">
+                <div className="detail-label">Время изготовления</div>
+                <div className="detail-value">{formatManufacturingTime(orderPreviewMeta?.startDate, orderPreviewMeta?.endDate)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="order-items-editor">
+            <div className="order-items-editor-header">
+              <div className="modal-title" style={{ fontSize: 16 }}>Изделия заказа</div>
+            </div>
+
+            {(Array.isArray(orderPreview.items) && orderPreview.items.length > 0) ? orderPreview.items.map((item, index) => {
+              const orderAttachments = getItemAttachments(item, 'order');
+              const paintAttachments = getItemAttachments(item, 'paint');
+              const packageItems = normalizePackageItems(item.packageItems, item.packageName);
+              return (
+                <div key={item.itemId || `order-preview-item-${index}`} className="order-item-editor-card">
+                  <div className="order-item-editor-card-header">
+                    <div>
+                      <div className="order-item-editor-title">
+                        {item.name || `Изделие ${index + 1}`}
+                      </div>
+                      <div className="order-item-editor-subtitle">
+                        {item.itemNumber ? `№ изделия: ${item.itemNumber}` : `Изделие ${index + 1}`}
+                        {item.room ? ` · ${item.room}` : ''}
+                        {item.roomNumber ? ` · помещение ${item.roomNumber}` : ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="panel-info-grid">
+                    <div className="detail-block">
+                      <div className="detail-label">Наименование</div>
+                      <div className="detail-value detail-value-multiline">{item.name || '—'}</div>
+                    </div>
+                    <div className="detail-block">
+                      <div className="detail-label">Кол-во</div>
+                      <div className="detail-value">{item.quantity || '—'}</div>
+                    </div>
+                    <div className="detail-block">
+                      <div className="detail-label">Помещение</div>
+                      <div className="detail-value">{item.room || '—'}</div>
+                    </div>
+                    <div className="detail-block">
+                      <div className="detail-label">№ помещения</div>
+                      <div className="detail-value">{item.roomNumber || '—'}</div>
+                    </div>
+                    <div className="detail-block">
+                      <div className="detail-label">Материал</div>
+                      <div className="detail-value detail-value-multiline">{item.material || '—'}</div>
+                    </div>
+                    <div className="detail-block">
+                      <div className="detail-label">Отгрузка до</div>
+                      <div className="detail-value">{formatDateDisplay(item.deliveryDate)}</div>
+                    </div>
+                    <div className="detail-block detail-block-wide">
+                      <div className="detail-label">Ссылка / фото</div>
+                      <div className="detail-value detail-value-multiline">
+                        {item.photoLink ? <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">{item.photoLink}</a> : '—'}
+                      </div>
+                    </div>
+                    <div className="detail-block detail-block-wide">
+                      <div className="detail-label">Примечания</div>
+                      <div className="detail-value detail-value-multiline">{item.notes || '—'}</div>
+                    </div>
+                    <div className="detail-block detail-block-wide">
+                      <div className="detail-label">Комплектация</div>
+                      <div className="detail-value detail-value-multiline">
+                        {packageItems.length > 0
+                          ? packageItems.map((packageItem) => `${packageItem.completed ? '[x]' : '[ ]'} ${packageItem.name}`).join('\n')
+                          : (item.packageName || '—')}
+                      </div>
+                    </div>
+                    <div className="detail-block detail-block-wide">
+                      <div className="detail-label">Файлы карточки заказа</div>
+                      <div className="detail-value detail-value-multiline">
+                        {orderAttachments.length > 0 ? orderAttachments.map((attachment) => attachment.name || 'Без названия').join('\n') : '—'}
+                      </div>
+                    </div>
+                    <div className="detail-block detail-block-wide">
+                      <div className="detail-label">Файлы покраски</div>
+                      <div className="detail-value detail-value-multiline">
+                        {paintAttachments.length > 0 ? paintAttachments.map((attachment) => attachment.name || 'Без названия').join('\n') : '—'}
+                      </div>
+                    </div>
+                    <div className="detail-block detail-block-wide">
+                      <div className="detail-label">Комментарии</div>
+                      <div className="detail-value detail-value-multiline">
+                        {Array.isArray(item.comments) && item.comments.length > 0
+                          ? item.comments.map((comment) => `${comment.role || 'comment'}: ${comment.text || ''}`).join('\n')
+                          : '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }) : (
+              <div className="mobile-empty-state">В заказе пока нет изделий.</div>
+            )}
+          </div>
+
+          <div className="modal-actions">
+            <Button variant="secondary" onClick={() => setOrderPreview(null)}>Закрыть</Button>
           </div>
         </Modal>
       ) : null}
