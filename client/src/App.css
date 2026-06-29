@@ -1788,9 +1788,9 @@ body[data-theme='light'] .order-primary-title-button-badge {
 
 .unified-orders-table {
   --orders-sticky-offset: 0px;
-  --orders-header-primary-height: 48px;
+  --orders-header-primary-height: 56px;
   --orders-header-secondary-height: 42px;
-  --orders-col-order-number-width: 92px;
+  --orders-col-order-number-width: calc(6ch + 18px);
   --orders-cell-divider-color: rgba(126, 191, 255, 0.18);
   --orders-group-divider-color: rgba(126, 191, 255, 0.62);
   --orders-hover-outline-color: rgba(126, 191, 255, 0.96);
@@ -2106,7 +2106,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
 .unified-orders-table col.col-start-date,
 .unified-orders-table col.col-end-date,
 .unified-orders-table col.col-duration {
-  width: 58px;
+  width: 70px;
 }
 
 .xlsx-order-cell {
@@ -2135,12 +2135,34 @@ body[data-theme='light'] .order-primary-title-button-badge {
   align-items: center;
   justify-content: center;
   width: 100%;
+  gap: 4px;
 }
 
 .merged-order-number-input,
 .merged-order-number-link,
 .merged-order-number-content .order-actions-trigger {
   text-align: center;
+}
+
+.merged-order-number-link {
+  display: block;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 2px 0;
+  line-height: 1.2;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.merged-order-number-link.order-link-button {
+  display: block;
+  padding: 4px 2px;
+  border-radius: 10px;
+  white-space: normal;
 }
 
 .unified-orders-table td.merged-order-customer-cell {
@@ -3273,13 +3295,13 @@ body[data-theme='light'] .attachment-preview-table td {
 }
 
 .order-actions-trigger {
-  width: 40px;
-  min-height: 32px;
-  min-width: 40px;
-  padding: 4px 8px;
+  width: 32px;
+  min-height: 28px;
+  min-width: 32px;
+  padding: 2px 4px;
   border-radius: 12px;
-  align-self: flex-start;
-  font-size: 16px;
+  align-self: center;
+  font-size: 20px;
   line-height: 1;
 }
 

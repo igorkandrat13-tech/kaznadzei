@@ -5,11 +5,9 @@ import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { ORDER_STAGE_LEGEND, ORDER_STAGE_SECONDARY_HEADERS } from './orderStageLegend';
 import { getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
-import { useRoleConfig } from './RoleConfigContext';
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
 
-const HIDDEN_TABLE_ROLE_KEYS = new Set(['assembler', 'painter', 'designer']);
 const ORDER_PRIMARY_HEADERS = [
   'Номер заказа',
   'Заказчик',
@@ -23,12 +21,12 @@ const ORDER_PRIMARY_HEADERS = [
   'Материал',
   'Отгрузка до',
   'Примечания',
-  'Ссылка / фото',
+  '',
   'Покраска',
   'СТОЛЯР',
-  'Начало изготовления',
-  'Окончание изготовления',
-  'Время изготовления',
+  'Начало изготовления заказа',
+  'Окончание изготовления заказа',
+  'Время изготовления заказа',
 ];
 const ORDER_PACKAGE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа');
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
@@ -579,14 +577,12 @@ function getOrderIdentity(row) {
 
 function OrdersWorkspace() {
   const authRole = getAppAuthRole();
-  const { allRoleTabs } = useRoleConfig();
   const isAdmin = canAccessRole('admin', authRole);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [roleFilter, setRoleFilter] = useState('all');
   const [roomFilter, setRoomFilter] = useState('all');
   const [lastRefreshedAt, setLastRefreshedAt] = useState('');
   const [downloadingKey, setDownloadingKey] = useState('');
@@ -763,7 +759,6 @@ function OrdersWorkspace() {
         .map(item => {
           const isPlaceholder = item?.__placeholder === true;
           const overallStatus = item?.overallStatus || order?.overallStatus || 'pending';
-          const currentRole = (item?.stages || []).find(stage => stage.status === 'in_progress')?.role || '';
           const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
           const carpenterAssignment = getItemWorkerAssignment(item, 'carpenter');
           const activeStage = getItemActiveStage(item);
@@ -784,7 +779,6 @@ function OrdersWorkspace() {
           ].join(' ').toLowerCase();
 
           if (statusFilter !== 'all' && overallStatus !== statusFilter) return null;
-          if (roleFilter !== 'all' && currentRole !== roleFilter) return null;
           if (roomFilter !== 'all' && String(item.room || '').trim() !== roomFilter) return null;
           if (query && !haystack.includes(query)) return null;
 
@@ -794,7 +788,6 @@ function OrdersWorkspace() {
             order,
             item,
             overallStatus,
-            currentRole,
             activeStage,
             assignedStage,
             carpenterActiveStage,
@@ -804,7 +797,7 @@ function OrdersWorkspace() {
         })
         .filter(Boolean);
     });
-  }, [orders, roleFilter, roomFilter, search, statusFilter]);
+  }, [orders, roomFilter, search, statusFilter]);
 
   const rowsByKey = useMemo(() => rows.reduce((acc, row) => {
     acc[row.key] = row;
@@ -828,10 +821,6 @@ function OrdersWorkspace() {
     })
     .filter(Boolean), [rowsByKey, selectedStageCellKeys]);
 
-  const visibleTableRoles = useMemo(
-    () => allRoleTabs.filter(role => !HIDDEN_TABLE_ROLE_KEYS.has(role.key)),
-    [allRoleTabs],
-  );
   const firstOrderRowKeys = useMemo(() => {
     const seenOrders = new Set();
     return rows.reduce((acc, row) => {
@@ -2047,18 +2036,6 @@ function OrdersWorkspace() {
     }));
   };
 
-  const handleOrderNumberCellChange = (rowKey, row) => (event) => {
-    const value = event.target.value;
-    setError('');
-    setInlineDrafts(current => ({
-      ...current,
-      [rowKey]: {
-        ...(current[rowKey] || createInlineDraft(row)),
-        orderNumber: value,
-      },
-    }));
-  };
-
   const saveInlineRow = async (rowKey) => {
     const row = rowsByKey[rowKey];
     const draft = inlineDrafts[rowKey];
@@ -2185,12 +2162,12 @@ function OrdersWorkspace() {
       'Материал',
       'Отгрузка до',
       'Примечания',
-      'Ссылка / фото',
+      '',
       'Покраска',
       'СТОЛЯР',
-      'Начало изготовления',
-      'Окончание изготовления',
-      'Время изготовления',
+      'Начало изготовления заказа',
+      'Окончание изготовления заказа',
+      'Время изготовления заказа',
     ];
 
     const csvLines = [
@@ -2283,15 +2260,6 @@ function OrdersWorkspace() {
               <option value="pending">Ожидание</option>
               <option value="in_progress">В работе</option>
               <option value="completed">Завершено</option>
-            </select>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Активная роль</label>
-            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
-              <option value="all">Все</option>
-              {visibleTableRoles.map(role => (
-                <option key={role.key} value={role.key}>{role.plainLabel || role.label}</option>
-              ))}
             </select>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -2530,21 +2498,12 @@ function OrdersWorkspace() {
                           >
                             <div className="merged-order-number-content">
                               <div className="xlsx-order-cell">
-                              {isAdmin ? (
-                                <input
-                                  className="table-inline-input merged-order-number-input"
-                                  value={isOrderInlineEditing ? orderInlineDraft.orderNumber : (order.orderNumber || '')}
-                                  onChange={handleOrderNumberCellChange(key, { key, order, item })}
-                                  placeholder="Номер заказа"
-                                />
+                              {item.itemId ? (
+                                <Link className="order-link-button merged-order-number-link" to={`/order/${order._id}/item/${item.itemId}`}>
+                                  {(isOrderInlineEditing ? orderInlineDraft?.orderNumber : order.orderNumber) || '—'}
+                                </Link>
                               ) : (
-                                item.itemId ? (
-                                  <Link className="order-link-button merged-order-number-link" to={`/order/${order._id}/item/${item.itemId}`}>
-                                    {order.orderNumber || '—'}
-                                  </Link>
-                                ) : (
-                                  <div className="merged-order-number-link">{order.orderNumber || '—'}</div>
-                                )
+                                <div className="merged-order-number-link">{(isOrderInlineEditing ? orderInlineDraft?.orderNumber : order.orderNumber) || '—'}</div>
                               )}
                               <button
                                 className={`btn btn-secondary btn-small order-actions-trigger ${hasOrderDrafts ? 'order-actions-trigger-attention' : ''}`}
@@ -2553,7 +2512,7 @@ function OrdersWorkspace() {
                                 title={hasOrderDrafts ? 'Действия над заказом: есть быстрые правки' : 'Действия над заказом'}
                                 onClick={() => setOrderActionsOrder(order)}
                               >
-                                ...
+                                &#8942;
                               </button>
                               </div>
                             </div>
