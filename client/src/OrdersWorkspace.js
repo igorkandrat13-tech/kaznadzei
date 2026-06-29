@@ -30,7 +30,11 @@ const ORDER_PRIMARY_HEADERS = [
 ];
 const ORDER_CARD_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа');
 const ORDER_PACKAGE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа');
+const ORDER_CARPENTER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР');
 const ORDER_PAINT_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Покраска');
+const ORDER_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления заказа');
+const ORDER_COMPLETE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления заказа');
+const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
   if (columnIndex < 0) return '';
   let currentIndex = 0;
@@ -43,13 +47,13 @@ function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
   }
   return '';
 }
-const CARPENTER_STAGE_LEGEND_KEY = 'postpaint';
+const CARPENTER_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_CARPENTER_COLUMN_INDEX);
 const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_START_STAGE_LEGEND_KEY = 'postpaint';
+const ORDER_START_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_START_COLUMN_INDEX);
 const ORDER_START_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_START_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_DURATION_STAGE_LEGEND_KEY = 'ready';
+const ORDER_DURATION_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_DURATION_COLUMN_INDEX);
 const ORDER_DURATION_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_DURATION_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_COMPLETE_STAGE_LEGEND_KEY = 'ready';
+const ORDER_COMPLETE_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_COMPLETE_COLUMN_INDEX);
 const ORDER_COMPLETE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_COMPLETE_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_CARD_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_CARD_COLUMN_INDEX);
 const ORDER_CARD_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_CARD_STAGE_LEGEND_KEY)?.textHex || '#000000';
