@@ -1849,6 +1849,9 @@ body[data-theme='light'] .order-primary-title-button-badge {
   color: #000000;
   font-size: 14px;
   line-height: 1.15;
+  border-right: 1px solid var(--orders-cell-divider-color);
+  border-bottom: 1px solid var(--orders-cell-divider-color);
+  background-clip: padding-box;
 }
 
 .unified-orders-table .xlsx-header-primary-cell {
@@ -1860,6 +1863,17 @@ body[data-theme='light'] .order-primary-title-button-badge {
   padding: 4px 4px;
   overflow: hidden;
   word-break: break-word;
+  border-top: 2px solid var(--orders-group-divider-color);
+}
+
+.unified-orders-table .xlsx-header-primary-cell:first-child,
+.unified-orders-table .xlsx-header-secondary-cell:first-child {
+  border-left: 2px solid var(--orders-group-divider-color);
+}
+
+.unified-orders-table .xlsx-header-primary-cell:last-child,
+.unified-orders-table .xlsx-header-secondary-cell:last-child {
+  border-right: 2px solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table .xlsx-header-secondary-cell {
@@ -1875,6 +1889,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   padding: 4px 4px;
   overflow: hidden;
   word-break: break-word;
+  border-bottom: 2px solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table .xlsx-header-secondary-cell-colored {
