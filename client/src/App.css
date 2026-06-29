@@ -1790,7 +1790,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-sticky-offset: 0px;
   --orders-header-primary-height: 56px;
   --orders-header-secondary-height: 42px;
-  --orders-col-order-number-width: calc(6ch + 18px);
+  --orders-col-order-number-width: 80px;
   --orders-cell-divider-color: rgba(126, 191, 255, 0.18);
   --orders-group-divider-color: rgba(126, 191, 255, 0.62);
   --orders-hover-outline-color: rgba(126, 191, 255, 0.96);
