@@ -58,8 +58,10 @@ export const ORDER_STAGE_LEGEND = [
 ];
 
 export const ORDER_STAGE_SECONDARY_HEADERS = [
-  { label: 'Заказ не обработан', legendKey: 'unprocessed', colSpan: 2, textHex: '#000000', stickyCol: 'sticky-col-1' },
-  { label: 'ТЗ от заказчика', legendKey: 'brief', colSpan: 2, textHex: '#000000' },
+  { label: '', legendKey: '', colSpan: 1, textHex: '#000000', stickyCol: 'sticky-col-1' },
+  { label: 'Заказ не обработан', legendKey: 'unprocessed', colSpan: 1, textHex: '#000000', stickyCol: 'sticky-col-2' },
+  { label: 'ТЗ от заказчика', legendKey: 'brief', colSpan: 1, textHex: '#000000' },
+  { label: '', legendKey: '', colSpan: 1, textHex: '#000000' },
   { label: 'ТЗ для чертежей', legendKey: 'brief', colSpan: 1, textHex: '#000000' },
   { label: 'Начерчен', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },
   { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F' },

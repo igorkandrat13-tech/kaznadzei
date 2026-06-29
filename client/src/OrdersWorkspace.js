@@ -18,17 +18,19 @@ const ORDER_PRIMARY_HEADERS = [
   'Наименование',
   'Карточка заказа',
   'Комплектация заказа',
-  'Материал',
-  'Отгрузка до',
   'Примечания',
+  'Отгрузка до',
+  'СТОЛЯР',
   '',
   'Покраска',
-  'СТОЛЯР',
+  'Материал',
   'Начало изготовления заказа',
   'Окончание изготовления заказа',
   'Время изготовления заказа',
 ];
+const ORDER_CARD_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа');
 const ORDER_PACKAGE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа');
+const ORDER_PAINT_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Покраска');
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
   if (columnIndex < 0) return '';
   let currentIndex = 0;
@@ -49,8 +51,12 @@ const ORDER_DURATION_STAGE_LEGEND_KEY = 'ready';
 const ORDER_DURATION_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_DURATION_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_COMPLETE_STAGE_LEGEND_KEY = 'ready';
 const ORDER_COMPLETE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_COMPLETE_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_CARD_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_CARD_COLUMN_INDEX);
+const ORDER_CARD_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_CARD_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_PACKAGE_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_PACKAGE_COLUMN_INDEX);
 const ORDER_PACKAGE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_PACKAGE_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_PAINT_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_PAINT_COLUMN_INDEX);
+const ORDER_PAINT_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_PAINT_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
 const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
@@ -1097,12 +1103,12 @@ function OrdersWorkspace() {
       <col className="col-name" />
       <col className="col-item-actions" />
       <col className="col-package" />
-      <col className="col-material" />
-      <col className="col-delivery-date" />
       <col className="col-notes" />
+      <col className="col-delivery-date" />
+      <col className="col-carpenter" />
       <col className="col-photo" />
       <col className="col-paint" />
-      <col className="col-carpenter" />
+      <col className="col-material" />
       <col className="col-start-date" />
       <col className="col-end-date" />
       <col className="col-duration" />
@@ -1953,7 +1959,7 @@ function OrdersWorkspace() {
     });
   };
 
-  const renderAttachmentCellControls = ({ order, item, scope = 'order', attachments = [], targetKey = '', disabled = false }) => {
+  const renderAttachmentCellControls = ({ order, item, scope = 'order', attachments = [], targetKey = '', disabled = false, actionStyle = undefined }) => {
     const scopeConfig = getAttachmentScopeConfig(scope);
     const isUploading = attachmentUploadingTargetKey === targetKey;
     return (
@@ -1975,6 +1981,7 @@ function OrdersWorkspace() {
           variant="secondary"
           size="sm"
           className="order-card-action-btn order-card-icon-btn"
+          style={actionStyle}
           onClick={() => attachmentInputRefs.current[targetKey]?.click()}
           disabled={disabled || isUploading}
           title={scopeConfig.addButtonTitle}
@@ -1986,6 +1993,7 @@ function OrdersWorkspace() {
           variant="secondary"
           size="sm"
           className="order-card-action-btn order-card-count-btn"
+          style={actionStyle}
           onClick={() => openAttachmentsDialog(order, item, scope)}
           disabled={disabled}
           title={attachments.length > 0 ? scopeConfig.openButtonTitle : scopeConfig.emptyTitle}
@@ -2159,12 +2167,12 @@ function OrdersWorkspace() {
       'Наименование',
       'Карточка заказа',
       'Комплектация заказа',
-      'Материал',
-      'Отгрузка до',
       'Примечания',
+      'Отгрузка до',
+      'СТОЛЯР',
       '',
       'Покраска',
-      'СТОЛЯР',
+      'Материал',
       'Начало изготовления заказа',
       'Окончание изготовления заказа',
       'Время изготовления заказа',
@@ -2172,8 +2180,10 @@ function OrdersWorkspace() {
 
     const csvLines = [
       headers.map(escapeCsvValue).join(';'),
-      ...rows.map(({ order, item }) => {
+      ...rows.map(({ order, item, carpenterAssignment, carpenterActiveStage, activeStage, assignedStage }) => {
         const manufacturingMeta = getOrderManufacturingMeta(order);
+        const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+        const packageStats = getPackageStats(item.packageItems, item.packageName);
         const cells = [
           order.orderNumber || '',
           order.customer || '',
@@ -2183,13 +2193,13 @@ function OrdersWorkspace() {
           item.quantity || '',
           item.name || '',
           getItemAttachments(item, 'order').map((attachment) => attachment.name).join(', '),
-          `${getPackageStats(item.packageItems, item.packageName).pending}/${getPackageStats(item.packageItems, item.packageName).total}`,
-          item.material || '',
-          item.deliveryDate || '',
+          `${packageStats.pending}/${packageStats.total}`,
           item.notes || '',
+          item.deliveryDate || '',
+          String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '',
           item.photoLink || '',
           getItemAttachments(item, 'paint').map((attachment) => attachment.name).join(', '),
-          '',
+          item.material || '',
           manufacturingMeta.startDate || '',
           manufacturingMeta.endDate || '',
           formatManufacturingTime(manufacturingMeta.startDate, manufacturingMeta.endDate),
@@ -2332,13 +2342,19 @@ function OrdersWorkspace() {
                         colSpan={cell.colSpan || 1}
                         className={cn(
                           'xlsx-header-secondary-cell',
+                          cell.startIndex === 0 && 'xlsx-header-secondary-cell-table-bg',
                           cell.legendKey && 'xlsx-header-secondary-cell-colored',
                           (cell.colSpan || 1) > 1 && 'xlsx-header-secondary-cell-merged',
                           (isOrdersHeaderLeftAlignedColumn(cell.startIndex) || isOrdersHeaderLeftAlignedColumn(cell.endIndex))
                             ? 'xlsx-header-cell-left'
                             : 'xlsx-header-cell-center',
                         )}
-                        style={{ background: cell.hex, color: '#000000' }}
+                        style={{
+                          background: cell.startIndex === 0
+                            ? 'var(--orders-table-cell-background)'
+                            : (cell.hex || undefined),
+                          color: '#000000',
+                        }}
                       >
                         {cell.label}
                       </th>
@@ -2402,6 +2418,18 @@ function OrdersWorkspace() {
                     const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const materialCellProps = getManualStageCellProps(key, item, 'material', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const orderCardActionStyle = {
+                      background: legendColorMap[ORDER_CARD_STAGE_LEGEND_KEY] || '#A8D7B6',
+                      color: ORDER_CARD_STAGE_TEXT_HEX,
+                    };
+                    const packageActionStyle = {
+                      background: legendColorMap[ORDER_PACKAGE_STAGE_LEGEND_KEY] || '#99E5FF',
+                      color: ORDER_PACKAGE_STAGE_TEXT_HEX,
+                    };
+                    const paintActionStyle = {
+                      background: legendColorMap[ORDER_PAINT_STAGE_LEGEND_KEY] || '#BDA6D5',
+                      color: ORDER_PAINT_STAGE_TEXT_HEX,
+                    };
                     const packageCellStyle = packageStats.total > 0 && packageStats.pending === 0
                       ? {
                           background: legendColorMap[ORDER_PACKAGE_STAGE_LEGEND_KEY] || '#99E5FF',
@@ -2573,6 +2601,7 @@ function OrdersWorkspace() {
                             attachments: itemAttachments,
                             targetKey: orderAttachmentTargetKey,
                             disabled: isPlaceholder,
+                            actionStyle: orderCardActionStyle,
                           })}
                         </td>
                         <td {...packageCellProps}>
@@ -2581,6 +2610,7 @@ function OrdersWorkspace() {
                               variant="secondary"
                               size="sm"
                               className="order-card-action-btn order-card-icon-btn"
+                              style={packageActionStyle}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 openPackageEditor(order, item);
@@ -2609,8 +2639,6 @@ function OrdersWorkspace() {
                             ) : null}
                           </div>
                         </td>
-                        <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
-                        <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
                         <td {...notesCellProps}>
                           {isInlineEditing ? (
                             <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
@@ -2622,6 +2650,10 @@ function OrdersWorkspace() {
                               {item.notes || (commentPreview !== '—' ? null : '—')}
                             </>
                           )}
+                        </td>
+                        <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
+                        <td {...carpenterCellProps} title={workerCellTitle}>
+                          {isPlaceholder ? '—' : workerCellText}
                         </td>
                         <td {...photoCellProps}>
                           {isInlineEditing ? (
@@ -2638,11 +2670,10 @@ function OrdersWorkspace() {
                             attachments: paintAttachments,
                             targetKey: paintAttachmentTargetKey,
                             disabled: isPlaceholder,
+                            actionStyle: paintActionStyle,
                           })}
                         </td>
-                        <td {...carpenterCellProps} title={workerCellTitle}>
-                          {isPlaceholder ? '—' : workerCellText}
-                        </td>
+                        <td {...materialCellProps}>{isInlineEditing ? <input className="table-inline-input" value={inlineDraft.material} onChange={handleInlineChange(key, 'material')} /> : (item.material || '—')}</td>
                         {isFirstOrderRow ? (
                           <td rowSpan={orderRowSpan} {...startDateMetaCellProps}>
                             <div className="merged-order-meta-content">{formatDateDisplay(orderManufacturingMeta.startDate)}</div>

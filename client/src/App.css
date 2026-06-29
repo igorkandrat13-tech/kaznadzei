@@ -1791,6 +1791,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-header-primary-height: 56px;
   --orders-header-secondary-height: 42px;
   --orders-col-order-number-width: 80px;
+  --orders-table-cell-background: rgba(12, 26, 42, 0.94);
   --orders-cell-divider-color: rgba(126, 191, 255, 0.18);
   --orders-group-divider-color: rgba(126, 191, 255, 0.62);
   --orders-hover-outline-color: rgba(126, 191, 255, 0.96);
@@ -1894,6 +1895,10 @@ body[data-theme='light'] .order-primary-title-button-badge {
 
 .unified-orders-table .xlsx-header-secondary-cell-colored {
   font-weight: 700;
+}
+
+.unified-orders-table .xlsx-header-secondary-cell-table-bg {
+  background: var(--orders-table-cell-background);
 }
 
 .unified-orders-table .xlsx-header-secondary-cell-merged {
@@ -3295,12 +3300,12 @@ body[data-theme='light'] .attachment-preview-table td {
 }
 
 .order-actions-trigger {
-  width: 32px;
+  width: 100%;
   min-height: 28px;
-  min-width: 32px;
-  padding: 2px 4px;
+  min-width: 0;
+  padding: 2px 0;
   border-radius: 12px;
-  align-self: center;
+  align-self: stretch;
   font-size: 20px;
   line-height: 1;
 }
@@ -4752,6 +4757,7 @@ body[data-theme='light'] .sticky-col {
 }
 
 body[data-theme='light'] .unified-orders-table {
+  --orders-table-cell-background: rgba(240, 246, 252, 0.98);
   --orders-cell-divider-color: rgba(103, 149, 196, 0.18);
   --orders-group-divider-color: rgba(62, 123, 179, 0.52);
   --orders-hover-outline-color: rgba(62, 123, 179, 0.96);
