@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
@@ -2278,51 +2279,46 @@ function OrdersWorkspace() {
     }
   };
 
+  const headerPrimaryActionsTarget = typeof document !== 'undefined'
+    ? document.getElementById('orders-header-primary-actions')
+    : null;
+
+  const headerPrimaryActions = headerPrimaryActionsTarget ? createPortal(
+    <div className="orders-header-primary-actions">
+      <Button
+        variant="primary"
+        className="section-toolbar-btn orders-header-toolbar-btn"
+        onClick={() => {
+          openCreateForm();
+        }}
+      >
+        Новый заказ
+      </Button>
+      <Button
+        variant="primary"
+        className="section-toolbar-btn orders-header-toolbar-btn"
+        onClick={() => {
+          openCreateRoomEditor();
+        }}
+      >
+        Новое помещение
+      </Button>
+      <Button
+        variant="primary"
+        className="section-toolbar-btn orders-header-toolbar-btn"
+        onClick={() => {
+          openCreateItemEditor();
+        }}
+      >
+        Новое изделие
+      </Button>
+    </div>,
+    headerPrimaryActionsTarget,
+  ) : null;
+
   return (
     <div>
-      <div className="card orders-workspace-card" style={{ marginBottom: 20 }}>
-        <div className="section-header">
-          <div>
-            <h2 className="section-header-title">📋 Единая таблица заказов</h2>
-          </div>
-          <div className="section-header-actions">
-            <Button variant="primary" onClick={openCreateForm}>Новый заказ</Button>
-            <Button variant="primary" onClick={() => openCreateRoomEditor()}>Новое помещение</Button>
-            <Button variant="primary" onClick={() => openCreateItemEditor()}>Новое изделие</Button>
-            <Button variant="secondary" onClick={exportRowsToCsv}>Экспорт CSV</Button>
-          </div>
-        </div>
-
-        <div className="responsive-filters">
-          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 260 }}>
-            <label>Поиск</label>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Заказ, изделие, помещение, материал, комментарий"
-            />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Статус</label>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">Все</option>
-              <option value="pending">Ожидание</option>
-              <option value="in_progress">В работе</option>
-              <option value="completed">Завершено</option>
-            </select>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Помещение</label>
-            <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)}>
-              <option value="all">Все</option>
-              {availableRooms.map(room => (
-                <option key={room} value={room}>{room}</option>
-              ))}
-            </select>
-          </div>
-          <div className="filters-summary">Строк: {rows.length}</div>
-        </div>
-      </div>
+      {headerPrimaryActions}
 
       <div className="card orders-workspace-table-card">
         {Object.keys(inlineDrafts).length > 0 ? (
