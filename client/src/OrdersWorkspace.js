@@ -2280,7 +2280,7 @@ function OrdersWorkspace() {
 
   return (
     <div>
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card orders-workspace-card" style={{ marginBottom: 20 }}>
         <div className="section-header">
           <div>
             <h2 className="section-header-title">📋 Единая таблица заказов</h2>

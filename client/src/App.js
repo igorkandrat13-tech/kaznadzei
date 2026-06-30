@@ -150,7 +150,6 @@ function AppLayout() {
                     <div className="App-header-main">
                         <div className="App-header-brand">
                             <h1>🏭 Мебельная фабрика Kaznadzei</h1>
-                            <div className="App-header-subtitle">Быстрый доступ к ключевым разделам. Рабочие роли остаются на главной странице.</div>
                         </div>
                         <div className="App-header-controls">
                             <button

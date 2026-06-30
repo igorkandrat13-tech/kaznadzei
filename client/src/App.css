@@ -51,13 +51,13 @@ body::before {
   background:
     linear-gradient(135deg, rgba(8, 20, 36, 0.96), rgba(12, 28, 48, 0.92));
   color: var(--text-main);
-  padding: 18px 28px;
+  padding: 18px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 14px 40px rgba(2, 8, 16, 0.3);
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
   border-bottom: 1px solid rgba(138, 194, 255, 0.14);
   backdrop-filter: blur(18px);
 }
@@ -66,14 +66,14 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
 }
 
 .App-header-brand {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .App-header h1 {
@@ -241,6 +241,10 @@ body::before {
   overflow-wrap: anywhere;
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(14px);
+}
+
+.orders-workspace-card {
+  padding: 14px;
 }
 
 .card,
