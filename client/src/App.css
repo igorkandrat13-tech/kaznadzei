@@ -2375,17 +2375,22 @@ body[data-theme='light'] .order-primary-title-button-badge {
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
-  gap: 3px;
-  min-height: 30px;
+  gap: 6px;
+  min-height: 34px;
   min-width: 0;
   max-width: 100%;
   width: 100%;
   position: relative;
   z-index: 2;
+}
+
+.package-cell-content-compact {
+  gap: 3px;
+  min-height: 30px;
   overflow: hidden;
 }
 
-.package-cell .order-card-icon-btn {
+.package-cell-content-compact .order-card-icon-btn {
   min-width: 24px;
   width: 24px;
   min-height: 24px;
@@ -2394,7 +2399,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   font-size: 15px;
 }
 
-.package-cell .package-cell-summary-badge {
+.package-cell-content-compact .package-cell-summary-badge {
   min-width: 38px;
   height: 24px;
   min-height: 24px;

@@ -2677,7 +2677,7 @@ function OrdersWorkspace() {
                           })}
                         </td>
                         <td {...packageCellProps}>
-                          <div className="package-cell-content">
+                          <div className={cn('package-cell-content', packageStats.pending > 0 && 'package-cell-content-compact')}>
                             <Button
                               variant="secondary"
                               size="sm"
