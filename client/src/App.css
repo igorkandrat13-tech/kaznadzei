@@ -259,6 +259,7 @@ body::before {
 
 .orders-workspace-table-card .table-scroll {
   padding-bottom: 8px;
+  overscroll-behavior-x: contain;
 }
 
 .card,
@@ -1809,11 +1810,29 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-header-primary-height: 56px;
   --orders-header-secondary-height: 42px;
   --orders-col-order-number-width: 64px;
+  --orders-col-customer-width: 130px;
+  --orders-col-room-width: 96px;
+  --orders-col-number-width: 52px;
+  --orders-col-name-width: 141px;
+  --orders-col-item-actions-width: 104px;
+  --orders-col-delivery-date-width: 104px;
+  --orders-col-package-width: 104px;
+  --orders-col-paint-width: 96px;
+  --orders-col-photo-width: 104px;
+  --orders-col-notes-width: 248px;
+  --orders-col-meta-width: 92px;
+  --orders-col-carpenter-width: 104px;
+  --orders-table-min-width: 1980px;
+  --orders-cell-padding-y: 5px;
+  --orders-cell-padding-x: 6px;
+  --orders-body-font-size: 16px;
+  --orders-header-font-size: 13px;
+  --orders-secondary-header-font-size: 12px;
   --orders-table-cell-background: rgba(12, 26, 42, 0.94);
   --orders-cell-divider-color: rgba(126, 191, 255, 0.18);
   --orders-group-divider-color: rgba(126, 191, 255, 0.62);
   --orders-hover-outline-color: rgba(126, 191, 255, 0.96);
-  min-width: 1980px;
+  min-width: var(--orders-table-min-width);
   width: 100%;
   table-layout: fixed;
   border-collapse: separate;
@@ -1830,11 +1849,11 @@ body[data-theme='light'] .order-primary-title-button-badge {
   box-sizing: border-box;
   vertical-align: middle;
   text-align: left;
-  padding: 5px 6px;
+  padding: var(--orders-cell-padding-y) var(--orders-cell-padding-x);
 }
 
 .unified-orders-table td {
-  font-size: 16px;
+  font-size: var(--orders-body-font-size);
   line-height: 1.35;
 }
 
@@ -1871,7 +1890,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   background: linear-gradient(180deg, rgba(241, 245, 249, 0.98), rgba(233, 239, 245, 0.98));
   text-transform: none;
   color: #000000;
-  font-size: 13px;
+  font-size: var(--orders-header-font-size);
   line-height: 1.15;
   border-right: 1px solid var(--orders-cell-divider-color);
   border-bottom: 1px solid var(--orders-cell-divider-color);
@@ -1905,7 +1924,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   z-index: 3;
   background: linear-gradient(180deg, rgba(235, 241, 247, 0.98), rgba(228, 236, 244, 0.98));
   color: #000000;
-  font-size: 12px;
+  font-size: var(--orders-secondary-header-font-size);
   white-space: normal;
   min-height: var(--orders-header-secondary-height);
   height: var(--orders-header-secondary-height);
@@ -2085,56 +2104,56 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .unified-orders-table col.col-customer {
-  width: 130px;
+  width: var(--orders-col-customer-width);
 }
 
 .unified-orders-table col.col-room {
-  width: 96px;
+  width: var(--orders-col-room-width);
 }
 
 .unified-orders-table col.col-room-number,
 .unified-orders-table col.col-item-number,
 .unified-orders-table col.col-quantity {
-  width: 52px;
+  width: var(--orders-col-number-width);
 }
 
 .unified-orders-table col.col-name {
-  width: 141px;
+  width: var(--orders-col-name-width);
 }
 
 .unified-orders-table col.col-item-actions {
-  width: 104px;
+  width: var(--orders-col-item-actions-width);
 }
 
 .unified-orders-table col.col-delivery-date {
-  width: 104px;
+  width: var(--orders-col-delivery-date-width);
 }
 
 .unified-orders-table col.col-package {
-  width: 104px;
+  width: var(--orders-col-package-width);
 }
 
 .unified-orders-table col.col-paint {
-  width: 96px;
+  width: var(--orders-col-paint-width);
 }
 
 .unified-orders-table col.col-photo {
-  width: 104px;
+  width: var(--orders-col-photo-width);
 }
 
 .unified-orders-table col.col-notes {
-  width: 248px;
+  width: var(--orders-col-notes-width);
 }
 
 .unified-orders-table col.col-item-start-date,
 .unified-orders-table col.col-item-end-date,
 .unified-orders-table col.col-item-duration,
 .unified-orders-table col.col-duration {
-  width: 92px;
+  width: var(--orders-col-meta-width);
 }
 
 .unified-orders-table col.col-carpenter {
-  width: 104px;
+  width: var(--orders-col-carpenter-width);
 }
 
 .xlsx-order-cell {
@@ -4724,6 +4743,90 @@ body[data-theme='light'] .attachment-preview-table td {
   }
 }
 
+@media (min-width: 1920px) {
+  .container {
+    --page-side-gap: clamp(18px, 1.6vw, 40px);
+  }
+
+  .orders-workspace-table-card {
+    padding: 12px 12px 14px;
+  }
+
+  .unified-orders-table {
+    --orders-header-primary-height: 60px;
+    --orders-header-secondary-height: 44px;
+    --orders-col-order-number-width: 72px;
+    --orders-col-customer-width: 164px;
+    --orders-col-room-width: 108px;
+    --orders-col-number-width: 58px;
+    --orders-col-name-width: 180px;
+    --orders-col-item-actions-width: 116px;
+    --orders-col-delivery-date-width: 112px;
+    --orders-col-package-width: 116px;
+    --orders-col-paint-width: 108px;
+    --orders-col-photo-width: 116px;
+    --orders-col-notes-width: 320px;
+    --orders-col-meta-width: 108px;
+    --orders-col-carpenter-width: 116px;
+    --orders-table-min-width: 2280px;
+    --orders-body-font-size: 17px;
+    --orders-header-font-size: 14px;
+    --orders-secondary-header-font-size: 13px;
+  }
+
+  .orders-workspace-table-card .order-card-action-btn,
+  .orders-workspace-table-card .package-cell-summary-badge {
+    min-height: 32px;
+    height: 32px;
+  }
+
+  .orders-workspace-table-card .order-card-icon-btn {
+    min-width: 32px;
+    width: 32px;
+    font-size: 20px;
+  }
+
+  .orders-workspace-table-card .order-card-count-btn,
+  .orders-workspace-table-card .package-cell-summary-badge {
+    min-width: 56px;
+    padding: 0 11px;
+  }
+}
+
+@media (min-width: 2560px) {
+  .container {
+    --page-side-gap: clamp(24px, 2vw, 56px);
+  }
+
+  .orders-workspace-table-card {
+    padding: 14px 14px 16px;
+  }
+
+  .unified-orders-table {
+    --orders-header-primary-height: 64px;
+    --orders-header-secondary-height: 48px;
+    --orders-col-order-number-width: 80px;
+    --orders-col-customer-width: 180px;
+    --orders-col-room-width: 120px;
+    --orders-col-number-width: 64px;
+    --orders-col-name-width: 220px;
+    --orders-col-item-actions-width: 126px;
+    --orders-col-delivery-date-width: 120px;
+    --orders-col-package-width: 126px;
+    --orders-col-paint-width: 116px;
+    --orders-col-photo-width: 126px;
+    --orders-col-notes-width: 360px;
+    --orders-col-meta-width: 118px;
+    --orders-col-carpenter-width: 126px;
+    --orders-table-min-width: 2540px;
+    --orders-cell-padding-y: 6px;
+    --orders-cell-padding-x: 8px;
+    --orders-body-font-size: 18px;
+    --orders-header-font-size: 15px;
+    --orders-secondary-header-font-size: 14px;
+  }
+}
+
 body[data-theme='light'] {
   --app-bg: #eef5fb;
   --app-bg-soft: #f6faff;
@@ -5623,6 +5726,25 @@ body[data-theme='light'] .home-auth-status-pending {
 
   .unified-orders-table {
     --orders-sticky-offset: 0px;
+    --orders-header-primary-height: 52px;
+    --orders-header-secondary-height: 40px;
+    --orders-col-order-number-width: 60px;
+    --orders-col-customer-width: 122px;
+    --orders-col-room-width: 88px;
+    --orders-col-number-width: 48px;
+    --orders-col-name-width: 132px;
+    --orders-col-item-actions-width: 98px;
+    --orders-col-delivery-date-width: 98px;
+    --orders-col-package-width: 98px;
+    --orders-col-paint-width: 92px;
+    --orders-col-photo-width: 98px;
+    --orders-col-notes-width: 220px;
+    --orders-col-meta-width: 88px;
+    --orders-col-carpenter-width: 98px;
+    --orders-table-min-width: 1720px;
+    --orders-body-font-size: 15px;
+    --orders-header-font-size: 12px;
+    --orders-secondary-header-font-size: 11px;
   }
 
   .App-header {
@@ -5630,8 +5752,23 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .container {
+    --page-side-gap: 16px;
     margin: 20px 0;
     padding: 0 16px;
+  }
+
+  .orders-workspace-table-card {
+    padding: 10px 6px 12px;
+  }
+
+  .responsive-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .responsive-filters .filters-summary {
+    grid-column: 1 / -1;
   }
 
   .home-grid {
@@ -5655,6 +5792,15 @@ body[data-theme='light'] .home-auth-status-pending {
 }
 
 @media (max-width: 1366px) {
+  .unified-orders-table {
+    --orders-col-customer-width: 124px;
+    --orders-col-room-width: 92px;
+    --orders-col-name-width: 136px;
+    --orders-col-notes-width: 228px;
+    --orders-table-min-width: 1840px;
+    --orders-body-font-size: 15px;
+  }
+
   .admin-overview-table th,
   .admin-overview-table td,
   .manager-orders-table th,
@@ -5708,6 +5854,27 @@ body[data-theme='light'] .home-auth-status-pending {
 
   .unified-orders-table {
     --orders-sticky-offset: 0px;
+    --orders-header-primary-height: 48px;
+    --orders-header-secondary-height: 38px;
+    --orders-col-order-number-width: 56px;
+    --orders-col-customer-width: 112px;
+    --orders-col-room-width: 82px;
+    --orders-col-number-width: 44px;
+    --orders-col-name-width: 124px;
+    --orders-col-item-actions-width: 90px;
+    --orders-col-delivery-date-width: 92px;
+    --orders-col-package-width: 92px;
+    --orders-col-paint-width: 84px;
+    --orders-col-photo-width: 92px;
+    --orders-col-notes-width: 204px;
+    --orders-col-meta-width: 82px;
+    --orders-col-carpenter-width: 90px;
+    --orders-table-min-width: 1500px;
+    --orders-cell-padding-y: 4px;
+    --orders-cell-padding-x: 5px;
+    --orders-body-font-size: 14px;
+    --orders-header-font-size: 11px;
+    --orders-secondary-header-font-size: 10px;
   }
 
   .App-header {
@@ -5783,8 +5950,16 @@ body[data-theme='light'] .home-auth-status-pending {
     display: inline-flex;
   }
   .container {
+    --page-side-gap: 10px;
     padding: 0 10px;
     margin: 15px 0;
+  }
+
+  .orders-workspace-table-card {
+    width: calc(100vw - (var(--page-side-gap) * 2));
+    margin-left: calc(50% - 50vw + var(--page-side-gap));
+    margin-right: calc(50% - 50vw + var(--page-side-gap));
+    padding: 8px 4px 10px;
   }
   .home-landing {
     padding: 16px;
@@ -5835,6 +6010,12 @@ body[data-theme='light'] .home-auth-status-pending {
   }
   .section-header-actions {
     width: 100%;
+  }
+  .responsive-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    align-items: stretch;
   }
   .comments-modal-layout {
     grid-template-columns: 1fr;
@@ -5944,6 +6125,30 @@ body[data-theme='light'] .home-auth-status-pending {
 }
 
 @media (max-width: 480px) {
+  .unified-orders-table {
+    --orders-header-primary-height: 44px;
+    --orders-header-secondary-height: 34px;
+    --orders-col-order-number-width: 52px;
+    --orders-col-customer-width: 100px;
+    --orders-col-room-width: 74px;
+    --orders-col-number-width: 40px;
+    --orders-col-name-width: 112px;
+    --orders-col-item-actions-width: 82px;
+    --orders-col-delivery-date-width: 84px;
+    --orders-col-package-width: 84px;
+    --orders-col-paint-width: 78px;
+    --orders-col-photo-width: 84px;
+    --orders-col-notes-width: 184px;
+    --orders-col-meta-width: 76px;
+    --orders-col-carpenter-width: 84px;
+    --orders-table-min-width: 1320px;
+    --orders-cell-padding-y: 3px;
+    --orders-cell-padding-x: 4px;
+    --orders-body-font-size: 12px;
+    --orders-header-font-size: 10px;
+    --orders-secondary-header-font-size: 9px;
+  }
+
   .App-header {
     padding: 10px 10px;
   }
@@ -5963,6 +6168,10 @@ body[data-theme='light'] .home-auth-status-pending {
   .container-telegram {
     margin: 8px auto 12px;
     padding: 0 8px;
+  }
+
+  .container {
+    --page-side-gap: 8px;
   }
 
   .home-landing {
@@ -6021,6 +6230,13 @@ body[data-theme='light'] .home-auth-status-pending {
   .card {
     padding: 14px;
     border-radius: 10px;
+  }
+
+  .orders-workspace-table-card {
+    width: calc(100vw - (var(--page-side-gap) * 2));
+    margin-left: calc(50% - 50vw + var(--page-side-gap));
+    margin-right: calc(50% - 50vw + var(--page-side-gap));
+    padding: 6px 2px 8px;
   }
 
   .card h2 {
@@ -6135,6 +6351,13 @@ body[data-theme='light'] .home-auth-status-pending {
 
   .order-card-count-btn {
     min-width: 46px;
+    padding: 0 8px;
+  }
+
+  .package-cell-summary-badge {
+    min-width: 46px;
+    min-height: 28px;
+    height: 28px;
     padding: 0 8px;
   }
 
