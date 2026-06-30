@@ -1840,6 +1840,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-sticky-offset: 0px;
   --orders-header-primary-height: 56px;
   --orders-header-secondary-height: 42px;
+  --orders-group-border-width: 1.35px;
   --orders-col-order-number-width: 64px;
   --orders-col-customer-width: 130px;
   --orders-col-room-width: 96px;
@@ -1896,19 +1897,19 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .unified-orders-table tbody td.order-group-top {
-  border-top: 2px solid var(--orders-group-divider-color);
+  border-top: var(--orders-group-border-width) solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table tbody td.order-group-bottom {
-  border-bottom: 2px solid var(--orders-group-divider-color);
+  border-bottom: var(--orders-group-border-width) solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table tbody td.order-group-left {
-  border-left: 2px solid var(--orders-group-divider-color);
+  border-left: var(--orders-group-border-width) solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table tbody td.order-group-right {
-  border-right: 2px solid var(--orders-group-divider-color);
+  border-right: var(--orders-group-border-width) solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table td.item-end-date-cell,
@@ -1938,18 +1939,18 @@ body[data-theme='light'] .order-primary-title-button-badge {
   padding: 4px 4px;
   overflow: hidden;
   word-break: break-word;
-  border-top: 2px solid var(--orders-group-divider-color);
+  border-top: var(--orders-group-border-width) solid var(--orders-group-divider-color);
   text-align: center;
 }
 
 .unified-orders-table .xlsx-header-primary-cell:first-child,
 .unified-orders-table .xlsx-header-secondary-cell:first-child {
-  border-left: 2px solid var(--orders-group-divider-color);
+  border-left: var(--orders-group-border-width) solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table .xlsx-header-primary-cell:last-child,
 .unified-orders-table .xlsx-header-secondary-cell:last-child {
-  border-right: 2px solid var(--orders-group-divider-color);
+  border-right: var(--orders-group-border-width) solid var(--orders-group-divider-color);
 }
 
 .unified-orders-table .xlsx-header-secondary-cell {
@@ -1965,7 +1966,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   padding: 4px 4px;
   overflow: hidden;
   word-break: break-word;
-  border-bottom: 0;
+  border-bottom: 1px solid var(--orders-cell-divider-color);
   text-align: center;
 }
 
@@ -2488,7 +2489,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
 }
 
 .order-card-count-btn-icon {
-  font-size: 17px;
+  font-size: 23px;
   line-height: 1;
 }
 
