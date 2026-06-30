@@ -73,7 +73,6 @@ export const ORDER_STAGE_SECONDARY_HEADERS = [
   { label: 'Красится', legendKey: 'paint', colSpan: 1, textHex: '#000000' },
   { label: 'Сборка после покраски', legendKey: 'postpaint', colSpan: 1, textHex: '#000000' },
   { label: 'Контроль качества', legendKey: 'postpaint', colSpan: 1, textHex: '#000000' },
-  { label: 'Доставка', legendKey: 'ready', colSpan: 1, textHex: '#000000' },
-  { label: 'Монтаж', legendKey: 'ready', colSpan: 1, textHex: '#000000' },
+  { label: 'Доставка/Монтаж', legendKey: 'ready', colSpan: 1, textHex: '#000000' },
   { label: 'Готово', legendKey: 'ready', colSpan: 1, textHex: '#000000' },
 ];

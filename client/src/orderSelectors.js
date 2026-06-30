@@ -2,19 +2,23 @@ function getOrderItems(order) {
   return Array.isArray(order?.items) ? order.items : [];
 }
 
-const ORDER_MANUFACTURING_STAGE_COLUMN_KEYS = [
+const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
   'room',
   'roomNumber',
   'itemNumber',
   'quantity',
   'name',
   'deliveryDate',
-  'material',
   'packageName',
   'paint',
   'photoLink',
   'notes',
   'carpenter',
+];
+
+const ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEYS = [
+  'orderAttachments',
+  'paintAttachments',
 ];
 
 function getOrderPrimaryItem(order) {
@@ -41,6 +45,14 @@ function getLatestTimestamp(...timestamps) {
     .at(-1) || '';
 }
 
+function getEarliestTimestamp(...timestamps) {
+  return timestamps
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .sort()
+    .at(0) || '';
+}
+
 function getItemActiveRoleStage(item, role) {
   return (item?.stages || []).find((stage) => stage.role === role && stage.status === 'in_progress') || null;
 }
@@ -62,6 +74,14 @@ function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMark
   const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
   if (updatedAt) return updatedAt;
 
+  if (columnKey === 'orderAttachments' || columnKey === 'paintAttachments') {
+    const fieldName = columnKey === 'paintAttachments' ? 'paintAttachments' : 'attachments';
+    const attachments = Array.isArray(item?.[fieldName]) ? item[fieldName] : [];
+    return getEarliestTimestamp(
+      ...attachments.map((attachment) => attachment?.uploadedAt || attachment?.createdAt || attachment?.updatedAt || ''),
+    );
+  }
+
   if (columnKey !== 'carpenter') return '';
 
   const carpenterAssignment = item?.workerAssignments?.carpenter || null;
@@ -69,13 +89,13 @@ function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMark
   const activeStage = getItemActiveStage(item);
   const assignedStage = getItemAssignedStage(item);
   const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
-  const latestAutoAt = getLatestTimestamp(
+  const earliestAutoAt = getEarliestTimestamp(
     carpenterAssignment?.scannedAt,
     carpenterActiveStage?.startedAt,
     workerStageForText?.startedAt,
   );
   return (carpenterAssignment || workerStageForText)
-    ? latestAutoAt
+    ? earliestAutoAt
     : '';
 }
 
@@ -118,10 +138,11 @@ function getItemManufacturingMeta(item) {
   const manualStageClears = sourceItem.manualStageClears && typeof sourceItem.manualStageClears === 'object'
     ? sourceItem.manualStageClears
     : {};
-  const timestamps = [];
+  const requiredTimestamps = [];
+  const startTimestamps = [];
   let isCompleted = true;
 
-  ORDER_MANUFACTURING_STAGE_COLUMN_KEYS.forEach((columnKey) => {
+  ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS.forEach((columnKey) => {
     const updatedAt = getItemEffectiveManufacturingTimestamp(
       sourceItem,
       columnKey,
@@ -129,15 +150,27 @@ function getItemManufacturingMeta(item) {
       manualStageClears,
     );
     if (updatedAt) {
-      timestamps.push(updatedAt);
+      requiredTimestamps.push(updatedAt);
+      startTimestamps.push(updatedAt);
     } else {
       isCompleted = false;
     }
   });
 
-  const sorted = timestamps.slice().sort();
-  const startAt = sorted[0] || '';
-  const endAt = isCompleted ? (sorted.at(-1) || '') : '';
+  ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEYS.forEach((columnKey) => {
+    const updatedAt = getItemEffectiveManufacturingTimestamp(
+      sourceItem,
+      columnKey,
+      manualStageMarks,
+      manualStageClears,
+    );
+    if (updatedAt) {
+      startTimestamps.push(updatedAt);
+    }
+  });
+
+  const startAt = startTimestamps.slice().sort()[0] || '';
+  const endAt = isCompleted ? (requiredTimestamps.slice().sort().at(-1) || '') : '';
 
   return {
     startAt,
@@ -150,25 +183,25 @@ function getItemManufacturingMeta(item) {
 
 function getOrderManufacturingMeta(order) {
   const items = getOrderItems(order);
-  const timestamps = [];
+  const startTimestamps = [];
+  const endTimestamps = [];
   let isCompleted = items.length > 0;
 
   items.forEach((item) => {
     const itemManufacturingMeta = getItemManufacturingMeta(item);
     if (itemManufacturingMeta.startAt) {
-      timestamps.push(itemManufacturingMeta.startAt);
+      startTimestamps.push(itemManufacturingMeta.startAt);
     }
     if (itemManufacturingMeta.endAt) {
-      timestamps.push(itemManufacturingMeta.endAt);
+      endTimestamps.push(itemManufacturingMeta.endAt);
     }
     if (!itemManufacturingMeta.isCompleted) {
       isCompleted = false;
     }
   });
 
-  const sorted = timestamps.slice().sort();
-  const startAt = sorted[0] || '';
-  const endAt = isCompleted ? (sorted.at(-1) || '') : '';
+  const startAt = startTimestamps.slice().sort()[0] || '';
+  const endAt = isCompleted ? (endTimestamps.slice().sort().at(-1) || '') : '';
 
   return {
     startAt,

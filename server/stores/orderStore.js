@@ -8,19 +8,23 @@ const MANUAL_STAGE_STATUS = {
   unprocessed: 'pending',
   ready: 'completed',
 };
-const ORDER_MANUFACTURING_STAGE_COLUMN_KEYS = [
+const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
   'room',
   'roomNumber',
   'itemNumber',
   'quantity',
   'name',
   'deliveryDate',
-  'material',
   'packageName',
   'paint',
   'photoLink',
   'notes',
   'carpenter',
+];
+
+const ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEYS = [
+  'orderAttachments',
+  'paintAttachments',
 ];
 
 function compareSteps(a, b) {
@@ -157,6 +161,14 @@ function getLatestTimestamp(...timestamps) {
     .at(-1) || '';
 }
 
+function getEarliestTimestamp(...timestamps) {
+  return timestamps
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .sort()
+    .at(0) || '';
+}
+
 function getItemActiveRoleStage(item = {}, role = '') {
   return (Array.isArray(item?.stages) ? item.stages : []).find((stage) => stage.role === role && stage.status === 'in_progress') || null;
 }
@@ -180,6 +192,14 @@ function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpe
   const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
   if (updatedAt) return updatedAt;
 
+  if (columnKey === 'orderAttachments' || columnKey === 'paintAttachments') {
+    const fieldName = columnKey === 'paintAttachments' ? 'paintAttachments' : 'attachments';
+    const attachments = Array.isArray(item?.[fieldName]) ? item[fieldName] : [];
+    return getEarliestTimestamp(
+      ...attachments.map((attachment) => attachment?.uploadedAt || ''),
+    );
+  }
+
   if (columnKey !== 'carpenter') return '';
 
   const workerAssignments = helpers.workerAssignments || mergeWorkerAssignments(item?.workerAssignments, item?.stages);
@@ -188,13 +208,13 @@ function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpe
   const activeStage = getItemActiveStage(item);
   const assignedStage = getItemAssignedStage(item);
   const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
-  const latestAutoAt = getLatestTimestamp(
+  const earliestAutoAt = getEarliestTimestamp(
     carpenterAssignment?.scannedAt,
     carpenterActiveStage?.startedAt,
     workerStageForText?.startedAt,
   );
   return (carpenterAssignment || workerStageForText)
-    ? latestAutoAt
+    ? earliestAutoAt
     : '';
 }
 
@@ -561,31 +581,54 @@ function hasLegacyPrimaryItemData(order = {}) {
 
 function deriveOrderManufacturingMeta(order = {}) {
   const items = Array.isArray(order?.items) ? order.items : [];
-  const markTimestamps = [];
+  const startTimestamps = [];
+  const endTimestamps = [];
   let isCompleted = items.length > 0;
 
   for (const item of items) {
     const manualStageMarks = normalizeManualStageMarks(item?.manualStageMarks);
     const manualStageClears = normalizeManualStageClears(item?.manualStageClears);
     const workerAssignments = mergeWorkerAssignments(item?.workerAssignments, item?.stages);
+    const requiredTimestamps = [];
+    const itemStartTimestamps = [];
+    let isItemCompleted = true;
 
-    for (const columnKey of ORDER_MANUFACTURING_STAGE_COLUMN_KEYS) {
+    for (const columnKey of ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS) {
       const updatedAt = getItemEffectiveManufacturingTimestamp(item, columnKey, {
         manualStageMarks,
         manualStageClears,
         workerAssignments,
       });
       if (updatedAt) {
-        markTimestamps.push(updatedAt);
+        requiredTimestamps.push(updatedAt);
+        itemStartTimestamps.push(updatedAt);
       } else {
         isCompleted = false;
+        isItemCompleted = false;
       }
+    }
+
+    for (const columnKey of ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEYS) {
+      const updatedAt = getItemEffectiveManufacturingTimestamp(item, columnKey, {
+        manualStageMarks,
+        manualStageClears,
+        workerAssignments,
+      });
+      if (updatedAt) {
+        itemStartTimestamps.push(updatedAt);
+      }
+    }
+
+    if (itemStartTimestamps.length > 0) {
+      startTimestamps.push(...itemStartTimestamps);
+    }
+    if (isItemCompleted && requiredTimestamps.length > 0) {
+      endTimestamps.push(requiredTimestamps.slice().sort().at(-1) || '');
     }
   }
 
-  const sortedTimestamps = markTimestamps.slice().sort();
-  const startAt = sortedTimestamps[0] || '';
-  const endAt = isCompleted ? (sortedTimestamps.at(-1) || '') : '';
+  const startAt = startTimestamps.slice().sort()[0] || '';
+  const endAt = isCompleted ? (endTimestamps.slice().sort().at(-1) || '') : '';
 
   return {
     startAt,

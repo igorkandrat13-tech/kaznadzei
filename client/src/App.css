@@ -2108,9 +2108,11 @@ body[data-theme='light'] .order-primary-title-button-badge {
   width: 88px;
 }
 
+.unified-orders-table col.col-item-duration {
+  width: 92px;
+}
+
 .unified-orders-table col.col-carpenter,
-.unified-orders-table col.col-start-date,
-.unified-orders-table col.col-end-date,
 .unified-orders-table col.col-duration {
   width: 70px;
 }

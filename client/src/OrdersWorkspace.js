@@ -24,8 +24,7 @@ const ORDER_PRIMARY_HEADERS = [
   'Покраска',
   'Начало изготовления изделия',
   'Окончание изготовления изделия',
-  'Начало изготовления заказа',
-  'Окончание изготовления заказа',
+  'Время изготовления изделий',
   'Время изготовления заказа',
 ];
 const ORDER_CARD_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа');
@@ -34,8 +33,7 @@ const ORDER_CARPENTER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР
 const ORDER_PAINT_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Покраска');
 const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления изделия');
 const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
-const ORDER_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления заказа');
-const ORDER_COMPLETE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления заказа');
+const ORDER_ITEM_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий');
 const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
   if (columnIndex < 0) return '';
@@ -55,12 +53,10 @@ const ORDER_ITEM_START_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDE
 const ORDER_ITEM_START_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_ITEM_START_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_ITEM_END_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_ITEM_END_COLUMN_INDEX);
 const ORDER_ITEM_END_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_ITEM_END_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_START_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_START_COLUMN_INDEX);
-const ORDER_START_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_START_STAGE_LEGEND_KEY)?.textHex || '#000000';
+const ORDER_ITEM_DURATION_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_ITEM_DURATION_COLUMN_INDEX);
+const ORDER_ITEM_DURATION_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_ITEM_DURATION_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_DURATION_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_DURATION_COLUMN_INDEX);
 const ORDER_DURATION_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_DURATION_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_COMPLETE_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_COMPLETE_COLUMN_INDEX);
-const ORDER_COMPLETE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_COMPLETE_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_CARD_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_CARD_COLUMN_INDEX);
 const ORDER_CARD_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_CARD_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_PACKAGE_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_PACKAGE_COLUMN_INDEX);
@@ -1125,8 +1121,7 @@ function OrdersWorkspace() {
       <col className="col-paint" />
       <col className="col-item-start-date" />
       <col className="col-item-end-date" />
-      <col className="col-start-date" />
-      <col className="col-end-date" />
+      <col className="col-item-duration" />
       <col className="col-duration" />
     </colgroup>
   ), []);
@@ -2194,8 +2189,7 @@ function OrdersWorkspace() {
       'Покраска',
       'Начало изготовления изделия',
       'Окончание изготовления изделия',
-      'Начало изготовления заказа',
-      'Окончание изготовления заказа',
+      'Время изготовления изделий',
       'Время изготовления заказа',
     ];
 
@@ -2223,8 +2217,7 @@ function OrdersWorkspace() {
           getItemAttachments(item, 'paint').map((attachment) => attachment.name).join(', '),
           itemManufacturingMeta.startDate || '',
           itemManufacturingMeta.endDate || '',
-          manufacturingMeta.startDate || '',
-          manufacturingMeta.endDate || '',
+          formatManufacturingTime(itemManufacturingMeta.startDate, itemManufacturingMeta.endDate),
           formatManufacturingTime(manufacturingMeta.startDate, manufacturingMeta.endDate),
         ];
         return cells.map(escapeCsvValue).join(';');
@@ -2523,41 +2516,31 @@ function OrdersWorkspace() {
                       'orderCard',
                       `order-card-cell ${regularOrderClass}`,
                     );
-                    const hasManufacturingStart = Boolean(orderManufacturingMeta.startDate);
-                    const startDateMetaCellStyle = hasManufacturingStart
+                    const itemDurationValue = formatManufacturingTime(itemManufacturingMeta.startDate, itemManufacturingMeta.endDate);
+                    const hasItemManufacturingDuration = itemDurationValue !== '—';
+                    const itemDurationCellStyle = hasItemManufacturingDuration
                       ? {
-                          background: legendColorMap[ORDER_START_STAGE_LEGEND_KEY] || '#D3EAD9',
-                          color: ORDER_START_STAGE_TEXT_HEX,
+                          background: legendColorMap[ORDER_ITEM_DURATION_STAGE_LEGEND_KEY] || '#C37C8E',
+                          color: ORDER_ITEM_DURATION_STAGE_TEXT_HEX,
                         }
                       : undefined;
-                    const startDateMetaCellProps = getManualStageCellProps(
+                    const itemDurationCellProps = getManualStageCellProps(
                       key,
                       item,
-                      'startDate',
-                      `merged-order-cell merged-order-meta-cell order-filled-cell order-group-cell order-group-top order-group-bottom${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
-                      startDateMetaCellStyle,
+                      'itemDuration',
+                      regularOrderClass,
+                      itemDurationCellStyle,
+                      { disabled: true },
                     );
-                    const completedMetaCellStyle = orderManufacturingMeta.isCompleted
-                      ? {
-                          background: legendColorMap[ORDER_COMPLETE_STAGE_LEGEND_KEY] || '#8BC34A',
-                          color: ORDER_COMPLETE_STAGE_TEXT_HEX,
-                        }
-                      : undefined;
-                    const durationValue = formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate);
-                    const hasManufacturingDuration = durationValue !== '—';
+
+                    const orderDurationValue = formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate);
+                    const hasManufacturingDuration = orderDurationValue !== '—';
                     const durationMetaCellStyle = hasManufacturingDuration
                       ? {
                           background: legendColorMap[ORDER_DURATION_STAGE_LEGEND_KEY] || '#F4C2A4',
                           color: ORDER_DURATION_STAGE_TEXT_HEX,
                         }
                       : undefined;
-                    const endDateMetaCellProps = getManualStageCellProps(
-                      key,
-                      item,
-                      'endDate',
-                      `merged-order-cell merged-order-meta-cell order-filled-cell order-group-cell order-group-top order-group-bottom${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
-                      completedMetaCellStyle,
-                    );
                     const durationMetaCellProps = getManualStageCellProps(
                       key,
                       item,
@@ -2733,19 +2716,10 @@ function OrdersWorkspace() {
                         </td>
                         <td {...itemStartDateCellProps}>{formatDateDisplay(itemManufacturingMeta.startDate)}</td>
                         <td {...itemEndDateCellProps}>{formatDateDisplay(itemManufacturingMeta.endDate)}</td>
-                        {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} {...startDateMetaCellProps}>
-                            <div className="merged-order-meta-content">{formatDateDisplay(orderManufacturingMeta.startDate)}</div>
-                          </td>
-                        ) : null}
-                        {isFirstOrderRow ? (
-                          <td rowSpan={orderRowSpan} {...endDateMetaCellProps}>
-                            <div className="merged-order-meta-content">{formatDateDisplay(orderManufacturingMeta.endDate)}</div>
-                          </td>
-                        ) : null}
+                        <td {...itemDurationCellProps}>{itemDurationValue}</td>
                         {isFirstOrderRow ? (
                           <td rowSpan={orderRowSpan} {...durationMetaCellProps}>
-                            <div className="merged-order-meta-content">{durationValue}</div>
+                            <div className="merged-order-meta-content">{orderDurationValue}</div>
                           </td>
                         ) : null}
                       </tr>
@@ -2753,7 +2727,7 @@ function OrdersWorkspace() {
                   })}
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={19} className="empty-cell">Нет изделий по выбранным фильтрам</td>
+                      <td colSpan={18} className="empty-cell">Нет изделий по выбранным фильтрам</td>
                     </tr>
                   ) : null}
                 </tbody>
