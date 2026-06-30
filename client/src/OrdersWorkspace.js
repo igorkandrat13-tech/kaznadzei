@@ -609,6 +609,7 @@ function OrdersWorkspace() {
   const [manualStageSaving, setManualStageSaving] = useState(false);
   const [manualStageLegendDraft, setManualStageLegendDraft] = useState('');
   const [manualStageDropdownOpen, setManualStageDropdownOpen] = useState(false);
+  const [manualStageMenuDirection, setManualStageMenuDirection] = useState('down');
   const [selectedStageCellKeys, setSelectedStageCellKeys] = useState([]);
   const [manualStageToolbarPosition, setManualStageToolbarPosition] = useState(null);
   const [qrPreview, setQrPreview] = useState(null);
@@ -1000,7 +1001,29 @@ function OrdersWorkspace() {
       window.removeEventListener('scroll', updateToolbarPosition, true);
       bodyNode?.removeEventListener('scroll', updateToolbarPosition);
     };
-  }, [isAdmin, selectedStageSelections.length, selectedStageCellKeys, manualStageLegendDraft]);
+  }, [isAdmin, manualStageDropdownOpen, selectedStageSelections.length, selectedStageCellKeys, manualStageLegendDraft]);
+
+  useLayoutEffect(() => {
+    if (!manualStageDropdownOpen) return;
+
+    const toolbarNode = manualStageToolbarRef.current;
+    if (!toolbarNode) return;
+    const menuNode = toolbarNode.querySelector('.manual-stage-select-menu');
+    const triggerNode = toolbarNode.querySelector('.manual-stage-select-trigger');
+    if (!menuNode || !triggerNode) return;
+
+    const menuRect = menuNode.getBoundingClientRect();
+    const triggerRect = triggerNode.getBoundingClientRect();
+    const margin = 12;
+    const availableBelow = Math.max(0, window.innerHeight - triggerRect.bottom - margin);
+    const availableAbove = Math.max(0, triggerRect.top - margin);
+    const shouldOpenUp = menuRect.height > availableBelow && availableAbove > availableBelow;
+
+    setManualStageMenuDirection((current) => {
+      const next = shouldOpenUp ? 'up' : 'down';
+      return current === next ? current : next;
+    });
+  }, [manualStageDropdownOpen, manualStageToolbarPosition?.left, manualStageToolbarPosition?.top, selectedStageSelections.length]);
 
   const syncHorizontalScroll = useCallback((source, target) => {
     if (!source || !target) return;
@@ -2762,7 +2785,7 @@ function OrdersWorkspace() {
             Выбрано: <strong>{selectedStageSelections.length}</strong>
           </div>
           <div className="manual-stage-toolbar-actions">
-            <div className="manual-stage-select-wrap">
+            <div className={cn('manual-stage-select-wrap', manualStageMenuDirection === 'up' ? 'manual-stage-select-wrap-up' : '')}>
               <button
                 type="button"
                 className="manual-stage-select-trigger"
