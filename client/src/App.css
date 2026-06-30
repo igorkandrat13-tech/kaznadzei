@@ -220,10 +220,11 @@ body::before {
 }
 
 .container {
+  --page-side-gap: clamp(12px, 1.5vw, 28px);
   width: 100%;
   max-width: none;
   margin: 30px 0;
-  padding: 0 clamp(12px, 1.5vw, 28px);
+  padding: 0 var(--page-side-gap);
   position: relative;
 }
 
@@ -245,6 +246,19 @@ body::before {
 
 .orders-workspace-card {
   padding: 14px;
+}
+
+.orders-workspace-table-card {
+  box-sizing: border-box;
+  width: calc(100vw - (var(--page-side-gap) * 2));
+  max-width: none;
+  margin-left: calc(50% - 50vw + var(--page-side-gap));
+  margin-right: calc(50% - 50vw + var(--page-side-gap));
+  padding: 10px 8px 12px;
+}
+
+.orders-workspace-table-card .table-scroll {
+  padding-bottom: 8px;
 }
 
 .card,
@@ -1799,7 +1813,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-cell-divider-color: rgba(126, 191, 255, 0.18);
   --orders-group-divider-color: rgba(126, 191, 255, 0.62);
   --orders-hover-outline-color: rgba(126, 191, 255, 0.96);
-  min-width: 1450px;
+  min-width: 1980px;
   width: 100%;
   table-layout: fixed;
   border-collapse: separate;

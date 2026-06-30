@@ -2324,7 +2324,7 @@ function OrdersWorkspace() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card orders-workspace-table-card">
         {Object.keys(inlineDrafts).length > 0 ? (
           <div className="excel-bulk-toolbar">
             <div className="filters-summary">Изменено строк: {Object.keys(inlineDrafts).length}</div>
