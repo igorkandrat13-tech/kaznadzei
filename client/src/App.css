@@ -1822,7 +1822,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-col-notes-width: 248px;
   --orders-col-meta-width: 92px;
   --orders-col-carpenter-width: 104px;
-  --orders-table-min-width: 1980px;
+  --orders-table-min-width: 1840px;
   --orders-cell-padding-y: 5px;
   --orders-cell-padding-x: 6px;
   --orders-body-font-size: 16px;
@@ -4743,7 +4743,7 @@ body[data-theme='light'] .attachment-preview-table td {
   }
 }
 
-@media (min-width: 1920px) {
+@media (min-width: 2200px) {
   .container {
     --page-side-gap: clamp(18px, 1.6vw, 40px);
   }
