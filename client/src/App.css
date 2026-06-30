@@ -1842,6 +1842,11 @@ body[data-theme='light'] .order-primary-title-button-badge {
   border-right: 2px solid var(--orders-group-divider-color);
 }
 
+.unified-orders-table td.item-end-date-cell,
+.unified-orders-table td.item-duration-cell {
+  text-align: center;
+}
+
 .unified-orders-table th {
   position: sticky;
   z-index: 2;

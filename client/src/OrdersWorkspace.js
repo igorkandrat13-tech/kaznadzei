@@ -2455,7 +2455,7 @@ function OrdersWorkspace() {
                           color: ORDER_ITEM_END_STAGE_TEXT_HEX,
                         }
                       : undefined;
-                    const itemEndDateCellProps = getManualStageCellProps(
+                    const itemEndDateCellPropsBase = getManualStageCellProps(
                       key,
                       item,
                       'itemEndDate',
@@ -2463,6 +2463,10 @@ function OrdersWorkspace() {
                       itemEndDateCellStyle,
                       { disabled: true },
                     );
+                    const itemEndDateCellProps = {
+                      ...itemEndDateCellPropsBase,
+                      className: cn(itemEndDateCellPropsBase.className, 'item-end-date-cell'),
+                    };
                     const orderCardActionStyle = {
                       background: legendColorMap[ORDER_CARD_STAGE_LEGEND_KEY] || '#A8D7B6',
                       color: ORDER_CARD_STAGE_TEXT_HEX,
@@ -2524,7 +2528,7 @@ function OrdersWorkspace() {
                           color: ORDER_ITEM_DURATION_STAGE_TEXT_HEX,
                         }
                       : undefined;
-                    const itemDurationCellProps = getManualStageCellProps(
+                    const itemDurationCellPropsBase = getManualStageCellProps(
                       key,
                       item,
                       'itemDuration',
@@ -2532,6 +2536,10 @@ function OrdersWorkspace() {
                       itemDurationCellStyle,
                       { disabled: true },
                     );
+                    const itemDurationCellProps = {
+                      ...itemDurationCellPropsBase,
+                      className: cn(itemDurationCellPropsBase.className, 'item-duration-cell'),
+                    };
 
                     const orderDurationValue = formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate);
                     const hasManufacturingDuration = orderDurationValue !== '—';
