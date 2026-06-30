@@ -2,24 +2,10 @@ function getOrderItems(order) {
   return Array.isArray(order?.items) ? order.items : [];
 }
 
-const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
-  'room',
-  'roomNumber',
-  'itemNumber',
-  'quantity',
-  'name',
-  'deliveryDate',
-  'packageName',
-  'paint',
-  'photoLink',
-  'notes',
-  'carpenter',
-];
-
-const ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEYS = [
-  'orderAttachments',
-  'paintAttachments',
-];
+const ORDER_MANUFACTURING_EXCLUDED_COLUMN_KEYS = new Set([
+  'orderNumber',
+  'customer',
+]);
 
 function getOrderPrimaryItem(order) {
   return getOrderItems(order)[0] || null;
@@ -99,6 +85,50 @@ function getItemEffectiveManufacturingTimestamp(item, columnKey, manualStageMark
     : '';
 }
 
+function getItemManufacturingTimelineTimestamps(item, manualStageMarks = {}, manualStageClears = {}) {
+  const marks = manualStageMarks && typeof manualStageMarks === 'object' ? manualStageMarks : {};
+  const clears = manualStageClears && typeof manualStageClears === 'object' ? manualStageClears : {};
+  const timestamps = [];
+
+  Object.entries(marks).forEach(([columnKey, mark]) => {
+    const normalizedKey = String(columnKey || '').trim();
+    if (!normalizedKey || ORDER_MANUFACTURING_EXCLUDED_COLUMN_KEYS.has(normalizedKey)) return;
+    if (clears[normalizedKey]) return;
+    const updatedAt = String(mark?.updatedAt || '').trim();
+    if (updatedAt) timestamps.push(updatedAt);
+  });
+
+  const orderAttachments = Array.isArray(item?.attachments) ? item.attachments : [];
+  orderAttachments.forEach((attachment) => {
+    const uploadedAt = String(attachment?.uploadedAt || attachment?.createdAt || attachment?.updatedAt || '').trim();
+    if (uploadedAt) timestamps.push(uploadedAt);
+  });
+
+  const paintAttachments = Array.isArray(item?.paintAttachments) ? item.paintAttachments : [];
+  paintAttachments.forEach((attachment) => {
+    const uploadedAt = String(attachment?.uploadedAt || attachment?.createdAt || attachment?.updatedAt || '').trim();
+    if (uploadedAt) timestamps.push(uploadedAt);
+  });
+
+  if (!clears.carpenter) {
+    const carpenterAssignment = item?.workerAssignments?.carpenter || null;
+    const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
+    const activeStage = getItemActiveStage(item);
+    const assignedStage = getItemAssignedStage(item);
+    const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+    [
+      carpenterAssignment?.scannedAt,
+      carpenterActiveStage?.startedAt,
+      workerStageForText?.startedAt,
+    ].forEach((value) => {
+      const ts = String(value || '').trim();
+      if (ts) timestamps.push(ts);
+    });
+  }
+
+  return timestamps;
+}
+
 function getOrderOverallStatus(order) {
   const items = getOrderItems(order);
   if (items.length === 0) {
@@ -138,39 +168,11 @@ function getItemManufacturingMeta(item) {
   const manualStageClears = sourceItem.manualStageClears && typeof sourceItem.manualStageClears === 'object'
     ? sourceItem.manualStageClears
     : {};
-  const requiredTimestamps = [];
-  const startTimestamps = [];
-  let isCompleted = true;
-
-  ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS.forEach((columnKey) => {
-    const updatedAt = getItemEffectiveManufacturingTimestamp(
-      sourceItem,
-      columnKey,
-      manualStageMarks,
-      manualStageClears,
-    );
-    if (updatedAt) {
-      requiredTimestamps.push(updatedAt);
-      startTimestamps.push(updatedAt);
-    } else {
-      isCompleted = false;
-    }
-  });
-
-  ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEYS.forEach((columnKey) => {
-    const updatedAt = getItemEffectiveManufacturingTimestamp(
-      sourceItem,
-      columnKey,
-      manualStageMarks,
-      manualStageClears,
-    );
-    if (updatedAt) {
-      startTimestamps.push(updatedAt);
-    }
-  });
-
-  const startAt = startTimestamps.slice().sort()[0] || '';
-  const endAt = isCompleted ? (requiredTimestamps.slice().sort().at(-1) || '') : '';
+  const timestamps = getItemManufacturingTimelineTimestamps(sourceItem, manualStageMarks, manualStageClears);
+  const sorted = timestamps.slice().sort();
+  const startAt = sorted[0] || '';
+  const endAt = sorted.at(-1) || '';
+  const isCompleted = Boolean(startAt && endAt);
 
   return {
     startAt,
@@ -183,25 +185,22 @@ function getItemManufacturingMeta(item) {
 
 function getOrderManufacturingMeta(order) {
   const items = getOrderItems(order);
-  const startTimestamps = [];
-  const endTimestamps = [];
-  let isCompleted = items.length > 0;
+  const timestamps = [];
 
   items.forEach((item) => {
     const itemManufacturingMeta = getItemManufacturingMeta(item);
     if (itemManufacturingMeta.startAt) {
-      startTimestamps.push(itemManufacturingMeta.startAt);
+      timestamps.push(itemManufacturingMeta.startAt);
     }
     if (itemManufacturingMeta.endAt) {
-      endTimestamps.push(itemManufacturingMeta.endAt);
-    }
-    if (!itemManufacturingMeta.isCompleted) {
-      isCompleted = false;
+      timestamps.push(itemManufacturingMeta.endAt);
     }
   });
 
-  const startAt = startTimestamps.slice().sort()[0] || '';
-  const endAt = isCompleted ? (endTimestamps.slice().sort().at(-1) || '') : '';
+  const sorted = timestamps.slice().sort();
+  const startAt = sorted[0] || '';
+  const endAt = sorted.at(-1) || '';
+  const isCompleted = Boolean(startAt && endAt);
 
   return {
     startAt,

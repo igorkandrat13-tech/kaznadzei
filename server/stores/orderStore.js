@@ -8,24 +8,10 @@ const MANUAL_STAGE_STATUS = {
   unprocessed: 'pending',
   ready: 'completed',
 };
-const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
-  'room',
-  'roomNumber',
-  'itemNumber',
-  'quantity',
-  'name',
-  'deliveryDate',
-  'packageName',
-  'paint',
-  'photoLink',
-  'notes',
-  'carpenter',
-];
-
-const ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEYS = [
-  'orderAttachments',
-  'paintAttachments',
-];
+const ORDER_MANUFACTURING_EXCLUDED_COLUMN_KEYS = new Set([
+  'orderNumber',
+  'customer',
+]);
 
 function compareSteps(a, b) {
   const roleOrder = RoleStore.findAll({ includeDeleted: true }).map(role => role.key);
@@ -581,54 +567,54 @@ function hasLegacyPrimaryItemData(order = {}) {
 
 function deriveOrderManufacturingMeta(order = {}) {
   const items = Array.isArray(order?.items) ? order.items : [];
-  const startTimestamps = [];
-  const endTimestamps = [];
-  let isCompleted = items.length > 0;
+  const timestamps = [];
 
   for (const item of items) {
     const manualStageMarks = normalizeManualStageMarks(item?.manualStageMarks);
     const manualStageClears = normalizeManualStageClears(item?.manualStageClears);
     const workerAssignments = mergeWorkerAssignments(item?.workerAssignments, item?.stages);
-    const requiredTimestamps = [];
-    const itemStartTimestamps = [];
-    let isItemCompleted = true;
 
-    for (const columnKey of ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS) {
-      const updatedAt = getItemEffectiveManufacturingTimestamp(item, columnKey, {
-        manualStageMarks,
-        manualStageClears,
-        workerAssignments,
+    Object.entries(manualStageMarks).forEach(([columnKey, mark]) => {
+      const normalizedKey = String(columnKey || '').trim();
+      if (!normalizedKey || ORDER_MANUFACTURING_EXCLUDED_COLUMN_KEYS.has(normalizedKey)) return;
+      if (manualStageClears[normalizedKey]) return;
+      const updatedAt = String(mark?.updatedAt || '').trim();
+      if (updatedAt) timestamps.push(updatedAt);
+    });
+
+    const orderAttachments = normalizeOrderAttachments(item?.attachments);
+    orderAttachments.forEach((attachment) => {
+      const uploadedAt = String(attachment?.uploadedAt || '').trim();
+      if (uploadedAt) timestamps.push(uploadedAt);
+    });
+
+    const paintAttachments = normalizeOrderAttachments(item?.paintAttachments);
+    paintAttachments.forEach((attachment) => {
+      const uploadedAt = String(attachment?.uploadedAt || '').trim();
+      if (uploadedAt) timestamps.push(uploadedAt);
+    });
+
+    if (!manualStageClears.carpenter) {
+      const carpenterAssignment = workerAssignments.carpenter || null;
+      const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
+      const activeStage = getItemActiveStage(item);
+      const assignedStage = getItemAssignedStage(item);
+      const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+      [
+        carpenterAssignment?.scannedAt,
+        carpenterActiveStage?.startedAt,
+        workerStageForText?.startedAt,
+      ].forEach((value) => {
+        const ts = String(value || '').trim();
+        if (ts) timestamps.push(ts);
       });
-      if (updatedAt) {
-        requiredTimestamps.push(updatedAt);
-        itemStartTimestamps.push(updatedAt);
-      } else {
-        isCompleted = false;
-        isItemCompleted = false;
-      }
-    }
-
-    for (const columnKey of ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEYS) {
-      const updatedAt = getItemEffectiveManufacturingTimestamp(item, columnKey, {
-        manualStageMarks,
-        manualStageClears,
-        workerAssignments,
-      });
-      if (updatedAt) {
-        itemStartTimestamps.push(updatedAt);
-      }
-    }
-
-    if (itemStartTimestamps.length > 0) {
-      startTimestamps.push(...itemStartTimestamps);
-    }
-    if (isItemCompleted && requiredTimestamps.length > 0) {
-      endTimestamps.push(requiredTimestamps.slice().sort().at(-1) || '');
     }
   }
 
-  const startAt = startTimestamps.slice().sort()[0] || '';
-  const endAt = isCompleted ? (endTimestamps.slice().sort().at(-1) || '') : '';
+  const sorted = timestamps.slice().sort();
+  const startAt = sorted[0] || '';
+  const endAt = sorted.at(-1) || '';
+  const isCompleted = Boolean(startAt && endAt);
 
   return {
     startAt,

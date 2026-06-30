@@ -2449,7 +2449,7 @@ function OrdersWorkspace() {
                       itemStartDateCellStyle,
                       { disabled: true },
                     );
-                    const itemEndDateCellStyle = itemManufacturingMeta.isCompleted
+                    const itemEndDateCellStyle = itemManufacturingMeta.endDate
                       ? {
                           background: legendColorMap[ORDER_ITEM_END_STAGE_LEGEND_KEY] || '#C37C8E',
                           color: ORDER_ITEM_END_STAGE_TEXT_HEX,
