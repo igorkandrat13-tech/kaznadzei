@@ -171,7 +171,7 @@ function getAttachmentTargetKey(orderId = '', itemId = '', scope = '') {
 }
 
 function isOrdersHeaderLeftAlignedColumn(columnIndex = -1) {
-  return columnIndex === ORDER_NAME_COLUMN_INDEX || columnIndex === ORDER_NOTES_COLUMN_INDEX;
+  return false;
 }
 
 function createPackageItemId() {
@@ -2377,18 +2377,19 @@ function OrdersWorkspace() {
                         colSpan={cell.colSpan || 1}
                         className={cn(
                           'xlsx-header-secondary-cell',
-                          cell.startIndex === 0 && 'xlsx-header-secondary-cell-table-bg',
+                          (cell.startIndex === 0 || cell.useTableBackground) && 'xlsx-header-secondary-cell-table-bg',
                           cell.legendKey && 'xlsx-header-secondary-cell-colored',
                           (cell.colSpan || 1) > 1 && 'xlsx-header-secondary-cell-merged',
+                          cell.noWrap && 'xlsx-header-secondary-cell-nowrap',
                           (isOrdersHeaderLeftAlignedColumn(cell.startIndex) || isOrdersHeaderLeftAlignedColumn(cell.endIndex))
                             ? 'xlsx-header-cell-left'
                             : 'xlsx-header-cell-center',
                         )}
                         style={{
-                          background: cell.startIndex === 0
+                          background: (cell.startIndex === 0 || cell.useTableBackground)
                             ? 'var(--orders-table-cell-background)'
                             : (cell.hex || undefined),
-                          color: '#000000',
+                          color: cell.textColor || '#000000',
                         }}
                       >
                         {cell.label}

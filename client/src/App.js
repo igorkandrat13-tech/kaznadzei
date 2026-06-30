@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import Admin from './Admin';
 import Archive from './Archive';
@@ -87,6 +87,7 @@ function AppLayout() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
     const canAccessOrders = canAccessRole('manager', authRole);
+    const mobileMenuAnchorRef = useRef(null);
 
     useEffect(() => {
         if (detectTelegramWebApp()) {
@@ -102,6 +103,30 @@ function AppLayout() {
     useEffect(() => {
         setMobileMenuOpen(false);
     }, [location.pathname]);
+
+    useEffect(() => {
+        if (!mobileMenuOpen) return undefined;
+
+        const handlePointerDown = (event) => {
+            const anchorNode = mobileMenuAnchorRef.current;
+            if (anchorNode?.contains(event.target)) return;
+            setMobileMenuOpen(false);
+        };
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setMobileMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [mobileMenuOpen]);
 
     useEffect(() => {
         const syncAuth = () => {
@@ -153,7 +178,7 @@ function AppLayout() {
                         <div className="App-header-brand">
                             <div className="App-header-brand-row">
                                 <h1>🏭 Мебельная фабрика Kaznadzei</h1>
-                                <div className="App-header-menu-anchor">
+                                <div ref={mobileMenuAnchorRef} className="App-header-menu-anchor">
                                     <button
                                         className="mobile-menu-toggle"
                                         type="button"
