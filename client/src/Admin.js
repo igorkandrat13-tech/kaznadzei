@@ -18,7 +18,7 @@ import RoleModal from './admin/RoleModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
 import { useRoleConfig } from './RoleConfigContext';
-import { ORDER_STAGE_LEGEND } from './orderStageLegend';
+import { buildOrderStageLegendConfig } from './orderStageLegend';
 import useEscapeKey from './useEscapeKey';
 
 function Admin() {
@@ -80,6 +80,10 @@ function Admin() {
   const [savingStep, setSavingStep] = useState(false);
   const [savingColor, setSavingColor] = useState(false);
   const [savingLegendColors, setSavingLegendColors] = useState(false);
+  const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
+  const [selectedLegendStageKey, setSelectedLegendStageKey] = useState('brief');
+  const [selectedLegendHeaderId, setSelectedLegendHeaderId] = useState('');
+  const [legendModalTab, setLegendModalTab] = useState('columns');
   const [savingAppSettings, setSavingAppSettings] = useState(false);
   const [savingUpdateSettings, setSavingUpdateSettings] = useState(false);
 
@@ -89,7 +93,7 @@ function Admin() {
   const [editRole, setEditRole] = useState(null);
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
   const [newColor, setNewColor] = useState({ name: '', hex: '#000000' });
-  const [legendColorDrafts, setLegendColorDrafts] = useState([]);
+  const [legendConfigDraft, setLegendConfigDraft] = useState(() => buildOrderStageLegendConfig());
   const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
   const [newRole, setNewRole] = useState({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
   const backupImportInputRef = useRef(null);
@@ -98,7 +102,7 @@ function Admin() {
   const employeeForm = employeeModalMode === 'edit' ? editEmployee : newEmployee;
   const roleForm = roleModalMode === 'edit' ? editRole : newRole;
   const legendItems = useMemo(() => {
-    return ORDER_STAGE_LEGEND.map((item) => {
+    return orderStageLegendConfig.stages.map((item) => {
       const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
       return {
         ...item,
@@ -106,7 +110,21 @@ function Admin() {
         hex: savedColor?.hex || item.defaultHex,
       };
     });
-  }, [colors]);
+  }, [colors, orderStageLegendConfig]);
+  const legendDraftStageMap = useMemo(() => {
+    return (legendConfigDraft.stages || []).reduce((acc, item) => {
+      acc[item.key] = item;
+      return acc;
+    }, {});
+  }, [legendConfigDraft]);
+  const selectedLegendStage = useMemo(
+    () => (legendConfigDraft.stages || []).find((item) => item.key === selectedLegendStageKey) || (legendConfigDraft.stages || [])[0] || null,
+    [legendConfigDraft, selectedLegendStageKey],
+  );
+  const selectedLegendHeader = useMemo(
+    () => (legendConfigDraft.secondaryHeaders || []).find((item) => item.draftId === selectedLegendHeaderId) || null,
+    [legendConfigDraft, selectedLegendHeaderId],
+  );
   const employeeRoleTabs = (() => {
     if (!employeeForm?.role) {
       return roleTabs;
@@ -169,6 +187,7 @@ function Admin() {
   useEffect(() => {
     fetchSteps();
     fetchColors();
+    fetchOrderStageLegendConfig().catch(error => setSettingsError(error.message || 'Не удалось загрузить легенду этапов.'));
     fetchUpdateStatus();
   }, []);
 
@@ -217,6 +236,15 @@ function Admin() {
     const res = await apiFetch('/api/colors');
     const data = await parseJsonSafely(res);
     setColors(Array.isArray(data) ? data : []);
+  };
+
+  const fetchOrderStageLegendConfig = async () => {
+    const res = await apiFetch('/api/order-stage-legend-config');
+    const data = await parseJsonSafely(res);
+    if (!res.ok) {
+      throw new Error(data?.message || 'Не удалось загрузить конфигурацию легенды этапов.');
+    }
+    setOrderStageLegendConfig(buildOrderStageLegendConfig(data || {}));
   };
 
   const fetchRoles = async ({ includeDeleted = false } = {}) => {
@@ -813,14 +841,29 @@ function Admin() {
   };
 
   const openLegendColorModal = () => {
-    setLegendColorDrafts(legendItems.map(item => ({
-      key: item.key,
-      label: item.label,
-      description: item.description,
-      storeName: item.storeName,
-      colorId: item.colorId,
-      hex: item.hex,
-    })));
+    const nextStages = legendItems.map(item => ({
+        key: item.key,
+        label: item.label,
+        description: item.description,
+        storeName: item.storeName,
+        colorId: item.colorId,
+        hex: item.hex,
+        defaultHex: item.defaultHex,
+      }));
+    setLegendConfigDraft({
+      stages: nextStages,
+      secondaryHeaders: orderStageLegendConfig.secondaryHeaders.map((item, index) => ({
+        ...item,
+        draftId: `secondary-header-${index}`,
+      })),
+    });
+    const nextHeaders = orderStageLegendConfig.secondaryHeaders.map((item, index) => ({
+      ...item,
+      draftId: `secondary-header-${index}`,
+    }));
+    setSelectedLegendStageKey(nextStages.find((item) => item.key)?.key || '');
+    setSelectedLegendHeaderId(nextHeaders.find((item) => !item.stickyCol)?.draftId || nextHeaders[0]?.draftId || '');
+    setLegendModalTab('columns');
     setShowLegendColorModal(true);
     setSettingsError('');
     setSettingsSuccess('');
@@ -829,7 +872,10 @@ function Admin() {
   const closeLegendColorModal = () => {
     if (savingLegendColors) return;
     setShowLegendColorModal(false);
-    setLegendColorDrafts([]);
+    setLegendConfigDraft(buildOrderStageLegendConfig());
+    setSelectedLegendStageKey('brief');
+    setSelectedLegendHeaderId('');
+    setLegendModalTab('columns');
   };
 
   useEscapeKey(() => {
@@ -854,10 +900,27 @@ function Admin() {
     }
   }, Boolean(confirmAction || showActivityLogs || showTelegramLogs || showLegendColorModal || stageManagerRoleKey));
 
-  const updateLegendColorDraft = (key, patch) => {
-    setLegendColorDrafts(current => current.map(item => (
-      item.key === key ? { ...item, ...patch } : item
-    )));
+  const updateLegendStageDraft = (key, patch) => {
+    setLegendConfigDraft(current => ({
+      ...current,
+      stages: (current.stages || []).map(item => (
+        item.key === key ? { ...item, ...patch } : item
+      )),
+    }));
+  };
+
+  const updateLegendSecondaryHeaderDraft = (draftId, patch) => {
+    setLegendConfigDraft(current => ({
+      ...current,
+      secondaryHeaders: (current.secondaryHeaders || []).map(item => (
+        item.draftId === draftId ? { ...item, ...patch } : item
+      )),
+    }));
+  };
+
+  const assignLegendStageToHeader = (draftId, legendKey) => {
+    if (savingLegendColors) return;
+    updateLegendSecondaryHeaderDraft(draftId, { legendKey });
   };
 
   const requestDeleteAction = (action) => {
@@ -1274,7 +1337,7 @@ function Admin() {
     setSettingsSuccess('');
     setSavingLegendColors(true);
     try {
-      for (const draft of legendColorDrafts) {
+      for (const draft of (legendConfigDraft.stages || [])) {
         const normalizedHex = String(draft.hex || '').trim() || '#000000';
         if (draft.colorId) {
           const existingItem = legendItems.find(item => item.key === draft.key);
@@ -1303,12 +1366,36 @@ function Admin() {
         }
       }
 
+      const configPayload = {
+        stages: (legendConfigDraft.stages || []).map((item) => ({
+          key: item.key,
+          label: item.label,
+          description: item.description,
+          storeName: item.storeName,
+          defaultHex: item.defaultHex,
+        })),
+        secondaryHeaders: (legendConfigDraft.secondaryHeaders || []).map((item) => ({
+          label: item.label,
+          legendKey: item.legendKey,
+        })),
+      };
+
+      const configRes = await apiFetch('/api/order-stage-legend-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(configPayload),
+      });
+      if (!configRes.ok) {
+        throw new Error(await getErrorMessage(configRes, 'Не удалось сохранить конфигурацию этапов.'));
+      }
+
       await fetchColors();
-      setSettingsSuccess('Цвета этапов обновлены.');
+      await fetchOrderStageLegendConfig();
+      setSettingsSuccess('Цвета, названия этапов и привязка колонок обновлены.');
       setShowLegendColorModal(false);
-      setLegendColorDrafts([]);
+      setLegendConfigDraft(buildOrderStageLegendConfig());
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось сохранить цвета этапов.');
+      setSettingsError(error.message || 'Не удалось сохранить настройки этапов.');
     } finally {
       setSavingLegendColors(false);
     }
@@ -1419,45 +1506,180 @@ function Admin() {
 
       {showLegendColorModal ? (
         <div className="modal-overlay" onClick={savingLegendColors ? undefined : closeLegendColorModal}>
-          <div className="modal-window modal-window-lg" onClick={e => e.stopPropagation()}>
+          <div className="modal-window modal-window-xl" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <div className="modal-title">Цвета этапов</div>
-                <div className="modal-subtitle">Эти цвета используются в легенде этапов и во второй строке таблицы заказов.</div>
+                <div className="modal-title">Выбор колонок и этапов</div>
+                <div className="modal-subtitle">Сначала выберите колонку таблицы, затем справа задайте ей название и этап. Ниже отдельно редактируются сами этапы.</div>
               </div>
               <button className="btn btn-small modal-close-btn" onClick={closeLegendColorModal} disabled={savingLegendColors}>✕</button>
             </div>
 
-            <div className="stage-legend-colors-modal-grid">
-              {legendColorDrafts.map(item => (
-                <div key={item.key} className="stage-legend-color-row">
-                  <div className="stage-legend-color-row-info">
-                    <span className="orders-stage-legend-swatch" style={{ background: item.hex }} />
-                    <div className="orders-stage-legend-content">
-                      <div className="orders-stage-legend-item-title">{item.label}</div>
-                      <div className="orders-stage-legend-item-subtitle">{item.description}</div>
+            <div className="stage-legend-builder-layout">
+              <div className="stage-legend-builder-panel stage-legend-builder-panel-wide">
+                <div className="stage-legend-config-section-title">Колонки таблицы</div>
+                <div className="stage-legend-builder-note">Нажмите на нужную ячейку второй строки шапки. Выбранная колонка откроется в редакторе справа.</div>
+                <div className="stage-legend-table-preview">
+                  {(legendConfigDraft.secondaryHeaders || []).map((item, index) => {
+                    const stage = legendDraftStageMap[item.legendKey] || null;
+                    const isSelectedHeader = selectedLegendHeaderId === item.draftId;
+                    return (
+                      <div
+                        key={item.draftId || `${item.label}-${index}`}
+                        className={`stage-legend-table-cell ${isSelectedHeader ? 'stage-legend-table-cell-active' : ''} ${item.stickyCol ? 'stage-legend-table-cell-service' : ''}`}
+                        style={{ background: stage?.hex || (item.useTableBackground ? 'rgba(12, 26, 42, 0.94)' : undefined), color: item.useTableBackground ? '#d8ecff' : '#000000' }}
+                        onClick={() => !savingLegendColors && setSelectedLegendHeaderId(item.draftId)}
+                        onKeyDown={(event) => {
+                          if ((event.key === 'Enter' || event.key === ' ') && !savingLegendColors) {
+                            event.preventDefault();
+                            setSelectedLegendHeaderId(item.draftId);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={savingLegendColors ? -1 : 0}
+                        title={stage ? `Этап: ${stage.label}` : 'Этап не назначен'}
+                      >
+                        <span className="stage-legend-table-cell-index">Колонка {index + 1}</span>
+                        <span className="stage-legend-table-cell-title">{item.label || 'Без названия'}</span>
+                        <span className="stage-legend-table-cell-stage">
+                          {stage ? stage.label : 'Без этапа'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="stage-legend-builder-panel stage-legend-column-editor">
+                <div className="stage-legend-config-section-title">Редактор колонки</div>
+                {selectedLegendHeader ? (
+                  <>
+                    <div className="stage-legend-column-editor-meta">
+                      <span className="stage-legend-column-editor-index">
+                        {selectedLegendHeader.stickyCol ? `Служебная колонка ${selectedLegendHeader.stickyCol}` : `Колонка ${Number(String(selectedLegendHeader.draftId || '').split('-').pop()) + 1 || ''}`}
+                      </span>
+                      <span className="stage-legend-column-editor-stage">
+                        Текущий этап: {legendDraftStageMap[selectedLegendHeader.legendKey]?.label || 'Без этапа'}
+                      </span>
+                    </div>
+                    <label className="stage-legend-field">
+                      <span>Название колонки</span>
+                      <input
+                        value={selectedLegendHeader.label}
+                        onChange={(event) => updateLegendSecondaryHeaderDraft(selectedLegendHeader.draftId, { label: event.target.value })}
+                        placeholder="Введите название колонки"
+                        disabled={savingLegendColors}
+                      />
+                    </label>
+                    <div className="stage-legend-config-section-title stage-legend-config-section-subtitle">Назначение этапа</div>
+                    <div className="stage-legend-assignment-toolbar">
+                      <button
+                        type="button"
+                        className={`stage-legend-stage-chip ${!selectedLegendHeader.legendKey ? 'stage-legend-stage-chip-active' : ''}`}
+                        onClick={() => assignLegendStageToHeader(selectedLegendHeader.draftId, '')}
+                        disabled={savingLegendColors}
+                      >
+                        Без этапа
+                      </button>
+                      {(legendConfigDraft.stages || []).map((stage) => (
+                        <button
+                          key={stage.key}
+                          type="button"
+                          className={`stage-legend-stage-chip ${selectedLegendHeader.legendKey === stage.key ? 'stage-legend-stage-chip-active' : ''}`}
+                          style={{ background: stage.hex, color: '#000000' }}
+                          onClick={() => assignLegendStageToHeader(selectedLegendHeader.draftId, stage.key)}
+                          disabled={savingLegendColors}
+                          title={stage.description || stage.label}
+                        >
+                          {stage.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="stage-legend-builder-note">Выберите колонку в схеме слева, чтобы изменить ее название и назначить этап.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="stage-legend-builder-layout stage-legend-builder-layout-bottom">
+              <div className="stage-legend-builder-panel stage-legend-stage-list-panel">
+                <div className="stage-legend-config-section-title">Этапы</div>
+                <div className="stage-legend-builder-note">Выберите этап из списка, затем отредактируйте его название, подсказку и цвет справа.</div>
+                <div className="stage-legend-stage-list">
+                  {(legendConfigDraft.stages || []).map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`stage-legend-stage-list-item ${selectedLegendStageKey === item.key ? 'stage-legend-stage-list-item-active' : ''}`}
+                      onClick={() => setSelectedLegendStageKey(item.key)}
+                      disabled={savingLegendColors}
+                    >
+                      <span className="stage-legend-stage-list-swatch" style={{ background: item.hex }} />
+                      <span className="stage-legend-stage-list-text">
+                        <strong>{item.label || 'Этап'}</strong>
+                        <small>{item.description || 'Без описания'}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="stage-legend-builder-panel stage-legend-stage-editor-panel">
+                <div className="stage-legend-config-section-title">Редактор этапа</div>
+                {selectedLegendStage ? (
+                  <div className="stage-legend-stage-card stage-legend-stage-editor-card">
+                    <div className="stage-legend-stage-card-header">
+                      <div
+                        className="stage-legend-stage-preview"
+                        style={{ background: selectedLegendStage.hex, color: '#000000' }}
+                      >
+                        {selectedLegendStage.label || 'Этап'}
+                      </div>
+                      <div className="stage-legend-stage-color">
+                        <input
+                          type="color"
+                          value={selectedLegendStage.hex}
+                          onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { hex: event.target.value })}
+                          disabled={savingLegendColors}
+                        />
+                        <input
+                          value={selectedLegendStage.hex}
+                          onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { hex: event.target.value })}
+                          disabled={savingLegendColors}
+                        />
+                      </div>
+                    </div>
+                    <div className="stage-legend-stage-fields">
+                      <label className="stage-legend-field">
+                        <span>Название этапа</span>
+                        <input
+                          value={selectedLegendStage.label}
+                          onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { label: event.target.value })}
+                          placeholder="Например: Чертежи"
+                          disabled={savingLegendColors}
+                        />
+                      </label>
+                      <label className="stage-legend-field">
+                        <span>Подсказка</span>
+                        <input
+                          value={selectedLegendStage.description}
+                          onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { description: event.target.value })}
+                          placeholder="Что входит в этот этап"
+                          disabled={savingLegendColors}
+                        />
+                      </label>
                     </div>
                   </div>
-                  <div className="stage-legend-color-row-controls">
-                    <input
-                      type="color"
-                      value={item.hex}
-                      onChange={(event) => updateLegendColorDraft(item.key, { hex: event.target.value })}
-                      disabled={savingLegendColors}
-                    />
-                    <input
-                      value={item.hex}
-                      onChange={(event) => updateLegendColorDraft(item.key, { hex: event.target.value })}
-                      disabled={savingLegendColors}
-                    />
-                  </div>
-                </div>
-              ))}
+                ) : (
+                  <div className="stage-legend-builder-note">Выберите этап слева, чтобы изменить его название, описание и цвет.</div>
+                )}
+              </div>
             </div>
 
             <div className="modal-actions">
               <button className="btn btn-success" onClick={handleSaveLegendColors} disabled={savingLegendColors}>
-                {savingLegendColors ? 'Сохранение...' : 'Сохранить цвета этапов'}
+                {savingLegendColors ? 'Сохранение...' : 'Сохранить настройки этапов'}
               </button>
               <button className="btn" onClick={closeLegendColorModal} disabled={savingLegendColors}>Отмена</button>
             </div>
@@ -1889,15 +2111,15 @@ function Admin() {
         <SettingsHeader title="⚙️ Настройки — Цвета и легенда этапов" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card">
-            <p>Здесь настраиваются цвета справочника и легенды этапов для единой таблицы заказов.</p>
+            <p>Здесь настраиваются цвета справочника, названия этапов и привязка колонок легенды для единой таблицы заказов.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
             <div className="orders-stage-legend">
               <div className="orders-stage-legend-header">
                 <div>
                   <div className="orders-stage-legend-title">Легенда этапов</div>
-                  <div className="orders-stage-legend-subtitle">Цвета ниже применяются к этапам в таблице заказов.</div>
+                  <div className="orders-stage-legend-subtitle">Цвета, названия этапов и привязка колонок ниже применяются ко всей логике таблицы заказов.</div>
                 </div>
-                <button className="btn btn-secondary" onClick={openLegendColorModal}>Редактировать цвета этапов</button>
+                <button className="btn btn-secondary" onClick={openLegendColorModal}>Выбор колонок</button>
               </div>
               <div className="orders-stage-legend-grid">
                 {legendItems.map(item => (

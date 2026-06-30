@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { load, save } = require('./store');
 const { getDefaultRoleLabels, getDefaultRoles, normalizeRoleLabels, normalizeRoles } = require('../config/roles');
+const { getDefaultOrderStageLegendConfig, normalizeOrderStageLegendConfig } = require('../config/orderStageLegendConfig');
 
 function getDefaultSettings() {
   return {
@@ -14,6 +15,7 @@ function getDefaultSettings() {
     authSessionSecret: (process.env.APP_AUTH_SECRET || '').trim() || crypto.randomBytes(32).toString('hex'),
     roleLabels: getDefaultRoleLabels(),
     roles: getDefaultRoles(),
+    orderStageLegendConfig: getDefaultOrderStageLegendConfig(),
   };
 }
 
@@ -34,6 +36,7 @@ function normalizeSettings(source = {}) {
       return acc;
     }, normalizeRoleLabels(source.roleLabels ?? defaults.roleLabels)),
     roles,
+    orderStageLegendConfig: normalizeOrderStageLegendConfig(source.orderStageLegendConfig ?? defaults.orderStageLegendConfig),
   };
 }
 
@@ -46,6 +49,7 @@ function toPublicSettings(source = {}) {
     updateRepositoryUrl: source.updateRepositoryUrl || '',
     roleLabels: normalizeRoleLabels(source.roleLabels || {}),
     roles: normalizeRoles(source.roles || []),
+    orderStageLegendConfig: normalizeOrderStageLegendConfig(source.orderStageLegendConfig || {}),
   };
 }
 

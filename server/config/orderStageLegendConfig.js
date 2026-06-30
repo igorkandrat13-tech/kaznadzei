@@ -1,4 +1,4 @@
-export const DEFAULT_ORDER_STAGE_LEGEND = [
+const DEFAULT_ORDER_STAGE_LEGEND = [
   {
     key: 'unprocessed',
     storeName: 'Легенда этапов: заказ не обработан',
@@ -57,7 +57,7 @@ export const DEFAULT_ORDER_STAGE_LEGEND = [
   },
 ];
 
-export const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
+const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
   { label: '', legendKey: '', colSpan: 1, textHex: '#000000', stickyCol: 'sticky-col-1' },
   { label: 'Заказ не обработан', legendKey: 'unprocessed', colSpan: 1, textHex: '#000000', stickyCol: 'sticky-col-2', useTableBackground: true },
   { label: 'ТЗ от заказчика', legendKey: 'brief', colSpan: 1, textHex: '#000000' },
@@ -77,29 +77,31 @@ export const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
   { label: 'Готово', legendKey: 'ready', colSpan: 1, textHex: '#000000' },
 ];
 
-function normalizeStage(source = {}, fallback = {}) {
+function normalizeStage(source = {}, fallback) {
+  const key = String(fallback?.key || source?.key || '').trim();
   return {
-    key: String(fallback.key || source.key || '').trim(),
-    storeName: String(fallback.storeName || source.storeName || '').trim(),
-    label: String(source.label ?? fallback.label ?? '').trim(),
-    description: String(source.description ?? fallback.description ?? '').trim(),
-    defaultHex: String(fallback.defaultHex || source.defaultHex || '#FFFFFF').trim() || '#FFFFFF',
+    key,
+    storeName: String(fallback?.storeName || source?.storeName || '').trim(),
+    label: String(source?.label ?? fallback?.label ?? '').trim(),
+    description: String(source?.description ?? fallback?.description ?? '').trim(),
+    defaultHex: String(fallback?.defaultHex || source?.defaultHex || '#FFFFFF').trim() || '#FFFFFF',
   };
 }
 
 function normalizeSecondaryHeader(source = {}, fallback = {}) {
+  const nextLegendKey = String(source?.legendKey ?? fallback?.legendKey ?? '').trim();
   return {
-    label: String(source.label ?? fallback.label ?? '').trim(),
-    legendKey: String(source.legendKey ?? fallback.legendKey ?? '').trim(),
-    colSpan: Number(fallback.colSpan) || 1,
-    textHex: String(fallback.textHex || '#000000').trim() || '#000000',
-    stickyCol: String(fallback.stickyCol || '').trim(),
-    useTableBackground: Boolean(fallback.useTableBackground),
-    noWrap: Boolean(fallback.noWrap),
+    label: String(source?.label ?? fallback?.label ?? '').trim(),
+    legendKey: nextLegendKey,
+    colSpan: Number(fallback?.colSpan) || 1,
+    textHex: String(fallback?.textHex || '#000000').trim() || '#000000',
+    stickyCol: String(fallback?.stickyCol || '').trim(),
+    useTableBackground: Boolean(fallback?.useTableBackground),
+    noWrap: Boolean(fallback?.noWrap),
   };
 }
 
-export function buildOrderStageLegendConfig(source = {}) {
+function normalizeOrderStageLegendConfig(source = {}) {
   const sourceStages = Array.isArray(source?.stages) ? source.stages : [];
   const sourceHeaders = Array.isArray(source?.secondaryHeaders) ? source.secondaryHeaders : [];
 
@@ -122,5 +124,13 @@ export function buildOrderStageLegendConfig(source = {}) {
   return { stages, secondaryHeaders };
 }
 
-export const ORDER_STAGE_LEGEND = DEFAULT_ORDER_STAGE_LEGEND;
-export const ORDER_STAGE_SECONDARY_HEADERS = DEFAULT_ORDER_STAGE_SECONDARY_HEADERS;
+function getDefaultOrderStageLegendConfig() {
+  return normalizeOrderStageLegendConfig({});
+}
+
+module.exports = {
+  DEFAULT_ORDER_STAGE_LEGEND,
+  DEFAULT_ORDER_STAGE_SECONDARY_HEADERS,
+  getDefaultOrderStageLegendConfig,
+  normalizeOrderStageLegendConfig,
+};

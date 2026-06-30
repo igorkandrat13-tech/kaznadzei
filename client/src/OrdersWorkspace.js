@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
-import { ORDER_STAGE_LEGEND, ORDER_STAGE_SECONDARY_HEADERS } from './orderStageLegend';
+import { buildOrderStageLegendConfig } from './orderStageLegend';
 import { getItemManufacturingMeta, getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
@@ -36,10 +36,10 @@ const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начал�
 const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
 const ORDER_ITEM_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий');
 const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
-function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
+function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
   let currentIndex = 0;
-  for (const cell of ORDER_STAGE_SECONDARY_HEADERS) {
+  for (const cell of secondaryHeaders) {
     const span = Number(cell.colSpan) || 1;
     if (columnIndex >= currentIndex && columnIndex < currentIndex + span) {
       return cell.legendKey || '';
@@ -48,22 +48,6 @@ function getStageLegendKeyForPrimaryColumn(columnIndex = -1) {
   }
   return '';
 }
-const CARPENTER_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_CARPENTER_COLUMN_INDEX);
-const CARPENTER_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === CARPENTER_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_ITEM_START_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_ITEM_START_COLUMN_INDEX);
-const ORDER_ITEM_START_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_ITEM_START_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_ITEM_END_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_ITEM_END_COLUMN_INDEX);
-const ORDER_ITEM_END_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_ITEM_END_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_ITEM_DURATION_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_ITEM_DURATION_COLUMN_INDEX);
-const ORDER_ITEM_DURATION_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_ITEM_DURATION_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_DURATION_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_DURATION_COLUMN_INDEX);
-const ORDER_DURATION_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_DURATION_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_CARD_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_CARD_COLUMN_INDEX);
-const ORDER_CARD_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_CARD_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_PACKAGE_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_PACKAGE_COLUMN_INDEX);
-const ORDER_PACKAGE_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_PACKAGE_STAGE_LEGEND_KEY)?.textHex || '#000000';
-const ORDER_PAINT_STAGE_LEGEND_KEY = getStageLegendKeyForPrimaryColumn(ORDER_PAINT_COLUMN_INDEX);
-const ORDER_PAINT_STAGE_TEXT_HEX = ORDER_STAGE_SECONDARY_HEADERS.find((item) => item.legendKey === ORDER_PAINT_STAGE_LEGEND_KEY)?.textHex || '#000000';
 const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
 const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
@@ -85,12 +69,18 @@ const ATTACHMENT_SCOPE_CONFIG = {
     deleteMessage: 'Файл будет удален из раздела покраски без возможности восстановления.',
   },
 };
-const MANUAL_STAGE_TEXT_COLOR_MAP = ORDER_STAGE_SECONDARY_HEADERS.reduce((acc, item) => {
-  if (item.legendKey && !acc[item.legendKey]) {
-    acc[item.legendKey] = item.textHex || '#000000';
-  }
-  return acc;
-}, {});
+function getStageTextHex(legendKey = '', secondaryHeaders = []) {
+  return secondaryHeaders.find((item) => item.legendKey === legendKey)?.textHex || '#000000';
+}
+
+function buildManualStageTextColorMap(secondaryHeaders = []) {
+  return secondaryHeaders.reduce((acc, item) => {
+    if (item.legendKey && !acc[item.legendKey]) {
+      acc[item.legendKey] = item.textHex || '#000000';
+    }
+    return acc;
+  }, {});
+}
 
 function getAttachmentKindLabel(attachment = {}) {
   const type = String(attachment.type || '').toLowerCase();
@@ -618,6 +608,7 @@ function OrdersWorkspace() {
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
   const [hoveredOrderId, setHoveredOrderId] = useState('');
   const [colors, setColors] = useState([]);
+  const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
   const [roomEditor, setRoomEditor] = useState(null);
   const [roomEditorSaving, setRoomEditorSaving] = useState(false);
   const [packageEditor, setPackageEditor] = useState(null);
@@ -671,10 +662,24 @@ function OrdersWorkspace() {
     }
   }, []);
 
+  const fetchOrderStageLegendConfig = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/order-stage-legend-config');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось загрузить конфигурацию этапов.');
+      }
+      setOrderStageLegendConfig(buildOrderStageLegendConfig(data || {}));
+    } catch {
+      setOrderStageLegendConfig(buildOrderStageLegendConfig());
+    }
+  }, []);
+
   useEffect(() => {
     fetchOrders({ showLoader: true });
     fetchColors();
-  }, [fetchColors, fetchOrders]);
+    fetchOrderStageLegendConfig();
+  }, [fetchColors, fetchOrderStageLegendConfig, fetchOrders]);
 
   useEffect(() => {
     return () => {
@@ -692,6 +697,7 @@ function OrdersWorkspace() {
       if (inlineSavingKey) return;
       fetchOrders();
       fetchColors();
+      fetchOrderStageLegendConfig();
     };
 
     const intervalId = window.setInterval(refresh, 2000);
@@ -703,19 +709,46 @@ function OrdersWorkspace() {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [fetchColors, fetchOrders, inlineDrafts, inlineSavingKey, showForm]);
+  }, [fetchColors, fetchOrderStageLegendConfig, fetchOrders, inlineDrafts, inlineSavingKey, showForm]);
+
+  const stageLegend = useMemo(() => orderStageLegendConfig.stages || [], [orderStageLegendConfig]);
+  const secondaryHeaderSchema = useMemo(() => orderStageLegendConfig.secondaryHeaders || [], [orderStageLegendConfig]);
+  const manualStageTextColorMap = useMemo(
+    () => buildManualStageTextColorMap(secondaryHeaderSchema),
+    [secondaryHeaderSchema],
+  );
+  const columnStageMeta = useMemo(() => {
+    const createColumnMeta = (columnIndex) => {
+      const legendKey = getStageLegendKeyForPrimaryColumn(columnIndex, secondaryHeaderSchema);
+      return {
+        legendKey,
+        textHex: getStageTextHex(legendKey, secondaryHeaderSchema),
+      };
+    };
+
+    return {
+      carpenter: createColumnMeta(ORDER_CARPENTER_COLUMN_INDEX),
+      itemStart: createColumnMeta(ORDER_ITEM_START_COLUMN_INDEX),
+      itemEnd: createColumnMeta(ORDER_ITEM_END_COLUMN_INDEX),
+      itemDuration: createColumnMeta(ORDER_ITEM_DURATION_COLUMN_INDEX),
+      duration: createColumnMeta(ORDER_DURATION_COLUMN_INDEX),
+      card: createColumnMeta(ORDER_CARD_COLUMN_INDEX),
+      package: createColumnMeta(ORDER_PACKAGE_COLUMN_INDEX),
+      paint: createColumnMeta(ORDER_PAINT_COLUMN_INDEX),
+    };
+  }, [secondaryHeaderSchema]);
 
   const legendColorMap = useMemo(() => {
-    return ORDER_STAGE_LEGEND.reduce((acc, item) => {
+    return stageLegend.reduce((acc, item) => {
       const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
       acc[item.key] = savedColor?.hex || item.defaultHex;
       return acc;
     }, {});
-  }, [colors]);
+  }, [colors, stageLegend]);
 
   const secondaryHeaderCells = useMemo(() => {
     let startIndex = 0;
-    return ORDER_STAGE_SECONDARY_HEADERS.map((item) => {
+    return secondaryHeaderSchema.map((item) => {
       const hex = item.legendKey ? (legendColorMap[item.legendKey] || '#FFFFFF') : '';
       const span = Number(item.colSpan) || 1;
       const cellStartIndex = startIndex;
@@ -729,7 +762,7 @@ function OrdersWorkspace() {
         endIndex: cellEndIndex,
       };
     });
-  }, [legendColorMap]);
+  }, [legendColorMap, secondaryHeaderSchema]);
   const roomEditorOrderOptions = useMemo(
     () => orders.map((order) => ({ value: order._id || '', label: getOrderLabel(order) })),
     [orders],
@@ -1109,7 +1142,7 @@ function OrdersWorkspace() {
       ? {
           ...(baseStyle || {}),
           background: legendColorMap[manualMark.legendKey] || '#FFFFFF',
-          color: MANUAL_STAGE_TEXT_COLOR_MAP[manualMark.legendKey] || '#000000',
+          color: manualStageTextColorMap[manualMark.legendKey] || '#000000',
         }
       : baseStyle;
     const title = manualMark?.legendKey
@@ -1125,7 +1158,7 @@ function OrdersWorkspace() {
       'data-manual-stage-cell-key': buildManualStageCellKey(rowKey, columnKey),
       title,
     };
-  }, [handleManualStageCellClick, isAdmin, legendColorMap, selectedStageCellKeys]);
+  }, [handleManualStageCellClick, isAdmin, legendColorMap, manualStageTextColorMap, selectedStageCellKeys]);
 
   const renderOrdersColGroup = useCallback(() => (
     <colgroup>
@@ -2443,8 +2476,8 @@ function OrdersWorkspace() {
                       : (workerStageForText?.stepName || activeStage?.stepName || '');
                     const carpenterCellStyle = hasCarpenterAutoHighlight
                       ? {
-                          background: legendColorMap[CARPENTER_STAGE_LEGEND_KEY] || '#C37C8E',
-                          color: CARPENTER_STAGE_TEXT_HEX,
+                          background: legendColorMap[columnStageMeta.carpenter.legendKey] || '#C37C8E',
+                          color: columnStageMeta.carpenter.textHex,
                         }
                       : undefined;
                     const carpenterCellClassName = `${hasCarpenterAutoHighlight ? '' : 'order-filled-cell'} ${orderGroupClass} ${orderOutlineClass}`.trim();
@@ -2457,8 +2490,8 @@ function OrdersWorkspace() {
                     const hasItemManufacturingStart = Boolean(itemManufacturingMeta.startDate);
                     const itemStartDateCellStyle = hasItemManufacturingStart
                       ? {
-                          background: legendColorMap[ORDER_ITEM_START_STAGE_LEGEND_KEY] || '#C37C8E',
-                          color: ORDER_ITEM_START_STAGE_TEXT_HEX,
+                          background: legendColorMap[columnStageMeta.itemStart.legendKey] || '#C37C8E',
+                          color: columnStageMeta.itemStart.textHex,
                         }
                       : undefined;
                     const itemStartDateCellProps = getManualStageCellProps(
@@ -2471,8 +2504,8 @@ function OrdersWorkspace() {
                     );
                     const itemEndDateCellStyle = itemManufacturingMeta.endDate
                       ? {
-                          background: legendColorMap[ORDER_ITEM_END_STAGE_LEGEND_KEY] || '#C37C8E',
-                          color: ORDER_ITEM_END_STAGE_TEXT_HEX,
+                          background: legendColorMap[columnStageMeta.itemEnd.legendKey] || '#C37C8E',
+                          color: columnStageMeta.itemEnd.textHex,
                         }
                       : undefined;
                     const itemEndDateCellPropsBase = getManualStageCellProps(
@@ -2488,26 +2521,26 @@ function OrdersWorkspace() {
                       className: cn(itemEndDateCellPropsBase.className, 'item-end-date-cell'),
                     };
                     const orderCardActionStyle = {
-                      background: legendColorMap[ORDER_CARD_STAGE_LEGEND_KEY] || '#A8D7B6',
-                      color: ORDER_CARD_STAGE_TEXT_HEX,
+                      background: legendColorMap[columnStageMeta.card.legendKey] || '#A8D7B6',
+                      color: columnStageMeta.card.textHex,
                     };
                     const packageActionStyle = {
-                      background: legendColorMap[ORDER_PACKAGE_STAGE_LEGEND_KEY] || '#99E5FF',
-                      color: ORDER_PACKAGE_STAGE_TEXT_HEX,
+                      background: legendColorMap[columnStageMeta.package.legendKey] || '#99E5FF',
+                      color: columnStageMeta.package.textHex,
                     };
                     const paintActionStyle = {
-                      background: legendColorMap[ORDER_PAINT_STAGE_LEGEND_KEY] || '#BDA6D5',
-                      color: ORDER_PAINT_STAGE_TEXT_HEX,
+                      background: legendColorMap[columnStageMeta.paint.legendKey] || '#BDA6D5',
+                      color: columnStageMeta.paint.textHex,
                     };
                     const packageCellStyle = packageStats.total > 0 && packageStats.pending === 0
                       ? {
-                          background: legendColorMap[ORDER_PACKAGE_STAGE_LEGEND_KEY] || '#99E5FF',
-                          color: ORDER_PACKAGE_STAGE_TEXT_HEX,
+                          background: legendColorMap[columnStageMeta.package.legendKey] || '#99E5FF',
+                          color: columnStageMeta.package.textHex,
                         }
                       : undefined;
                     const packageSummaryBadgeStyle = {
-                      background: legendColorMap[ORDER_PACKAGE_STAGE_LEGEND_KEY] || '#99E5FF',
-                      color: ORDER_PACKAGE_STAGE_TEXT_HEX,
+                      background: legendColorMap[columnStageMeta.package.legendKey] || '#99E5FF',
+                      color: columnStageMeta.package.textHex,
                     };
                     const packageCellPropsBase = getManualStageCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle, { disabled: isInlineEditing });
                     const packageCellProps = {
@@ -2544,8 +2577,8 @@ function OrdersWorkspace() {
                     const hasItemManufacturingDuration = itemDurationValue !== '—';
                     const itemDurationCellStyle = hasItemManufacturingDuration
                       ? {
-                          background: legendColorMap[ORDER_ITEM_DURATION_STAGE_LEGEND_KEY] || '#C37C8E',
-                          color: ORDER_ITEM_DURATION_STAGE_TEXT_HEX,
+                          background: legendColorMap[columnStageMeta.itemDuration.legendKey] || '#C37C8E',
+                          color: columnStageMeta.itemDuration.textHex,
                         }
                       : undefined;
                     const itemDurationCellPropsBase = getManualStageCellProps(
@@ -2565,8 +2598,8 @@ function OrdersWorkspace() {
                     const hasManufacturingDuration = orderDurationValue !== '—';
                     const durationMetaCellStyle = hasManufacturingDuration
                       ? {
-                          background: legendColorMap[ORDER_DURATION_STAGE_LEGEND_KEY] || '#F4C2A4',
-                          color: ORDER_DURATION_STAGE_TEXT_HEX,
+                          background: legendColorMap[columnStageMeta.duration.legendKey] || '#F4C2A4',
+                          color: columnStageMeta.duration.textHex,
                         }
                       : undefined;
                     const durationMetaCellProps = getManualStageCellProps(
@@ -2793,23 +2826,23 @@ function OrdersWorkspace() {
                   className="manual-stage-select-trigger-label"
                   style={manualStageLegendDraft ? {
                     background: legendColorMap[manualStageLegendDraft] || '#FFFFFF',
-                    color: MANUAL_STAGE_TEXT_COLOR_MAP[manualStageLegendDraft] || '#000000',
+                    color: manualStageTextColorMap[manualStageLegendDraft] || '#000000',
                   } : undefined}
                 >
-                  {ORDER_STAGE_LEGEND.find((stage) => stage.key === manualStageLegendDraft)?.label || 'Выберите этап'}
+                  {stageLegend.find((stage) => stage.key === manualStageLegendDraft)?.label || 'Выберите этап'}
                 </span>
                 <span className="manual-stage-select-trigger-arrow">{manualStageDropdownOpen ? '▲' : '▼'}</span>
               </button>
               {manualStageDropdownOpen ? (
                 <div className="manual-stage-select-menu">
-                  {ORDER_STAGE_LEGEND.map((stage) => (
+                  {stageLegend.map((stage) => (
                     <button
                       key={stage.key}
                       type="button"
                       className="manual-stage-select-option"
                       style={{
                         background: legendColorMap[stage.key] || stage.defaultHex,
-                        color: MANUAL_STAGE_TEXT_COLOR_MAP[stage.key] || '#000000',
+                        color: manualStageTextColorMap[stage.key] || '#000000',
                       }}
                       onClick={() => {
                         setManualStageLegendDraft(stage.key);
