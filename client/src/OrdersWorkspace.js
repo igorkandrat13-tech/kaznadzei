@@ -36,6 +36,14 @@ const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начал�
 const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
 const ORDER_ITEM_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий');
 const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
+const ORDER_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Номер заказа');
+const ORDER_CUSTOMER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заказчик');
+const ORDER_ROOM_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Помещение');
+const ORDER_ROOM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ помещения');
+const ORDER_ITEM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ изделия в заказе');
+const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй');
+const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
+const ORDER_PHOTO_LINK_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('');
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
   let currentIndex = 0;
@@ -82,27 +90,52 @@ function buildManualStageTextColorMap(secondaryHeaders = []) {
   }, {});
 }
 
-function getLegendKeyForManualStageColumn(columnKey = '', columnStageMeta = {}) {
+function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
   switch (String(columnKey || '').trim()) {
+    case 'orderNumber':
+      return ORDER_NUMBER_COLUMN_INDEX;
+    case 'customer':
+      return ORDER_CUSTOMER_COLUMN_INDEX;
+    case 'room':
+      return ORDER_ROOM_COLUMN_INDEX;
+    case 'roomNumber':
+      return ORDER_ROOM_NUMBER_COLUMN_INDEX;
+    case 'itemNumber':
+      return ORDER_ITEM_NUMBER_COLUMN_INDEX;
+    case 'quantity':
+      return ORDER_QUANTITY_COLUMN_INDEX;
+    case 'name':
+      return ORDER_NAME_COLUMN_INDEX;
     case 'orderCard':
-      return columnStageMeta.card?.legendKey || '';
+      return ORDER_CARD_COLUMN_INDEX;
     case 'packageName':
-      return columnStageMeta.package?.legendKey || '';
-    case 'paint':
-      return columnStageMeta.paint?.legendKey || '';
+      return ORDER_PACKAGE_COLUMN_INDEX;
+    case 'notes':
+      return ORDER_NOTES_COLUMN_INDEX;
+    case 'deliveryDate':
+      return ORDER_DELIVERY_DATE_COLUMN_INDEX;
+    case 'photoLink':
+      return ORDER_PHOTO_LINK_COLUMN_INDEX;
     case 'carpenter':
-      return columnStageMeta.carpenter?.legendKey || '';
+      return ORDER_CARPENTER_COLUMN_INDEX;
+    case 'paint':
+      return ORDER_PAINT_COLUMN_INDEX;
     case 'itemStartDate':
-      return columnStageMeta.itemStart?.legendKey || '';
+      return ORDER_ITEM_START_COLUMN_INDEX;
     case 'itemEndDate':
-      return columnStageMeta.itemEnd?.legendKey || '';
+      return ORDER_ITEM_END_COLUMN_INDEX;
     case 'itemDuration':
-      return columnStageMeta.itemDuration?.legendKey || '';
+      return ORDER_ITEM_DURATION_COLUMN_INDEX;
     case 'duration':
-      return columnStageMeta.duration?.legendKey || '';
+      return ORDER_DURATION_COLUMN_INDEX;
     default:
-      return '';
+      return -1;
   }
+}
+
+function getLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders = []) {
+  const primaryColumnIndex = getPrimaryColumnIndexForManualStageColumn(columnKey);
+  return getStageLegendKeyForPrimaryColumn(primaryColumnIndex, secondaryHeaders);
 }
 
 function getAttachmentKindLabel(attachment = {}) {
@@ -860,7 +893,7 @@ function OrdersWorkspace() {
       if (!rowKey || !columnKey || !isManualStageSelectableColumn(columnKey)) return null;
       const row = rowsByKey[rowKey];
       if (!row?.item?.itemId || !row?.orderId) return null;
-      const autoLegendKey = getLegendKeyForManualStageColumn(columnKey, columnStageMeta);
+      const autoLegendKey = getLegendKeyForManualStageColumn(columnKey, secondaryHeaderSchema);
       return {
         cellKey,
         rowKey,
@@ -872,7 +905,7 @@ function OrdersWorkspace() {
         orderNumber: row.order.orderNumber || '',
       };
     })
-    .filter(Boolean), [columnStageMeta, rowsByKey, selectedStageCellKeys]);
+    .filter(Boolean), [rowsByKey, secondaryHeaderSchema, selectedStageCellKeys]);
   const selectedStageSelectionsWithLegend = useMemo(
     () => selectedStageSelections.filter((selection) => selection.autoLegendKey),
     [selectedStageSelections],
@@ -1003,12 +1036,13 @@ function OrdersWorkspace() {
         bottom: rects[0].bottom,
       });
 
-      const toolbarRect = manualStageToolbarRef.current?.getBoundingClientRect();
-      const toolbarWidth = toolbarRect?.width || 320;
-      const toolbarHeight = toolbarRect?.height || 56;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       const margin = 12;
+      const toolbarRect = manualStageToolbarRef.current?.getBoundingClientRect();
+      const fallbackToolbarWidth = Math.min(420, Math.max(320, viewportWidth - (margin * 2)));
+      const toolbarWidth = toolbarRect?.width || fallbackToolbarWidth;
+      const toolbarHeight = toolbarRect?.height || 56;
       const preferredLeft = bounds.left + ((bounds.right - bounds.left) / 2) - (toolbarWidth / 2);
       const clampedLeft = Math.min(
         Math.max(margin, preferredLeft),
@@ -2787,13 +2821,14 @@ function OrdersWorkspace() {
         </div>
       </div>
 
-      {isAdmin && selectedStageSelections.length > 0 && manualStageToolbarPosition ? (
+      {isAdmin && selectedStageSelections.length > 0 ? (
         <div
           ref={manualStageToolbarRef}
           className="manual-stage-toolbar manual-stage-toolbar-floating"
           style={{
-            left: manualStageToolbarPosition.left,
-            top: manualStageToolbarPosition.top,
+            left: manualStageToolbarPosition?.left ?? -9999,
+            top: manualStageToolbarPosition?.top ?? -9999,
+            visibility: manualStageToolbarPosition ? 'visible' : 'hidden',
           }}
         >
           <div className="manual-stage-toolbar-summary">
@@ -2807,18 +2842,31 @@ function OrdersWorkspace() {
           </div>
           <div className="manual-stage-toolbar-actions">
             <Button
-              variant="success"
+              variant="secondary"
               size="sm"
+              className="manual-stage-toolbar-btn manual-stage-toolbar-btn-accent"
               onClick={() => applyManualStageToSelection()}
               disabled={manualStageSaving || selectedStageSelectionsWithLegend.length === 0}
               title={selectedStageSelectionSkippedCount > 0 ? 'Закрасит только ячейки, у которых есть этап колонки.' : 'Закрасит выбранные ячейки цветом их колонок.'}
             >
               Закрасить
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => applyManualStageToSelection({ clear: true })} disabled={manualStageSaving}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="manual-stage-toolbar-btn"
+              onClick={() => applyManualStageToSelection({ clear: true })}
+              disabled={manualStageSaving}
+            >
               Сбросить
             </Button>
-            <Button variant="secondary" size="sm" onClick={clearSelectedStageCells} disabled={manualStageSaving}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="manual-stage-toolbar-btn"
+              onClick={clearSelectedStageCells}
+              disabled={manualStageSaving}
+            >
               Закрыть
             </Button>
           </div>
