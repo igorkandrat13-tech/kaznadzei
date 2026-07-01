@@ -371,6 +371,7 @@ function handleManualStageMarks(req, res) {
       orderId: String(selection?.orderId || '').trim(),
       itemId: String(selection?.itemId || '').trim(),
       columnKey: String(selection?.columnKey || '').trim(),
+      legendKey: String(selection?.legendKey || '').trim(),
     })).filter(selection => selection.orderId && selection.itemId && selection.columnKey);
 
     if (normalizedSelections.length === 0) {
@@ -388,19 +389,22 @@ function handleManualStageMarks(req, res) {
     }
 
     addActivityLog({
-      action: legendKey ? 'order.manual-stage.apply' : 'order.manual-stage.clear',
+      action: (legendKey || normalizedSelections.some((selection) => selection.legendKey))
+        ? 'order.manual-stage.apply'
+        : 'order.manual-stage.clear',
       entityType: 'order',
       entityId: normalizedSelections[0]?.orderId || '',
       entityName: normalizedSelections.length === 1
         ? (OrderStore.getOrderPrimaryName(updatedOrders[0]) || '')
         : `Массовое обновление (${normalizedSelections.length} ячеек)`,
       actor: getRequestActor(req, { label: 'Администратор' }),
-      message: legendKey
-        ? `Ручной этап "${legendKey}" применен к ${normalizedSelections.length} ячейкам таблицы.`
+      message: (legendKey || normalizedSelections.some((selection) => selection.legendKey))
+        ? `Ручные этапные отметки применены к ${normalizedSelections.length} ячейкам таблицы.`
         : `Ручные этапные отметки очищены для ${normalizedSelections.length} ячеек таблицы.`,
       details: {
         legendKey,
         selections: normalizedSelections.length,
+        mixedLegendKeys: normalizedSelections.some((selection) => selection.legendKey),
       },
     });
 

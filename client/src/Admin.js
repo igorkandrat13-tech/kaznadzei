@@ -18,14 +18,10 @@ import RoleModal from './admin/RoleModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
 import { useRoleConfig } from './RoleConfigContext';
-import { buildOrderStageLegendConfig, DEFAULT_ORDER_STAGE_LEGEND } from './orderStageLegend';
+import { buildOrderStageLegendConfig } from './orderStageLegend';
 import useEscapeKey from './useEscapeKey';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
-const LEGEND_DEFAULT_HEX_BY_KEY = DEFAULT_ORDER_STAGE_LEGEND.reduce((acc, item) => {
-  acc[item.key] = item.defaultHex;
-  return acc;
-}, {});
 
 function buildLegendSaveErrorMessage({
   summary,
@@ -137,14 +133,12 @@ function Admin() {
   const roleForm = roleModalMode === 'edit' ? editRole : newRole;
   const legendItems = useMemo(() => {
     return orderStageLegendConfig.stages.map((item) => {
-      const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
-      const hasCustomConfigHex = String(item.defaultHex || '').trim().toUpperCase() !== String(LEGEND_DEFAULT_HEX_BY_KEY[item.key] || '').trim().toUpperCase();
       return {
         ...item,
-        hex: hasCustomConfigHex ? item.defaultHex : (savedColor?.hex || item.defaultHex),
+        hex: item.defaultHex,
       };
     });
-  }, [colors, orderStageLegendConfig]);
+  }, [orderStageLegendConfig]);
   const legendDraftStageMap = useMemo(() => {
     return (legendConfigDraft.stages || []).reduce((acc, item) => {
       acc[item.key] = item;

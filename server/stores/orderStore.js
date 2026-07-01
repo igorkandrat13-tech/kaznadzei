@@ -991,8 +991,8 @@ const OrderStore = {
     const db = load();
     ensureOrders(db);
     const normalizedLegendKey = String(legendKey || '').trim();
-    const shouldClear = !normalizedLegendKey;
-    if (!shouldClear && !MANUAL_STAGE_ORDER.includes(normalizedLegendKey)) {
+    const hasGlobalLegendKey = Boolean(normalizedLegendKey);
+    if (hasGlobalLegendKey && !MANUAL_STAGE_ORDER.includes(normalizedLegendKey)) {
       return false;
     }
 
@@ -1003,6 +1003,12 @@ const OrderStore = {
       const orderId = String(entry?.orderId || '').trim();
       const itemId = String(entry?.itemId || '').trim();
       const columnKey = String(entry?.columnKey || '').trim();
+      const entryLegendKey = String(entry?.legendKey || '').trim();
+      const effectiveLegendKey = entryLegendKey || normalizedLegendKey;
+      const shouldClear = !effectiveLegendKey;
+      if (!shouldClear && !MANUAL_STAGE_ORDER.includes(effectiveLegendKey)) {
+        continue;
+      }
       if (!orderId || !itemId || !columnKey) continue;
 
       const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1039,7 +1045,7 @@ const OrderStore = {
         }
       } else {
         const nextMark = {
-          legendKey: normalizedLegendKey,
+          legendKey: effectiveLegendKey,
           updatedAt: new Date().toISOString(),
           updatedBy: String(actor || '').trim(),
         };

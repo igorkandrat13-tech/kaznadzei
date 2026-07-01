@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
-import { buildOrderStageLegendConfig, DEFAULT_ORDER_STAGE_LEGEND } from './orderStageLegend';
+import { buildOrderStageLegendConfig } from './orderStageLegend';
 import { getItemManufacturingMeta, getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
@@ -36,10 +36,6 @@ const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начал�
 const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
 const ORDER_ITEM_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий');
 const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
-const LEGEND_DEFAULT_HEX_BY_KEY = DEFAULT_ORDER_STAGE_LEGEND.reduce((acc, item) => {
-  acc[item.key] = item.defaultHex;
-  return acc;
-}, {});
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
   let currentIndex = 0;
@@ -84,6 +80,29 @@ function buildManualStageTextColorMap(secondaryHeaders = []) {
     }
     return acc;
   }, {});
+}
+
+function getLegendKeyForManualStageColumn(columnKey = '', columnStageMeta = {}) {
+  switch (String(columnKey || '').trim()) {
+    case 'orderCard':
+      return columnStageMeta.card?.legendKey || '';
+    case 'packageName':
+      return columnStageMeta.package?.legendKey || '';
+    case 'paint':
+      return columnStageMeta.paint?.legendKey || '';
+    case 'carpenter':
+      return columnStageMeta.carpenter?.legendKey || '';
+    case 'itemStartDate':
+      return columnStageMeta.itemStart?.legendKey || '';
+    case 'itemEndDate':
+      return columnStageMeta.itemEnd?.legendKey || '';
+    case 'itemDuration':
+      return columnStageMeta.itemDuration?.legendKey || '';
+    case 'duration':
+      return columnStageMeta.duration?.legendKey || '';
+    default:
+      return '';
+  }
 }
 
 function getAttachmentKindLabel(attachment = {}) {
@@ -602,16 +621,12 @@ function OrdersWorkspace() {
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
   const [manualStageSaving, setManualStageSaving] = useState(false);
-  const [manualStageLegendDraft, setManualStageLegendDraft] = useState('');
-  const [manualStageDropdownOpen, setManualStageDropdownOpen] = useState(false);
-  const [manualStageMenuDirection, setManualStageMenuDirection] = useState('down');
   const [selectedStageCellKeys, setSelectedStageCellKeys] = useState([]);
   const [manualStageToolbarPosition, setManualStageToolbarPosition] = useState(null);
   const [qrPreview, setQrPreview] = useState(null);
   const [orderPreview, setOrderPreview] = useState(null);
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
   const [hoveredOrderId, setHoveredOrderId] = useState('');
-  const [colors, setColors] = useState([]);
   const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
   const [roomEditor, setRoomEditor] = useState(null);
   const [roomEditorSaving, setRoomEditorSaving] = useState(false);
@@ -653,19 +668,6 @@ function OrdersWorkspace() {
     }
   }, []);
 
-  const fetchColors = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/colors');
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось загрузить цвета.');
-      }
-      setColors(Array.isArray(data) ? data : []);
-    } catch {
-      setColors([]);
-    }
-  }, []);
-
   const fetchOrderStageLegendConfig = useCallback(async () => {
     try {
       const res = await apiFetch('/api/order-stage-legend-config');
@@ -681,9 +683,8 @@ function OrdersWorkspace() {
 
   useEffect(() => {
     fetchOrders({ showLoader: true });
-    fetchColors();
     fetchOrderStageLegendConfig();
-  }, [fetchColors, fetchOrderStageLegendConfig, fetchOrders]);
+  }, [fetchOrderStageLegendConfig, fetchOrders]);
 
   useEffect(() => {
     return () => {
@@ -700,7 +701,6 @@ function OrdersWorkspace() {
       if (Object.keys(inlineDrafts).length > 0) return;
       if (inlineSavingKey) return;
       fetchOrders();
-      fetchColors();
       fetchOrderStageLegendConfig();
     };
 
@@ -713,7 +713,7 @@ function OrdersWorkspace() {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [fetchColors, fetchOrderStageLegendConfig, fetchOrders, inlineDrafts, inlineSavingKey, showForm]);
+  }, [fetchOrderStageLegendConfig, fetchOrders, inlineDrafts, inlineSavingKey, showForm]);
 
   const stageLegend = useMemo(() => orderStageLegendConfig.stages || [], [orderStageLegendConfig]);
   const secondaryHeaderSchema = useMemo(() => orderStageLegendConfig.secondaryHeaders || [], [orderStageLegendConfig]);
@@ -744,12 +744,10 @@ function OrdersWorkspace() {
 
   const legendColorMap = useMemo(() => {
     return stageLegend.reduce((acc, item) => {
-      const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
-      const hasCustomConfigHex = String(item.defaultHex || '').trim().toUpperCase() !== String(LEGEND_DEFAULT_HEX_BY_KEY[item.key] || '').trim().toUpperCase();
-      acc[item.key] = hasCustomConfigHex ? item.defaultHex : (savedColor?.hex || item.defaultHex);
+      acc[item.key] = item.defaultHex || '#FFFFFF';
       return acc;
     }, {});
-  }, [colors, stageLegend]);
+  }, [stageLegend]);
 
   const secondaryHeaderCells = useMemo(() => {
     let startIndex = 0;
@@ -862,17 +860,24 @@ function OrdersWorkspace() {
       if (!rowKey || !columnKey || !isManualStageSelectableColumn(columnKey)) return null;
       const row = rowsByKey[rowKey];
       if (!row?.item?.itemId || !row?.orderId) return null;
+      const autoLegendKey = getLegendKeyForManualStageColumn(columnKey, columnStageMeta);
       return {
         cellKey,
         rowKey,
         columnKey,
+        autoLegendKey,
         orderId: row.orderId,
         itemId: row.item.itemId,
         itemName: row.item.name || '',
         orderNumber: row.order.orderNumber || '',
       };
     })
-    .filter(Boolean), [rowsByKey, selectedStageCellKeys]);
+    .filter(Boolean), [columnStageMeta, rowsByKey, selectedStageCellKeys]);
+  const selectedStageSelectionsWithLegend = useMemo(
+    () => selectedStageSelections.filter((selection) => selection.autoLegendKey),
+    [selectedStageSelections],
+  );
+  const selectedStageSelectionSkippedCount = selectedStageSelections.length - selectedStageSelectionsWithLegend.length;
 
   const firstOrderRowKeys = useMemo(() => {
     const seenOrders = new Set();
@@ -950,13 +955,6 @@ function OrdersWorkspace() {
   }, [rowsByKey]);
 
   useEffect(() => {
-    if (selectedStageSelections.length === 0) {
-      setManualStageLegendDraft('');
-      setManualStageDropdownOpen(false);
-    }
-  }, [selectedStageSelections.length]);
-
-  useEffect(() => {
     if (!isAdmin || selectedStageSelections.length === 0) return undefined;
 
     const handlePointerDown = (event) => {
@@ -964,7 +962,6 @@ function OrdersWorkspace() {
       if (!(target instanceof Element)) return;
       if (target.closest('.manual-stage-toolbar-floating')) return;
       if (target.closest('[data-manual-stage-cell-key]')) return;
-      setManualStageDropdownOpen(false);
       clearSelectedStageCells();
     };
 
@@ -1040,29 +1037,7 @@ function OrdersWorkspace() {
       window.removeEventListener('scroll', updateToolbarPosition, true);
       bodyNode?.removeEventListener('scroll', updateToolbarPosition);
     };
-  }, [isAdmin, manualStageDropdownOpen, selectedStageSelections.length, selectedStageCellKeys, manualStageLegendDraft]);
-
-  useLayoutEffect(() => {
-    if (!manualStageDropdownOpen) return;
-
-    const toolbarNode = manualStageToolbarRef.current;
-    if (!toolbarNode) return;
-    const menuNode = toolbarNode.querySelector('.manual-stage-select-menu');
-    const triggerNode = toolbarNode.querySelector('.manual-stage-select-trigger');
-    if (!menuNode || !triggerNode) return;
-
-    const menuRect = menuNode.getBoundingClientRect();
-    const triggerRect = triggerNode.getBoundingClientRect();
-    const margin = 12;
-    const availableBelow = Math.max(0, window.innerHeight - triggerRect.bottom - margin);
-    const availableAbove = Math.max(0, triggerRect.top - margin);
-    const shouldOpenUp = menuRect.height > availableBelow && availableAbove > availableBelow;
-
-    setManualStageMenuDirection((current) => {
-      const next = shouldOpenUp ? 'up' : 'down';
-      return current === next ? current : next;
-    });
-  }, [manualStageDropdownOpen, manualStageToolbarPosition?.left, manualStageToolbarPosition?.top, selectedStageSelections.length]);
+  }, [isAdmin, selectedStageSelections.length, selectedStageCellKeys]);
 
   const syncHorizontalScroll = useCallback((source, target) => {
     if (!source || !target) return;
@@ -1090,19 +1065,25 @@ function OrdersWorkspace() {
     });
   }, [isAdmin, manualStageSaving]);
 
-  const applyManualStageToSelection = useCallback(async (legendKey = '') => {
+  const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
     if (!isAdmin || manualStageSaving || selectedStageSelections.length === 0) return;
+    if (!clear && selectedStageSelectionsWithLegend.length === 0) {
+      setError('Для выбранных ячеек не найден связанный этап колонки.');
+      return;
+    }
 
     setManualStageSaving(true);
     setError('');
     try {
+      const selections = (clear ? selectedStageSelections : selectedStageSelectionsWithLegend).map((selection) => ({
+        orderId: selection.orderId,
+        itemId: selection.itemId,
+        columnKey: selection.columnKey,
+        ...(clear ? {} : { legendKey: selection.autoLegendKey }),
+      }));
       const payload = {
-        legendKey,
-        selections: selectedStageSelections.map(({ orderId, itemId, columnKey }) => ({
-          orderId,
-          itemId,
-          columnKey,
-        })),
+        legendKey: clear ? '' : undefined,
+        selections,
       };
       let res = await apiFetch('/api/orders/manual-stage-marks', {
         method: 'PATCH',
@@ -1123,13 +1104,12 @@ function OrdersWorkspace() {
         setError(await getErrorMessage(res, 'Не удалось обновить ручные этапные отметки.'));
         return;
       }
-      setManualStageDropdownOpen(false);
       clearSelectedStageCells();
       await fetchOrders();
     } finally {
       setManualStageSaving(false);
     }
-  }, [clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
+  }, [clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections, selectedStageSelectionsWithLegend]);
 
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
@@ -2818,51 +2798,24 @@ function OrdersWorkspace() {
         >
           <div className="manual-stage-toolbar-summary">
             Выбрано: <strong>{selectedStageSelections.length}</strong>
+            {selectedStageSelectionsWithLegend.length > 0 ? (
+              <> • будет закрашено: <strong>{selectedStageSelectionsWithLegend.length}</strong></>
+            ) : null}
+            {selectedStageSelectionSkippedCount > 0 ? (
+              <> • без этапа: <strong>{selectedStageSelectionSkippedCount}</strong></>
+            ) : null}
           </div>
           <div className="manual-stage-toolbar-actions">
-            <div className={cn('manual-stage-select-wrap', manualStageMenuDirection === 'up' ? 'manual-stage-select-wrap-up' : '')}>
-              <button
-                type="button"
-                className="manual-stage-select-trigger"
-                onClick={() => setManualStageDropdownOpen((current) => !current)}
-                disabled={manualStageSaving}
-              >
-                <span
-                  className="manual-stage-select-trigger-label"
-                  style={manualStageLegendDraft ? {
-                    background: legendColorMap[manualStageLegendDraft] || '#FFFFFF',
-                    color: manualStageTextColorMap[manualStageLegendDraft] || '#000000',
-                  } : undefined}
-                >
-                  {stageLegend.find((stage) => stage.key === manualStageLegendDraft)?.label || 'Выберите этап'}
-                </span>
-                <span className="manual-stage-select-trigger-arrow">{manualStageDropdownOpen ? '▲' : '▼'}</span>
-              </button>
-              {manualStageDropdownOpen ? (
-                <div className="manual-stage-select-menu">
-                  {stageLegend.map((stage) => (
-                    <button
-                      key={stage.key}
-                      type="button"
-                      className="manual-stage-select-option"
-                      style={{
-                        background: legendColorMap[stage.key] || stage.defaultHex,
-                        color: manualStageTextColorMap[stage.key] || '#000000',
-                      }}
-                      onClick={() => {
-                        setManualStageLegendDraft(stage.key);
-                        applyManualStageToSelection(stage.key);
-                      }}
-                      disabled={manualStageSaving}
-                      title={stage.description || stage.label}
-                    >
-                      {stage.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => applyManualStageToSelection('')} disabled={manualStageSaving}>
+            <Button
+              variant="success"
+              size="sm"
+              onClick={() => applyManualStageToSelection()}
+              disabled={manualStageSaving || selectedStageSelectionsWithLegend.length === 0}
+              title={selectedStageSelectionSkippedCount > 0 ? 'Закрасит только ячейки, у которых есть этап колонки.' : 'Закрасит выбранные ячейки цветом их колонок.'}
+            >
+              Закрасить
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => applyManualStageToSelection({ clear: true })} disabled={manualStageSaving}>
               Сбросить
             </Button>
             <Button variant="secondary" size="sm" onClick={clearSelectedStageCells} disabled={manualStageSaving}>
