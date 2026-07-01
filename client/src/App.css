@@ -4253,6 +4253,8 @@ body[data-theme='light'] .attachment-preview-table td {
   margin-bottom: 12px;
   padding: 10px 12px;
   border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .settings-alert-error {

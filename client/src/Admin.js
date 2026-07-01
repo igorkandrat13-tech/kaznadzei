@@ -27,7 +27,34 @@ const LEGEND_DEFAULT_HEX_BY_KEY = DEFAULT_ORDER_STAGE_LEGEND.reduce((acc, item) 
   return acc;
 }, {});
 
-function Admin() {
+function buildLegendSaveErrorMessage({
+  summary,
+  step,
+  status,
+  statusText,
+  serverMessage,
+  error,
+  selectedStageLabel,
+  selectedHeaderLabel,
+  stagesCount,
+  headersCount,
+}) {
+  const lines = [
+    summary || 'Не удалось сохранить настройки этапов.',
+    step ? `Шаг: ${step}` : '',
+    status ? `HTTP: ${status}${statusText ? ` ${statusText}` : ''}` : '',
+    serverMessage ? `Ответ сервера: ${serverMessage}` : '',
+    error?.name ? `Тип ошибки: ${error.name}` : '',
+    error?.message ? `Сообщение: ${error.message}` : '',
+    selectedStageLabel ? `Выбранный этап: ${selectedStageLabel}` : '',
+    selectedHeaderLabel ? `Выбранная колонка: ${selectedHeaderLabel}` : '',
+    Number.isFinite(stagesCount) ? `Этапов в конфиге: ${stagesCount}` : '',
+    Number.isFinite(headersCount) ? `Колонок в конфиге: ${headersCount}` : '',
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+
   const navigate = useNavigate();
   const { roleTabs, allRoleTabs, refreshRoleConfig } = useRoleConfig();
   const getDefaultEmployeeForm = (role = '') => ({
@@ -1382,7 +1409,21 @@ function Admin() {
         body: JSON.stringify(configPayload),
       });
       if (!configRes.ok) {
-        throw new Error(await getErrorMessage(configRes, 'Не удалось сохранить конфигурацию этапов.'));
+        const errorData = await parseJsonSafely(configRes);
+        const detailedMessage = buildLegendSaveErrorMessage({
+          summary: 'Не удалось сохранить конфигурацию этапов.',
+          step: 'PUT /api/order-stage-legend-config',
+          status: configRes.status,
+          statusText: configRes.statusText,
+          serverMessage: errorData?.details || errorData?.message || '',
+          selectedStageLabel: selectedLegendStage?.label || '',
+          selectedHeaderLabel: selectedLegendHeader?.label || '',
+          stagesCount: normalizedStages.length,
+          headersCount: configPayload.secondaryHeaders.length,
+        });
+        const error = new Error(detailedMessage);
+        error.legendDebugMessage = detailedMessage;
+        throw error;
       }
 
       await fetchOrderStageLegendConfig();
@@ -1393,7 +1434,22 @@ function Admin() {
       setSelectedLegendHeaderId('');
       setLegendModalTab('columns');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось сохранить настройки этапов.');
+      const detailedMessage = error?.legendDebugMessage || buildLegendSaveErrorMessage({
+        summary: 'Не удалось сохранить настройки этапов.',
+        step: 'Локальная подготовка данных',
+        error,
+        selectedStageLabel: selectedLegendStage?.label || '',
+        selectedHeaderLabel: selectedLegendHeader?.label || '',
+        stagesCount: legendConfigDraft.stages?.length,
+        headersCount: legendConfigDraft.secondaryHeaders?.length,
+      });
+      console.error('Legend save failed:', {
+        error,
+        selectedStage: selectedLegendStage,
+        selectedHeader: selectedLegendHeader,
+        draft: legendConfigDraft,
+      });
+      setSettingsError(detailedMessage);
     } finally {
       setSavingLegendColors(false);
     }
