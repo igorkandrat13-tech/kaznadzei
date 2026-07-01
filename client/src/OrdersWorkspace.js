@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
-import { buildOrderStageLegendConfig } from './orderStageLegend';
+import { buildOrderStageLegendConfig, DEFAULT_ORDER_STAGE_LEGEND } from './orderStageLegend';
 import { getItemManufacturingMeta, getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
@@ -36,6 +36,10 @@ const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начал�
 const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
 const ORDER_ITEM_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий');
 const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
+const LEGEND_DEFAULT_HEX_BY_KEY = DEFAULT_ORDER_STAGE_LEGEND.reduce((acc, item) => {
+  acc[item.key] = item.defaultHex;
+  return acc;
+}, {});
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
   let currentIndex = 0;
@@ -741,7 +745,8 @@ function OrdersWorkspace() {
   const legendColorMap = useMemo(() => {
     return stageLegend.reduce((acc, item) => {
       const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
-      acc[item.key] = savedColor?.hex || item.defaultHex;
+      const hasCustomConfigHex = String(item.defaultHex || '').trim().toUpperCase() !== String(LEGEND_DEFAULT_HEX_BY_KEY[item.key] || '').trim().toUpperCase();
+      acc[item.key] = hasCustomConfigHex ? item.defaultHex : (savedColor?.hex || item.defaultHex);
       return acc;
     }, {});
   }, [colors, stageLegend]);

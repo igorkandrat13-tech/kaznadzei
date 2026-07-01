@@ -84,7 +84,7 @@ function normalizeStage(source = {}, fallback) {
     storeName: String(fallback?.storeName || source?.storeName || '').trim(),
     label: String(source?.label ?? fallback?.label ?? '').trim(),
     description: String(source?.description ?? fallback?.description ?? '').trim(),
-    defaultHex: String(fallback?.defaultHex || source?.defaultHex || '#FFFFFF').trim() || '#FFFFFF',
+    defaultHex: String(source?.defaultHex ?? fallback?.defaultHex ?? '#FFFFFF').trim() || '#FFFFFF',
   };
 }
 

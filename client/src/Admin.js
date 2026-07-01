@@ -18,10 +18,14 @@ import RoleModal from './admin/RoleModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
 import { useRoleConfig } from './RoleConfigContext';
-import { buildOrderStageLegendConfig } from './orderStageLegend';
+import { buildOrderStageLegendConfig, DEFAULT_ORDER_STAGE_LEGEND } from './orderStageLegend';
 import useEscapeKey from './useEscapeKey';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+const LEGEND_DEFAULT_HEX_BY_KEY = DEFAULT_ORDER_STAGE_LEGEND.reduce((acc, item) => {
+  acc[item.key] = item.defaultHex;
+  return acc;
+}, {});
 
 function Admin() {
   const navigate = useNavigate();
@@ -106,10 +110,10 @@ function Admin() {
   const legendItems = useMemo(() => {
     return orderStageLegendConfig.stages.map((item) => {
       const savedColor = colors.find(color => String(color.name || '').trim() === item.storeName);
+      const hasCustomConfigHex = String(item.defaultHex || '').trim().toUpperCase() !== String(LEGEND_DEFAULT_HEX_BY_KEY[item.key] || '').trim().toUpperCase();
       return {
         ...item,
-        colorId: savedColor?._id || '',
-        hex: savedColor?.hex || item.defaultHex,
+        hex: hasCustomConfigHex ? item.defaultHex : (savedColor?.hex || item.defaultHex),
       };
     });
   }, [colors, orderStageLegendConfig]);
@@ -858,9 +862,8 @@ function Admin() {
       label: item.label,
       description: item.description,
       storeName: item.storeName,
-      colorId: item.colorId,
       hex: item.hex,
-      defaultHex: item.defaultHex,
+      defaultHex: item.hex,
     }));
     const nextHeaders = orderStageLegendConfig.secondaryHeaders.map((item, index) => ({
       ...item,
@@ -1351,46 +1354,22 @@ function Admin() {
     setSettingsSuccess('');
     setSavingLegendColors(true);
     try {
-      for (const draft of (legendConfigDraft.stages || [])) {
+      const normalizedStages = (legendConfigDraft.stages || []).map((draft) => {
         const normalizedHex = String(draft.hex || '').trim().toUpperCase() || '#000000';
         if (!HEX_COLOR_PATTERN.test(normalizedHex)) {
           throw new Error(`Цвет этапа "${draft.label || 'Без названия'}" должен быть в формате #RRGGBB.`);
         }
-        if (draft.colorId) {
-          const existingItem = legendItems.find(item => item.key === draft.key);
-          if (existingItem?.hex === normalizedHex) {
-            continue;
-          }
-
-          const res = await apiFetch(`/api/colors/${draft.colorId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: draft.storeName, hex: normalizedHex }),
-          });
-          if (!res.ok) {
-            throw new Error(await getErrorMessage(res, `Не удалось обновить цвет этапа "${draft.label}".`));
-          }
-          continue;
-        }
-
-        const res = await apiFetch('/api/colors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: draft.storeName, hex: normalizedHex }),
-        });
-        if (!res.ok) {
-          throw new Error(await getErrorMessage(res, `Не удалось создать цвет этапа "${draft.label}".`));
-        }
-      }
+        return {
+          key: draft.key,
+          label: String(draft.label || '').trim(),
+          description: String(draft.description || '').trim(),
+          storeName: draft.storeName,
+          defaultHex: normalizedHex,
+        };
+      });
 
       const configPayload = {
-        stages: (legendConfigDraft.stages || []).map((item) => ({
-          key: item.key,
-          label: item.label,
-          description: item.description,
-          storeName: item.storeName,
-          defaultHex: item.defaultHex,
-        })),
+        stages: normalizedStages,
         secondaryHeaders: (legendConfigDraft.secondaryHeaders || []).map((item) => ({
           label: item.label,
           legendKey: item.legendKey,
@@ -1406,7 +1385,6 @@ function Admin() {
         throw new Error(await getErrorMessage(configRes, 'Не удалось сохранить конфигурацию этапов.'));
       }
 
-      await fetchColors();
       await fetchOrderStageLegendConfig();
       setSettingsSuccess('Цвета, названия этапов и привязка колонок обновлены.');
       setShowLegendColorModal(false);
