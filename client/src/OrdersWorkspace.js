@@ -1101,19 +1101,15 @@ function OrdersWorkspace() {
 
   const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
     if (!isAdmin || manualStageSaving || selectedStageSelections.length === 0) return;
-    if (!clear && selectedStageSelectionsWithLegend.length === 0) {
-      setError('Для выбранных ячеек не найден связанный этап колонки.');
-      return;
-    }
 
     setManualStageSaving(true);
     setError('');
     try {
-      const selections = (clear ? selectedStageSelections : selectedStageSelectionsWithLegend).map((selection) => ({
+      const selections = selectedStageSelections.map((selection) => ({
         orderId: selection.orderId,
         itemId: selection.itemId,
         columnKey: selection.columnKey,
-        ...(clear ? {} : { legendKey: selection.autoLegendKey }),
+        ...(!clear && selection.autoLegendKey ? { legendKey: selection.autoLegendKey } : {}),
       }));
       const payload = {
         legendKey: clear ? '' : undefined,
@@ -1143,7 +1139,7 @@ function OrdersWorkspace() {
     } finally {
       setManualStageSaving(false);
     }
-  }, [clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections, selectedStageSelectionsWithLegend]);
+  }, [clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
 
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
@@ -2846,8 +2842,8 @@ function OrdersWorkspace() {
               size="sm"
               className="manual-stage-toolbar-btn manual-stage-toolbar-btn-accent"
               onClick={() => applyManualStageToSelection()}
-              disabled={manualStageSaving || selectedStageSelectionsWithLegend.length === 0}
-              title={selectedStageSelectionSkippedCount > 0 ? 'Закрасит только ячейки, у которых есть этап колонки.' : 'Закрасит выбранные ячейки цветом их колонок.'}
+              disabled={manualStageSaving || selectedStageSelections.length === 0}
+              title="Закрасит выбранные ячейки цветом этапов их колонок."
             >
               Закрасить
             </Button>

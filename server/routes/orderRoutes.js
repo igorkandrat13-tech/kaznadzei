@@ -50,6 +50,46 @@ const ORDER_ATTACHMENT_ALLOWED_EXTENSIONS = new Set([
   '.webp',
   '.bmp',
 ]);
+const ORDER_PRIMARY_HEADERS = [
+  'Номер заказа',
+  'Заказчик',
+  'Помещение',
+  '№ помещения',
+  '№ изделия в заказе',
+  'Кол-во изделй',
+  'Наименование',
+  'Карточка заказа',
+  'Комплектация заказа',
+  'Примечания',
+  'Отгрузка до',
+  'СТОЛЯР',
+  '',
+  'Покраска',
+  'Начало изготовления изделия',
+  'Окончание изготовления изделия',
+  'Время изготовления изделий',
+  'Время изготовления заказа',
+];
+const ORDER_COLUMN_KEY_TO_PRIMARY_INDEX = {
+  orderNumber: ORDER_PRIMARY_HEADERS.indexOf('Номер заказа'),
+  customer: ORDER_PRIMARY_HEADERS.indexOf('Заказчик'),
+  room: ORDER_PRIMARY_HEADERS.indexOf('Помещение'),
+  roomNumber: ORDER_PRIMARY_HEADERS.indexOf('№ помещения'),
+  itemNumber: ORDER_PRIMARY_HEADERS.indexOf('№ изделия в заказе'),
+  quantity: ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй'),
+  name: ORDER_PRIMARY_HEADERS.indexOf('Наименование'),
+  orderCard: ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа'),
+  packageName: ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа'),
+  notes: ORDER_PRIMARY_HEADERS.indexOf('Примечания'),
+  deliveryDate: ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до'),
+  carpenter: ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР'),
+  photoLink: ORDER_PRIMARY_HEADERS.indexOf(''),
+  paint: ORDER_PRIMARY_HEADERS.indexOf('Покраска'),
+  itemStartDate: ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления изделия'),
+  itemEndDate: ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия'),
+  itemDuration: ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий'),
+  duration: ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа'),
+};
 
 function getAttachmentScope(req = {}) {
   return String(req.query?.scope || req.body?.scope || '').trim().toLowerCase() === 'paint'
@@ -108,6 +148,25 @@ function createAttachmentUploadError(message, status = 400) {
   const error = new Error(message);
   error.status = status;
   return error;
+}
+
+function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
+  if (columnIndex < 0) return '';
+  let currentIndex = 0;
+  for (const cell of Array.isArray(secondaryHeaders) ? secondaryHeaders : []) {
+    const span = Number(cell?.colSpan) || 1;
+    if (columnIndex >= currentIndex && columnIndex < currentIndex + span) {
+      return String(cell?.legendKey || '').trim();
+    }
+    currentIndex += span;
+  }
+  return '';
+}
+
+function resolveLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders = []) {
+  const primaryColumnIndex = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX[String(columnKey || '').trim()];
+  if (!Number.isInteger(primaryColumnIndex)) return '';
+  return getStageLegendKeyForPrimaryColumn(primaryColumnIndex, secondaryHeaders);
 }
 
 ensureDirectoryExists(ORDER_ATTACHMENTS_ROOT);
@@ -362,6 +421,8 @@ function handleManualStageMarks(req, res) {
   try {
     const legendKey = String(req.body?.legendKey || '').trim();
     const selections = Array.isArray(req.body?.selections) ? req.body.selections : [];
+    const settings = SettingsStore.get();
+    const secondaryHeaders = settings?.orderStageLegendConfig?.secondaryHeaders || [];
 
     if (selections.length === 0) {
       return res.status(400).json({ message: 'Не выбраны ячейки для обновления.' });
@@ -371,7 +432,8 @@ function handleManualStageMarks(req, res) {
       orderId: String(selection?.orderId || '').trim(),
       itemId: String(selection?.itemId || '').trim(),
       columnKey: String(selection?.columnKey || '').trim(),
-      legendKey: String(selection?.legendKey || '').trim(),
+      legendKey: String(selection?.legendKey || '').trim()
+        || resolveLegendKeyForManualStageColumn(selection?.columnKey, secondaryHeaders),
     })).filter(selection => selection.orderId && selection.itemId && selection.columnKey);
 
     if (normalizedSelections.length === 0) {
