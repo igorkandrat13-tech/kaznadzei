@@ -125,6 +125,16 @@ function Admin() {
     () => (legendConfigDraft.secondaryHeaders || []).find((item) => item.draftId === selectedLegendHeaderId) || null,
     [legendConfigDraft, selectedLegendHeaderId],
   );
+  const legendDraftHeaders = legendConfigDraft.secondaryHeaders || [];
+  const legendDraftStages = legendConfigDraft.stages || [];
+  const legendAssignedColumnsCount = useMemo(
+    () => legendDraftHeaders.filter((item) => item.legendKey).length,
+    [legendDraftHeaders],
+  );
+  const selectedLegendStageUsageCount = useMemo(
+    () => legendDraftHeaders.filter((item) => item.legendKey === selectedLegendStageKey).length,
+    [legendDraftHeaders, selectedLegendStageKey],
+  );
   const employeeRoleTabs = (() => {
     if (!employeeForm?.role) {
       return roleTabs;
@@ -842,25 +852,22 @@ function Admin() {
 
   const openLegendColorModal = () => {
     const nextStages = legendItems.map(item => ({
-        key: item.key,
-        label: item.label,
-        description: item.description,
-        storeName: item.storeName,
-        colorId: item.colorId,
-        hex: item.hex,
-        defaultHex: item.defaultHex,
-      }));
-    setLegendConfigDraft({
-      stages: nextStages,
-      secondaryHeaders: orderStageLegendConfig.secondaryHeaders.map((item, index) => ({
-        ...item,
-        draftId: `secondary-header-${index}`,
-      })),
-    });
+      key: item.key,
+      label: item.label,
+      description: item.description,
+      storeName: item.storeName,
+      colorId: item.colorId,
+      hex: item.hex,
+      defaultHex: item.defaultHex,
+    }));
     const nextHeaders = orderStageLegendConfig.secondaryHeaders.map((item, index) => ({
       ...item,
       draftId: `secondary-header-${index}`,
     }));
+    setLegendConfigDraft({
+      stages: nextStages,
+      secondaryHeaders: nextHeaders,
+    });
     setSelectedLegendStageKey(nextStages.find((item) => item.key)?.key || '');
     setSelectedLegendHeaderId(nextHeaders.find((item) => !item.stickyCol)?.draftId || nextHeaders[0]?.draftId || '');
     setLegendModalTab('columns');
@@ -1394,6 +1401,9 @@ function Admin() {
       setSettingsSuccess('Цвета, названия этапов и привязка колонок обновлены.');
       setShowLegendColorModal(false);
       setLegendConfigDraft(buildOrderStageLegendConfig());
+      setSelectedLegendStageKey('brief');
+      setSelectedLegendHeaderId('');
+      setLegendModalTab('columns');
     } catch (error) {
       setSettingsError(error.message || 'Не удалось сохранить настройки этапов.');
     } finally {
@@ -1506,178 +1516,245 @@ function Admin() {
 
       {showLegendColorModal ? (
         <div className="modal-overlay" onClick={savingLegendColors ? undefined : closeLegendColorModal}>
-          <div className="modal-window modal-window-xl" onClick={e => e.stopPropagation()}>
+          <div className="modal-window modal-window-xl stage-legend-modal-window" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <div className="modal-title">Выбор колонок и этапов</div>
-                <div className="modal-subtitle">Сначала выберите колонку таблицы, затем справа задайте ей название и этап. Ниже отдельно редактируются сами этапы.</div>
+                <div className="modal-subtitle">Настройка разбита на два коротких шага: сначала колонки, потом сами этапы.</div>
               </div>
               <button className="btn btn-small modal-close-btn" onClick={closeLegendColorModal} disabled={savingLegendColors}>✕</button>
             </div>
 
-            <div className="stage-legend-builder-layout">
-              <div className="stage-legend-builder-panel stage-legend-builder-panel-wide">
-                <div className="stage-legend-config-section-title">Колонки таблицы</div>
-                <div className="stage-legend-builder-note">Нажмите на нужную ячейку второй строки шапки. Выбранная колонка откроется в редакторе справа.</div>
-                <div className="stage-legend-table-preview">
-                  {(legendConfigDraft.secondaryHeaders || []).map((item, index) => {
-                    const stage = legendDraftStageMap[item.legendKey] || null;
-                    const isSelectedHeader = selectedLegendHeaderId === item.draftId;
-                    return (
-                      <div
-                        key={item.draftId || `${item.label}-${index}`}
-                        className={`stage-legend-table-cell ${isSelectedHeader ? 'stage-legend-table-cell-active' : ''} ${item.stickyCol ? 'stage-legend-table-cell-service' : ''}`}
-                        style={{ background: stage?.hex || (item.useTableBackground ? 'rgba(12, 26, 42, 0.94)' : undefined), color: item.useTableBackground ? '#d8ecff' : '#000000' }}
-                        onClick={() => !savingLegendColors && setSelectedLegendHeaderId(item.draftId)}
-                        onKeyDown={(event) => {
-                          if ((event.key === 'Enter' || event.key === ' ') && !savingLegendColors) {
-                            event.preventDefault();
-                            setSelectedLegendHeaderId(item.draftId);
-                          }
-                        }}
-                        role="button"
-                        tabIndex={savingLegendColors ? -1 : 0}
-                        title={stage ? `Этап: ${stage.label}` : 'Этап не назначен'}
-                      >
-                        <span className="stage-legend-table-cell-index">Колонка {index + 1}</span>
-                        <span className="stage-legend-table-cell-title">{item.label || 'Без названия'}</span>
-                        <span className="stage-legend-table-cell-stage">
-                          {stage ? stage.label : 'Без этапа'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="stage-legend-modal-body">
+              <div className="stage-legend-modal-tabs" role="tablist" aria-label="Настройка легенды этапов">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={legendModalTab === 'columns'}
+                  className={`stage-legend-modal-tab ${legendModalTab === 'columns' ? 'stage-legend-modal-tab-active' : ''}`}
+                  onClick={() => setLegendModalTab('columns')}
+                  disabled={savingLegendColors}
+                >
+                  <span className="stage-legend-modal-tab-title">Колонки</span>
+                  <span className="stage-legend-modal-tab-meta">{legendAssignedColumnsCount}/{legendDraftHeaders.length} привязано</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={legendModalTab === 'stages'}
+                  className={`stage-legend-modal-tab ${legendModalTab === 'stages' ? 'stage-legend-modal-tab-active' : ''}`}
+                  onClick={() => setLegendModalTab('stages')}
+                  disabled={savingLegendColors}
+                >
+                  <span className="stage-legend-modal-tab-title">Этапы</span>
+                  <span className="stage-legend-modal-tab-meta">{legendDraftStages.length} этапов</span>
+                </button>
               </div>
 
-              <div className="stage-legend-builder-panel stage-legend-column-editor">
-                <div className="stage-legend-config-section-title">Редактор колонки</div>
-                {selectedLegendHeader ? (
-                  <>
-                    <div className="stage-legend-column-editor-meta">
-                      <span className="stage-legend-column-editor-index">
-                        {selectedLegendHeader.stickyCol ? `Служебная колонка ${selectedLegendHeader.stickyCol}` : `Колонка ${Number(String(selectedLegendHeader.draftId || '').split('-').pop()) + 1 || ''}`}
-                      </span>
-                      <span className="stage-legend-column-editor-stage">
-                        Текущий этап: {legendDraftStageMap[selectedLegendHeader.legendKey]?.label || 'Без этапа'}
-                      </span>
+              {legendModalTab === 'columns' ? (
+                <>
+                  <div className="stage-legend-modal-summary">
+                    <div className="stage-legend-modal-summary-card">
+                      <span className="stage-legend-modal-summary-label">Выбрана</span>
+                      <strong>
+                        {selectedLegendHeader
+                          ? (selectedLegendHeader.label || 'Без названия')
+                          : 'Колонка не выбрана'}
+                      </strong>
                     </div>
-                    <label className="stage-legend-field">
-                      <span>Название колонки</span>
-                      <input
-                        value={selectedLegendHeader.label}
-                        onChange={(event) => updateLegendSecondaryHeaderDraft(selectedLegendHeader.draftId, { label: event.target.value })}
-                        placeholder="Введите название колонки"
-                        disabled={savingLegendColors}
-                      />
-                    </label>
-                    <div className="stage-legend-config-section-title stage-legend-config-section-subtitle">Назначение этапа</div>
-                    <div className="stage-legend-assignment-toolbar">
-                      <button
-                        type="button"
-                        className={`stage-legend-stage-chip ${!selectedLegendHeader.legendKey ? 'stage-legend-stage-chip-active' : ''}`}
-                        onClick={() => assignLegendStageToHeader(selectedLegendHeader.draftId, '')}
-                        disabled={savingLegendColors}
-                      >
-                        Без этапа
-                      </button>
-                      {(legendConfigDraft.stages || []).map((stage) => (
-                        <button
-                          key={stage.key}
-                          type="button"
-                          className={`stage-legend-stage-chip ${selectedLegendHeader.legendKey === stage.key ? 'stage-legend-stage-chip-active' : ''}`}
-                          style={{ background: stage.hex, color: '#000000' }}
-                          onClick={() => assignLegendStageToHeader(selectedLegendHeader.draftId, stage.key)}
-                          disabled={savingLegendColors}
-                          title={stage.description || stage.label}
-                        >
-                          {stage.label}
-                        </button>
-                      ))}
+                    <div className="stage-legend-modal-summary-card">
+                      <span className="stage-legend-modal-summary-label">Этап</span>
+                      <strong>{legendDraftStageMap[selectedLegendHeader?.legendKey]?.label || 'Без этапа'}</strong>
                     </div>
-                  </>
-                ) : (
-                  <div className="stage-legend-builder-note">Выберите колонку в схеме слева, чтобы изменить ее название и назначить этап.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="stage-legend-builder-layout stage-legend-builder-layout-bottom">
-              <div className="stage-legend-builder-panel stage-legend-stage-list-panel">
-                <div className="stage-legend-config-section-title">Этапы</div>
-                <div className="stage-legend-builder-note">Выберите этап из списка, затем отредактируйте его название, подсказку и цвет справа.</div>
-                <div className="stage-legend-stage-list">
-                  {(legendConfigDraft.stages || []).map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className={`stage-legend-stage-list-item ${selectedLegendStageKey === item.key ? 'stage-legend-stage-list-item-active' : ''}`}
-                      onClick={() => setSelectedLegendStageKey(item.key)}
-                      disabled={savingLegendColors}
-                    >
-                      <span className="stage-legend-stage-list-swatch" style={{ background: item.hex }} />
-                      <span className="stage-legend-stage-list-text">
-                        <strong>{item.label || 'Этап'}</strong>
-                        <small>{item.description || 'Без описания'}</small>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="stage-legend-builder-panel stage-legend-stage-editor-panel">
-                <div className="stage-legend-config-section-title">Редактор этапа</div>
-                {selectedLegendStage ? (
-                  <div className="stage-legend-stage-card stage-legend-stage-editor-card">
-                    <div className="stage-legend-stage-card-header">
-                      <div
-                        className="stage-legend-stage-preview"
-                        style={{ background: selectedLegendStage.hex, color: '#000000' }}
-                      >
-                        {selectedLegendStage.label || 'Этап'}
-                      </div>
-                      <div className="stage-legend-stage-color">
-                        <input
-                          type="color"
-                          value={selectedLegendStage.hex}
-                          onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { hex: event.target.value })}
-                          disabled={savingLegendColors}
-                        />
-                        <input
-                          value={selectedLegendStage.hex}
-                          onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { hex: event.target.value })}
-                          disabled={savingLegendColors}
-                        />
-                      </div>
-                    </div>
-                    <div className="stage-legend-stage-fields">
-                      <label className="stage-legend-field">
-                        <span>Название этапа</span>
-                        <input
-                          value={selectedLegendStage.label}
-                          onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { label: event.target.value })}
-                          placeholder="Например: Чертежи"
-                          disabled={savingLegendColors}
-                        />
-                      </label>
-                      <label className="stage-legend-field">
-                        <span>Подсказка</span>
-                        <input
-                          value={selectedLegendStage.description}
-                          onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { description: event.target.value })}
-                          placeholder="Что входит в этот этап"
-                          disabled={savingLegendColors}
-                        />
-                      </label>
+                    <div className="stage-legend-modal-summary-card">
+                      <span className="stage-legend-modal-summary-label">Подсказка</span>
+                      <strong>Выберите ячейку слева и сразу назначьте этап справа</strong>
                     </div>
                   </div>
-                ) : (
-                  <div className="stage-legend-builder-note">Выберите этап слева, чтобы изменить его название, описание и цвет.</div>
-                )}
-              </div>
+
+                  <div className="stage-legend-builder-layout stage-legend-builder-layout-tab">
+                    <div className="stage-legend-builder-panel stage-legend-builder-panel-wide">
+                      <div className="stage-legend-config-section-title">Колонки таблицы</div>
+                      <div className="stage-legend-builder-note">Нажмите на колонку второй строки шапки, которую хотите переименовать или перекрасить.</div>
+                      <div className="stage-legend-table-preview">
+                        {legendDraftHeaders.map((item, index) => {
+                          const stage = legendDraftStageMap[item.legendKey] || null;
+                          const isSelectedHeader = selectedLegendHeaderId === item.draftId;
+                          return (
+                            <div
+                              key={item.draftId || `${item.label}-${index}`}
+                              className={`stage-legend-table-cell ${isSelectedHeader ? 'stage-legend-table-cell-active' : ''} ${item.stickyCol ? 'stage-legend-table-cell-service' : ''}`}
+                              style={{ background: stage?.hex || (item.useTableBackground ? 'rgba(12, 26, 42, 0.94)' : undefined), color: item.useTableBackground ? '#d8ecff' : '#000000' }}
+                              onClick={() => !savingLegendColors && setSelectedLegendHeaderId(item.draftId)}
+                              onKeyDown={(event) => {
+                                if ((event.key === 'Enter' || event.key === ' ') && !savingLegendColors) {
+                                  event.preventDefault();
+                                  setSelectedLegendHeaderId(item.draftId);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={savingLegendColors ? -1 : 0}
+                              title={stage ? `Этап: ${stage.label}` : 'Этап не назначен'}
+                            >
+                              <span className="stage-legend-table-cell-index">Колонка {index + 1}</span>
+                              <span className="stage-legend-table-cell-title">{item.label || 'Без названия'}</span>
+                              <span className="stage-legend-table-cell-stage">
+                                {stage ? stage.label : 'Без этапа'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="stage-legend-builder-panel stage-legend-column-editor">
+                      <div className="stage-legend-config-section-title">Редактор колонки</div>
+                      {selectedLegendHeader ? (
+                        <>
+                          <div className="stage-legend-column-editor-meta">
+                            <span className="stage-legend-column-editor-index">
+                              {selectedLegendHeader.stickyCol ? `Служебная колонка ${selectedLegendHeader.stickyCol}` : `Колонка ${Number(String(selectedLegendHeader.draftId || '').split('-').pop()) + 1 || ''}`}
+                            </span>
+                            <span className="stage-legend-column-editor-stage">
+                              Текущий этап: {legendDraftStageMap[selectedLegendHeader.legendKey]?.label || 'Без этапа'}
+                            </span>
+                          </div>
+                          <label className="stage-legend-field">
+                            <span>Название колонки</span>
+                            <input
+                              value={selectedLegendHeader.label}
+                              onChange={(event) => updateLegendSecondaryHeaderDraft(selectedLegendHeader.draftId, { label: event.target.value })}
+                              placeholder="Введите название колонки"
+                              disabled={savingLegendColors}
+                            />
+                          </label>
+                          <div className="stage-legend-config-section-title stage-legend-config-section-subtitle">Назначение этапа</div>
+                          <div className="stage-legend-assignment-toolbar">
+                            <button
+                              type="button"
+                              className={`stage-legend-stage-chip ${!selectedLegendHeader.legendKey ? 'stage-legend-stage-chip-active' : ''}`}
+                              onClick={() => assignLegendStageToHeader(selectedLegendHeader.draftId, '')}
+                              disabled={savingLegendColors}
+                            >
+                              Без этапа
+                            </button>
+                            {legendDraftStages.map((stage) => (
+                              <button
+                                key={stage.key}
+                                type="button"
+                                className={`stage-legend-stage-chip ${selectedLegendHeader.legendKey === stage.key ? 'stage-legend-stage-chip-active' : ''}`}
+                                style={{ background: stage.hex, color: '#000000' }}
+                                onClick={() => assignLegendStageToHeader(selectedLegendHeader.draftId, stage.key)}
+                                disabled={savingLegendColors}
+                                title={stage.description || stage.label}
+                              >
+                                {stage.label}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="stage-legend-builder-note">Выберите колонку слева, чтобы изменить название и назначить этап.</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="stage-legend-modal-summary">
+                    <div className="stage-legend-modal-summary-card">
+                      <span className="stage-legend-modal-summary-label">Выбран этап</span>
+                      <strong>{selectedLegendStage?.label || 'Этап не выбран'}</strong>
+                    </div>
+                    <div className="stage-legend-modal-summary-card">
+                      <span className="stage-legend-modal-summary-label">Используется</span>
+                      <strong>{selectedLegendStageUsageCount} колонок</strong>
+                    </div>
+                    <div className="stage-legend-modal-summary-card">
+                      <span className="stage-legend-modal-summary-label">Подсказка</span>
+                      <strong>Измените название, описание и цвет выбранного этапа</strong>
+                    </div>
+                  </div>
+
+                  <div className="stage-legend-builder-layout stage-legend-builder-layout-tab stage-legend-builder-layout-bottom">
+                    <div className="stage-legend-builder-panel stage-legend-stage-list-panel">
+                      <div className="stage-legend-config-section-title">Этапы</div>
+                      <div className="stage-legend-builder-note">Выберите этап из списка, чтобы отредактировать его справа.</div>
+                      <div className="stage-legend-stage-list">
+                        {legendDraftStages.map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            className={`stage-legend-stage-list-item ${selectedLegendStageKey === item.key ? 'stage-legend-stage-list-item-active' : ''}`}
+                            onClick={() => setSelectedLegendStageKey(item.key)}
+                            disabled={savingLegendColors}
+                          >
+                            <span className="stage-legend-stage-list-swatch" style={{ background: item.hex }} />
+                            <span className="stage-legend-stage-list-text">
+                              <strong>{item.label || 'Этап'}</strong>
+                              <small>{item.description || 'Без описания'}</small>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="stage-legend-builder-panel stage-legend-stage-editor-panel">
+                      <div className="stage-legend-config-section-title">Редактор этапа</div>
+                      {selectedLegendStage ? (
+                        <div className="stage-legend-stage-card stage-legend-stage-editor-card">
+                          <div className="stage-legend-stage-card-header">
+                            <div
+                              className="stage-legend-stage-preview"
+                              style={{ background: selectedLegendStage.hex, color: '#000000' }}
+                            >
+                              {selectedLegendStage.label || 'Этап'}
+                            </div>
+                            <div className="stage-legend-stage-color">
+                              <input
+                                type="color"
+                                value={selectedLegendStage.hex}
+                                onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { hex: event.target.value })}
+                                disabled={savingLegendColors}
+                              />
+                              <input
+                                value={selectedLegendStage.hex}
+                                onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { hex: event.target.value })}
+                                disabled={savingLegendColors}
+                              />
+                            </div>
+                          </div>
+                          <div className="stage-legend-stage-fields">
+                            <label className="stage-legend-field">
+                              <span>Название этапа</span>
+                              <input
+                                value={selectedLegendStage.label}
+                                onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { label: event.target.value })}
+                                placeholder="Например: Чертежи"
+                                disabled={savingLegendColors}
+                              />
+                            </label>
+                            <label className="stage-legend-field">
+                              <span>Подсказка</span>
+                              <input
+                                value={selectedLegendStage.description}
+                                onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { description: event.target.value })}
+                                placeholder="Что входит в этот этап"
+                                disabled={savingLegendColors}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="stage-legend-builder-note">Выберите этап слева, чтобы изменить его название, описание и цвет.</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            <div className="modal-actions">
+            <div className="modal-actions stage-legend-modal-actions">
               <button className="btn btn-success" onClick={handleSaveLegendColors} disabled={savingLegendColors}>
                 {savingLegendColors ? 'Сохранение...' : 'Сохранить настройки этапов'}
               </button>
