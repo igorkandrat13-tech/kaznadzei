@@ -423,6 +423,9 @@ function handleManualStageMarks(req, res) {
     const selections = Array.isArray(req.body?.selections) ? req.body.selections : [];
     const settings = SettingsStore.get();
     const secondaryHeaders = settings?.orderStageLegendConfig?.secondaryHeaders || [];
+    const isClearRequest = !legendKey && selections.every(
+      (selection) => !String(selection?.legendKey || '').trim(),
+    );
 
     if (selections.length === 0) {
       return res.status(400).json({ message: 'Не выбраны ячейки для обновления.' });
@@ -432,8 +435,12 @@ function handleManualStageMarks(req, res) {
       orderId: String(selection?.orderId || '').trim(),
       itemId: String(selection?.itemId || '').trim(),
       columnKey: String(selection?.columnKey || '').trim(),
-      legendKey: String(selection?.legendKey || '').trim()
-        || resolveLegendKeyForManualStageColumn(selection?.columnKey, secondaryHeaders),
+      legendKey: isClearRequest
+        ? ''
+        : (
+            String(selection?.legendKey || '').trim()
+            || resolveLegendKeyForManualStageColumn(selection?.columnKey, secondaryHeaders)
+          ),
     })).filter(selection => selection.orderId && selection.itemId && selection.columnKey);
 
     if (normalizedSelections.length === 0) {
