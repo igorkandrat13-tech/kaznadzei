@@ -12,6 +12,21 @@ const ORDER_MANUFACTURING_EXCLUDED_COLUMN_KEYS = new Set([
   'orderNumber',
   'customer',
 ]);
+const ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEY = 'room';
+const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
+  'room',
+  'roomNumber',
+  'itemNumber',
+  'quantity',
+  'name',
+  'orderCard',
+  'packageName',
+  'notes',
+  'deliveryDate',
+  'carpenter',
+  'photoLink',
+  'paint',
+];
 
 function compareSteps(a, b) {
   const roleOrder = RoleStore.findAll({ includeDeleted: true }).map(role => role.key);
@@ -178,11 +193,21 @@ function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpe
   const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
   if (updatedAt) return updatedAt;
 
-  if (columnKey === 'orderAttachments' || columnKey === 'paintAttachments') {
-    const fieldName = columnKey === 'paintAttachments' ? 'paintAttachments' : 'attachments';
+  if (columnKey === 'orderAttachments' || columnKey === 'paintAttachments' || columnKey === 'orderCard' || columnKey === 'paint') {
+    const fieldName = columnKey === 'paintAttachments' || columnKey === 'paint'
+      ? 'paintAttachments'
+      : 'attachments';
     const attachments = Array.isArray(item?.[fieldName]) ? item[fieldName] : [];
-    return getEarliestTimestamp(
+    return getLatestTimestamp(
       ...attachments.map((attachment) => attachment?.uploadedAt || ''),
+    );
+  }
+
+  if (columnKey === 'packageName') {
+    const packageItems = Array.isArray(item?.packageItems) ? item.packageItems : [];
+    if (packageItems.length === 0 || packageItems.some((packageItem) => !packageItem?.isCompleted)) return '';
+    return getLatestTimestamp(
+      ...packageItems.map((packageItem) => packageItem?.completedAt || packageItem?.updatedAt || ''),
     );
   }
 
@@ -567,54 +592,51 @@ function hasLegacyPrimaryItemData(order = {}) {
 
 function deriveOrderManufacturingMeta(order = {}) {
   const items = Array.isArray(order?.items) ? order.items : [];
-  const timestamps = [];
+  const startTimestamps = [];
+  const endTimestamps = [];
 
   for (const item of items) {
     const manualStageMarks = normalizeManualStageMarks(item?.manualStageMarks);
     const manualStageClears = normalizeManualStageClears(item?.manualStageClears);
     const workerAssignments = mergeWorkerAssignments(item?.workerAssignments, item?.stages);
 
-    Object.entries(manualStageMarks).forEach(([columnKey, mark]) => {
-      const normalizedKey = String(columnKey || '').trim();
-      if (!normalizedKey || ORDER_MANUFACTURING_EXCLUDED_COLUMN_KEYS.has(normalizedKey)) return;
-      if (manualStageClears[normalizedKey]) return;
-      const updatedAt = String(mark?.updatedAt || '').trim();
-      if (updatedAt) timestamps.push(updatedAt);
+    const explicitStartAt = getItemEffectiveManufacturingTimestamp(item, 'itemStartDate', {
+      manualStageMarks,
+      manualStageClears,
+      workerAssignments,
     });
-
-    const orderAttachments = normalizeOrderAttachments(item?.attachments);
-    orderAttachments.forEach((attachment) => {
-      const uploadedAt = String(attachment?.uploadedAt || '').trim();
-      if (uploadedAt) timestamps.push(uploadedAt);
+    const triggerStartAt = getItemEffectiveManufacturingTimestamp(item, ORDER_MANUFACTURING_START_TRIGGER_COLUMN_KEY, {
+      manualStageMarks,
+      manualStageClears,
+      workerAssignments,
     });
+    const itemStartAt = explicitStartAt || triggerStartAt || '';
+    if (itemStartAt) {
+      startTimestamps.push(itemStartAt);
+    }
 
-    const paintAttachments = normalizeOrderAttachments(item?.paintAttachments);
-    paintAttachments.forEach((attachment) => {
-      const uploadedAt = String(attachment?.uploadedAt || '').trim();
-      if (uploadedAt) timestamps.push(uploadedAt);
+    const explicitEndAt = getItemEffectiveManufacturingTimestamp(item, 'itemEndDate', {
+      manualStageMarks,
+      manualStageClears,
+      workerAssignments,
     });
-
-    if (!manualStageClears.carpenter) {
-      const carpenterAssignment = workerAssignments.carpenter || null;
-      const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
-      const activeStage = getItemActiveStage(item);
-      const assignedStage = getItemAssignedStage(item);
-      const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
-      [
-        carpenterAssignment?.scannedAt,
-        carpenterActiveStage?.startedAt,
-        workerStageForText?.startedAt,
-      ].forEach((value) => {
-        const ts = String(value || '').trim();
-        if (ts) timestamps.push(ts);
-      });
+    const completionTimestamps = ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS.map((columnKey) => (
+      getItemEffectiveManufacturingTimestamp(item, columnKey, {
+        manualStageMarks,
+        manualStageClears,
+        workerAssignments,
+      })
+    ));
+    if (explicitEndAt) {
+      endTimestamps.push(explicitEndAt);
+    } else if (completionTimestamps.every(Boolean)) {
+      endTimestamps.push(getLatestTimestamp(...completionTimestamps));
     }
   }
 
-  const sorted = timestamps.slice().sort();
-  const startAt = sorted[0] || '';
-  const endAt = sorted.at(-1) || '';
-  const isCompleted = Boolean(startAt && endAt);
+  const startAt = getEarliestTimestamp(...startTimestamps);
+  const isCompleted = items.length > 0 && endTimestamps.length === items.length;
+  const endAt = isCompleted ? getLatestTimestamp(...endTimestamps) : '';
 
   return {
     startAt,

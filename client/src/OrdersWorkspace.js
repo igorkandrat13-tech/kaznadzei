@@ -2472,9 +2472,9 @@ function OrdersWorkspace() {
                     const orderInlineDraft = currentOrderDraftKeys.length > 0 ? inlineDrafts[currentOrderDraftKeys[0]] : null;
                     const isOrderInlineEditing = Boolean(orderInlineDraft);
                     const hasOrderDrafts = currentOrderDraftKeys.length > 0;
+                    const orderManufacturingMeta = getOrderManufacturingMeta(order);
                     const commentPreview = getCommentPreview(item.comments);
                     const itemManufacturingMeta = getItemManufacturingMeta(item);
-                    const orderManufacturingMeta = getOrderManufacturingMeta(order);
                     const itemAttachments = getItemAttachments(item, 'order');
                     const paintAttachments = getItemAttachments(item, 'paint');
                     const packageStats = getPackageStats(item.packageItems, item.packageName);
@@ -2517,7 +2517,7 @@ function OrdersWorkspace() {
                       'itemStartDate',
                       regularOrderClass,
                       itemStartDateCellStyle,
-                      { disabled: true },
+                      { disabled: isInlineEditing },
                     );
                     const itemEndDateCellStyle = itemManufacturingMeta.endDate
                       ? {
@@ -2531,7 +2531,7 @@ function OrdersWorkspace() {
                       'itemEndDate',
                       regularOrderClass,
                       itemEndDateCellStyle,
-                      { disabled: true },
+                      { disabled: isInlineEditing },
                     );
                     const itemEndDateCellProps = {
                       ...itemEndDateCellPropsBase,
@@ -2590,7 +2590,9 @@ function OrdersWorkspace() {
                       'orderCard',
                       `order-card-cell ${regularOrderClass}`,
                     );
-                    const itemDurationValue = formatManufacturingTime(itemManufacturingMeta.startDate, itemManufacturingMeta.endDate);
+                    const itemDurationValue = itemManufacturingMeta.endDate
+                      ? formatManufacturingTime(itemManufacturingMeta.startDate, itemManufacturingMeta.endDate)
+                      : '—';
                     const hasItemManufacturingDuration = itemDurationValue !== '—';
                     const itemDurationCellStyle = hasItemManufacturingDuration
                       ? {
@@ -2604,15 +2606,17 @@ function OrdersWorkspace() {
                       'itemDuration',
                       regularOrderClass,
                       itemDurationCellStyle,
-                      { disabled: true },
+                      { disabled: isInlineEditing },
                     );
                     const itemDurationCellProps = {
                       ...itemDurationCellPropsBase,
                       className: cn(itemDurationCellPropsBase.className, 'item-duration-cell'),
                     };
 
-                    const orderDurationValue = formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate);
-                    const hasManufacturingDuration = orderDurationValue !== '—';
+                    const orderDurationValue = orderManufacturingMeta.endDate
+                      ? formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate)
+                      : '—';
+                    const hasManufacturingDuration = Boolean(orderManufacturingMeta.startDate || orderManufacturingMeta.endDate || orderDurationValue !== '—');
                     const durationMetaCellStyle = hasManufacturingDuration
                       ? {
                           background: legendColorMap[columnStageMeta.duration.legendKey] || '#F4C2A4',
@@ -2797,7 +2801,11 @@ function OrdersWorkspace() {
                         <td {...itemDurationCellProps}>{itemDurationValue}</td>
                         {isFirstOrderRow ? (
                           <td rowSpan={orderRowSpan} {...durationMetaCellProps}>
-                            <div className="merged-order-meta-content">{orderDurationValue}</div>
+                            <div className="merged-order-meta-content merged-order-meta-content-stacked">
+                              <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.startDate)}</span>
+                              <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.endDate)}</span>
+                              <span className="merged-order-meta-pill">{orderDurationValue}</span>
+                            </div>
                           </td>
                         ) : null}
                       </tr>

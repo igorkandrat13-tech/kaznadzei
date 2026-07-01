@@ -2886,6 +2886,29 @@ body[data-theme='light'] .order-primary-title-button-badge {
   text-align: center;
 }
 
+.merged-order-meta-content-stacked {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.merged-order-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(12, 26, 42, 0.12);
+  background: rgba(255, 255, 255, 0.18);
+  line-height: 1.2;
+}
+
+body[data-theme='light'] .merged-order-meta-pill {
+  border-color: rgba(113, 158, 207, 0.18);
+  background: rgba(255, 255, 255, 0.74);
+}
+
 .room-cell-content {
   display: flex;
   align-items: center;
