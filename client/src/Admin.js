@@ -54,6 +54,7 @@ function buildLegendSaveErrorMessage({
   return lines.filter(Boolean).join('\n');
 }
 
+function Admin() {
 
   const navigate = useNavigate();
   const { roleTabs, allRoleTabs, refreshRoleConfig } = useRoleConfig();
