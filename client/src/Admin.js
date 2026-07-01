@@ -21,6 +21,8 @@ import { useRoleConfig } from './RoleConfigContext';
 import { buildOrderStageLegendConfig } from './orderStageLegend';
 import useEscapeKey from './useEscapeKey';
 
+const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+
 function Admin() {
   const navigate = useNavigate();
   const { roleTabs, allRoleTabs, refreshRoleConfig } = useRoleConfig();
@@ -929,6 +931,11 @@ function Admin() {
     if (savingLegendColors) return;
     updateLegendSecondaryHeaderDraft(draftId, { legendKey });
   };
+  const openLegendStageEditor = (legendKey) => {
+    if (!legendKey || savingLegendColors) return;
+    setSelectedLegendStageKey(legendKey);
+    setLegendModalTab('stages');
+  };
 
   const requestDeleteAction = (action) => {
     setSettingsError('');
@@ -1345,7 +1352,10 @@ function Admin() {
     setSavingLegendColors(true);
     try {
       for (const draft of (legendConfigDraft.stages || [])) {
-        const normalizedHex = String(draft.hex || '').trim() || '#000000';
+        const normalizedHex = String(draft.hex || '').trim().toUpperCase() || '#000000';
+        if (!HEX_COLOR_PATTERN.test(normalizedHex)) {
+          throw new Error(`Цвет этапа "${draft.label || 'Без названия'}" должен быть в формате #RRGGBB.`);
+        }
         if (draft.colorId) {
           const existingItem = legendItems.find(item => item.key === draft.key);
           if (existingItem?.hex === normalizedHex) {
@@ -1524,6 +1534,7 @@ function Admin() {
               </div>
               <button className="btn btn-small modal-close-btn" onClick={closeLegendColorModal} disabled={savingLegendColors}>✕</button>
             </div>
+            <SettingsFeedback error={settingsError} success={settingsSuccess} />
 
             <div className="stage-legend-modal-body">
               <div className="stage-legend-modal-tabs" role="tablist" aria-label="Настройка легенды этапов">
@@ -1652,6 +1663,22 @@ function Admin() {
                               </button>
                             ))}
                           </div>
+                          {selectedLegendHeader.legendKey ? (
+                            <div className="stage-legend-linked-stage-card">
+                              <div className="stage-legend-linked-stage-card-info">
+                                <span className="stage-legend-linked-stage-card-label">Редактирование этапа</span>
+                                <strong>{legendDraftStageMap[selectedLegendHeader.legendKey]?.label || 'Этап'}</strong>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => openLegendStageEditor(selectedLegendHeader.legendKey)}
+                                disabled={savingLegendColors}
+                              >
+                                Изменить название и цвет
+                              </button>
+                            </div>
+                          ) : null}
                         </>
                       ) : (
                         <div className="stage-legend-builder-note">Выберите колонку слева, чтобы изменить название и назначить этап.</div>
@@ -1693,6 +1720,9 @@ function Admin() {
                             <span className="stage-legend-stage-list-text">
                               <strong>{item.label || 'Этап'}</strong>
                               <small>{item.description || 'Без описания'}</small>
+                            </span>
+                            <span className="stage-legend-stage-list-usage">
+                              {legendDraftHeaders.filter((header) => header.legendKey === item.key).length}
                             </span>
                           </button>
                         ))}
@@ -1743,6 +1773,9 @@ function Admin() {
                                 disabled={savingLegendColors}
                               />
                             </label>
+                            <div className="stage-legend-builder-note">
+                              Этот этап сейчас привязан к {selectedLegendStageUsageCount} колонкам таблицы.
+                            </div>
                           </div>
                         </div>
                       ) : (

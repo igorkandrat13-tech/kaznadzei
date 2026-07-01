@@ -2356,6 +2356,8 @@ body[data-theme='light'] .order-primary-title-button-badge {
 .stage-legend-stage-list-text {
   display: grid;
   gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .stage-legend-stage-list-text strong {
@@ -2367,6 +2369,22 @@ body[data-theme='light'] .order-primary-title-button-badge {
 .stage-legend-stage-list-text small {
   font-size: 12px;
   color: var(--text-soft);
+}
+
+.stage-legend-stage-list-usage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(132, 190, 255, 0.12);
+  background: rgba(10, 22, 36, 0.56);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
 .stage-legend-stage-card {
@@ -2541,6 +2559,35 @@ body[data-theme='light'] .order-primary-title-button-badge {
 .stage-legend-column-editor-meta {
   display: grid;
   gap: 6px;
+}
+
+.stage-legend-linked-stage-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(132, 190, 255, 0.12);
+  background: rgba(12, 24, 40, 0.82);
+}
+
+.stage-legend-linked-stage-card-info {
+  display: grid;
+  gap: 4px;
+}
+
+.stage-legend-linked-stage-card-info strong {
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.stage-legend-linked-stage-card-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-soft);
 }
 
 .stage-legend-column-editor-index {
@@ -5659,8 +5706,20 @@ body[data-theme='light'] .stage-legend-modal-tab-meta {
 body[data-theme='light'] .stage-legend-stage-list-text strong,
 body[data-theme='light'] .stage-legend-column-editor-index,
 body[data-theme='light'] .stage-legend-modal-tab-title,
-body[data-theme='light'] .stage-legend-modal-summary-card strong {
+body[data-theme='light'] .stage-legend-modal-summary-card strong,
+body[data-theme='light'] .stage-legend-linked-stage-card-info strong,
+body[data-theme='light'] .stage-legend-stage-list-usage {
   color: #173857;
+}
+
+body[data-theme='light'] .stage-legend-linked-stage-card,
+body[data-theme='light'] .stage-legend-stage-list-usage {
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(240, 247, 255, 0.96));
+  border-color: rgba(113, 158, 207, 0.18);
+}
+
+body[data-theme='light'] .stage-legend-linked-stage-card-label {
+  color: rgba(45, 75, 105, 0.9);
 }
 
 body[data-theme='light'] .stage-legend-modal-actions {
@@ -6700,6 +6759,11 @@ body[data-theme='light'] .home-auth-status-pending {
     max-height: none;
     overflow: visible;
     padding-right: 0;
+  }
+
+  .stage-legend-linked-stage-card {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
