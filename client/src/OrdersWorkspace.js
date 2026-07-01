@@ -3,31 +3,12 @@ import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
-import { buildOrderStageLegendConfig } from './orderStageLegend';
+import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
 import { getItemManufacturingMeta, getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
 
-const ORDER_PRIMARY_HEADERS = [
-  'Номер заказа',
-  'Заказчик',
-  'Помещение',
-  '№ помещения',
-  '№ изделия в заказе',
-  'Кол-во изделй',
-  'Наименование',
-  'Карточка заказа',
-  'Комплектация заказа',
-  'Примечания',
-  'Отгрузка до',
-  'СТОЛЯР',
-  '',
-  'Покраска',
-  'Начало изготовления изделия',
-  'Окончание изготовления изделия',
-  'Время изготовления изделий',
-  'Время изготовления заказа',
-];
+const ORDER_PRIMARY_HEADERS = DEFAULT_ORDER_PRIMARY_HEADERS;
 const ORDER_CARD_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа');
 const ORDER_PACKAGE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа');
 const ORDER_CARPENTER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР');
@@ -768,6 +749,7 @@ function OrdersWorkspace() {
   }, [fetchOrderStageLegendConfig, fetchOrders, inlineDrafts, inlineSavingKey, showForm]);
 
   const stageLegend = useMemo(() => orderStageLegendConfig.stages || [], [orderStageLegendConfig]);
+  const primaryHeaderLabels = useMemo(() => orderStageLegendConfig.primaryHeaders || DEFAULT_ORDER_PRIMARY_HEADERS, [orderStageLegendConfig]);
   const secondaryHeaderSchema = useMemo(() => orderStageLegendConfig.secondaryHeaders || [], [orderStageLegendConfig]);
   const manualStageTextColorMap = useMemo(
     () => buildManualStageTextColorMap(secondaryHeaderSchema),
@@ -2426,7 +2408,7 @@ function OrdersWorkspace() {
                 {renderOrdersColGroup()}
                 <thead>
                   <tr className="xlsx-header-row xlsx-header-row-primary">
-                    {ORDER_PRIMARY_HEADERS.map((label, index) => (
+                    {primaryHeaderLabels.map((label, index) => (
                       <th
                         key={`primary-header-${index}`}
                         className={cn(

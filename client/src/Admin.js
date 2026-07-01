@@ -113,6 +113,7 @@ function Admin() {
   const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
   const [selectedLegendStageKey, setSelectedLegendStageKey] = useState('brief');
   const [selectedLegendHeaderId, setSelectedLegendHeaderId] = useState('');
+  const [selectedLegendPrimaryHeaderIndex, setSelectedLegendPrimaryHeaderIndex] = useState(0);
   const [legendModalTab, setLegendModalTab] = useState('columns');
   const [savingAppSettings, setSavingAppSettings] = useState(false);
   const [savingUpdateSettings, setSavingUpdateSettings] = useState(false);
@@ -153,8 +154,10 @@ function Admin() {
     () => (legendConfigDraft.secondaryHeaders || []).find((item) => item.draftId === selectedLegendHeaderId) || null,
     [legendConfigDraft, selectedLegendHeaderId],
   );
+  const legendDraftPrimaryHeaders = legendConfigDraft.primaryHeaders || [];
   const legendDraftHeaders = legendConfigDraft.secondaryHeaders || [];
   const legendDraftStages = legendConfigDraft.stages || [];
+  const selectedLegendPrimaryHeaderLabel = legendDraftPrimaryHeaders[selectedLegendPrimaryHeaderIndex] ?? '';
   const legendAssignedColumnsCount = useMemo(
     () => legendDraftHeaders.filter((item) => item.legendKey).length,
     [legendDraftHeaders],
@@ -892,11 +895,13 @@ function Admin() {
       draftId: `secondary-header-${index}`,
     }));
     setLegendConfigDraft({
+      primaryHeaders: [...(orderStageLegendConfig.primaryHeaders || [])],
       stages: nextStages,
       secondaryHeaders: nextHeaders,
     });
     setSelectedLegendStageKey(nextStages.find((item) => item.key)?.key || '');
     setSelectedLegendHeaderId(nextHeaders.find((item) => !item.stickyCol)?.draftId || nextHeaders[0]?.draftId || '');
+    setSelectedLegendPrimaryHeaderIndex(0);
     setLegendModalTab('columns');
     setShowLegendColorModal(true);
     setSettingsError('');
@@ -909,6 +914,7 @@ function Admin() {
     setLegendConfigDraft(buildOrderStageLegendConfig());
     setSelectedLegendStageKey('brief');
     setSelectedLegendHeaderId('');
+    setSelectedLegendPrimaryHeaderIndex(0);
     setLegendModalTab('columns');
   };
 
@@ -948,6 +954,15 @@ function Admin() {
       ...current,
       secondaryHeaders: (current.secondaryHeaders || []).map(item => (
         item.draftId === draftId ? { ...item, ...patch } : item
+      )),
+    }));
+  };
+
+  const updateLegendPrimaryHeaderDraft = (index, value) => {
+    setLegendConfigDraft(current => ({
+      ...current,
+      primaryHeaders: (current.primaryHeaders || []).map((item, itemIndex) => (
+        itemIndex === index ? value : item
       )),
     }));
   };
@@ -1391,6 +1406,7 @@ function Admin() {
       });
 
       const configPayload = {
+        primaryHeaders: legendDraftPrimaryHeaders.map((label) => String(label ?? '')),
         stages: normalizedStages,
         secondaryHeaders: (legendConfigDraft.secondaryHeaders || []).map((item) => ({
           label: item.label,
@@ -1615,7 +1631,32 @@ function Admin() {
                   <div className="stage-legend-builder-layout stage-legend-builder-layout-tab">
                     <div className="stage-legend-builder-panel stage-legend-builder-panel-wide">
                       <div className="stage-legend-config-section-title">Колонки таблицы</div>
-                      <div className="stage-legend-builder-note">Нажмите на колонку второй строки шапки, которую хотите переименовать или перекрасить.</div>
+                      <div className="stage-legend-builder-note">Нажмите на колонку второй строки шапки, которую хотите переименовать или перекрасить. Названия первой строки редактируются кнопками с карандашом.</div>
+                      <div className="stage-legend-primary-header-block">
+                        <div className="stage-legend-config-section-title stage-legend-config-section-subtitle">Первая строка шапки</div>
+                        <div className="stage-legend-primary-header-list">
+                          {legendDraftPrimaryHeaders.map((label, index) => (
+                            <div
+                              key={`primary-header-draft-${index}`}
+                              className={`stage-legend-primary-header-item ${selectedLegendPrimaryHeaderIndex === index ? 'stage-legend-primary-header-item-active' : ''}`}
+                            >
+                              <div className="stage-legend-primary-header-text">
+                                <span className="stage-legend-primary-header-index">Колонка {index + 1}</span>
+                                <strong>{label || 'Без названия'}</strong>
+                              </div>
+                              <button
+                                type="button"
+                                className="stage-legend-primary-header-edit-btn"
+                                onClick={() => setSelectedLegendPrimaryHeaderIndex(index)}
+                                disabled={savingLegendColors}
+                                title="Редактировать название колонки первой строки"
+                              >
+                                ✎
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                       <div className="stage-legend-table-preview">
                         {legendDraftHeaders.map((item, index) => {
                           const stage = legendDraftStageMap[item.legendKey] || null;
@@ -1651,6 +1692,20 @@ function Admin() {
                       <div className="stage-legend-config-section-title">Редактор колонки</div>
                       {selectedLegendHeader ? (
                         <>
+                          <div className="stage-legend-column-editor-meta">
+                            <span className="stage-legend-column-editor-index">
+                              Первая строка: колонка {selectedLegendPrimaryHeaderIndex + 1}
+                            </span>
+                          </div>
+                          <label className="stage-legend-field">
+                            <span>Название колонки первой строки</span>
+                            <input
+                              value={selectedLegendPrimaryHeaderLabel}
+                              onChange={(event) => updateLegendPrimaryHeaderDraft(selectedLegendPrimaryHeaderIndex, event.target.value)}
+                              placeholder="Введите название колонки первой строки"
+                              disabled={savingLegendColors}
+                            />
+                          </label>
                           <div className="stage-legend-column-editor-meta">
                             <span className="stage-legend-column-editor-index">
                               {selectedLegendHeader.stickyCol ? `Служебная колонка ${selectedLegendHeader.stickyCol}` : `Колонка ${Number(String(selectedLegendHeader.draftId || '').split('-').pop()) + 1 || ''}`}
