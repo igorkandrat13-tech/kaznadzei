@@ -198,6 +198,22 @@ function AppLayout() {
                                             {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
                                             {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
                                         </nav>
+                                        <div className="App-header-menu-footer">
+                                            <button
+                                                className="theme-icon-toggle App-header-menu-theme-toggle"
+                                                type="button"
+                                                onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}
+                                                aria-label={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
+                                                title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
+                                            >
+                                                {theme === 'dark' ? '☀' : '◐'}
+                                            </button>
+                                            {authRole ? (
+                                                <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
+                                                    Выйти
+                                                </button>
+                                            ) : null}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -207,22 +223,6 @@ function AppLayout() {
                                 <div id="orders-header-primary-actions" className="App-header-orders-primary-slot" />
                             </div>
                         ) : null}
-                        <div className="App-header-controls">
-                            <button
-                                className="theme-icon-toggle"
-                                type="button"
-                                onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}
-                                aria-label={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
-                                title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
-                            >
-                                {theme === 'dark' ? '☀' : '◐'}
-                            </button>
-                            {authRole ? (
-                                <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
-                                    Выйти
-                                </button>
-                            ) : null}
-                        </div>
                     </div>
                 </div>
             )}

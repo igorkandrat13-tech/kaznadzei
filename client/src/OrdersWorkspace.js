@@ -506,6 +506,25 @@ function getOrderLabel(order = {}) {
   return 'Заказ без номера';
 }
 
+function compareOrderNumbersAsc(leftOrder = {}, rightOrder = {}) {
+  const leftNumber = String(leftOrder?.orderNumber || '').trim();
+  const rightNumber = String(rightOrder?.orderNumber || '').trim();
+  if (!leftNumber && !rightNumber) return 0;
+  if (!leftNumber) return 1;
+  if (!rightNumber) return -1;
+
+  const naturalCompare = leftNumber.localeCompare(rightNumber, 'ru', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+  if (naturalCompare !== 0) return naturalCompare;
+
+  return String(leftOrder?._id || '').localeCompare(String(rightOrder?._id || ''), 'ru', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+}
+
 function getOrderRoomOptions(order = {}) {
   const roomMap = new Map();
   for (const item of (order.items || [])) {
@@ -814,7 +833,8 @@ function OrdersWorkspace() {
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return orders.flatMap(order => {
+    const sortedOrders = [...orders].sort(compareOrderNumbersAsc);
+    return sortedOrders.flatMap(order => {
       const items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
       const sourceRows = items.length > 0 ? items : [{
         itemId: '',
