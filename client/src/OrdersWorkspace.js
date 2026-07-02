@@ -1277,12 +1277,16 @@ function OrdersWorkspace() {
       : manualMark
       ? {
           ...(baseStyle || {}),
-          background: legendColorMap[manualMark.legendKey] || '#FFFFFF',
-          color: manualStageTextColorMap[manualMark.legendKey] || '#000000',
+          ...(manualMark.legendKey
+            ? {
+                background: legendColorMap[manualMark.legendKey] || '#FFFFFF',
+                color: manualStageTextColorMap[manualMark.legendKey] || '#000000',
+              }
+            : {}),
         }
       : baseStyle;
-    const title = manualMark?.legendKey
-      ? `${manualMark.legendKey}${manualMark.updatedAt ? ` • ${new Date(manualMark.updatedAt).toLocaleString()}` : ''}`
+    const title = manualMark
+      ? `${manualMark.legendKey || 'Ручная дата'}${manualMark.updatedAt ? ` • ${new Date(manualMark.updatedAt).toLocaleString()}` : ''}`
       : (manualClear
           ? `Сброшено${manualClear.updatedAt ? ` • ${new Date(manualClear.updatedAt).toLocaleString()}` : ''}`
           : undefined);

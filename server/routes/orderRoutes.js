@@ -537,6 +537,9 @@ function handleManualDateOverrides(req, res) {
     }
 
     const updatedOrders = OrderStore.setManualDateOverrides(normalizedSelections, payload);
+    if (!Array.isArray(updatedOrders) || updatedOrders.length === 0) {
+      return res.status(400).json({ message: 'Не удалось применить дату. Проверьте выбранные ячейки и попробуйте снова.' });
+    }
     addActivityLog({
       action: 'order.manual-date.apply',
       entityType: 'order',
