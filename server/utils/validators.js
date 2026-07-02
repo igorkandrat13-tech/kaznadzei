@@ -88,6 +88,51 @@ function normalizeBoolean(value, fieldName) {
   return value;
 }
 
+function normalizeManualStageMarks(value, fieldName) {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    fail(`Поле "${fieldName}" должно быть объектом.`);
+  }
+
+  return Object.entries(value).reduce((acc, [columnKey, mark]) => {
+    const normalizedColumnKey = normalizeString(columnKey, `${fieldName}.key`, { required: true, maxLength: 80 });
+    if (!mark || typeof mark !== 'object' || Array.isArray(mark)) {
+      fail(`Поле "${fieldName}.${normalizedColumnKey}" должно быть объектом.`);
+    }
+
+    acc[normalizedColumnKey] = {
+      legendKey: normalizeString(mark.legendKey, `${fieldName}.${normalizedColumnKey}.legendKey`, { required: false, maxLength: 40 }),
+      updatedAt: normalizeString(mark.updatedAt, `${fieldName}.${normalizedColumnKey}.updatedAt`, { required: false, maxLength: 80 }),
+      updatedBy: normalizeString(mark.updatedBy, `${fieldName}.${normalizedColumnKey}.updatedBy`, { required: false, maxLength: 120 }),
+    };
+    return acc;
+  }, {});
+}
+
+function normalizeManualStageClears(value, fieldName) {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    fail(`Поле "${fieldName}" должно быть объектом.`);
+  }
+
+  return Object.entries(value).reduce((acc, [columnKey, mark]) => {
+    const normalizedColumnKey = normalizeString(columnKey, `${fieldName}.key`, { required: true, maxLength: 80 });
+    if (!mark || typeof mark !== 'object' || Array.isArray(mark)) {
+      fail(`Поле "${fieldName}.${normalizedColumnKey}" должно быть объектом.`);
+    }
+
+    acc[normalizedColumnKey] = {
+      updatedAt: normalizeString(mark.updatedAt, `${fieldName}.${normalizedColumnKey}.updatedAt`, { required: false, maxLength: 80 }),
+      updatedBy: normalizeString(mark.updatedBy, `${fieldName}.${normalizedColumnKey}.updatedBy`, { required: false, maxLength: 120 }),
+    };
+    return acc;
+  }, {});
+}
+
 function normalizeAttachmentRelativePath(value, fieldName, options = {}) {
   const normalized = normalizeString(value, fieldName, {
     required: options.required,
@@ -184,6 +229,21 @@ function sanitizeOrderInput(payload, options = {}) {
   }
   if (!partial || payload.endDate !== undefined) {
     data.endDate = normalizeDate(payload.endDate, 'endDate', { allowUndefined: partial });
+  }
+  if (!partial || payload.manualDateOverrides !== undefined) {
+    if (payload.manualDateOverrides === undefined && partial) {
+      data.manualDateOverrides = undefined;
+    } else if (!payload.manualDateOverrides || typeof payload.manualDateOverrides !== 'object' || Array.isArray(payload.manualDateOverrides)) {
+      fail('Поле "manualDateOverrides" должно быть объектом.');
+    } else {
+      data.manualDateOverrides = {
+        startDate: normalizeDate(payload.manualDateOverrides.startDate, 'manualDateOverrides.startDate', { allowUndefined: true }) || '',
+        endDate: normalizeDate(payload.manualDateOverrides.endDate, 'manualDateOverrides.endDate', { allowUndefined: true }) || '',
+      };
+      if (data.manualDateOverrides.startDate && data.manualDateOverrides.endDate && data.manualDateOverrides.endDate < data.manualDateOverrides.startDate) {
+        fail('Дата окончания не может быть раньше даты начала.');
+      }
+    }
   }
 
   if (data.startDate && data.endDate && data.endDate < data.startDate) {
@@ -295,6 +355,12 @@ function sanitizeOrderItemInput(payload, options = {}) {
   }
   if (!partial || payload.notes !== undefined) {
     data.notes = normalizeString(payload.notes, 'notes', { maxLength: 2000 });
+  }
+  if (!partial || payload.manualStageMarks !== undefined) {
+    data.manualStageMarks = normalizeManualStageMarks(payload.manualStageMarks, 'manualStageMarks');
+  }
+  if (!partial || payload.manualStageClears !== undefined) {
+    data.manualStageClears = normalizeManualStageClears(payload.manualStageClears, 'manualStageClears');
   }
 
   return data;

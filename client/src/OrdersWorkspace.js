@@ -1200,6 +1200,88 @@ function OrdersWorkspace() {
     }
   }, [clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
 
+  const applyManualDateThroughOrderUpdate = useCallback(async (payload) => {
+    const ordersById = new Map(
+      (Array.isArray(orders) ? orders : []).map((order) => [String(order?._id || '').trim(), order]),
+    );
+    const updatesByOrderId = new Map();
+
+    for (const selection of payload.selections || []) {
+      const orderId = String(selection?.orderId || '').trim();
+      if (!orderId) continue;
+
+      const sourceOrder = ordersById.get(orderId);
+      if (!sourceOrder) {
+        return { ok: false, message: 'Не удалось найти заказ для обновления даты.' };
+      }
+
+      if (!updatesByOrderId.has(orderId)) {
+        updatesByOrderId.set(orderId, {
+          manualDateOverrides: {
+            startDate: String(sourceOrder?.manualDateOverrides?.startDate || '').trim(),
+            endDate: String(sourceOrder?.manualDateOverrides?.endDate || '').trim(),
+          },
+          items: (sourceOrder.items || []).map((item) => ({
+            ...item,
+            manualStageMarks: { ...(item?.manualStageMarks || {}) },
+            manualStageClears: { ...(item?.manualStageClears || {}) },
+          })),
+        });
+      }
+
+      const orderUpdate = updatesByOrderId.get(orderId);
+      if (payload.columnKey === 'duration') {
+        orderUpdate.manualDateOverrides = {
+          startDate: String(payload.startDate || '').trim(),
+          endDate: String(payload.endDate || '').trim(),
+        };
+        continue;
+      }
+
+      const itemId = String(selection?.itemId || '').trim();
+      const itemIndex = orderUpdate.items.findIndex((item) => String(item?.itemId || '').trim() === itemId);
+      if (itemIndex === -1) {
+        return { ok: false, message: 'Не удалось найти изделие для обновления даты.' };
+      }
+
+      const item = orderUpdate.items[itemIndex];
+      const columnKey = String(selection?.columnKey || payload.columnKey || '').trim();
+      const currentMark = item.manualStageMarks?.[columnKey] || {};
+      item.manualStageMarks = {
+        ...(item.manualStageMarks || {}),
+        [columnKey]: {
+          ...currentMark,
+          legendKey: String(selection?.legendKey || currentMark.legendKey || '').trim(),
+          updatedAt: new Date(`${payload.date}T00:00:00.000Z`).toISOString(),
+          updatedBy: 'admin',
+        },
+      };
+      if (item.manualStageClears?.[columnKey]) {
+        delete item.manualStageClears[columnKey];
+      }
+    }
+
+    for (const [orderId, update] of updatesByOrderId.entries()) {
+      const res = await apiFetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: update.items,
+          manualDateOverrides: update.manualDateOverrides,
+        }),
+      });
+
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: await getErrorMessage(res, 'Не удалось обновить даты через резервное сохранение заказа.'),
+        };
+      }
+    }
+
+    return { ok: true };
+  }, [orders]);
+
   const applyManualDateToSelection = useCallback(async () => {
     if (!isAdmin || manualStageSaving || selectedStageSelections.length === 0 || !canEditSelectedDates) return;
 
@@ -1255,8 +1337,18 @@ function OrdersWorkspace() {
       }
 
       if (!res.ok) {
-        setError(await getErrorMessage(res, 'Не удалось обновить даты.'));
-        return;
+        const shouldTryFallback = ![400, 401, 403, 422].includes(res.status);
+        const endpointErrorMessage = await getErrorMessage(res, 'Не удалось обновить даты.');
+        if (!shouldTryFallback) {
+          setError(endpointErrorMessage);
+          return;
+        }
+
+        const fallbackResult = await applyManualDateThroughOrderUpdate(payload);
+        if (!fallbackResult.ok) {
+          setError(fallbackResult.message || endpointErrorMessage);
+          return;
+        }
       }
 
       clearSelectedStageCells();
@@ -1266,6 +1358,7 @@ function OrdersWorkspace() {
     }
   }, [
     canEditSelectedDates,
+    applyManualDateThroughOrderUpdate,
     clearSelectedStageCells,
     fetchOrders,
     isAdmin,

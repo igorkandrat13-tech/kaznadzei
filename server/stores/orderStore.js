@@ -981,6 +981,9 @@ const OrderStore = {
     if (updates.orderNumber !== undefined) order.orderNumber = updates.orderNumber;
     if (updates.customer !== undefined) order.customer = updates.customer;
     if (updates.orderDate !== undefined) order.orderDate = updates.orderDate;
+    if (updates.manualDateOverrides !== undefined) {
+      order.manualDateOverrides = normalizeOrderManualDateOverrides(updates.manualDateOverrides);
+    }
     if (updates.attachments !== undefined) {
       const primaryItem = getOrderItem(order);
       if (primaryItem) {
