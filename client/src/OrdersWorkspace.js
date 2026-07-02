@@ -678,6 +678,7 @@ function OrdersWorkspace() {
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
+  const manualDatePickerOpenRef = useRef(false);
   const attachmentInputRefs = useRef({});
   const syncingScrollRef = useRef(false);
 
@@ -1035,6 +1036,7 @@ function OrdersWorkspace() {
     const handlePointerDown = (event) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
+      if (manualDatePickerOpenRef.current) return;
       if (target.closest('.manual-stage-toolbar-floating')) return;
       if (target.closest('[data-manual-stage-cell-key]')) return;
       clearSelectedStageCells();
@@ -1248,6 +1250,7 @@ function OrdersWorkspace() {
       setManualStageSaving(false);
     }
   }, [
+    bindManualDateInputProps,
     canEditSelectedDates,
     clearSelectedStageCells,
     fetchOrders,
@@ -1293,6 +1296,34 @@ function OrdersWorkspace() {
       title,
     };
   }, [handleManualStageCellClick, isAdmin, legendColorMap, manualStageTextColorMap, selectedStageCellKeys]);
+
+  const bindManualDateInputProps = useCallback((valueSetter) => ({
+    onFocus: () => {
+      manualDatePickerOpenRef.current = true;
+    },
+    onBlur: () => {
+      window.setTimeout(() => {
+        manualDatePickerOpenRef.current = false;
+      }, 150);
+    },
+    onMouseDown: (event) => {
+      event.stopPropagation();
+    },
+    onClick: (event) => {
+      event.stopPropagation();
+      if (typeof event.currentTarget.showPicker === 'function') {
+        try {
+          event.currentTarget.showPicker();
+        } catch {
+          // Ignore browsers that block programmatic picker opening.
+        }
+      }
+    },
+    onChange: (event) => {
+      manualDatePickerOpenRef.current = false;
+      valueSetter(event.target.value);
+    },
+  }), []);
 
   const renderOrdersColGroup = useCallback(() => (
     <colgroup>
@@ -2972,7 +3003,7 @@ function OrdersWorkspace() {
                     <input
                       type="date"
                       value={manualOrderDateDraft.startDate}
-                      onChange={(event) => setManualOrderDateDraft((current) => ({ ...current, startDate: event.target.value }))}
+                      {...bindManualDateInputProps((value) => setManualOrderDateDraft((current) => ({ ...current, startDate: value })))}
                       disabled={manualStageSaving}
                     />
                   </label>
@@ -2981,7 +3012,7 @@ function OrdersWorkspace() {
                     <input
                       type="date"
                       value={manualOrderDateDraft.endDate}
-                      onChange={(event) => setManualOrderDateDraft((current) => ({ ...current, endDate: event.target.value }))}
+                      {...bindManualDateInputProps((value) => setManualOrderDateDraft((current) => ({ ...current, endDate: value })))}
                       disabled={manualStageSaving}
                     />
                   </label>
@@ -2992,7 +3023,7 @@ function OrdersWorkspace() {
                   <input
                     type="date"
                     value={manualDateDraft}
-                    onChange={(event) => setManualDateDraft(event.target.value)}
+                    {...bindManualDateInputProps(setManualDateDraft)}
                     disabled={manualStageSaving}
                   />
                 </label>
