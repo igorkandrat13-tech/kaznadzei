@@ -1237,6 +1237,7 @@ function OrdersWorkspace() {
         };
         continue;
       }
+      orderUpdate.manualDateOverrides = { startDate: '', endDate: '' };
 
       const itemId = String(selection?.itemId || '').trim();
       const itemIndex = orderUpdate.items.findIndex((item) => String(item?.itemId || '').trim() === itemId);

@@ -1174,6 +1174,7 @@ const OrderStore = {
 
       const item = getOrderItem(order, itemId);
       if (!item) continue;
+      const currentOverrides = normalizeOrderManualDateOverrides(order.manualDateOverrides);
       const currentMarks = normalizeManualStageMarks(item.manualStageMarks);
       const currentClears = normalizeManualStageClears(item.manualStageClears);
       const nextMark = {
@@ -1194,6 +1195,10 @@ const OrderStore = {
         const nextClears = { ...currentClears };
         delete nextClears[columnKey];
         item.manualStageClears = nextClears;
+        changed = true;
+      }
+      if (currentOverrides.startDate || currentOverrides.endDate) {
+        order.manualDateOverrides = { startDate: '', endDate: '' };
         changed = true;
       }
       item.updatedAt = new Date().toISOString();
