@@ -679,6 +679,7 @@ function OrdersWorkspace() {
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
   const manualDatePickerOpenRef = useRef(false);
+  const manualDateSelectionSyncRef = useRef('');
   const attachmentInputRefs = useRef({});
   const syncingScrollRef = useRef(false);
 
@@ -736,6 +737,8 @@ function OrdersWorkspace() {
       if (showForm) return;
       if (Object.keys(inlineDrafts).length > 0) return;
       if (inlineSavingKey) return;
+      if (selectedStageCellKeys.length > 0) return;
+      if (manualStageSaving) return;
       fetchOrders();
       fetchOrderStageLegendConfig();
     };
@@ -749,7 +752,7 @@ function OrdersWorkspace() {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [fetchOrderStageLegendConfig, fetchOrders, inlineDrafts, inlineSavingKey, showForm]);
+  }, [fetchOrderStageLegendConfig, fetchOrders, inlineDrafts, inlineSavingKey, manualStageSaving, selectedStageCellKeys.length, showForm]);
 
   const stageLegend = useMemo(() => orderStageLegendConfig.stages || [], [orderStageLegendConfig]);
   const primaryHeaderLabels = useMemo(() => orderStageLegendConfig.primaryHeaders || DEFAULT_ORDER_PRIMARY_HEADERS, [orderStageLegendConfig]);
@@ -926,6 +929,10 @@ function OrdersWorkspace() {
     const uniqueColumnKeys = Array.from(new Set(selectedStageSelections.map((selection) => selection.columnKey)));
     return uniqueColumnKeys.length === 1 ? uniqueColumnKeys[0] : '';
   }, [selectedStageSelections]);
+  const selectedStageCellKeysSignature = useMemo(
+    () => selectedStageCellKeys.join('|'),
+    [selectedStageCellKeys],
+  );
   const canEditSelectedDates = selectedStageSingleColumnKey === 'itemStartDate'
     || selectedStageSingleColumnKey === 'itemEndDate'
     || selectedStageSingleColumnKey === 'duration';
@@ -999,7 +1006,15 @@ function OrdersWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (!canEditSelectedDates || selectedStageSelections.length === 0) {
+    const nextSelectionSyncKey = canEditSelectedDates
+      ? `${selectedStageSingleColumnKey}::${selectedStageCellKeysSignature}`
+      : '';
+    if (nextSelectionSyncKey === manualDateSelectionSyncRef.current) {
+      return;
+    }
+    manualDateSelectionSyncRef.current = nextSelectionSyncKey;
+
+    if (!canEditSelectedDates || selectedStageCellKeys.length === 0 || selectedStageSelections.length === 0) {
       setManualDateDraft('');
       setManualOrderDateDraft({ startDate: '', endDate: '' });
       return;
@@ -1021,7 +1036,7 @@ function OrdersWorkspace() {
         : (firstSelection?.currentItemEndDate || '')
     );
     setManualOrderDateDraft({ startDate: '', endDate: '' });
-  }, [canEditSelectedDates, selectedStageSelections, selectedStageSingleColumnKey]);
+  }, [canEditSelectedDates, selectedStageCellKeys.length, selectedStageCellKeysSignature, selectedStageSelections, selectedStageSingleColumnKey]);
 
   useEffect(() => {
     setSelectedStageCellKeys((current) => current.filter((cellKey) => {
