@@ -1250,7 +1250,6 @@ function OrdersWorkspace() {
       setManualStageSaving(false);
     }
   }, [
-    bindManualDateInputProps,
     canEditSelectedDates,
     clearSelectedStageCells,
     fetchOrders,
