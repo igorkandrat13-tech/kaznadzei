@@ -275,6 +275,7 @@ const orderStageLegendRoutes = require('./server/routes/orderStageLegendRoutes')
 const updateRoutes = require('./server/routes/updateRoutes');
 const settingsRoutes = require('./server/routes/settingsRoutes');
 const employeeRoutes = require('./server/routes/employeeRoutes');
+const customerRoutes = require('./server/routes/customerRoutes');
 const telegramRoutes = require('./server/routes/telegramRoutes');
 const authRoutes = require('./server/routes/authRoutes');
 const adminToolsRoutes = require('./server/routes/adminToolsRoutes');
@@ -288,6 +289,7 @@ app.use('/api', orderStageLegendRoutes);
 app.use('/api', updateRoutes);
 app.use('/api', settingsRoutes);
 app.use('/api', employeeRoutes);
+app.use('/api', customerRoutes);
 app.use('/api', telegramRoutes);
 app.use('/api', adminToolsRoutes);
 

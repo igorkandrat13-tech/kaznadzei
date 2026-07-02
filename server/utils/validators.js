@@ -212,6 +212,9 @@ function sanitizeOrderInput(payload, options = {}) {
   if (!partial || payload.customer !== undefined) {
     data.customer = normalizeString(payload.customer, 'customer', { maxLength: 120 });
   }
+  if (!partial || payload.customerId !== undefined) {
+    data.customerId = normalizeString(payload.customerId, 'customerId', { maxLength: 80 });
+  }
   if (!partial || payload.quantity !== undefined) {
     data.quantity = normalizePositiveInt(payload.quantity, 'quantity', { required: false, min: 1 });
   }
@@ -230,10 +233,8 @@ function sanitizeOrderInput(payload, options = {}) {
   if (!partial || payload.endDate !== undefined) {
     data.endDate = normalizeDate(payload.endDate, 'endDate', { allowUndefined: partial });
   }
-  if (!partial || payload.manualDateOverrides !== undefined) {
-    if (payload.manualDateOverrides === undefined && partial) {
-      data.manualDateOverrides = undefined;
-    } else if (!payload.manualDateOverrides || typeof payload.manualDateOverrides !== 'object' || Array.isArray(payload.manualDateOverrides)) {
+  if (payload.manualDateOverrides !== undefined) {
+    if (!payload.manualDateOverrides || typeof payload.manualDateOverrides !== 'object' || Array.isArray(payload.manualDateOverrides)) {
       fail('Поле "manualDateOverrides" должно быть объектом.');
     } else {
       data.manualDateOverrides = {
@@ -356,10 +357,10 @@ function sanitizeOrderItemInput(payload, options = {}) {
   if (!partial || payload.notes !== undefined) {
     data.notes = normalizeString(payload.notes, 'notes', { maxLength: 2000 });
   }
-  if (!partial || payload.manualStageMarks !== undefined) {
+  if (payload.manualStageMarks !== undefined) {
     data.manualStageMarks = normalizeManualStageMarks(payload.manualStageMarks, 'manualStageMarks');
   }
-  if (!partial || payload.manualStageClears !== undefined) {
+  if (payload.manualStageClears !== undefined) {
     data.manualStageClears = normalizeManualStageClears(payload.manualStageClears, 'manualStageClears');
   }
 
@@ -468,6 +469,33 @@ function sanitizeEmployeeInput(payload, options = {}) {
   return data;
 }
 
+function sanitizeCustomerInput(payload, options = {}) {
+  const partial = options.partial === true;
+  const data = {};
+
+  if (!partial || payload.fullName !== undefined) {
+    data.fullName = normalizeString(payload.fullName, 'fullName', { required: !partial, maxLength: 160 });
+  }
+  if (!partial || payload.phone !== undefined) {
+    data.phone = normalizeString(payload.phone, 'phone', { maxLength: 40 });
+  }
+  if (!partial || payload.telegram !== undefined) {
+    const telegram = normalizeString(payload.telegram, 'telegram', { maxLength: 120 });
+    data.telegram = telegram ? telegram.replace(/^@+/, '@') : '';
+  }
+  if (!partial || payload.email !== undefined) {
+    data.email = normalizeString(payload.email, 'email', { maxLength: 160 });
+  }
+  if (!partial || payload.address !== undefined) {
+    data.address = normalizeString(payload.address, 'address', { maxLength: 255 });
+  }
+  if (!partial || payload.notes !== undefined) {
+    data.notes = normalizeString(payload.notes, 'notes', { maxLength: 2000 });
+  }
+
+  return data;
+}
+
 function sanitizeRoleInput(payload, options = {}) {
   const partial = options.partial === true;
   const data = {};
@@ -495,6 +523,7 @@ module.exports = {
   normalizeDate,
   sanitizeColorInput,
   sanitizeCommentInput,
+  sanitizeCustomerInput,
   sanitizeEmployeeInput,
   sanitizeOrderAttachmentInput,
   sanitizeOrderInput,

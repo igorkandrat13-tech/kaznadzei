@@ -9,6 +9,7 @@ function normalizeDb(source = {}) {
   return {
     processSteps: Array.isArray(source.processSteps) ? source.processSteps : [],
     orders: Array.isArray(source.orders) ? source.orders : [],
+    customers: Array.isArray(source.customers) ? source.customers : [],
     colors: Array.isArray(source.colors) ? source.colors : [],
     settings: source.settings && typeof source.settings === 'object' ? source.settings : {},
     employees: Array.isArray(source.employees) ? source.employees : [],

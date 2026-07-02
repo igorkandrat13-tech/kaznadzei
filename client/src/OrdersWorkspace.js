@@ -563,11 +563,36 @@ function buildOrderItemsPayload(items = []) {
   }));
 }
 
+function createEmptyCustomerDraft(name = '') {
+  return {
+    customerId: '',
+    fullName: String(name || '').trim(),
+    phone: '',
+    telegram: '',
+    email: '',
+    address: '',
+    notes: '',
+  };
+}
+
+function mapCustomerToDraft(customer) {
+  return {
+    customerId: customer?._id || '',
+    fullName: customer?.fullName || '',
+    phone: customer?.phone || '',
+    telegram: customer?.telegram || '',
+    email: customer?.email || '',
+    address: customer?.address || '',
+    notes: customer?.notes || '',
+  };
+}
+
 function createEmptyOrderForm() {
   const today = new Date().toISOString().split('T')[0];
   return {
     orderNumber: '',
     customer: '',
+    customerId: '',
     orderDate: today,
     startDate: '',
     endDate: '',
@@ -598,6 +623,7 @@ function mapOrderToForm(order) {
   return {
     orderNumber: order?.orderNumber || '',
     customer: order?.customer || '',
+    customerId: order?.customerId || '',
     orderDate: order?.orderDate || '',
     startDate: order?.startDate || '',
     endDate: order?.endDate || '',
@@ -637,7 +663,9 @@ function getOrderIdentity(row) {
 function OrdersWorkspace() {
   const authRole = getAppAuthRole();
   const isAdmin = canAccessRole('admin', authRole);
+  const canManageCustomers = canAccessRole('manager', authRole);
   const [orders, setOrders] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -675,6 +703,9 @@ function OrdersWorkspace() {
   const [confirmAttachmentDelete, setConfirmAttachmentDelete] = useState(null);
   const [confirmAttachmentOverwrite, setConfirmAttachmentOverwrite] = useState(null);
   const [attachmentLinkDraft, setAttachmentLinkDraft] = useState({ name: '', url: '' });
+  const [customerEditor, setCustomerEditor] = useState(null);
+  const [customerDraft, setCustomerDraft] = useState(createEmptyCustomerDraft);
+  const [customerSaving, setCustomerSaving] = useState(false);
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
@@ -718,10 +749,28 @@ function OrdersWorkspace() {
     }
   }, []);
 
+  const fetchCustomers = useCallback(async () => {
+    if (!canManageCustomers) {
+      setCustomers([]);
+      return;
+    }
+    try {
+      const res = await apiFetch('/api/customers');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось загрузить заказчиков.');
+      }
+      setCustomers(Array.isArray(data) ? data : []);
+    } catch (fetchError) {
+      setError(fetchError.message || 'Не удалось загрузить заказчиков.');
+    }
+  }, [canManageCustomers]);
+
   useEffect(() => {
     fetchOrders({ showLoader: true });
     fetchOrderStageLegendConfig();
-  }, [fetchOrderStageLegendConfig, fetchOrders]);
+    fetchCustomers();
+  }, [fetchCustomers, fetchOrderStageLegendConfig, fetchOrders]);
 
   useEffect(() => {
     return () => {
@@ -996,6 +1045,11 @@ function OrdersWorkspace() {
     () => (orderPreview ? getOrderManufacturingMeta(orderPreview) : null),
     [orderPreview],
   );
+  const customersById = useMemo(() => customers.reduce((acc, customer) => {
+    acc[customer._id] = customer;
+    return acc;
+  }, {}), [customers]);
+  const linkedOrderPreviewCustomer = orderPreview?.customerId ? (customersById[orderPreview.customerId] || null) : null;
   const currentAttachmentDialogAttachments = useMemo(
     () => getItemAttachments(currentAttachmentDialogItem, attachmentsDialog?.scope),
     [attachmentsDialog?.scope, currentAttachmentDialogItem],
@@ -1633,6 +1687,10 @@ function OrdersWorkspace() {
       setAttachmentsDialog(null);
       return;
     }
+    if (customerEditor && !customerSaving) {
+      setCustomerEditor(null);
+      return;
+    }
     if (orderPreview) {
       setOrderPreview(null);
       return;
@@ -1648,7 +1706,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || packageEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || orderPreview || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || packageEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || customerEditor || orderPreview || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -1660,6 +1718,127 @@ function OrdersWorkspace() {
     setError('');
     setOrderForm(current => ({ ...current, [field]: value }));
   };
+
+  const openCustomerEditor = useCallback((options = {}) => {
+    const context = options.context || 'order-form';
+    if (context === 'order-cell') {
+      const order = options.order || null;
+      if (!order?._id) return;
+      const linkedCustomer = order.customerId ? (customersById[order.customerId] || null) : null;
+      setCustomerDraft(linkedCustomer ? mapCustomerToDraft(linkedCustomer) : createEmptyCustomerDraft(order.customer || ''));
+      setCustomerEditor({
+        context,
+        orderId: order._id,
+        initialName: order.customer || '',
+      });
+      return;
+    }
+
+    const linkedCustomer = orderForm.customerId ? (customersById[orderForm.customerId] || null) : null;
+    setCustomerDraft(linkedCustomer ? mapCustomerToDraft(linkedCustomer) : createEmptyCustomerDraft(orderForm.customer || ''));
+    setCustomerEditor({
+      context: 'order-form',
+      orderId: editingOrderId || '',
+      initialName: orderForm.customer || '',
+    });
+  }, [customersById, editingOrderId, orderForm.customer, orderForm.customerId]);
+
+  const handleCustomerDraftFieldChange = useCallback((field) => (event) => {
+    const value = event.target.value;
+    setError('');
+    setCustomerDraft((current) => ({ ...current, [field]: value }));
+  }, []);
+
+  const handleCustomerTemplateSelect = useCallback((event) => {
+    const nextCustomerId = event.target.value;
+    setError('');
+    if (!nextCustomerId) {
+      setCustomerDraft(createEmptyCustomerDraft(customerEditor?.initialName || ''));
+      return;
+    }
+    const existingCustomer = customersById[nextCustomerId] || null;
+    if (!existingCustomer) return;
+    setCustomerDraft(mapCustomerToDraft(existingCustomer));
+  }, [customerEditor?.initialName, customersById]);
+
+  const applyCustomerToOrder = useCallback(async (orderId, customer) => {
+    const res = await apiFetch(`/api/orders/${orderId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: customer.fullName || '',
+        customerId: customer._id || '',
+      }),
+    });
+    if (!res.ok) {
+      return await getErrorMessage(res, 'Не удалось привязать заказчика к заказу.');
+    }
+    return '';
+  }, []);
+
+  const saveCustomerFromEditor = useCallback(async () => {
+    const payload = {
+      fullName: String(customerDraft.fullName || '').trim(),
+      phone: String(customerDraft.phone || '').trim(),
+      telegram: String(customerDraft.telegram || '').trim(),
+      email: String(customerDraft.email || '').trim(),
+      address: String(customerDraft.address || '').trim(),
+      notes: String(customerDraft.notes || '').trim(),
+    };
+    if (!payload.fullName) {
+      setError('Укажите ФИО заказчика.');
+      return;
+    }
+
+    setCustomerSaving(true);
+    setError('');
+    try {
+      const customerId = String(customerDraft.customerId || '').trim();
+      const res = await apiFetch(customerId ? `/api/customers/${customerId}` : '/api/customers', {
+        method: customerId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setError(data?.message || 'Не удалось сохранить карточку заказчика.');
+        return;
+      }
+
+      const savedCustomer = data || { _id: customerId, ...payload };
+      await fetchCustomers();
+
+      if (customerEditor?.context === 'order-cell' && customerEditor?.orderId) {
+        const orderLinkError = await applyCustomerToOrder(customerEditor.orderId, savedCustomer);
+        if (orderLinkError) {
+          setError(orderLinkError);
+          return;
+        }
+        setOrderPreview((current) => (
+          current && current._id === customerEditor.orderId
+            ? { ...current, customer: savedCustomer.fullName || '', customerId: savedCustomer._id || '' }
+            : current
+        ));
+        setOrderActionsOrder((current) => (
+          current && current._id === customerEditor.orderId
+            ? { ...current, customer: savedCustomer.fullName || '', customerId: savedCustomer._id || '' }
+            : current
+        ));
+        await fetchOrders();
+      } else {
+        setOrderForm((current) => ({
+          ...current,
+          customer: savedCustomer.fullName || '',
+          customerId: savedCustomer._id || '',
+        }));
+      }
+
+      setCustomerEditor(null);
+      setCustomerDraft(createEmptyCustomerDraft());
+    } finally {
+      setCustomerSaving(false);
+    }
+  }, [applyCustomerToOrder, customerDraft, customerEditor, fetchCustomers, fetchOrders]);
 
   const handleSubmit = async () => {
     if (!isFormValid) {
@@ -1673,6 +1852,7 @@ function OrdersWorkspace() {
     const payload = {
       orderNumber: String(orderForm.orderNumber || '').trim(),
       customer: String(orderForm.customer || '').trim(),
+      customerId: String(orderForm.customerId || '').trim(),
       orderDate: String(orderForm.orderDate || '').trim(),
       startDate: String(orderForm.startDate || '').trim(),
       endDate: String(orderForm.endDate || '').trim(),
@@ -2431,6 +2611,9 @@ function OrdersWorkspace() {
     const payload = {
       orderNumber,
       customer: String(draft.customer || '').trim(),
+      customerId: String(draft.customer || '').trim() === String(baseOrder.customer || '').trim()
+        ? String(baseOrder.customerId || '').trim()
+        : '',
       orderDate: baseOrder.orderDate || '',
       items: nextItems.map(item => ({
         itemId: item.itemId,
@@ -2746,9 +2929,21 @@ function OrdersWorkspace() {
                       : undefined;
                     const carpenterCellClassName = `${hasCarpenterAutoHighlight ? '' : 'order-filled-cell'} ${orderGroupClass} ${orderOutlineClass}`.trim();
                     const roomCellProps = getManualStageCellProps(key, item, 'room', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const roomNumberCellProps = getManualStageCellProps(key, item, 'roomNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const itemNumberCellProps = getManualStageCellProps(key, item, 'itemNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const quantityCellProps = getManualStageCellProps(key, item, 'quantity', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const roomNumberCellPropsBase = getManualStageCellProps(key, item, 'roomNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const roomNumberCellProps = {
+                      ...roomNumberCellPropsBase,
+                      className: cn(roomNumberCellPropsBase.className, 'orders-cell-center'),
+                    };
+                    const itemNumberCellPropsBase = getManualStageCellProps(key, item, 'itemNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const itemNumberCellProps = {
+                      ...itemNumberCellPropsBase,
+                      className: cn(itemNumberCellPropsBase.className, 'orders-cell-center'),
+                    };
+                    const quantityCellPropsBase = getManualStageCellProps(key, item, 'quantity', regularOrderClass, undefined, { disabled: isInlineEditing });
+                    const quantityCellProps = {
+                      ...quantityCellPropsBase,
+                      className: cn(quantityCellPropsBase.className, 'orders-cell-center'),
+                    };
                     const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const hasItemManufacturingStart = Boolean(itemManufacturingMeta.startDate);
@@ -2922,7 +3117,20 @@ function OrdersWorkspace() {
                             {...customerCellProps}
                           >
                             <div className="merged-order-customer-content">
-                              {isOrderInlineEditing ? <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} /> : <div className="merged-order-customer-text">{order.customer || '—'}</div>}
+                              {isOrderInlineEditing ? (
+                                <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} />
+                              ) : canManageCustomers && (order.customer || order.customerId) ? (
+                                <button
+                                  type="button"
+                                  className="order-link-button merged-order-customer-button"
+                                  onClick={() => openCustomerEditor({ context: 'order-cell', order })}
+                                  title="Открыть карточку заказчика"
+                                >
+                                  {order.customer || 'Открыть карточку'}
+                                </button>
+                              ) : (
+                                <div className="merged-order-customer-text">{order.customer || '—'}</div>
+                              )}
                             </div>
                           </td>
                         ) : null}
@@ -2975,7 +3183,7 @@ function OrdersWorkspace() {
                           })}
                         </td>
                         <td {...packageCellProps}>
-                          <div className={cn('package-cell-content', packageStats.pending > 0 && 'package-cell-content-compact')}>
+                          <div className="package-cell-content">
                             <Button
                               variant="secondary"
                               size="sm"
@@ -2998,15 +3206,6 @@ function OrdersWorkspace() {
                             >
                               {packageStats.pending}/{packageStats.total}
                             </span>
-                            {packageStats.pending > 0 ? (
-                              <span
-                                className="package-cell-attention-icon"
-                                title={`Не исполнено: ${packageStats.pending} из ${packageStats.total}`}
-                                aria-hidden="true"
-                              >
-                                !
-                              </span>
-                            ) : null}
                           </div>
                         </td>
                         <td {...notesCellProps}>
@@ -3193,11 +3392,27 @@ function OrdersWorkspace() {
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Заказчик</label>
-                <input
-                  value={orderForm.customer}
-                  onChange={handleOrderFieldChange('customer')}
-                  placeholder="ФИО или название"
-                />
+                <div className="customer-picker-field">
+                  <button
+                    type="button"
+                    className="order-link-button customer-picker-trigger"
+                    onClick={() => openCustomerEditor({ context: 'order-form' })}
+                    disabled={!canManageCustomers || savingOrder}
+                    title={canManageCustomers ? 'Открыть карточку заказчика' : 'Недостаточно прав для редактирования заказчиков'}
+                  >
+                    {orderForm.customer || 'Создать или выбрать заказчика'}
+                  </button>
+                  {orderForm.customer ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setOrderForm((current) => ({ ...current, customer: '', customerId: '' }))}
+                      disabled={savingOrder}
+                    >
+                      Очистить
+                    </Button>
+                  ) : null}
+                </div>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Дата заказа *</label>
@@ -3223,6 +3438,97 @@ function OrdersWorkspace() {
                 {savingOrder ? (editingOrderId ? 'Сохранение...' : 'Создание...') : (editingOrderId ? 'Сохранить заказ' : 'Создать заказ')}
               </Button>
             </div>
+        </Modal>
+      ) : null}
+
+      {customerEditor ? (
+        <Modal open={Boolean(customerEditor)} onClose={() => !customerSaving && setCustomerEditor(null)} closeDisabled={customerSaving} size="lg" className="order-form-modal">
+          <ModalHeader
+            title={customerEditor.context === 'order-cell' ? 'Карточка заказчика' : 'Выбор и создание заказчика'}
+            subtitle={customerEditor.context === 'order-cell'
+              ? 'Просмотр, редактирование и привязка заказчика к текущему заказу.'
+              : 'Создайте новую карточку заказчика или выберите существующую для заказа.'}
+            onClose={() => !customerSaving && setCustomerEditor(null)}
+            closeDisabled={customerSaving}
+          />
+
+          <div className="responsive-form-grid">
+            {customerEditor.context === 'order-form' ? (
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Существующий заказчик</label>
+                <select value={customerDraft.customerId} onChange={handleCustomerTemplateSelect} disabled={customerSaving}>
+                  <option value="">{customers.length > 0 ? 'Новая карточка заказчика' : 'Заказчики пока не добавлены'}</option>
+                  {customers.map((customer) => (
+                    <option key={customer._id} value={customer._id}>{customer.fullName}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>ФИО *</label>
+              <input
+                value={customerDraft.fullName}
+                onChange={handleCustomerDraftFieldChange('fullName')}
+                placeholder="Фамилия Имя Отчество"
+                disabled={customerSaving}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Телефон</label>
+              <input
+                value={customerDraft.phone}
+                onChange={handleCustomerDraftFieldChange('phone')}
+                placeholder="+7 (900) 000-00-00"
+                disabled={customerSaving}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Telegram</label>
+              <input
+                value={customerDraft.telegram}
+                onChange={handleCustomerDraftFieldChange('telegram')}
+                placeholder="@username"
+                disabled={customerSaving}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Email</label>
+              <input
+                value={customerDraft.email}
+                onChange={handleCustomerDraftFieldChange('email')}
+                placeholder="mail@example.com"
+                disabled={customerSaving}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Адрес</label>
+              <input
+                value={customerDraft.address}
+                onChange={handleCustomerDraftFieldChange('address')}
+                placeholder="Адрес объекта или доставки"
+                disabled={customerSaving}
+              />
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
+            <label>Дополнительные контакты и примечания</label>
+            <textarea
+              className="table-inline-textarea"
+              rows={4}
+              value={customerDraft.notes}
+              onChange={handleCustomerDraftFieldChange('notes')}
+              placeholder="Удобное время связи, дополнительные телефоны, комментарии по коммуникации"
+              disabled={customerSaving}
+            />
+          </div>
+
+          <div className="modal-actions">
+            <Button onClick={() => !customerSaving && setCustomerEditor(null)} disabled={customerSaving}>Отмена</Button>
+            <Button variant="success" onClick={saveCustomerFromEditor} disabled={customerSaving}>
+              {customerSaving ? 'Сохранение...' : (customerEditor.context === 'order-cell' ? 'Сохранить карточку' : 'Сохранить и выбрать')}
+            </Button>
+          </div>
         </Modal>
       ) : null}
 
@@ -3582,6 +3888,15 @@ function OrdersWorkspace() {
                 <div className="detail-value">{formatManufacturingTime(orderPreviewMeta?.startDate, orderPreviewMeta?.endDate)}</div>
               </div>
             </div>
+            {linkedOrderPreviewCustomer ? (
+              <div className="panel-info-text">
+                Контакты: {[
+                  linkedOrderPreviewCustomer.phone,
+                  linkedOrderPreviewCustomer.telegram,
+                  linkedOrderPreviewCustomer.email,
+                ].filter(Boolean).join(' · ') || '—'}
+              </div>
+            ) : null}
           </div>
 
           <div className="order-items-editor">

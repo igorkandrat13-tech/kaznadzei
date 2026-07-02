@@ -753,6 +753,11 @@ function ensureOrderShape(order) {
     order.customer = '';
     changed = true;
   }
+  const normalizedCustomerId = String(order.customerId || '').trim();
+  if (order.customerId !== normalizedCustomerId) {
+    order.customerId = normalizedCustomerId;
+    changed = true;
+  }
   if (JSON.stringify(order.attachments || []) !== JSON.stringify([])) {
     order.attachments = [];
     changed = true;
@@ -840,6 +845,7 @@ const OrderStore = {
       _id: id(),
       orderNumber: data.orderNumber || '',
       customer: data.customer || '',
+      customerId: String(data.customerId || '').trim(),
       orderDate: data.orderDate || '',
       startDate: '',
       endDate: '',
@@ -980,6 +986,7 @@ const OrderStore = {
 
     if (updates.orderNumber !== undefined) order.orderNumber = updates.orderNumber;
     if (updates.customer !== undefined) order.customer = updates.customer;
+    if (updates.customerId !== undefined) order.customerId = String(updates.customerId || '').trim();
     if (updates.orderDate !== undefined) order.orderDate = updates.orderDate;
     if (updates.manualDateOverrides !== undefined) {
       order.manualDateOverrides = normalizeOrderManualDateOverrides(updates.manualDateOverrides);
