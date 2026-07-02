@@ -1861,7 +1861,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-header-secondary-height: 42px;
   --orders-group-border-width: 1.35px;
   --orders-col-order-number-width: 64px;
-  --orders-col-customer-width: 130px;
+  --orders-col-customer-width: 164px;
   --orders-col-room-width: 96px;
   --orders-col-number-width: 52px;
   --orders-col-quantity-width: 86px;
@@ -2853,6 +2853,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
   justify-content: center;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .merged-order-customer-text,
@@ -2878,9 +2879,16 @@ body[data-theme='light'] .order-primary-title-button-badge {
 .merged-order-customer-button {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 6px 8px;
   white-space: normal;
   word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 
 .orders-cell-center {
@@ -6497,7 +6505,7 @@ body[data-theme='light'] .home-auth-status-pending {
     --orders-header-primary-height: 52px;
     --orders-header-secondary-height: 40px;
     --orders-col-order-number-width: 60px;
-    --orders-col-customer-width: 122px;
+    --orders-col-customer-width: 138px;
     --orders-col-room-width: 88px;
     --orders-col-number-width: 48px;
     --orders-col-quantity-width: 82px;
@@ -6562,7 +6570,7 @@ body[data-theme='light'] .home-auth-status-pending {
 
 @media (max-width: 1366px) {
   .unified-orders-table {
-    --orders-col-customer-width: 124px;
+    --orders-col-customer-width: 140px;
     --orders-col-room-width: 92px;
     --orders-col-name-width: 136px;
     --orders-col-notes-width: 228px;
@@ -6648,7 +6656,7 @@ body[data-theme='light'] .home-auth-status-pending {
     --orders-header-primary-height: 48px;
     --orders-header-secondary-height: 38px;
     --orders-col-order-number-width: 56px;
-    --orders-col-customer-width: 112px;
+    --orders-col-customer-width: 132px;
     --orders-col-room-width: 82px;
     --orders-col-number-width: 44px;
     --orders-col-quantity-width: 78px;
@@ -6944,7 +6952,7 @@ body[data-theme='light'] .home-auth-status-pending {
     --orders-header-primary-height: 44px;
     --orders-header-secondary-height: 34px;
     --orders-col-order-number-width: 52px;
-    --orders-col-customer-width: 100px;
+    --orders-col-customer-width: 120px;
     --orders-col-room-width: 74px;
     --orders-col-number-width: 40px;
     --orders-col-quantity-width: 74px;
