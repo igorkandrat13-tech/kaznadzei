@@ -1305,19 +1305,6 @@ function OrdersWorkspace() {
         manualDatePickerOpenRef.current = false;
       }, 150);
     },
-    onMouseDown: (event) => {
-      event.stopPropagation();
-    },
-    onClick: (event) => {
-      event.stopPropagation();
-      if (typeof event.currentTarget.showPicker === 'function') {
-        try {
-          event.currentTarget.showPicker();
-        } catch {
-          // Ignore browsers that block programmatic picker opening.
-        }
-      }
-    },
     onChange: (event) => {
       manualDatePickerOpenRef.current = false;
       valueSetter(event.target.value);
