@@ -426,6 +426,7 @@ function sanitizeRoleInput(payload, options = {}) {
 }
 
 module.exports = {
+  normalizeDate,
   sanitizeColorInput,
   sanitizeCommentInput,
   sanitizeEmployeeInput,

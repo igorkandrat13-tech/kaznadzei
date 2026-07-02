@@ -656,6 +656,8 @@ function OrdersWorkspace() {
   const [manualStageSaving, setManualStageSaving] = useState(false);
   const [selectedStageCellKeys, setSelectedStageCellKeys] = useState([]);
   const [manualStageToolbarPosition, setManualStageToolbarPosition] = useState(null);
+  const [manualDateDraft, setManualDateDraft] = useState('');
+  const [manualOrderDateDraft, setManualOrderDateDraft] = useState({ startDate: '', endDate: '' });
   const [qrPreview, setQrPreview] = useState(null);
   const [orderPreview, setOrderPreview] = useState(null);
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
@@ -896,6 +898,8 @@ function OrdersWorkspace() {
       const row = rowsByKey[rowKey];
       if (!row?.item?.itemId || !row?.orderId) return null;
       const autoLegendKey = getLegendKeyForManualStageColumn(columnKey, secondaryHeaderSchema);
+      const itemManufacturingMeta = getItemManufacturingMeta(row.item);
+      const orderManufacturingMeta = getOrderManufacturingMeta(row.order);
       return {
         cellKey,
         rowKey,
@@ -905,6 +909,10 @@ function OrdersWorkspace() {
         itemId: row.item.itemId,
         itemName: row.item.name || '',
         orderNumber: row.order.orderNumber || '',
+        currentItemStartDate: itemManufacturingMeta.startDate || '',
+        currentItemEndDate: itemManufacturingMeta.endDate || '',
+        currentOrderStartDate: orderManufacturingMeta.startDate || '',
+        currentOrderEndDate: orderManufacturingMeta.endDate || '',
       };
     })
     .filter(Boolean), [rowsByKey, secondaryHeaderSchema, selectedStageCellKeys]);
@@ -913,6 +921,13 @@ function OrdersWorkspace() {
     [selectedStageSelections],
   );
   const selectedStageSelectionSkippedCount = selectedStageSelections.length - selectedStageSelectionsWithLegend.length;
+  const selectedStageSingleColumnKey = useMemo(() => {
+    const uniqueColumnKeys = Array.from(new Set(selectedStageSelections.map((selection) => selection.columnKey)));
+    return uniqueColumnKeys.length === 1 ? uniqueColumnKeys[0] : '';
+  }, [selectedStageSelections]);
+  const canEditSelectedDates = selectedStageSingleColumnKey === 'itemStartDate'
+    || selectedStageSingleColumnKey === 'itemEndDate'
+    || selectedStageSingleColumnKey === 'duration';
 
   const firstOrderRowKeys = useMemo(() => {
     const seenOrders = new Set();
@@ -981,6 +996,31 @@ function OrdersWorkspace() {
   const clearSelectedStageCells = useCallback(() => {
     setSelectedStageCellKeys([]);
   }, []);
+
+  useEffect(() => {
+    if (!canEditSelectedDates || selectedStageSelections.length === 0) {
+      setManualDateDraft('');
+      setManualOrderDateDraft({ startDate: '', endDate: '' });
+      return;
+    }
+
+    const firstSelection = selectedStageSelections[0];
+    if (selectedStageSingleColumnKey === 'duration') {
+      setManualOrderDateDraft({
+        startDate: firstSelection?.currentOrderStartDate || '',
+        endDate: firstSelection?.currentOrderEndDate || '',
+      });
+      setManualDateDraft('');
+      return;
+    }
+
+    setManualDateDraft(
+      selectedStageSingleColumnKey === 'itemStartDate'
+        ? (firstSelection?.currentItemStartDate || '')
+        : (firstSelection?.currentItemEndDate || '')
+    );
+    setManualOrderDateDraft({ startDate: '', endDate: '' });
+  }, [canEditSelectedDates, selectedStageSelections, selectedStageSingleColumnKey]);
 
   useEffect(() => {
     setSelectedStageCellKeys((current) => current.filter((cellKey) => {
@@ -1142,6 +1182,83 @@ function OrdersWorkspace() {
       setManualStageSaving(false);
     }
   }, [clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
+
+  const applyManualDateToSelection = useCallback(async () => {
+    if (!isAdmin || manualStageSaving || selectedStageSelections.length === 0 || !canEditSelectedDates) return;
+
+    if (selectedStageSingleColumnKey === 'duration') {
+      if (!manualOrderDateDraft.startDate && !manualOrderDateDraft.endDate) {
+        setError('Укажите хотя бы одну дату для последнего столбца.');
+        return;
+      }
+      if (
+        manualOrderDateDraft.startDate
+        && manualOrderDateDraft.endDate
+        && manualOrderDateDraft.endDate < manualOrderDateDraft.startDate
+      ) {
+        setError('Дата окончания не может быть раньше даты начала.');
+        return;
+      }
+    } else if (!manualDateDraft) {
+      setError('Укажите дату для выбранных ячеек.');
+      return;
+    }
+
+    setManualStageSaving(true);
+    setError('');
+    try {
+      const payload = {
+        columnKey: selectedStageSingleColumnKey,
+        selections: selectedStageSelections.map((selection) => ({
+          orderId: selection.orderId,
+          itemId: selection.itemId,
+          columnKey: selection.columnKey,
+          legendKey: selection.autoLegendKey,
+        })),
+      };
+      if (selectedStageSingleColumnKey === 'duration') {
+        payload.startDate = manualOrderDateDraft.startDate || '';
+        payload.endDate = manualOrderDateDraft.endDate || '';
+      } else {
+        payload.date = manualDateDraft;
+      }
+
+      let res = await apiFetch('/api/orders/manual-date-overrides', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 404 || res.status === 405) {
+        res = await apiFetch('/api/orders/manual-date-overrides', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось обновить даты.'));
+        return;
+      }
+
+      clearSelectedStageCells();
+      await fetchOrders();
+    } finally {
+      setManualStageSaving(false);
+    }
+  }, [
+    canEditSelectedDates,
+    clearSelectedStageCells,
+    fetchOrders,
+    isAdmin,
+    manualDateDraft,
+    manualOrderDateDraft.endDate,
+    manualOrderDateDraft.startDate,
+    manualStageSaving,
+    selectedStageSelections,
+    selectedStageSingleColumnKey,
+  ]);
 
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
@@ -2846,6 +2963,51 @@ function OrdersWorkspace() {
               <> • без этапа: <strong>{selectedStageSelectionSkippedCount}</strong></>
             ) : null}
           </div>
+          {canEditSelectedDates ? (
+            <div className="manual-stage-toolbar-date-editor">
+              {selectedStageSingleColumnKey === 'duration' ? (
+                <>
+                  <label className="manual-stage-toolbar-date-field">
+                    <span>Начало заказа</span>
+                    <input
+                      type="date"
+                      value={manualOrderDateDraft.startDate}
+                      onChange={(event) => setManualOrderDateDraft((current) => ({ ...current, startDate: event.target.value }))}
+                      disabled={manualStageSaving}
+                    />
+                  </label>
+                  <label className="manual-stage-toolbar-date-field">
+                    <span>Окончание заказа</span>
+                    <input
+                      type="date"
+                      value={manualOrderDateDraft.endDate}
+                      onChange={(event) => setManualOrderDateDraft((current) => ({ ...current, endDate: event.target.value }))}
+                      disabled={manualStageSaving}
+                    />
+                  </label>
+                </>
+              ) : (
+                <label className="manual-stage-toolbar-date-field">
+                  <span>{selectedStageSingleColumnKey === 'itemStartDate' ? 'Дата начала' : 'Дата окончания'}</span>
+                  <input
+                    type="date"
+                    value={manualDateDraft}
+                    onChange={(event) => setManualDateDraft(event.target.value)}
+                    disabled={manualStageSaving}
+                  />
+                </label>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                className="manual-stage-toolbar-btn"
+                onClick={applyManualDateToSelection}
+                disabled={manualStageSaving}
+              >
+                Применить дату
+              </Button>
+            </div>
+          ) : null}
           <div className="manual-stage-toolbar-actions">
             <Button
               variant="secondary"

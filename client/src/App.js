@@ -178,44 +178,6 @@ function AppLayout() {
                         <div className="App-header-brand">
                             <div className="App-header-brand-row">
                                 <h1>🏭 Мебельная фабрика Kaznadzei</h1>
-                                <div ref={mobileMenuAnchorRef} className="App-header-menu-anchor">
-                                    <button
-                                        className="mobile-menu-toggle"
-                                        type="button"
-                                        onClick={() => setMobileMenuOpen(current => !current)}
-                                        aria-expanded={mobileMenuOpen}
-                                        aria-label={mobileMenuOpen ? 'Скрыть меню навигации' : 'Показать меню навигации'}
-                                        title="Навигация"
-                                    >
-                                        <span className="mobile-menu-toggle-line" aria-hidden="true" />
-                                        <span className="mobile-menu-toggle-line" aria-hidden="true" />
-                                        <span className="mobile-menu-toggle-line" aria-hidden="true" />
-                                    </button>
-                                    <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
-                                        <nav className="App-header-nav App-header-nav-primary">
-                                            <Link to="/" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
-                                            {canAccessOrders && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
-                                            {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
-                                            {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
-                                        </nav>
-                                        <div className="App-header-menu-footer">
-                                            <button
-                                                className="theme-icon-toggle App-header-menu-theme-toggle"
-                                                type="button"
-                                                onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}
-                                                aria-label={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
-                                                title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
-                                            >
-                                                {theme === 'dark' ? '☀' : '◐'}
-                                            </button>
-                                            {authRole ? (
-                                                <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
-                                                    Выйти
-                                                </button>
-                                            ) : null}
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                         {canAccessOrders && ordersRoute ? (
@@ -223,6 +185,44 @@ function AppLayout() {
                                 <div id="orders-header-primary-actions" className="App-header-orders-primary-slot" />
                             </div>
                         ) : null}
+                        <div ref={mobileMenuAnchorRef} className="App-header-menu-anchor">
+                            <button
+                                className="mobile-menu-toggle"
+                                type="button"
+                                onClick={() => setMobileMenuOpen(current => !current)}
+                                aria-expanded={mobileMenuOpen}
+                                aria-label={mobileMenuOpen ? 'Скрыть меню навигации' : 'Показать меню навигации'}
+                                title="Навигация"
+                            >
+                                <span className="mobile-menu-toggle-line" aria-hidden="true" />
+                                <span className="mobile-menu-toggle-line" aria-hidden="true" />
+                                <span className="mobile-menu-toggle-line" aria-hidden="true" />
+                            </button>
+                            <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
+                                <nav className="App-header-nav App-header-nav-primary">
+                                    <Link to="/" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
+                                    {canAccessOrders && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
+                                    {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
+                                    {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
+                                </nav>
+                                <div className="App-header-menu-footer">
+                                    <button
+                                        className="theme-icon-toggle App-header-menu-theme-toggle"
+                                        type="button"
+                                        onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}
+                                        aria-label={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
+                                        title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
+                                    >
+                                        {theme === 'dark' ? '☀' : '◐'}
+                                    </button>
+                                    {authRole ? (
+                                        <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
+                                            Выйти
+                                        </button>
+                                    ) : null}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

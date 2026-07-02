@@ -8,6 +8,7 @@ const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireAdminAccess, requireManagerAccess, requireWriteAccess } = require('../middleware/security');
 const {
+  normalizeDate,
   sanitizeCommentInput,
   sanitizeOrderAttachmentInput,
   sanitizeOrderInput,
@@ -486,8 +487,84 @@ function handleManualStageMarks(req, res) {
   }
 }
 
+function handleManualDateOverrides(req, res) {
+  try {
+    const columnKey = String(req.body?.columnKey || '').trim();
+    const selections = Array.isArray(req.body?.selections) ? req.body.selections : [];
+    const settings = SettingsStore.get();
+    const secondaryHeaders = settings?.orderStageLegendConfig?.secondaryHeaders || [];
+
+    if (!['itemStartDate', 'itemEndDate', 'duration'].includes(columnKey)) {
+      return res.status(400).json({ message: 'Редактирование дат доступно только для последних датных колонок.' });
+    }
+    if (selections.length === 0) {
+      return res.status(400).json({ message: 'Не выбраны ячейки для изменения даты.' });
+    }
+
+    const normalizedSelections = selections.map((selection) => ({
+      orderId: String(selection?.orderId || '').trim(),
+      itemId: String(selection?.itemId || '').trim(),
+      columnKey: String(selection?.columnKey || columnKey).trim(),
+      legendKey: String(selection?.legendKey || '').trim()
+        || resolveLegendKeyForManualStageColumn(selection?.columnKey || columnKey, secondaryHeaders),
+    })).filter(selection => selection.orderId && (selection.itemId || columnKey === 'duration'));
+
+    if (normalizedSelections.length === 0) {
+      return res.status(400).json({ message: 'Некорректный список ячеек для изменения даты.' });
+    }
+
+    const payload = {
+      columnKey,
+      actor: req.auth?.role || 'admin',
+    };
+    if (columnKey === 'duration') {
+      const startDate = normalizeDate(req.body?.startDate ?? '', 'startDate', { allowUndefined: false });
+      const endDate = normalizeDate(req.body?.endDate ?? '', 'endDate', { allowUndefined: false });
+      if (!startDate && !endDate) {
+        return res.status(400).json({ message: 'Укажите хотя бы одну дату для последнего столбца.' });
+      }
+      if (startDate && endDate && endDate < startDate) {
+        return res.status(400).json({ message: 'Дата окончания не может быть раньше даты начала.' });
+      }
+      payload.startDate = startDate || '';
+      payload.endDate = endDate || '';
+    } else {
+      const date = normalizeDate(req.body?.date ?? '', 'date', { allowUndefined: false });
+      if (!date) {
+        return res.status(400).json({ message: 'Укажите дату для выбранных ячеек.' });
+      }
+      payload.date = date;
+    }
+
+    const updatedOrders = OrderStore.setManualDateOverrides(normalizedSelections, payload);
+    addActivityLog({
+      action: 'order.manual-date.apply',
+      entityType: 'order',
+      entityId: normalizedSelections[0]?.orderId || '',
+      entityName: normalizedSelections.length === 1
+        ? (OrderStore.getOrderPrimaryName(updatedOrders[0]) || '')
+        : `Массовое изменение дат (${normalizedSelections.length} ячеек)`,
+      actor: getRequestActor(req, { label: 'Администратор' }),
+      message: `Ручные даты обновлены для ${normalizedSelections.length} ячеек таблицы.`,
+      details: {
+        columnKey,
+        selections: normalizedSelections.length,
+      },
+    });
+
+    res.json({
+      ok: true,
+      updatedOrders,
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить даты.' });
+  }
+}
+
 router.patch('/orders/manual-stage-marks', requireAdminAccess(), handleManualStageMarks);
 router.post('/orders/manual-stage-marks', requireAdminAccess(), handleManualStageMarks);
+router.patch('/orders/manual-date-overrides', requireAdminAccess(), handleManualDateOverrides);
+router.post('/orders/manual-date-overrides', requireAdminAccess(), handleManualDateOverrides);
 
 router.post('/orders/:id/telegram-comment', (req, res) => {
   try {

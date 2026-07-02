@@ -38,6 +38,13 @@ function getOrderComments(order) {
   return Array.isArray(order?.comments) ? order.comments : [];
 }
 
+function normalizeOrderManualDateOverrides(source = {}) {
+  return {
+    startDate: String(source?.startDate || '').trim(),
+    endDate: String(source?.endDate || '').trim(),
+  };
+}
+
 function getLatestTimestamp(...timestamps) {
   return timestamps
     .map((value) => String(value || '').trim())
@@ -216,6 +223,7 @@ function getOrderManufacturingMeta(order) {
   const items = getOrderItems(order);
   const startTimestamps = [];
   const endTimestamps = [];
+  const manualDateOverrides = normalizeOrderManualDateOverrides(order?.manualDateOverrides);
 
   items.forEach((item) => {
     const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
@@ -242,9 +250,18 @@ function getOrderManufacturingMeta(order) {
     }
   });
 
-  const startAt = getEarliestTimestamp(...startTimestamps);
-  const isCompleted = items.length > 0 && endTimestamps.length === items.length;
-  const endAt = isCompleted ? getLatestTimestamp(...endTimestamps) : '';
+  let startAt = getEarliestTimestamp(...startTimestamps);
+  const autoCompleted = items.length > 0 && endTimestamps.length === items.length;
+  let endAt = autoCompleted ? getLatestTimestamp(...endTimestamps) : '';
+
+  if (manualDateOverrides.startDate) {
+    startAt = `${manualDateOverrides.startDate}T00:00:00.000Z`;
+  }
+  if (manualDateOverrides.endDate) {
+    endAt = `${manualDateOverrides.endDate}T00:00:00.000Z`;
+  }
+
+  const isCompleted = Boolean(startAt && endAt);
 
   return {
     startAt,

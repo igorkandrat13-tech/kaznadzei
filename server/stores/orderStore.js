@@ -577,6 +577,13 @@ function getOrderPrimaryNotes(order) {
   return String(primaryItem?.notes || order?.notes || '').trim();
 }
 
+function normalizeOrderManualDateOverrides(source = {}) {
+  return {
+    startDate: String(source?.startDate || '').trim(),
+    endDate: String(source?.endDate || '').trim(),
+  };
+}
+
 function hasLegacyPrimaryItemData(order = {}) {
   return Boolean(
     String(order?.name || '').trim()
@@ -594,6 +601,7 @@ function deriveOrderManufacturingMeta(order = {}) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const startTimestamps = [];
   const endTimestamps = [];
+  const manualDateOverrides = normalizeOrderManualDateOverrides(order?.manualDateOverrides);
 
   for (const item of items) {
     const manualStageMarks = normalizeManualStageMarks(item?.manualStageMarks);
@@ -634,9 +642,18 @@ function deriveOrderManufacturingMeta(order = {}) {
     }
   }
 
-  const startAt = getEarliestTimestamp(...startTimestamps);
-  const isCompleted = items.length > 0 && endTimestamps.length === items.length;
-  const endAt = isCompleted ? getLatestTimestamp(...endTimestamps) : '';
+  let startAt = getEarliestTimestamp(...startTimestamps);
+  const autoCompleted = items.length > 0 && endTimestamps.length === items.length;
+  let endAt = autoCompleted ? getLatestTimestamp(...endTimestamps) : '';
+
+  if (manualDateOverrides.startDate) {
+    startAt = `${manualDateOverrides.startDate}T00:00:00.000Z`;
+  }
+  if (manualDateOverrides.endDate) {
+    endAt = `${manualDateOverrides.endDate}T00:00:00.000Z`;
+  }
+
+  const isCompleted = Boolean(startAt && endAt);
 
   return {
     startAt,
@@ -664,6 +681,12 @@ function cleanupLegacyOrderFields(order) {
 function ensureOrderShape(order) {
   if (!order || typeof order !== 'object') return false;
   let changed = false;
+
+  const normalizedManualDateOverrides = normalizeOrderManualDateOverrides(order.manualDateOverrides);
+  if (JSON.stringify(order.manualDateOverrides || {}) !== JSON.stringify(normalizedManualDateOverrides)) {
+    order.manualDateOverrides = normalizedManualDateOverrides;
+    changed = true;
+  }
 
   const sourceItems = Array.isArray(order.items) ? order.items : [];
 
@@ -819,6 +842,7 @@ const OrderStore = {
       orderDate: data.orderDate || '',
       startDate: '',
       endDate: '',
+      manualDateOverrides: { startDate: '', endDate: '' },
       createdAt,
       attachments: [],
       items,
@@ -1095,6 +1119,84 @@ const OrderStore = {
     }
 
     if (!changed) return [];
+
+    for (const orderId of touchedOrderIds) {
+      const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+      if (order) {
+        syncOrderStatus(order);
+      }
+    }
+
+    save();
+    return db.orders.filter(order => touchedOrderIds.has(order._id));
+  },
+
+  setManualDateOverrides(entries = [], payload = {}) {
+    const db = load();
+    ensureOrders(db);
+    const columnKey = String(payload?.columnKey || '').trim();
+    const date = String(payload?.date || '').trim();
+    const startDate = String(payload?.startDate || '').trim();
+    const endDate = String(payload?.endDate || '').trim();
+    const actor = String(payload?.actor || '').trim();
+    const touchedOrderIds = new Set();
+    let changed = false;
+
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      const orderId = String(entry?.orderId || '').trim();
+      const itemId = String(entry?.itemId || '').trim();
+      if (!orderId) continue;
+
+      const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+      if (!order) continue;
+
+      if (columnKey === 'duration') {
+        const currentOverrides = normalizeOrderManualDateOverrides(order.manualDateOverrides);
+        const nextOverrides = {
+          startDate: startDate || '',
+          endDate: endDate || '',
+        };
+        if (JSON.stringify(currentOverrides) !== JSON.stringify(nextOverrides)) {
+          order.manualDateOverrides = nextOverrides;
+          changed = true;
+        }
+        touchedOrderIds.add(orderId);
+        continue;
+      }
+
+      if ((columnKey !== 'itemStartDate' && columnKey !== 'itemEndDate') || !itemId || !date) {
+        continue;
+      }
+
+      const item = getOrderItem(order, itemId);
+      if (!item) continue;
+      const currentMarks = normalizeManualStageMarks(item.manualStageMarks);
+      const currentClears = normalizeManualStageClears(item.manualStageClears);
+      const nextMark = {
+        ...(currentMarks[columnKey] || {}),
+        legendKey: String(entry?.legendKey || currentMarks[columnKey]?.legendKey || '').trim(),
+        updatedAt: new Date(`${date}T00:00:00.000Z`).toISOString(),
+        updatedBy: actor,
+      };
+
+      if (JSON.stringify(currentMarks[columnKey] || {}) !== JSON.stringify(nextMark)) {
+        item.manualStageMarks = {
+          ...currentMarks,
+          [columnKey]: nextMark,
+        };
+        changed = true;
+      }
+      if (currentClears[columnKey]) {
+        const nextClears = { ...currentClears };
+        delete nextClears[columnKey];
+        item.manualStageClears = nextClears;
+        changed = true;
+      }
+      item.updatedAt = new Date().toISOString();
+      touchedOrderIds.add(orderId);
+    }
+
+    if (!changed) return db.orders.filter(order => touchedOrderIds.has(order._id));
 
     for (const orderId of touchedOrderIds) {
       const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
