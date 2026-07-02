@@ -2880,15 +2880,16 @@ body[data-theme='light'] .order-primary-title-button-badge {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   box-sizing: border-box;
   padding: 6px 8px;
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
   line-height: 1.2;
+  text-align: center;
+  min-height: auto;
+  border-radius: 12px;
 }
 
 .orders-cell-center {
@@ -3969,6 +3970,19 @@ body[data-theme='light'] .attachment-preview-table td {
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.order-link-button.merged-order-customer-button {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .order-link-button:hover {
