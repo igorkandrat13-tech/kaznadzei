@@ -4146,6 +4146,7 @@ body[data-theme='light'] .attachment-preview-table td {
 
 .table-inline-input-narrow {
   min-width: 72px;
+  text-align: center;
 }
 
 .table-inline-textarea {

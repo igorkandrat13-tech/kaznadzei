@@ -3249,12 +3249,12 @@ function OrdersWorkspace() {
                               }}
                               disabled={isPlaceholder}
                               title={packageStats.total > 0
-                                ? `Открыть и редактировать комплектацию: не исполнено ${packageStats.pending} из ${packageStats.total}`
+                                ? `Открыть и редактировать комплектацию: сделано ${packageStats.completed} из ${packageStats.total}`
                                 : 'Открыть и редактировать комплектацию'}
                               aria-label="Открыть и редактировать комплектацию"
                             >
                               <span className="package-cell-summary-badge-value">
-                              {packageStats.pending}/{packageStats.total}
+                                {packageStats.completed}/{packageStats.total}
                               </span>
                             </button>
                           </div>
