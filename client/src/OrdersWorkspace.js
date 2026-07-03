@@ -587,6 +587,37 @@ function mapCustomerToDraft(customer) {
   };
 }
 
+function getCustomerApiMessage({ status = 0, message = '', fallback = 'Не удалось выполнить операцию с карточкой заказчика.' } = {}) {
+  const normalizedMessage = String(message || '').trim();
+  const loweredMessage = normalizedMessage.toLowerCase();
+
+  if (
+    status === 404
+    || /cannot\s+(get|post|put|delete)/i.test(normalizedMessage)
+    || loweredMessage === 'not found'
+    || loweredMessage === 'http 404'
+  ) {
+    return 'API карточек заказчиков (`/api/customers`) не найден на сервере. Вероятно, тестовая ВМ запущена на старой версии backend. Обновите и перезапустите сервер.';
+  }
+  if (status === 405) {
+    return 'Сервер не поддерживает этот метод для API карточек заказчиков. Вероятно, backend на тестовой ВМ не обновлён.';
+  }
+  if (status === 401) {
+    return 'Сессия истекла или вход не выполнен. Войдите снова и повторите действие с карточкой заказчика.';
+  }
+  if (status === 403) {
+    return 'Недостаточно прав для работы с карточками заказчиков. Требуется роль менеджера или администратора.';
+  }
+  if (status === 503) {
+    return normalizedMessage || 'Сервис карточек заказчиков временно недоступен на сервере.';
+  }
+  if (/^<!doctype html|^<html[\s>]/i.test(normalizedMessage)) {
+    return 'Сервер вернул HTML вместо ответа API карточек заказчиков. Проверьте proxy и backend на тестовой ВМ.';
+  }
+
+  return normalizedMessage || fallback;
+}
+
 function createEmptyOrderForm() {
   const today = new Date().toISOString().split('T')[0];
   return {
@@ -668,6 +699,8 @@ function OrdersWorkspace() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [customerError, setCustomerError] = useState('');
+  const [customerLoadError, setCustomerLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [roomFilter, setRoomFilter] = useState('all');
@@ -752,17 +785,29 @@ function OrdersWorkspace() {
   const fetchCustomers = useCallback(async () => {
     if (!canManageCustomers) {
       setCustomers([]);
+      setCustomerLoadError('');
       return;
     }
     try {
       const res = await apiFetch('/api/customers');
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось загрузить заказчиков.');
+        setCustomers([]);
+        setCustomerLoadError(getCustomerApiMessage({
+          status: res.status,
+          message: data?.details || data?.message || '',
+          fallback: 'Не удалось загрузить список заказчиков.',
+        }));
+        return;
       }
       setCustomers(Array.isArray(data) ? data : []);
+      setCustomerLoadError('');
     } catch (fetchError) {
-      setError(fetchError.message || 'Не удалось загрузить заказчиков.');
+      setCustomers([]);
+      setCustomerLoadError(getCustomerApiMessage({
+        message: fetchError?.message || '',
+        fallback: 'Не удалось загрузить список заказчиков. Проверьте соединение с сервером.',
+      }));
     }
   }, [canManageCustomers]);
 
@@ -1721,6 +1766,7 @@ function OrdersWorkspace() {
 
   const openCustomerEditor = useCallback((options = {}) => {
     const context = options.context || 'order-form';
+    setCustomerError('');
     if (context === 'order-cell') {
       const order = options.order || null;
       if (!order?._id) return;
@@ -1745,13 +1791,13 @@ function OrdersWorkspace() {
 
   const handleCustomerDraftFieldChange = useCallback((field) => (event) => {
     const value = event.target.value;
-    setError('');
+    setCustomerError('');
     setCustomerDraft((current) => ({ ...current, [field]: value }));
   }, []);
 
   const handleCustomerTemplateSelect = useCallback((event) => {
     const nextCustomerId = event.target.value;
-    setError('');
+    setCustomerError('');
     if (!nextCustomerId) {
       setCustomerDraft(createEmptyCustomerDraft(customerEditor?.initialName || ''));
       return;
@@ -1786,12 +1832,12 @@ function OrdersWorkspace() {
       notes: String(customerDraft.notes || '').trim(),
     };
     if (!payload.fullName) {
-      setError('Укажите ФИО заказчика.');
+      setCustomerError('Укажите ФИО заказчика.');
       return;
     }
 
     setCustomerSaving(true);
-    setError('');
+    setCustomerError('');
     try {
       const customerId = String(customerDraft.customerId || '').trim();
       const res = await apiFetch(customerId ? `/api/customers/${customerId}` : '/api/customers', {
@@ -1801,7 +1847,11 @@ function OrdersWorkspace() {
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        setError(data?.message || 'Не удалось сохранить карточку заказчика.');
+        setCustomerError(getCustomerApiMessage({
+          status: res.status,
+          message: data?.details || data?.message || '',
+          fallback: customerId ? 'Не удалось сохранить изменения в карточке заказчика.' : 'Не удалось создать карточку заказчика.',
+        }));
         return;
       }
 
@@ -1811,7 +1861,7 @@ function OrdersWorkspace() {
       if (customerEditor?.context === 'order-cell' && customerEditor?.orderId) {
         const orderLinkError = await applyCustomerToOrder(customerEditor.orderId, savedCustomer);
         if (orderLinkError) {
-          setError(orderLinkError);
+          setCustomerError(orderLinkError);
           return;
         }
         setOrderPreview((current) => (
@@ -1835,6 +1885,12 @@ function OrdersWorkspace() {
 
       setCustomerEditor(null);
       setCustomerDraft(createEmptyCustomerDraft());
+      setCustomerError('');
+    } catch (saveError) {
+      setCustomerError(getCustomerApiMessage({
+        message: saveError?.message || '',
+        fallback: 'Не удалось сохранить карточку заказчика. Проверьте соединение с сервером.',
+      }));
     } finally {
       setCustomerSaving(false);
     }
@@ -3452,11 +3508,23 @@ function OrdersWorkspace() {
             closeDisabled={customerSaving}
           />
 
+          {customerError ? (
+            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+              {customerError}
+            </div>
+          ) : null}
+
+          {customerLoadError && customerEditor.context === 'order-form' ? (
+            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+              {customerLoadError}
+            </div>
+          ) : null}
+
           <div className="responsive-form-grid">
             {customerEditor.context === 'order-form' ? (
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Существующий заказчик</label>
-                <select value={customerDraft.customerId} onChange={handleCustomerTemplateSelect} disabled={customerSaving}>
+                <select value={customerDraft.customerId} onChange={handleCustomerTemplateSelect} disabled={customerSaving || Boolean(customerLoadError)}>
                   <option value="">{customers.length > 0 ? 'Новая карточка заказчика' : 'Заказчики пока не добавлены'}</option>
                   {customers.map((customer) => (
                     <option key={customer._id} value={customer._id}>{customer.fullName}</option>
