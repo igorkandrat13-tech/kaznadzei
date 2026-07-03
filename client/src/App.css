@@ -2909,6 +2909,11 @@ body[data-theme='light'] .order-primary-title-button-badge {
   vertical-align: middle;
 }
 
+.unified-orders-table td.orders-cell-center,
+.unified-orders-table th.orders-cell-center {
+  text-align: center;
+}
+
 .unified-orders-table td.merged-order-meta-cell {
   text-align: center;
   font-weight: 600;
