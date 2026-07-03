@@ -297,10 +297,13 @@ body::before {
 
 .orders-workspace-table-card {
   box-sizing: border-box;
-  width: calc(100vw - (var(--page-side-gap) * 2));
-  max-width: none;
-  margin-left: calc(50% - 50vw + var(--page-side-gap));
-  margin-right: calc(50% - 50vw + var(--page-side-gap));
+  width: min(
+    calc(100% + (var(--page-side-gap) * 2) - 12px),
+    calc(100vw - 12px)
+  );
+  max-width: calc(100vw - 12px);
+  margin-left: calc((var(--page-side-gap) * -1) + 6px);
+  margin-right: calc((var(--page-side-gap) * -1) + 6px);
   padding: 10px 8px 12px;
 }
 
@@ -1861,20 +1864,20 @@ body[data-theme='light'] .order-primary-title-button-badge {
   --orders-header-secondary-height: 42px;
   --orders-group-border-width: 1.35px;
   --orders-col-order-number-width: 64px;
-  --orders-col-customer-width: 164px;
-  --orders-col-room-width: 96px;
-  --orders-col-number-width: 52px;
-  --orders-col-quantity-width: 86px;
-  --orders-col-name-width: 141px;
-  --orders-col-item-actions-width: 104px;
-  --orders-col-delivery-date-width: 104px;
-  --orders-col-package-width: 104px;
-  --orders-col-paint-width: 96px;
-  --orders-col-photo-width: 104px;
-  --orders-col-notes-width: 248px;
-  --orders-col-meta-width: 92px;
-  --orders-col-carpenter-width: 104px;
-  --orders-table-min-width: 1840px;
+  --orders-col-customer-width: 150px;
+  --orders-col-room-width: 88px;
+  --orders-col-number-width: 48px;
+  --orders-col-quantity-width: 76px;
+  --orders-col-name-width: 128px;
+  --orders-col-item-actions-width: 96px;
+  --orders-col-delivery-date-width: 96px;
+  --orders-col-package-width: 96px;
+  --orders-col-paint-width: 92px;
+  --orders-col-photo-width: 96px;
+  --orders-col-notes-width: 220px;
+  --orders-col-meta-width: 84px;
+  --orders-col-carpenter-width: 96px;
+  --orders-table-min-width: 1720px;
   --orders-cell-padding-y: 5px;
   --orders-cell-padding-x: 6px;
   --orders-body-font-size: 16px;
@@ -2849,7 +2852,7 @@ body[data-theme='light'] .order-primary-title-button-badge {
 
 .merged-order-customer-content {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   width: 100%;
   min-width: 0;
@@ -2876,20 +2879,29 @@ body[data-theme='light'] .order-primary-title-button-badge {
   text-align: center;
 }
 
-.merged-order-customer-button {
+.merged-order-customer-button,
+.order-primary-title-button.merged-order-customer-button {
   width: 100%;
   min-width: 0;
   max-width: 100%;
   display: block;
   box-sizing: border-box;
-  padding: 6px 8px;
+  padding: 4px 6px;
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
-  line-height: 1.2;
-  text-align: center;
-  min-height: auto;
-  border-radius: 12px;
+  line-height: 1.25;
+  text-align: left;
+  min-height: 100%;
+}
+
+.order-primary-title-button.merged-order-customer-button {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.order-primary-title-button.merged-order-customer-button .order-primary-title-button-text {
+  width: 100%;
 }
 
 .orders-cell-center {
@@ -3129,7 +3141,7 @@ body[data-theme='light'] .merged-order-meta-pill {
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 0;
   min-height: 34px;
   min-width: 0;
   max-width: 100%;
@@ -3155,12 +3167,33 @@ body[data-theme='light'] .merged-order-meta-pill {
   height: 30px;
   padding: 0 10px;
   box-sizing: border-box;
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
   border-width: 1px !important;
   border-style: solid;
   border-color: #000000 !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
     0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.package-cell-summary-badge:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.package-cell-summary-badge:disabled {
+  cursor: default;
+  opacity: 0.72;
+  border-color: rgba(0, 0, 0, 0.7) !important;
+}
+
+.package-cell-summary-badge-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1;
 }
 
 .package-cell-summary-badge-attention {
@@ -5447,20 +5480,20 @@ body[data-theme='light'] .attachment-preview-table td {
     --orders-header-primary-height: 60px;
     --orders-header-secondary-height: 44px;
     --orders-col-order-number-width: 72px;
-    --orders-col-customer-width: 164px;
-    --orders-col-room-width: 108px;
-    --orders-col-number-width: 58px;
-    --orders-col-quantity-width: 94px;
-    --orders-col-name-width: 180px;
-    --orders-col-item-actions-width: 116px;
-    --orders-col-delivery-date-width: 112px;
-    --orders-col-package-width: 116px;
-    --orders-col-paint-width: 108px;
-    --orders-col-photo-width: 116px;
-    --orders-col-notes-width: 320px;
-    --orders-col-meta-width: 108px;
-    --orders-col-carpenter-width: 116px;
-    --orders-table-min-width: 2280px;
+    --orders-col-customer-width: 160px;
+    --orders-col-room-width: 96px;
+    --orders-col-number-width: 54px;
+    --orders-col-quantity-width: 84px;
+    --orders-col-name-width: 150px;
+    --orders-col-item-actions-width: 104px;
+    --orders-col-delivery-date-width: 102px;
+    --orders-col-package-width: 104px;
+    --orders-col-paint-width: 98px;
+    --orders-col-photo-width: 104px;
+    --orders-col-notes-width: 260px;
+    --orders-col-meta-width: 94px;
+    --orders-col-carpenter-width: 104px;
+    --orders-table-min-width: 1940px;
     --orders-body-font-size: 17px;
     --orders-header-font-size: 14px;
     --orders-secondary-header-font-size: 13px;
@@ -5498,20 +5531,20 @@ body[data-theme='light'] .attachment-preview-table td {
     --orders-header-primary-height: 64px;
     --orders-header-secondary-height: 48px;
     --orders-col-order-number-width: 80px;
-    --orders-col-customer-width: 180px;
-    --orders-col-room-width: 120px;
-    --orders-col-number-width: 64px;
-    --orders-col-quantity-width: 102px;
-    --orders-col-name-width: 220px;
-    --orders-col-item-actions-width: 126px;
-    --orders-col-delivery-date-width: 120px;
-    --orders-col-package-width: 126px;
-    --orders-col-paint-width: 116px;
-    --orders-col-photo-width: 126px;
-    --orders-col-notes-width: 360px;
-    --orders-col-meta-width: 118px;
-    --orders-col-carpenter-width: 126px;
-    --orders-table-min-width: 2540px;
+    --orders-col-customer-width: 170px;
+    --orders-col-room-width: 104px;
+    --orders-col-number-width: 58px;
+    --orders-col-quantity-width: 90px;
+    --orders-col-name-width: 164px;
+    --orders-col-item-actions-width: 112px;
+    --orders-col-delivery-date-width: 108px;
+    --orders-col-package-width: 112px;
+    --orders-col-paint-width: 104px;
+    --orders-col-photo-width: 112px;
+    --orders-col-notes-width: 280px;
+    --orders-col-meta-width: 100px;
+    --orders-col-carpenter-width: 112px;
+    --orders-table-min-width: 2080px;
     --orders-cell-padding-y: 6px;
     --orders-cell-padding-x: 8px;
     --orders-body-font-size: 18px;
@@ -6584,11 +6617,11 @@ body[data-theme='light'] .home-auth-status-pending {
 
 @media (max-width: 1366px) {
   .unified-orders-table {
-    --orders-col-customer-width: 140px;
-    --orders-col-room-width: 92px;
-    --orders-col-name-width: 136px;
-    --orders-col-notes-width: 228px;
-    --orders-table-min-width: 1840px;
+    --orders-col-customer-width: 142px;
+    --orders-col-room-width: 86px;
+    --orders-col-name-width: 124px;
+    --orders-col-notes-width: 210px;
+    --orders-table-min-width: 1660px;
     --orders-body-font-size: 15px;
   }
 
@@ -6767,9 +6800,10 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .orders-workspace-table-card {
-    width: calc(100vw - (var(--page-side-gap) * 2));
-    margin-left: calc(50% - 50vw + var(--page-side-gap));
-    margin-right: calc(50% - 50vw + var(--page-side-gap));
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
     padding: 8px 4px 10px;
   }
   .home-landing {
@@ -7076,9 +7110,10 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .orders-workspace-table-card {
-    width: calc(100vw - (var(--page-side-gap) * 2));
-    margin-left: calc(50% - 50vw + var(--page-side-gap));
-    margin-right: calc(50% - 50vw + var(--page-side-gap));
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
     padding: 6px 2px 8px;
   }
 

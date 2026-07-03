@@ -3039,10 +3039,6 @@ function OrdersWorkspace() {
                       background: legendColorMap[columnStageMeta.card.legendKey] || '#A8D7B6',
                       color: columnStageMeta.card.textHex,
                     };
-                    const packageActionStyle = {
-                      background: legendColorMap[columnStageMeta.package.legendKey] || '#99E5FF',
-                      color: columnStageMeta.package.textHex,
-                    };
                     const paintActionStyle = {
                       background: legendColorMap[columnStageMeta.paint.legendKey] || '#BDA6D5',
                       color: columnStageMeta.paint.textHex,
@@ -3178,14 +3174,14 @@ function OrdersWorkspace() {
                               ) : canManageCustomers && (order.customer || order.customerId) ? (
                                 <button
                                   type="button"
-                                  className="order-link-button merged-order-customer-button"
+                                  className="order-primary-title-button merged-order-customer-button"
                                   onClick={() => openCustomerEditor({ context: 'order-cell', order })}
                                   title="Открыть карточку заказчика"
                                 >
-                                  {order.customer || 'Открыть карточку'}
+                                  <span className="order-primary-title-button-text"><strong>{order.customer || 'Открыть карточку'}</strong></span>
                                 </button>
                               ) : (
-                                <div className="merged-order-customer-text">{order.customer || '—'}</div>
+                                <div className="order-primary-title-button merged-order-customer-button merged-order-customer-text"><span className="order-primary-title-button-text"><strong>{order.customer || '—'}</strong></span></div>
                               )}
                             </div>
                           </td>
@@ -3240,28 +3236,27 @@ function OrdersWorkspace() {
                         </td>
                         <td {...packageCellProps}>
                           <div className="package-cell-content">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="order-card-action-btn order-card-icon-btn"
-                              style={packageActionStyle}
+                            <button
+                              type="button"
+                              className={cn(
+                                'package-cell-summary-badge',
+                                packageStats.pending > 0 && 'package-cell-summary-badge-attention',
+                              )}
+                              style={packageSummaryBadgeStyle}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 openPackageEditor(order, item);
                               }}
                               disabled={isPlaceholder}
-                              title="Редактировать комплектацию"
-                              aria-label="Редактировать комплектацию"
+                              title={packageStats.total > 0
+                                ? `Открыть и редактировать комплектацию: не исполнено ${packageStats.pending} из ${packageStats.total}`
+                                : 'Открыть и редактировать комплектацию'}
+                              aria-label="Открыть и редактировать комплектацию"
                             >
-                              ✎
-                            </Button>
-                            <span
-                              className={cn('package-cell-summary-badge', packageStats.pending > 0 && 'package-cell-summary-badge-attention')}
-                              style={packageSummaryBadgeStyle}
-                              title={packageStats.total > 0 ? `Не исполнено: ${packageStats.pending} из ${packageStats.total}` : 'Позиции комплектации не добавлены'}
-                            >
+                              <span className="package-cell-summary-badge-value">
                               {packageStats.pending}/{packageStats.total}
-                            </span>
+                              </span>
+                            </button>
                           </div>
                         </td>
                         <td {...notesCellProps}>
