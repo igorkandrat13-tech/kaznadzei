@@ -78,6 +78,6 @@ export function buildSettingsTabs() {
     { key: 'general', label: '⚙️ Общие' },
     { key: 'roles', label: '🧩 Роли' },
     { key: 'employees', label: '👥 Сотрудники' },
-    { key: 'colors', label: '🎨 Цвета' },
+    { key: 'colors', label: '🎨 Легенда этапов' },
   ];
 }

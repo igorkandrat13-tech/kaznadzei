@@ -12,7 +12,6 @@ import {
   buildSettingsTabs,
   emptyEmployeeForm,
 } from './adminUI';
-import ColorModal from './admin/ColorModal';
 import EmployeeModal from './admin/EmployeeModal';
 import RoleModal from './admin/RoleModal';
 import StepModal from './admin/StepModal';
@@ -62,7 +61,6 @@ function Admin() {
   const [selectedStepsRole, setSelectedStepsRole] = useState(() => roleTabs[0]?.key || '');
   const [stageManagerRoleKey, setStageManagerRoleKey] = useState('');
   const [steps, setSteps] = useState([]);
-  const [colors, setColors] = useState([]);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [installJob, setInstallJob] = useState(null);
   const [updateMessage, setUpdateMessage] = useState('');
@@ -101,14 +99,12 @@ function Admin() {
   const [employeeModalMode, setEmployeeModalMode] = useState('');
   const [roleModalMode, setRoleModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
-  const [colorModalMode, setColorModalMode] = useState('');
   const [showLegendColorModal, setShowLegendColorModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [savingStep, setSavingStep] = useState(false);
-  const [savingColor, setSavingColor] = useState(false);
   const [savingLegendColors, setSavingLegendColors] = useState(false);
   const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
   const [selectedLegendStageKey, setSelectedLegendStageKey] = useState('brief');
@@ -119,11 +115,9 @@ function Admin() {
   const [savingUpdateSettings, setSavingUpdateSettings] = useState(false);
 
   const [editStep, setEditStep] = useState(null);
-  const [editColor, setEditColor] = useState(null);
   const [editEmployee, setEditEmployee] = useState(null);
   const [editRole, setEditRole] = useState(null);
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
-  const [newColor, setNewColor] = useState({ name: '', hex: '#000000' });
   const [legendConfigDraft, setLegendConfigDraft] = useState(() => buildOrderStageLegendConfig());
   const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
   const [newRole, setNewRole] = useState({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
@@ -193,16 +187,13 @@ function Admin() {
 
   useEffect(() => {
     setEditStep(null);
-    setEditColor(null);
     setEditEmployee(null);
     setEditRole(null);
     setEmployeeModalMode('');
     setRoleModalMode('');
     setStepModalMode('');
-    setColorModalMode('');
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
     setNewEmployee(getDefaultEmployeeForm());
-    setNewColor({ name: '', hex: '#000000' });
     setNewRole({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
     setSettingsError('');
     setSettingsSuccess('');
@@ -227,7 +218,6 @@ function Admin() {
 
   useEffect(() => {
     fetchSteps();
-    fetchColors();
     fetchOrderStageLegendConfig().catch(error => setSettingsError(error.message || 'Не удалось загрузить легенду этапов.'));
     fetchUpdateStatus();
   }, []);
@@ -271,12 +261,6 @@ function Admin() {
     const res = await apiFetch('/api/processSteps');
     const data = await parseJsonSafely(res);
     setSteps(Array.isArray(data) ? data : []);
-  };
-
-  const fetchColors = async () => {
-    const res = await apiFetch('/api/colors');
-    const data = await parseJsonSafely(res);
-    setColors(Array.isArray(data) ? data : []);
   };
 
   const fetchOrderStageLegendConfig = async () => {
@@ -746,7 +730,6 @@ function Admin() {
       }
       await Promise.all([
         fetchSteps(),
-        fetchColors(),
         fetchEmployees().catch(() => {}),
         fetchAppSettings().catch(() => {}),
       ]);
@@ -857,28 +840,6 @@ function Admin() {
     setStepModalMode('');
     setEditStep(null);
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
-  };
-
-  const openCreateColorModal = () => {
-    setEditColor(null);
-    setNewColor({ name: '', hex: '#000000' });
-    setColorModalMode('create');
-    setSettingsError('');
-    setSettingsSuccess('');
-  };
-
-  const openEditColorModal = (color) => {
-    setEditColor({ ...color });
-    setColorModalMode('edit');
-    setSettingsError('');
-    setSettingsSuccess('');
-  };
-
-  const closeColorModal = () => {
-    if (savingColor) return;
-    setColorModalMode('');
-    setEditColor(null);
-    setNewColor({ name: '', hex: '#000000' });
   };
 
   const openLegendColorModal = () => {
@@ -1003,16 +964,6 @@ function Admin() {
     });
   };
 
-  const requestDeleteColor = (color) => {
-    requestDeleteAction({
-      type: 'color',
-      id: color._id,
-      title: 'Удалить цвет?',
-      message: `Цвет "${color.name}" (${color.hex}) будет удален из справочника.`,
-      confirmLabel: 'Удалить цвет',
-    });
-  };
-
   const requestDeleteRole = (role) => {
     requestDeleteAction({
       type: 'role',
@@ -1053,8 +1004,6 @@ function Admin() {
         success = await handleDeleteRole(confirmAction.id);
       } else if (confirmAction.type === 'step') {
         success = await handleDeleteStep(confirmAction.id);
-      } else if (confirmAction.type === 'color') {
-        success = await handleDeleteColor(confirmAction.id);
       } else if (confirmAction.type === 'clearTelegramLogs') {
         success = await clearTelegramLogs();
       } else if (confirmAction.type === 'clearActivityLogs') {
@@ -1312,76 +1261,6 @@ function Admin() {
       return true;
     } catch (error) {
       setSettingsError(error.message || 'Не удалось удалить этап.');
-      return false;
-    }
-  };
-
-  const handleAddColor = async () => {
-    if (!newColor.name) return;
-    setSettingsError('');
-    setSettingsSuccess('');
-    setSavingColor(true);
-    try {
-      const res = await apiFetch('/api/colors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newColor),
-      });
-      if (!res.ok) {
-        setSettingsError(await getErrorMessage(res, 'Не удалось добавить цвет.'));
-        return;
-      }
-      setNewColor({ name: '', hex: '#000000' });
-      setColorModalMode('');
-      await fetchColors();
-      setSettingsSuccess('Цвет добавлен.');
-    } catch (error) {
-      setSettingsError(error.message || 'Не удалось добавить цвет.');
-    } finally {
-      setSavingColor(false);
-    }
-  };
-
-  const handleUpdateColor = async () => {
-    if (!editColor) return;
-    setSettingsError('');
-    setSettingsSuccess('');
-    setSavingColor(true);
-    try {
-      const res = await apiFetch(`/api/colors/${editColor._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editColor.name, hex: editColor.hex }),
-      });
-      if (!res.ok) {
-        setSettingsError(await getErrorMessage(res, 'Не удалось обновить цвет.'));
-        return;
-      }
-      setEditColor(null);
-      setColorModalMode('');
-      await fetchColors();
-      setSettingsSuccess('Цвет обновлен.');
-    } catch (error) {
-      setSettingsError(error.message || 'Не удалось обновить цвет.');
-    } finally {
-      setSavingColor(false);
-    }
-  };
-
-  const handleDeleteColor = async (id) => {
-    setSettingsError('');
-    setSettingsSuccess('');
-    try {
-      const res = await apiFetch(`/api/colors/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        setSettingsError(await getErrorMessage(res, 'Не удалось удалить цвет.'));
-        return false;
-      }
-      await fetchColors();
-      setSettingsSuccess('Цвет удален.');
-      return true;
-    } catch (error) {
-      setSettingsError(error.message || 'Не удалось удалить цвет.');
       return false;
     }
   };
@@ -1881,18 +1760,6 @@ function Admin() {
         </div>
       ) : null}
 
-      <ColorModal
-        mode={colorModalMode}
-        editColor={editColor}
-        newColor={newColor}
-        setEditColor={setEditColor}
-        setNewColor={setNewColor}
-        onAdd={handleAddColor}
-        onUpdate={handleUpdateColor}
-        onClose={closeColorModal}
-        saving={savingColor}
-      />
-
       <ConfirmDialog
         open={Boolean(confirmAction)}
         title={confirmAction?.title}
@@ -1944,20 +1811,6 @@ function Admin() {
                 onChange={e => setAppSettings({ ...appSettings, telegramBotToken: e.target.value })}
                 placeholder="Например: 123456789:AA..."
               />
-            </div>
-
-            <div className="form-group">
-              <label className="helper-label">
-                Названия ролей
-                <HelpTooltip text="Названия берутся из вкладки 'Роли'. Здесь они отображаются для контроля и всегда синхронизированы с рабочими экранами." />
-              </label>
-              <div className="order-role-summary">
-                {roleTabs.map(role => (
-                  <span key={role.key} className="order-role-summary-chip">
-                    {role.label}
-                  </span>
-                ))}
-              </div>
             </div>
 
             <SettingsActions>
@@ -2302,10 +2155,10 @@ function Admin() {
   if (activeRole === 'colors') {
     return (
       <div>
-        <SettingsHeader title="⚙️ Настройки — Цвета и легенда этапов" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+        <SettingsHeader title="⚙️ Настройки — Легенда этапов" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card">
-            <p>Здесь настраиваются цвета справочника, названия этапов и привязка колонок легенды для единой таблицы заказов.</p>
+            <p>Здесь настраиваются этапы, их цвета, названия и привязка колонок для единой таблицы заказов.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
             <div className="orders-stage-legend">
               <div className="orders-stage-legend-header">
@@ -2327,46 +2180,6 @@ function Admin() {
                   </div>
                 ))}
               </div>
-            </div>
-            <SettingsActions>
-              <button className="btn btn-success" onClick={openCreateColorModal}>Добавить цвет</button>
-              <button className="btn" onClick={fetchColors}>Обновить список</button>
-            </SettingsActions>
-            <div className="table-scroll desktop-table-only">
-              <table>
-                <thead><tr><th>Название</th><th>Цвет</th><th>Действия</th></tr></thead>
-                <tbody>
-                  {colors.map(c => (
-                    <tr key={c._id}>
-                      <td>{c.name}</td>
-                      <td><span className="color-swatch-inline" style={{ background: c.hex }} />{c.hex}</td>
-                      <td>
-                        <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditColorModal(c)}>✎</button>
-                        <button className="btn btn-danger" onClick={() => requestDeleteColor(c)}>✕</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mobile-card-list">
-              {colors.map(color => (
-                <div key={color._id} className="mobile-settings-card">
-                  <div className="mobile-settings-card-header">
-                    <div className="mobile-order-card-title">{color.name}</div>
-                    <div className="mobile-settings-color-row">
-                      <span className="color-swatch-inline" style={{ background: color.hex }} />
-                      {color.hex}
-                    </div>
-                  </div>
-                  <div className="mobile-settings-card-actions">
-                    <button className="btn btn-primary" onClick={() => openEditColorModal(color)}>Редактировать</button>
-                    <button className="btn btn-danger" onClick={() => requestDeleteColor(color)}>Удалить</button>
-                  </div>
-                </div>
-              ))}
-              {colors.length === 0 && <div className="mobile-empty-state">Цвета пока не добавлены</div>}
             </div>
           </div>
           {settingsCrudModals}
