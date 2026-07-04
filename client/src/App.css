@@ -83,6 +83,12 @@
   --hover-info-surface-bg: rgba(18, 35, 56, 0.72);
   --hover-info-surface-border: rgba(145, 207, 255, 0.22);
   --hover-info-surface-shadow: 0 12px 26px rgba(2, 8, 16, 0.16);
+  --z-overlay-tooltip: 1250;
+  --z-overlay-floating: 1260;
+  --z-overlay-floating-menu: 1270;
+  --z-header: 1300;
+  --z-header-menu: 1310;
+  --z-modal: 2000;
 }
 
 body {
@@ -109,7 +115,7 @@ body::before {
 
 .App-header {
   position: relative;
-  z-index: 1300;
+  z-index: var(--z-header);
   background: var(--header-bg);
   color: var(--text-main);
   padding: 18px 20px;
@@ -188,7 +194,7 @@ body::before {
   right: 0;
   left: auto;
   transform: none;
-  z-index: 1400;
+  z-index: var(--z-header-menu);
   display: none;
   width: min(260px, calc(100vw - 24px));
   padding: 12px;
@@ -3943,7 +3949,7 @@ body[data-theme='light'] .attachment-preview-table td {
 
 .manual-stage-toolbar-floating {
   position: fixed;
-  z-index: 1200;
+  z-index: var(--z-overlay-floating);
   margin-bottom: 0;
   padding: 10px 12px;
   min-width: 360px;
@@ -4052,7 +4058,7 @@ body[data-theme='light'] .attachment-preview-table td {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  z-index: 1210;
+  z-index: var(--z-overlay-floating-menu);
   min-width: 100%;
   display: flex;
   flex-direction: column;
@@ -5087,7 +5093,7 @@ body[data-theme='light'] .attachment-preview-table td {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1100;
+  z-index: var(--z-modal);
   padding: 20px;
   animation: overlayFadeIn 0.18s ease;
 }
@@ -5490,7 +5496,7 @@ body[data-theme='light'] .modal-close-btn {
   visibility: hidden;
   transition: opacity 0.15s ease;
   text-transform: none;
-  z-index: 20;
+  z-index: var(--z-overlay-tooltip);
 }
 
 .help-tooltip-content::after {
