@@ -18,7 +18,7 @@ import { RoleConfigProvider } from './RoleConfigContext';
 import './App.css';
 
 const THEME_STORAGE_KEY = 'kaznadzei.theme';
-
+const HEADER_LOGO_SRC = '/files/Logo-1024x307.png';
 class AppErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
@@ -178,13 +178,11 @@ function AppLayout() {
     return (
         <>
             {!telegramMode && (
-                <div className={`App-header ${mobileMenuOpen ? 'App-header-mobile-open' : ''}`}>
+                <div
+                    className={`App-header ${mobileMenuOpen ? 'App-header-mobile-open' : ''}`}
+                    style={{ '--header-logo-image': `url("${HEADER_LOGO_SRC}")` }}
+                >
                     <div className="App-header-main">
-                        <div className="App-header-brand">
-                            <div className="App-header-brand-row">
-                                <h1>🏭 Мебельная фабрика Kaznadzei</h1>
-                            </div>
-                        </div>
                         {canAccessOrders && ordersRoute ? (
                             <div className="App-header-center">
                                 <div id="orders-header-primary-actions" className="App-header-orders-primary-slot" />

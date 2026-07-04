@@ -84,41 +84,46 @@ body::before {
   gap: 12px;
   border-bottom: 1px solid var(--header-border);
   backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+
+.App-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--header-logo-image);
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: auto calc(100% - 12px);
+  opacity: 0.96;
+  pointer-events: none;
 }
 
 .App-header-main {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   width: 100%;
-}
-
-.App-header-brand {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.App-header-brand-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  z-index: 1;
 }
 
 .App-header-menu-anchor {
   position: relative;
   display: inline-flex;
   align-items: center;
-  margin-left: auto;
   flex-shrink: 0;
+  margin-left: 12px;
+  z-index: 2;
 }
 
 .App-header-center {
   flex: 1 1 auto;
-  min-width: 0;
   display: flex;
   justify-content: flex-end;
+  min-width: 0;
+  z-index: 2;
 }
 
 .App-header h1 {
@@ -5782,6 +5787,10 @@ body[data-theme='light'] .App-header-menu-footer {
   border-top-color: rgba(122, 167, 214, 0.18);
 }
 
+body[data-theme='light'] .App-header::before {
+  filter: drop-shadow(0 6px 14px rgba(60, 97, 138, 0.1));
+}
+
 body[data-theme='light'] .card h2,
 body[data-theme='light'] .modal-title,
 body[data-theme='light'] .telegram-comment-title,
@@ -6927,9 +6936,6 @@ body[data-theme='light'] .home-auth-status-pending {
     padding: 12px 14px;
     gap: 10px;
   }
-  .App-header-brand {
-    min-width: 0;
-  }
   .App-header h1 {
     font-size: 18px;
     line-height: 1.2;
@@ -6938,12 +6944,13 @@ body[data-theme='light'] .home-auth-status-pending {
     display: none;
   }
   .App-header-main {
+    display: flex;
     gap: 12px;
     align-items: center;
     flex-wrap: wrap;
   }
-  .App-header-brand-row {
-    flex-wrap: wrap;
+  .App-header::before {
+    background-size: auto calc(100% - 16px);
   }
   .App-header-center {
     order: 3;
@@ -7225,6 +7232,7 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .App-header-main {
+    display: flex;
     align-items: flex-start;
   }
   .orders-header-primary-actions {
@@ -7233,6 +7241,10 @@ body[data-theme='light'] .home-auth-status-pending {
 
   .App-header h1 {
     font-size: 16px;
+  }
+
+  .App-header::before {
+    background-size: auto calc(100% - 18px);
   }
 
   .App-header-controls {

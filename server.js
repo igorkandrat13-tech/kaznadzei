@@ -18,6 +18,11 @@ app.disable('x-powered-by');
 app.use(buildSecurityHeaders);
 app.use(express.json({ limit: '5mb' }));
 
+const filesPath = path.join(__dirname, 'files');
+if (fs.existsSync(filesPath)) {
+  app.use('/files', express.static(filesPath));
+}
+
 const seedSteps = [
   { stepName: 'Подготовка древесины', description: 'Выбор и подготовка пиломатериала', order: 1, role: 'carpenter' },
   { stepName: 'Раскрой', description: 'Распил на заготовки по чертежам', order: 2, role: 'carpenter' },
