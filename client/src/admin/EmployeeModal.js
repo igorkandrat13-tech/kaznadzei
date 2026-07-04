@@ -1,5 +1,5 @@
 import React from 'react';
-import { generatePassword, generatePinCode } from '../adminUI';
+import { generatePinCode } from '../adminUI';
 import { Button, Modal, ModalHeader } from '../ui';
 
 function EmployeeModal({
@@ -61,27 +61,7 @@ function EmployeeModal({
         />
       </div>
 
-      <div className="modal-form-grid modal-form-grid-two">
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Пароль</label>
-          <div className="modal-actions-group">
-            <input
-              value={employeeForm?.password || ''}
-              onChange={e => setEmployeeForm({ ...employeeForm, password: e.target.value })}
-              placeholder="Пароль для первичного входа"
-              disabled={saving}
-            />
-            <Button
-              variant="secondary"
-              disabled={saving}
-              onClick={() => setEmployeeForm({ ...employeeForm, password: generatePassword() })}
-            >
-              Сгенерировать
-            </Button>
-          </div>
-        </div>
-
-        <div className="form-group" style={{ marginBottom: 0 }}>
+      <div className="form-group" style={{ marginBottom: 0 }}>
           <label>PIN-код</label>
           <div className="modal-actions-group">
             <input
@@ -98,7 +78,6 @@ function EmployeeModal({
               Сгенерировать
             </Button>
           </div>
-        </div>
       </div>
 
       <div className="modal-actions">

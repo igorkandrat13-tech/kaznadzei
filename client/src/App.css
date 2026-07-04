@@ -19,17 +19,45 @@
   --accent-emerald: #64e6c2;
   --danger: #ff6b6b;
   --shadow-panel: 0 18px 50px rgba(2, 8, 16, 0.32);
+  --app-bg-gradient:
+    radial-gradient(circle at top left, rgba(49, 187, 255, 0.14), transparent 24%),
+    radial-gradient(circle at 85% 10%, rgba(100, 238, 217, 0.11), transparent 22%),
+    linear-gradient(180deg, #07111f 0%, #091423 36%, #060f1b 100%);
+  --app-overlay-gradient:
+    radial-gradient(circle at 20% 20%, rgba(121, 222, 255, 0.06), transparent 20%),
+    radial-gradient(circle at 80% 10%, rgba(100, 230, 194, 0.05), transparent 18%),
+    radial-gradient(circle at 50% 100%, rgba(106, 183, 255, 0.04), transparent 24%);
+  --header-bg: linear-gradient(135deg, rgba(8, 20, 36, 0.96), rgba(12, 28, 48, 0.92));
+  --header-border: rgba(138, 194, 255, 0.14);
+  --header-shadow: 0 14px 40px rgba(2, 8, 16, 0.3);
+  --header-title: #f4fbff;
+  --menu-bg: linear-gradient(180deg, rgba(10, 21, 36, 0.98), rgba(7, 16, 29, 0.96));
+  --menu-border: rgba(138, 194, 255, 0.14);
+  --menu-shadow: 0 24px 54px rgba(2, 8, 16, 0.32);
+  --control-bg: rgba(14, 30, 50, 0.8);
+  --control-bg-hover: rgba(21, 41, 66, 0.96);
+  --control-border: rgba(132, 190, 255, 0.14);
+  --control-border-hover: rgba(143, 205, 255, 0.28);
+  --control-shadow: 0 10px 24px rgba(2, 8, 16, 0.16);
+  --control-text: #f3fbff;
+  --nav-pill-bg: rgba(20, 42, 69, 0.72);
+  --nav-pill-bg-hover: rgba(34, 63, 98, 0.94);
+  --nav-pill-border: rgba(132, 190, 255, 0.12);
+  --nav-pill-border-hover: rgba(143, 205, 255, 0.28);
+  --nav-pill-text: #d8ecff;
+  --card-bg: linear-gradient(180deg, rgba(10, 21, 36, 0.88), rgba(7, 16, 29, 0.82));
 }
 
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(49, 187, 255, 0.14), transparent 24%),
-    radial-gradient(circle at 85% 10%, rgba(100, 238, 217, 0.11), transparent 22%),
-    linear-gradient(180deg, #07111f 0%, #091423 36%, #060f1b 100%);
+  background: var(--app-bg-gradient);
   color: var(--text-main);
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+body[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 body::before {
@@ -37,10 +65,7 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(121, 222, 255, 0.06), transparent 20%),
-    radial-gradient(circle at 80% 10%, rgba(100, 230, 194, 0.05), transparent 18%),
-    radial-gradient(circle at 50% 100%, rgba(106, 183, 255, 0.04), transparent 24%);
+  background: var(--app-overlay-gradient);
   opacity: 0.9;
   animation: ambientShift 18s ease-in-out infinite alternate;
 }
@@ -48,17 +73,16 @@ body::before {
 .App-header {
   position: relative;
   z-index: 50;
-  background:
-    linear-gradient(135deg, rgba(8, 20, 36, 0.96), rgba(12, 28, 48, 0.92));
+  background: var(--header-bg);
   color: var(--text-main);
   padding: 18px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 14px 40px rgba(2, 8, 16, 0.3);
+  box-shadow: var(--header-shadow);
   flex-wrap: wrap;
   gap: 12px;
-  border-bottom: 1px solid rgba(138, 194, 255, 0.14);
+  border-bottom: 1px solid var(--header-border);
   backdrop-filter: blur(18px);
 }
 
@@ -100,7 +124,7 @@ body::before {
 .App-header h1 {
   font-size: 22px;
   font-weight: 600;
-  color: #f4fbff;
+  color: var(--header-title);
   letter-spacing: 0.01em;
 }
 
@@ -126,9 +150,9 @@ body::before {
   width: min(260px, calc(100vw - 24px));
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid rgba(138, 194, 255, 0.14);
-  background: linear-gradient(180deg, rgba(10, 21, 36, 0.98), rgba(7, 16, 29, 0.96));
-  box-shadow: 0 24px 54px rgba(2, 8, 16, 0.32);
+  border: 1px solid var(--menu-border);
+  background: var(--menu-bg);
+  box-shadow: var(--menu-shadow);
   backdrop-filter: blur(18px);
 }
 
@@ -197,10 +221,10 @@ body::before {
   height: 38px;
   min-width: 38px;
   border-radius: 999px;
-  border: 1px solid rgba(132, 190, 255, 0.14);
-  background: rgba(14, 30, 50, 0.8);
-  box-shadow: 0 10px 24px rgba(2, 8, 16, 0.16);
-  color: #f3fbff;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  box-shadow: var(--control-shadow);
+  color: var(--control-text);
   font-size: 17px;
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
@@ -208,24 +232,24 @@ body::before {
 
 .theme-icon-toggle:hover {
   transform: translateY(-1px);
-  background: rgba(21, 41, 66, 0.96);
-  border-color: rgba(143, 205, 255, 0.28);
+  background: var(--control-bg-hover);
+  border-color: var(--control-border-hover);
 }
 
 .App-header-nav a {
-  color: #d8ecff;
+  color: var(--nav-pill-text);
   text-decoration: none;
   font-size: 14px;
   padding: 8px 14px;
   border-radius: 999px;
   transition: background 0.2s, border-color 0.2s, transform 0.2s;
-  background: rgba(20, 42, 69, 0.72);
-  border: 1px solid rgba(132, 190, 255, 0.12);
+  background: var(--nav-pill-bg);
+  border: 1px solid var(--nav-pill-border);
 }
 
 .App-header-nav a:hover {
-  background: rgba(34, 63, 98, 0.94);
-  border-color: rgba(143, 205, 255, 0.28);
+  background: var(--nav-pill-bg-hover);
+  border-color: var(--nav-pill-border-hover);
   transform: translateY(-1px);
 }
 
@@ -239,17 +263,17 @@ body::before {
   height: 40px;
   padding: 0;
   border-radius: 12px;
-  border: 1px solid rgba(132, 190, 255, 0.12);
-  background: rgba(14, 30, 50, 0.8);
-  color: var(--text-main);
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--control-text);
   cursor: pointer;
-  box-shadow: 0 10px 24px rgba(2, 8, 16, 0.16);
+  box-shadow: var(--control-shadow);
   transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 
 .mobile-menu-toggle:hover {
-  background: rgba(21, 41, 66, 0.96);
-  border-color: rgba(143, 205, 255, 0.28);
+  background: var(--control-bg-hover);
+  border-color: var(--control-border-hover);
   transform: translateY(-1px);
 }
 
@@ -282,7 +306,7 @@ body::before {
 }
 
 .card {
-  background: linear-gradient(180deg, rgba(10, 21, 36, 0.88), rgba(7, 16, 29, 0.82));
+  background: var(--card-bg);
   border-radius: 18px;
   padding: 20px;
   box-shadow: var(--shadow-panel);
@@ -4738,6 +4762,81 @@ body[data-theme='light'] .attachment-preview-table td {
   color: #8fdcff;
 }
 
+.update-install-statusbar-live-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.update-install-statusbar-live-badge,
+.update-install-statusbar-live-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(135, 186, 247, 0.16);
+  background: rgba(11, 22, 38, 0.76);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.update-install-statusbar-live-badge {
+  color: #dff6ff;
+}
+
+.update-install-statusbar-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 0 currentColor;
+}
+
+.update-install-statusbar-live-metric {
+  color: #a9c4de;
+}
+
+.update-install-statusbar-live-badge-online {
+  color: #8ff0cf;
+  border-color: rgba(99, 224, 176, 0.22);
+  background: rgba(14, 46, 34, 0.72);
+}
+
+.update-install-statusbar-live-badge-online .update-install-statusbar-live-dot {
+  animation: updateStatusPulse 1.25s ease-in-out infinite;
+}
+
+.update-install-statusbar-live-badge-waiting {
+  color: #a7dcff;
+  border-color: rgba(116, 190, 244, 0.22);
+}
+
+.update-install-statusbar-live-badge-stale {
+  color: #ffd59a;
+  border-color: rgba(255, 192, 97, 0.22);
+  background: rgba(58, 38, 8, 0.72);
+}
+
+.update-install-statusbar-live-badge-completed {
+  color: #b8f4d9;
+  border-color: rgba(97, 221, 165, 0.22);
+  background: rgba(13, 53, 35, 0.72);
+}
+
+.update-install-statusbar-live-badge-failed {
+  color: #ffc0ba;
+  border-color: rgba(255, 133, 133, 0.22);
+  background: rgba(67, 20, 20, 0.76);
+}
+
+.update-install-statusbar-live-badge-idle {
+  color: #b5cadf;
+}
+
 .update-install-statusbar-track {
   width: 100%;
   height: 10px;
@@ -4768,6 +4867,28 @@ body[data-theme='light'] .attachment-preview-table td {
   line-height: 1.4;
 }
 
+.update-install-statusbar-last-log {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(135, 186, 247, 0.1);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.update-install-statusbar-last-log-label {
+  color: #8fdcff;
+  font-weight: 700;
+}
+
+.update-install-statusbar-last-log-value {
+  color: #dcecff;
+  word-break: break-word;
+}
+
 .update-install-statusbar-stage {
   display: inline-flex;
   align-items: center;
@@ -4785,6 +4906,8 @@ body[data-theme='light'] .attachment-preview-table td {
   color: #10263d;
   background: linear-gradient(135deg, rgba(135, 214, 255, 0.96), rgba(126, 237, 205, 0.92));
   border-color: rgba(129, 230, 217, 0.32);
+  box-shadow: 0 0 0 0 rgba(135, 214, 255, 0.36);
+  animation: updateStagePulse 1.4s ease-in-out infinite;
 }
 
 .update-install-statusbar-stage-completed {
@@ -4809,6 +4932,47 @@ body[data-theme='light'] .attachment-preview-table td {
 
 .update-install-statusbar-failed .update-install-statusbar-fill {
   background: linear-gradient(90deg, #d56363 0%, #f29c7b 100%);
+}
+
+.update-install-statusbar-running .update-install-statusbar-fill {
+  background-size: 200% 100%;
+  animation: updateFillShift 1.8s linear infinite;
+}
+
+@keyframes updateStatusPulse {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(143, 240, 207, 0.45);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(143, 240, 207, 0);
+  }
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(143, 240, 207, 0);
+  }
+}
+
+@keyframes updateStagePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(135, 214, 255, 0.34);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(135, 214, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(135, 214, 255, 0);
+  }
+}
+
+@keyframes updateFillShift {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .telegram-log-list {
@@ -4915,6 +5079,19 @@ body[data-theme='light'] .attachment-preview-table td {
 .modal-close-btn:hover:not(:disabled) {
   background: rgba(29, 52, 80, 0.96);
   border-color: rgba(147, 205, 255, 0.38);
+}
+
+body[data-theme='light'] .modal-close-btn {
+  background: linear-gradient(135deg, #f7fbff, #ebf4fd);
+  color: #173857;
+  border-color: rgba(113, 158, 207, 0.24);
+  box-shadow: 0 10px 24px rgba(60, 97, 138, 0.08);
+}
+
+body[data-theme='light'] .modal-close-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #eef6ff, #e2eefb);
+  color: #102b45;
+  border-color: rgba(86, 149, 214, 0.34);
 }
 
 .modal-section {
@@ -5570,36 +5747,41 @@ body[data-theme='light'] {
   --text-soft: rgba(32, 63, 96, 0.88);
   --text-muted: rgba(50, 79, 110, 0.8);
   --shadow-panel: 0 18px 45px rgba(35, 68, 105, 0.14);
-  background:
+  --app-bg-gradient:
     radial-gradient(circle at top left, rgba(101, 195, 255, 0.2), transparent 22%),
     radial-gradient(circle at 88% 10%, rgba(111, 225, 214, 0.16), transparent 20%),
     linear-gradient(180deg, #f4f9ff 0%, #edf5fb 38%, #e7f0f7 100%);
-  color: var(--text-main);
-}
-
-body[data-theme='light']::before {
-  background:
+  --app-overlay-gradient:
     radial-gradient(circle at 20% 20%, rgba(121, 222, 255, 0.12), transparent 20%),
     radial-gradient(circle at 80% 10%, rgba(100, 230, 194, 0.09), transparent 18%),
     radial-gradient(circle at 50% 100%, rgba(106, 183, 255, 0.08), transparent 24%);
-}
-
-body[data-theme='light'] .App-header {
-  background: linear-gradient(135deg, rgba(250, 253, 255, 0.94), rgba(237, 245, 252, 0.9));
-  border-bottom-color: rgba(112, 156, 205, 0.22);
-  box-shadow: 0 14px 34px rgba(45, 78, 114, 0.14);
-}
-
-body[data-theme='light'] .App-header-actions {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.96));
-  box-shadow: 0 24px 54px rgba(40, 76, 114, 0.16);
+  --header-bg: linear-gradient(135deg, rgba(250, 253, 255, 0.94), rgba(237, 245, 252, 0.9));
+  --header-border: rgba(112, 156, 205, 0.22);
+  --header-shadow: 0 14px 34px rgba(45, 78, 114, 0.14);
+  --header-title: #16314b;
+  --menu-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.96));
+  --menu-border: rgba(113, 158, 207, 0.18);
+  --menu-shadow: 0 24px 54px rgba(40, 76, 114, 0.16);
+  --control-bg: rgba(255, 255, 255, 0.78);
+  --control-bg-hover: rgba(239, 247, 255, 0.98);
+  --control-border: rgba(122, 167, 214, 0.18);
+  --control-border-hover: rgba(99, 159, 221, 0.28);
+  --control-shadow: 0 10px 24px rgba(60, 97, 138, 0.1);
+  --control-text: #23415f;
+  --nav-pill-bg: rgba(255, 255, 255, 0.92);
+  --nav-pill-bg-hover: rgba(232, 242, 252, 0.98);
+  --nav-pill-border: rgba(113, 158, 207, 0.24);
+  --nav-pill-border-hover: rgba(86, 149, 214, 0.34);
+  --nav-pill-text: #173857;
+  --card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.96));
+  color-scheme: light;
+  color: var(--text-main);
 }
 
 body[data-theme='light'] .App-header-menu-footer {
   border-top-color: rgba(122, 167, 214, 0.18);
 }
 
-body[data-theme='light'] .App-header h1,
 body[data-theme='light'] .card h2,
 body[data-theme='light'] .modal-title,
 body[data-theme='light'] .telegram-comment-title,
@@ -5608,41 +5790,6 @@ body[data-theme='light'] .home-hero-panel h2,
 body[data-theme='light'] .panel-info-title,
 body[data-theme='light'] .service-details-title {
   color: #16314b;
-}
-
-body[data-theme='light'] .App-header-nav a {
-  color: #173857;
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(113, 158, 207, 0.24);
-}
-
-body[data-theme='light'] .App-header-nav a:hover {
-  background: rgba(232, 242, 252, 0.98);
-  border-color: rgba(86, 149, 214, 0.34);
-}
-
-body[data-theme='light'] .mobile-menu-toggle {
-  background: rgba(255, 255, 255, 0.78);
-  color: #23415f;
-  border-color: rgba(122, 167, 214, 0.18);
-  box-shadow: 0 10px 24px rgba(60, 97, 138, 0.1);
-}
-
-body[data-theme='light'] .mobile-menu-toggle:hover {
-  background: rgba(239, 247, 255, 0.98);
-  border-color: rgba(99, 159, 221, 0.28);
-}
-
-body[data-theme='light'] .theme-icon-toggle {
-  background: rgba(255, 255, 255, 0.78);
-  color: #23415f;
-  border-color: rgba(122, 167, 214, 0.18);
-  box-shadow: 0 10px 24px rgba(60, 97, 138, 0.1);
-}
-
-body[data-theme='light'] .theme-icon-toggle:hover {
-  background: rgba(239, 247, 255, 0.98);
-  border-color: rgba(99, 159, 221, 0.28);
 }
 
 body[data-theme='light'] .card,
@@ -6447,6 +6594,40 @@ body[data-theme='light'] .update-install-statusbar-percent {
   color: #2b6ea5;
 }
 
+body[data-theme='light'] .update-install-statusbar-live-badge,
+body[data-theme='light'] .update-install-statusbar-live-metric {
+  background: rgba(248, 251, 255, 0.96);
+  border-color: rgba(120, 164, 212, 0.18);
+}
+
+body[data-theme='light'] .update-install-statusbar-live-badge {
+  color: #1d4968;
+}
+
+body[data-theme='light'] .update-install-statusbar-live-metric {
+  color: #5f7b97;
+}
+
+body[data-theme='light'] .update-install-statusbar-live-badge-online {
+  color: #1d7b59;
+  background: rgba(234, 251, 243, 0.98);
+}
+
+body[data-theme='light'] .update-install-statusbar-live-badge-stale {
+  color: #8f6120;
+  background: rgba(255, 247, 231, 0.98);
+}
+
+body[data-theme='light'] .update-install-statusbar-live-badge-completed {
+  color: #207050;
+  background: rgba(235, 250, 242, 0.98);
+}
+
+body[data-theme='light'] .update-install-statusbar-live-badge-failed {
+  color: #a04848;
+  background: rgba(255, 241, 241, 0.98);
+}
+
 body[data-theme='light'] .update-install-statusbar-track {
   background: rgba(166, 189, 217, 0.22);
 }
@@ -6463,6 +6644,18 @@ body[data-theme='light'] .update-install-statusbar-stage-active {
 
 body[data-theme='light'] .update-install-statusbar-heartbeat {
   color: #68829d;
+}
+
+body[data-theme='light'] .update-install-statusbar-last-log {
+  border-top-color: rgba(120, 164, 212, 0.16);
+}
+
+body[data-theme='light'] .update-install-statusbar-last-log-label {
+  color: #2b6ea5;
+}
+
+body[data-theme='light'] .update-install-statusbar-last-log-value {
+  color: #21405e;
 }
 
 body[data-theme='light'] .telegram-log-entry {

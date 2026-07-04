@@ -5,7 +5,6 @@ export const emptyEmployeeForm = {
   fullName: '',
   role: '',
   telegramUsername: '',
-  password: '',
   pinCode: '',
 };
 
@@ -63,10 +62,6 @@ export function SectionHeader({ title, description, actions }) {
       {actions ? <div className="section-header-actions">{actions}</div> : null}
     </div>
   );
-}
-
-export function generatePassword() {
-  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6).toUpperCase();
 }
 
 export function generatePinCode() {

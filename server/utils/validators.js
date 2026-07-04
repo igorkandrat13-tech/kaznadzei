@@ -455,9 +455,6 @@ function sanitizeEmployeeInput(payload, options = {}) {
     const username = normalizeString(payload.telegramUsername, 'telegramUsername', { maxLength: 80 });
     data.telegramUsername = username ? username.replace(/^@+/, '@') : '';
   }
-  if (!partial || payload.password !== undefined) {
-    data.password = normalizeString(payload.password, 'password', { required: !partial, maxLength: 120 });
-  }
   if (!partial || payload.pinCode !== undefined) {
     const pinCode = normalizeString(payload.pinCode, 'pinCode', { required: !partial, maxLength: 20 });
     if (pinCode && !/^[A-Za-z0-9_-]{4,20}$/.test(pinCode)) {

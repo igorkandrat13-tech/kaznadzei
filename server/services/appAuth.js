@@ -163,16 +163,6 @@ function authenticateRolePassword(role, password) {
     return { role: 'admin', bootstrapUsed: true };
   }
 
-  if (normalizedRole === 'manager') {
-    if (!config.managerPasswordHash) {
-      throw new Error('Пароль менеджера ещё не настроен.');
-    }
-    if (!verifyPassword(normalizedPassword, config.managerPasswordHash)) {
-      throw new Error('Неверный пароль менеджера.');
-    }
-    return { role: 'manager', bootstrapUsed: false };
-  }
-
   throw new Error('Неизвестная роль для входа.');
 }
 
@@ -180,7 +170,6 @@ function getPublicAuthConfig() {
   const config = SettingsStore.getAuthConfig();
   return {
     adminPasswordConfigured: Boolean(config.adminPasswordHash),
-    managerPasswordConfigured: Boolean(config.managerPasswordHash),
     adminBootstrapAvailable: Boolean(!config.adminPasswordHash && getBootstrapAdminPassword()),
   };
 }

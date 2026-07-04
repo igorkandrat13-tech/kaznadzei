@@ -35,18 +35,16 @@ router.get('/auth/config', (req, res) => {
 router.post('/auth/setup', (req, res) => {
   try {
     const authConfig = SettingsStore.getAuthConfig();
-    if (authConfig.adminPasswordHash || authConfig.managerPasswordHash) {
+    if (authConfig.adminPasswordHash) {
       return res.status(409).json({
-        message: 'Первичная настройка уже выполнена. Для изменения паролей используйте админ-панель.',
+        message: 'Первичная настройка уже выполнена. Для изменения пароля используйте админ-панель.',
       });
     }
 
     const adminPassword = normalizePasswordInput(req.body?.adminPassword, 'Пароль администратора');
-    const managerPassword = normalizePasswordInput(req.body?.managerPassword, 'Пароль менеджера');
 
     SettingsStore.updateAuthConfig({
       adminPasswordHash: hashPassword(adminPassword),
-      managerPasswordHash: hashPassword(managerPassword),
     });
 
     const sessionToken = createAppSessionToken('admin');
@@ -54,11 +52,11 @@ router.post('/auth/setup', (req, res) => {
       ok: true,
       role: 'admin',
       sessionToken,
-      message: 'Пароли администратора и менеджера сохранены.',
+      message: 'Пароль администратора сохранен.',
       ...getPublicAuthConfig(),
     });
   } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось выполнить первичную настройку паролей.' });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось выполнить первичную настройку пароля.' });
   }
 });
 
@@ -90,28 +88,24 @@ router.get('/auth/session', requireManagerAccess(), (req, res) => {
 router.put('/auth/passwords', requireAdminAccess(), (req, res) => {
   try {
     const adminPassword = normalizePasswordInput(req.body?.adminPassword, 'Пароль администратора');
-    const managerPassword = normalizePasswordInput(req.body?.managerPassword, 'Пароль менеджера');
 
-    if (adminPassword === undefined && managerPassword === undefined) {
-      return res.status(400).json({ message: 'Укажите хотя бы один пароль для обновления.' });
+    if (adminPassword === undefined) {
+      return res.status(400).json({ message: 'Укажите пароль администратора для обновления.' });
     }
 
     const updates = {};
     if (adminPassword !== undefined) {
       updates.adminPasswordHash = hashPassword(adminPassword);
     }
-    if (managerPassword !== undefined) {
-      updates.managerPasswordHash = hashPassword(managerPassword);
-    }
 
     SettingsStore.updateAuthConfig(updates);
     res.json({
       ok: true,
-      message: 'Пароли доступа обновлены.',
+      message: 'Пароль администратора обновлен.',
       ...getPublicAuthConfig(),
     });
   } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить пароли.' });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить пароль администратора.' });
   }
 });
 

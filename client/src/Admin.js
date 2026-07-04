@@ -1989,7 +1989,7 @@ function Admin() {
           <div className="card" style={{ marginBottom: 20 }}>
             <p>Список сотрудников для входа в Telegram-бот и работы с заказами по ролям.</p>
             <SettingsHint>
-              <div><strong>Как работать:</strong> нажмите "Добавить сотрудника", заполните ФИО, роль, пароль и PIN-код.</div>
+              <div><strong>Как работать:</strong> нажмите "Добавить сотрудника", заполните ФИО, роль и PIN-код.</div>
               <div><strong>Редактирование:</strong> используйте кнопку ✎ или "Редактировать" в карточке сотрудника.</div>
               <div><strong>Удаление:</strong> используйте кнопку ✕ или "Удалить", подтвердите действие, после чего привязанному сотруднику придет уведомление в Telegram.</div>
             </SettingsHint>
@@ -2002,7 +2002,7 @@ function Admin() {
 
             <div className="table-scroll desktop-table-only">
               <table>
-                <thead><tr><th>ФИО</th><th>Роль</th><th>Статус TG</th><th>Пользователь TG</th><th>Авторизован</th><th>Пароль</th><th>PIN</th><th>Действия</th></tr></thead>
+                <thead><tr><th>ФИО</th><th>Роль</th><th>Статус TG</th><th>Пользователь TG</th><th>Авторизован</th><th>PIN</th><th>Действия</th></tr></thead>
                 <tbody>
                   {employees.map(employee => (
                     <tr key={employee._id}>
@@ -2011,7 +2011,6 @@ function Admin() {
                       <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
                       <td>{getEmployeeTelegramSummary(employee)}</td>
                       <td>{employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</td>
-                      <td>{employee.password || '—'}</td>
                       <td>{employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</td>
                       <td>
                         <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditEmployeeModal(employee)}>✎</button>
@@ -2019,7 +2018,7 @@ function Admin() {
                       </td>
                     </tr>
                   ))}
-                  {employees.length === 0 && <tr><td colSpan={8} className="empty-cell">Сотрудники пока не добавлены</td></tr>}
+                  {employees.length === 0 && <tr><td colSpan={7} className="empty-cell">Сотрудники пока не добавлены</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -2035,7 +2034,6 @@ function Admin() {
                     <div><strong>Статус TG:</strong> {employee.telegramUserId ? 'Привязан' : 'Не привязан'}</div>
                     <div><strong>Пользователь TG:</strong> {employee.telegramUserId ? employee.telegramUsername || 'без username' : '—'}</div>
                     <div><strong>Авторизован:</strong> {employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</div>
-                    <div><strong>Пароль:</strong> {employee.password || '—'}</div>
                     <div><strong>PIN:</strong> {employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</div>
                   </div>
                   {employee.telegramUserId ? (

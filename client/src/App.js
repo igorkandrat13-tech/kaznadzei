@@ -83,7 +83,10 @@ function AppLayout() {
     const routeTelegramMode = location.pathname === '/telegram-app';
     const ordersRoute = location.pathname === '/orders';
     const telegramMode = detectTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
-    const [theme, setTheme] = useState(() => window.localStorage.getItem(THEME_STORAGE_KEY) || 'light');
+    const [theme, setTheme] = useState(() => {
+        const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+        return storedTheme === 'dark' ? 'dark' : 'light';
+    });
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
     const canAccessOrders = canAccessRole('manager', authRole);
@@ -96,6 +99,8 @@ function AppLayout() {
     }, [location.pathname]);
 
     useEffect(() => {
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
         document.body.dataset.theme = theme;
         window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     }, [theme]);

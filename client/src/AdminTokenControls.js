@@ -4,11 +4,9 @@ import { apiFetch, parseJsonSafely } from './api';
 function AdminTokenControls() {
   const [form, setForm] = useState({
     adminPassword: '',
-    managerPassword: '',
   });
   const [config, setConfig] = useState({
     adminPasswordConfigured: false,
-    managerPasswordConfigured: false,
     adminBootstrapAvailable: false,
   });
   const [message, setMessage] = useState('');
@@ -20,7 +18,6 @@ function AdminTokenControls() {
     const data = await parseJsonSafely(res);
     setConfig({
       adminPasswordConfigured: Boolean(data?.adminPasswordConfigured),
-      managerPasswordConfigured: Boolean(data?.managerPasswordConfigured),
       adminBootstrapAvailable: Boolean(data?.adminBootstrapAvailable),
     });
   };
@@ -29,15 +26,14 @@ function AdminTokenControls() {
     fetchConfig().catch(() => {
       setConfig({
         adminPasswordConfigured: false,
-        managerPasswordConfigured: false,
         adminBootstrapAvailable: false,
       });
     });
   }, []);
 
   const handleSave = async () => {
-    if (!form.adminPassword.trim() && !form.managerPassword.trim()) {
-      setError('Введите хотя бы один пароль для сохранения.');
+    if (!form.adminPassword.trim()) {
+      setError('Введите пароль администратора для сохранения.');
       setMessage('');
       return;
     }
@@ -50,8 +46,7 @@ function AdminTokenControls() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(form.adminPassword.trim() ? { adminPassword: form.adminPassword } : {}),
-          ...(form.managerPassword.trim() ? { managerPassword: form.managerPassword } : {}),
+          adminPassword: form.adminPassword,
         }),
       });
       const data = await parseJsonSafely(res);
@@ -61,13 +56,12 @@ function AdminTokenControls() {
       }
       setConfig({
         adminPasswordConfigured: Boolean(data?.adminPasswordConfigured),
-        managerPasswordConfigured: Boolean(data?.managerPasswordConfigured),
         adminBootstrapAvailable: Boolean(data?.adminBootstrapAvailable),
       });
-      setForm({ adminPassword: '', managerPassword: '' });
-      setMessage(data?.message || 'Пароли доступа сохранены.');
+      setForm({ adminPassword: '' });
+      setMessage(data?.message || 'Пароль администратора сохранен.');
     } catch (requestError) {
-      setError(requestError.message || 'Не удалось сохранить пароли доступа.');
+      setError(requestError.message || 'Не удалось сохранить пароль администратора.');
     } finally {
       setSaving(false);
     }
@@ -77,7 +71,7 @@ function AdminTokenControls() {
     <div className="panel-soft">
       <div className="panel-soft-title">Доступ по паролю</div>
       <div className="panel-soft-text">
-        Здесь задаются пароли для администратора и рабочего доступа. Администратор получает полный доступ, рабочий доступ открывает заказы и рабочие страницы без системных настроек.
+        Здесь задается пароль администратора для входа в системные настройки и управления проектом.
       </div>
 
       <div className="responsive-form-grid" style={{ marginTop: 16 }}>
@@ -98,27 +92,11 @@ function AdminTokenControls() {
                 : 'Пароль администратора пока не настроен.'}
           </div>
         </div>
-
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Рабочий пароль</label>
-          <input
-            type="password"
-            value={form.managerPassword}
-            onChange={(e) => setForm(current => ({ ...current, managerPassword: e.target.value }))}
-            placeholder="Введите новый рабочий пароль"
-            disabled={saving}
-          />
-          <div className="text-small text-subtle" style={{ marginTop: 8 }}>
-            {config.managerPasswordConfigured
-              ? 'Рабочий пароль настроен.'
-              : 'Рабочий пароль пока не задан.'}
-          </div>
-        </div>
       </div>
 
       <div className="modal-actions-group" style={{ alignItems: 'center', marginTop: 16 }}>
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Сохранение...' : 'Сохранить пароли'}
+          {saving ? 'Сохранение...' : 'Сохранить пароль'}
         </button>
       </div>
 

@@ -7,7 +7,6 @@ function Home() {
     const navigate = useNavigate();
     const [authConfig, setAuthConfig] = useState({
         adminPasswordConfigured: false,
-        managerPasswordConfigured: false,
         adminBootstrapAvailable: false,
     });
     const [authLoading, setAuthLoading] = useState(false);
@@ -16,11 +15,9 @@ function Home() {
     const [authSuccess, setAuthSuccess] = useState('');
     const [authForm, setAuthForm] = useState({
         admin: '',
-        manager: '',
     });
     const [setupForm, setSetupForm] = useState({
         adminPassword: '',
-        managerPassword: '',
     });
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
 
@@ -29,13 +26,11 @@ function Home() {
             .then(res => parseJsonSafely(res))
             .then(data => setAuthConfig({
                 adminPasswordConfigured: Boolean(data?.adminPasswordConfigured),
-                managerPasswordConfigured: Boolean(data?.managerPasswordConfigured),
                 adminBootstrapAvailable: Boolean(data?.adminBootstrapAvailable),
             }))
             .catch(() => {
                 setAuthConfig({
                     adminPasswordConfigured: false,
-                    managerPasswordConfigured: false,
                     adminBootstrapAvailable: false,
                 });
             });
@@ -62,7 +57,7 @@ function Home() {
         },
     ]), [authConfig.adminPasswordConfigured]);
 
-    const needsInitialSetup = !authConfig.adminPasswordConfigured && !authConfig.managerPasswordConfigured;
+    const needsInitialSetup = !authConfig.adminPasswordConfigured;
 
     const handleAuthChange = (role) => (event) => {
         setAuthForm(current => ({ ...current, [role]: event.target.value }));
@@ -82,8 +77,8 @@ function Home() {
     };
 
     const handleInitialSetup = async () => {
-        if (!setupForm.adminPassword.trim() || !setupForm.managerPassword.trim()) {
-            setAuthError('Заполните новый пароль администратора и рабочий пароль.');
+        if (!setupForm.adminPassword.trim()) {
+            setAuthError('Заполните новый пароль администратора.');
             setAuthSuccess('');
             return;
         }
@@ -97,7 +92,6 @@ function Home() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     adminPassword: setupForm.adminPassword,
-                    managerPassword: setupForm.managerPassword,
                 }),
             });
             const data = await parseJsonSafely(res);
@@ -113,18 +107,16 @@ function Home() {
             setAuthRole(data?.role || 'admin');
             setAuthConfig({
                 adminPasswordConfigured: Boolean(data?.adminPasswordConfigured),
-                managerPasswordConfigured: Boolean(data?.managerPasswordConfigured),
                 adminBootstrapAvailable: Boolean(data?.adminBootstrapAvailable),
             });
             setSetupForm({
                 adminPassword: '',
-                managerPassword: '',
             });
-            setAuthForm(current => ({ ...current, admin: '', manager: '' }));
-            setAuthSuccess(data?.message || 'Пароли администратора и доступа к заказам сохранены.');
+            setAuthForm({ admin: '' });
+            setAuthSuccess(data?.message || 'Пароль администратора сохранен.');
             navigate('/orders');
         } catch (error) {
-            setAuthError(error.message || 'Не удалось сохранить пароли доступа.');
+            setAuthError(error.message || 'Не удалось сохранить пароль администратора.');
         } finally {
             setSetupLoading(false);
         }
@@ -133,7 +125,7 @@ function Home() {
     const handleLogin = async (role) => {
         const password = String(authForm[role] || '').trim();
         if (!password) {
-            setAuthError(role === 'admin' ? 'Введите пароль администратора.' : 'Введите рабочий пароль.');
+            setAuthError('Введите пароль администратора.');
             return;
         }
 
@@ -157,7 +149,7 @@ function Home() {
                 role: data?.role || role,
             });
             setAuthRole(data?.role || role);
-            setAuthSuccess(role === 'admin' ? 'Вход администратора выполнен.' : 'Доступ к заказам открыт.');
+            setAuthSuccess('Вход администратора выполнен.');
             navigate('/orders');
         } catch (error) {
             setAuthError(error.message || 'Не удалось выполнить вход.');
@@ -237,8 +229,8 @@ function Home() {
                         <div className="home-auth-setup card">
                             <div className="home-role-panel-title">Первичная настройка доступа</div>
                             <div className="home-role-panel-subtitle" style={{ marginBottom: 16 }}>
-                                После обновления сразу задайте пароль администратора и пароль доступа к заказам.
-                                Они сохранятся в хэш и будут использоваться для всех следующих входов.
+                                После обновления сразу задайте пароль администратора.
+                                Он сохранится в хэш и будет использоваться для всех следующих входов.
                             </div>
                             <form onSubmit={handleSetupSubmit}>
                                 <div className="responsive-form-grid" style={{ marginBottom: 16 }}>
@@ -252,20 +244,10 @@ function Home() {
                                             disabled={setupLoading}
                                         />
                                     </div>
-                                    <div className="form-group" style={{ marginBottom: 0 }}>
-                                        <label>Пароль доступа к заказам</label>
-                                        <input
-                                            type="password"
-                                            value={setupForm.managerPassword}
-                                            onChange={handleSetupChange('managerPassword')}
-                                            placeholder="Введите пароль доступа к заказам"
-                                            disabled={setupLoading}
-                                        />
-                                    </div>
                                 </div>
                                 <div className="modal-actions-group">
                                     <button className="btn btn-success" type="submit" disabled={setupLoading}>
-                                        {setupLoading ? 'Сохранение...' : 'Сохранить пароли и включить вход'}
+                                        {setupLoading ? 'Сохранение...' : 'Сохранить пароль и включить вход'}
                                     </button>
                                 </div>
                             </form>
@@ -277,7 +259,7 @@ function Home() {
                             <div>
                                 <div className="home-role-panel-title">Активная сессия</div>
                                 <div className="home-role-panel-subtitle">
-                                    Текущая роль: <strong>{authRole === 'admin' ? 'Администратор' : 'Доступ к заказам'}</strong>
+                                    Текущая роль: <strong>{authRole === 'admin' ? 'Администратор' : authRole}</strong>
                                 </div>
                             </div>
                             <div className="section-header-actions">
@@ -303,12 +285,12 @@ function Home() {
                                 <div className="home-auth-hint">{card.helper}</div>
                                 <form onSubmit={handleLoginSubmit(card.role)}>
                                     <div className="form-group" style={{ marginBottom: 12 }}>
-                                        <label>{card.role === 'admin' ? 'Пароль администратора' : 'Рабочий пароль'}</label>
+                                        <label>Пароль администратора</label>
                                         <input
                                             type="password"
                                             value={authForm[card.role]}
                                             onChange={handleAuthChange(card.role)}
-                                            placeholder={card.role === 'admin' ? 'Введите пароль администратора' : 'Введите рабочий пароль'}
+                                            placeholder="Введите пароль администратора"
                                             disabled={authLoading || !card.configured}
                                         />
                                     </div>
@@ -331,7 +313,7 @@ function Home() {
                         ))}
                     </div>
                     <div className="home-auth-note">
-                        Рабочие роли цеха, QR и Telegram-сценарии продолжают работать по своим маршрутам и не настраиваются с главного экрана.
+                        Роли цеха, QR и Telegram-сценарии продолжают работать по своим маршрутам и не настраиваются с главного экрана.
                     </div>
                 </section>
             </div>

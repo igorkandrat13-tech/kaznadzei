@@ -51,6 +51,63 @@ function formatInstallHeartbeat(updatedAt, nowTs) {
   return `Последнее обновление ${diffHours} ч назад`;
 }
 
+function formatInstallElapsed(startedAt, finishedAt, nowTs) {
+  const startedAtTs = new Date(startedAt || '').getTime();
+  if (!startedAtTs) return '';
+
+  const endTs = new Date(finishedAt || '').getTime() || nowTs;
+  const diffSeconds = Math.max(0, Math.floor((endTs - startedAtTs) / 1000));
+  const hours = Math.floor(diffSeconds / 3600);
+  const minutes = Math.floor((diffSeconds % 3600) / 60);
+  const seconds = diffSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours} ч ${minutes} мин`;
+  }
+  if (minutes > 0) {
+    return `${minutes} мин ${seconds} сек`;
+  }
+  return `${seconds} сек`;
+}
+
+function getInstallHeartbeatState(updatedAt, nowTs, installStatus) {
+  if (installStatus === 'completed') {
+    return { tone: 'completed', label: 'Поток завершён' };
+  }
+  if (installStatus === 'failed') {
+    return { tone: 'failed', label: 'Поток остановлен' };
+  }
+
+  const updatedAtTs = new Date(updatedAt || '').getTime();
+  if (!updatedAtTs) {
+    return { tone: 'idle', label: 'Ожидаю первый статус' };
+  }
+
+  const diffSeconds = Math.max(0, Math.floor((nowTs - updatedAtTs) / 1000));
+  if (diffSeconds <= 4) {
+    return { tone: 'online', label: 'Онлайн сейчас' };
+  }
+  if (diffSeconds <= 10) {
+    return { tone: 'waiting', label: 'Жду следующее обновление' };
+  }
+  return { tone: 'stale', label: 'Статус задерживается' };
+}
+
+function getLatestInstallLogLine(logs) {
+  if (!Array.isArray(logs) || logs.length === 0) {
+    return '';
+  }
+
+  for (let index = logs.length - 1; index >= 0; index -= 1) {
+    const line = String(logs[index] || '').trim();
+    if (line) {
+      return line;
+    }
+  }
+
+  return '';
+}
+
 function UpdatesOverview({
   updateStatus,
   installJob,
@@ -75,9 +132,16 @@ function UpdatesOverview({
   const installHeartbeatText = installJob?.updatedAt
     ? formatInstallHeartbeat(installJob.updatedAt, heartbeatNowTs)
     : '';
+  const installElapsedText = installJob?.startedAt
+    ? formatInstallElapsed(installJob.startedAt, installJob.finishedAt, heartbeatNowTs)
+    : '';
+  const installHeartbeatState = installJob
+    ? getInstallHeartbeatState(installJob.updatedAt, heartbeatNowTs, installJob.status)
+    : null;
+  const latestInstallLogLine = getLatestInstallLogLine(installJob?.logs);
 
   useEffect(() => {
-    if (!installJob?.updatedAt) {
+    if (!installJob?.updatedAt && !installJob?.startedAt) {
       return undefined;
     }
 
@@ -86,7 +150,7 @@ function UpdatesOverview({
     }, 1000);
 
     return () => window.clearInterval(intervalId);
-  }, [installJob?.updatedAt]);
+  }, [installJob?.updatedAt, installJob?.startedAt]);
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -120,9 +184,6 @@ function UpdatesOverview({
           </>
         }
       />
-      <div className="settings-hint" style={{ marginBottom: 10 }}>
-        Здесь собраны все действия и настройки, связанные с обновлением проекта и перезапуском сервиса.
-      </div>
       <div className="responsive-form-grid" style={{ marginBottom: 12 }}>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -176,6 +237,24 @@ function UpdatesOverview({
                 <span className="update-install-statusbar-label">Этап: {installProgress.label}</span>
                 <span className="update-install-statusbar-percent">{installProgress.percent}%</span>
               </div>
+              <div className="update-install-statusbar-live-row">
+                {installHeartbeatState ? (
+                  <span className={`update-install-statusbar-live-badge update-install-statusbar-live-badge-${installHeartbeatState.tone}`}>
+                    <span className="update-install-statusbar-live-dot" aria-hidden="true" />
+                    {installHeartbeatState.label}
+                  </span>
+                ) : null}
+                {installElapsedText ? (
+                  <span className="update-install-statusbar-live-metric">
+                    Длительность: {installElapsedText}
+                  </span>
+                ) : null}
+                {installJob.status === 'running' ? (
+                  <span className="update-install-statusbar-live-metric">
+                    Автообновление: каждые ~3 сек
+                  </span>
+                ) : null}
+              </div>
               <div className="update-install-statusbar-track" aria-hidden="true">
                 <div
                   className="update-install-statusbar-fill"
@@ -197,6 +276,12 @@ function UpdatesOverview({
               </div>
               {installHeartbeatText ? (
                 <div className="update-install-statusbar-heartbeat">{installHeartbeatText}</div>
+              ) : null}
+              {latestInstallLogLine ? (
+                <div className="update-install-statusbar-last-log">
+                  <span className="update-install-statusbar-last-log-label">Сейчас:</span>
+                  <span className="update-install-statusbar-last-log-value">{latestInstallLogLine}</span>
+                </div>
               ) : null}
             </div>
           ) : null}
