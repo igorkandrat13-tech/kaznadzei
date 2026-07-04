@@ -18,7 +18,7 @@ import { RoleConfigProvider } from './RoleConfigContext';
 import './App.css';
 
 const THEME_STORAGE_KEY = 'kaznadzei.theme';
-const HEADER_LOGO_SRC = '/files/Logo-1024x307.png';
+const HEADER_LOGO_SRC = `${process.env.PUBLIC_URL || ''}/kaznadzei-header-logo.png`;
 class AppErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
