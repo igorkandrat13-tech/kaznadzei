@@ -164,7 +164,7 @@ body::before {
   background-image: var(--header-logo-image);
   background-repeat: no-repeat;
   background-position: center center;
-  background-size: auto calc(100% - 16px);
+  background-size: auto calc(100% - 10px);
   opacity: 0.96;
   z-index: 1;
   overflow: visible;
