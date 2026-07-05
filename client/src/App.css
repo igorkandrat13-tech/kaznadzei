@@ -132,6 +132,7 @@ body::before {
 }
 
 .App-header-main {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -142,12 +143,15 @@ body::before {
 }
 
 .App-header-brand-link {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
   display: block;
   flex: 0 1 min(420px, calc(100% - 320px));
   width: min(420px, calc(100% - 320px));
   min-width: 220px;
   height: 44px;
+  margin: 0 auto;
   border-radius: 18px;
   background-image: var(--header-logo-image);
   background-repeat: no-repeat;
@@ -157,6 +161,7 @@ body::before {
   z-index: 1;
   overflow: visible;
   pointer-events: auto;
+  transform: translate(-50%, -50%);
   transition: opacity 0.18s ease, transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
@@ -177,7 +182,7 @@ body::before {
 .App-header-brand-link:hover,
 .App-header-brand-link:focus-visible {
   opacity: 1;
-  transform: translateY(-1px);
+  transform: translate(-50%, calc(-50% - 1px));
   filter: saturate(1.04) brightness(1.02);
   box-shadow: 0 0 0 1px rgba(143, 210, 255, 0.22);
 }
@@ -7025,6 +7030,7 @@ body[data-theme='light'] .home-auth-status-pending {
     width: clamp(148px, calc(100% - 520px), 300px);
     min-width: 148px;
     height: 36px;
+    transform: translate(-50%, -50%);
   }
 
   .App-header-center {
@@ -7112,11 +7118,12 @@ body[data-theme='light'] .home-auth-status-pending {
     width: clamp(132px, calc(100% - 430px), 280px);
     height: 36px;
     min-width: 132px;
+    transform: translate(-50%, -50%);
   }
 
   .App-header-brand-link:hover,
   .App-header-brand-link:focus-visible {
-    transform: translateY(-1px);
+    transform: translate(-50%, calc(-50% - 1px));
   }
 
   .App-header-orders-primary-slot {
@@ -7195,11 +7202,20 @@ body[data-theme='light'] .home-auth-status-pending {
     flex-wrap: wrap;
   }
   .App-header-brand-link {
+    position: relative;
+    top: auto;
+    left: auto;
     order: 1;
     flex: 0 1 clamp(124px, calc(100% - 180px), 220px);
     width: clamp(124px, calc(100% - 180px), 220px);
     height: 32px;
     min-width: 124px;
+    margin: 0 auto;
+    transform: none;
+  }
+  .App-header-brand-link:hover,
+  .App-header-brand-link:focus-visible {
+    transform: translateY(-1px);
   }
   .App-header-center {
     order: 2;
