@@ -159,7 +159,7 @@ body::before {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  height: 48px;
+  height: 58px;
   border-radius: 18px;
   background-image: var(--header-logo-image);
   background-repeat: no-repeat;
@@ -7072,7 +7072,7 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .App-header-brand-link {
-    height: 42px;
+    height: 50px;
   }
 
   .App-header-center {
@@ -7158,7 +7158,7 @@ body[data-theme='light'] .home-auth-status-pending {
 
   .App-header-brand-link {
     width: min(100%, 720px);
-    height: 44px;
+    height: 53px;
     min-width: 0;
   }
 
@@ -7259,7 +7259,7 @@ body[data-theme='light'] .home-auth-status-pending {
   }
   .App-header-brand-link {
     width: min(100%, 560px);
-    height: 40px;
+    height: 48px;
     min-width: 0;
   }
   .App-header-brand-link:hover,
@@ -7559,7 +7559,7 @@ body[data-theme='light'] .home-auth-status-pending {
 
   .App-header-brand-link {
     width: min(100%, 420px);
-    height: 34px;
+    height: 41px;
     min-width: 0;
   }
 
