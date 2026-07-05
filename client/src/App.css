@@ -132,26 +132,31 @@ body::before {
 }
 
 .App-header-main {
-  position: relative;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
   width: 100%;
   z-index: 2;
   pointer-events: none;
 }
 
+.App-header-orders-zone {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  pointer-events: none;
+}
+
 .App-header-brand-link {
-  position: absolute;
-  top: 50%;
-  left: 50%;
   display: block;
-  flex: 0 1 min(420px, calc(100% - 320px));
-  width: min(420px, calc(100% - 320px));
-  min-width: 220px;
+  flex: 0 1 clamp(180px, 28vw, 360px);
+  width: clamp(180px, 28vw, 360px);
+  min-width: 180px;
   height: 44px;
-  margin: 0 auto;
   border-radius: 18px;
   background-image: var(--header-logo-image);
   background-repeat: no-repeat;
@@ -161,7 +166,6 @@ body::before {
   z-index: 1;
   overflow: visible;
   pointer-events: auto;
-  transform: translate(-50%, -50%);
   transition: opacity 0.18s ease, transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
@@ -182,7 +186,7 @@ body::before {
 .App-header-brand-link:hover,
 .App-header-brand-link:focus-visible {
   opacity: 1;
-  transform: translate(-50%, calc(-50% - 1px));
+  transform: translateY(-1px);
   filter: saturate(1.04) brightness(1.02);
   box-shadow: 0 0 0 1px rgba(143, 210, 255, 0.22);
 }
@@ -209,7 +213,7 @@ body::before {
 }
 
 .App-header-center {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   display: flex;
   justify-content: flex-end;
   min-width: 0;
@@ -7019,25 +7023,19 @@ body[data-theme='light'] .home-auth-status-pending {
 }
 
 @media (max-width: 1366px) {
-  .App-header-main {
-    flex-wrap: nowrap;
-    justify-content: flex-end;
-    row-gap: 0;
+  .App-header-orders-zone {
+    gap: 14px;
   }
 
   .App-header-brand-link {
-    flex-basis: clamp(148px, calc(100% - 520px), 300px);
-    width: clamp(148px, calc(100% - 520px), 300px);
-    min-width: 148px;
+    flex-basis: clamp(156px, 25vw, 300px);
+    width: clamp(156px, 25vw, 300px);
+    min-width: 156px;
     height: 36px;
-    transform: translate(-50%, -50%);
   }
 
   .App-header-center {
-    order: 0;
-    width: auto;
     justify-content: flex-end;
-    padding-top: 0;
   }
 
   .App-header-orders-primary-slot {
@@ -7113,21 +7111,38 @@ body[data-theme='light'] .home-auth-status-pending {
     padding-bottom: 14px;
   }
 
+  .App-header-orders-zone {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    align-items: center;
+    row-gap: 10px;
+  }
+
   .App-header-brand-link {
-    flex-basis: clamp(132px, calc(100% - 430px), 280px);
-    width: clamp(132px, calc(100% - 430px), 280px);
+    flex-basis: auto;
+    width: clamp(156px, 32vw, 280px);
     height: 36px;
-    min-width: 132px;
-    transform: translate(-50%, -50%);
+    min-width: 156px;
   }
 
   .App-header-brand-link:hover,
   .App-header-brand-link:focus-visible {
-    transform: translate(-50%, calc(-50% - 1px));
+    transform: translateY(-1px);
+  }
+
+  .App-header-center {
+    width: 100%;
+    justify-content: center;
   }
 
   .App-header-orders-primary-slot {
-    justify-content: flex-end;
+    justify-content: center;
+  }
+
+  .orders-header-primary-actions {
+    justify-content: center;
+    max-width: 100%;
   }
 }
 
@@ -7201,24 +7216,20 @@ body[data-theme='light'] .home-auth-status-pending {
     align-items: center;
     flex-wrap: wrap;
   }
+  .App-header-orders-zone {
+    width: 100%;
+    gap: 10px;
+  }
   .App-header-brand-link {
-    position: relative;
-    top: auto;
-    left: auto;
-    order: 1;
-    flex: 0 1 clamp(124px, calc(100% - 180px), 220px);
     width: clamp(124px, calc(100% - 180px), 220px);
     height: 32px;
     min-width: 124px;
-    margin: 0 auto;
-    transform: none;
   }
   .App-header-brand-link:hover,
   .App-header-brand-link:focus-visible {
     transform: translateY(-1px);
   }
   .App-header-center {
-    order: 2;
     width: 100%;
     justify-content: stretch;
     padding-top: 0;
@@ -7510,8 +7521,6 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .App-header-brand-link {
-    order: 1;
-    flex: 0 1 clamp(112px, calc(100% - 156px), 180px);
     width: clamp(112px, calc(100% - 156px), 180px);
     height: 28px;
     min-width: 112px;

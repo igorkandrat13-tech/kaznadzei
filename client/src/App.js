@@ -183,17 +183,19 @@ function AppLayout() {
                     style={{ '--header-logo-image': `url("${HEADER_LOGO_SRC}")` }}
                 >
                     <div className="App-header-main">
-                        <Link
-                            to={canAccessOrders ? '/orders' : '/'}
-                            className="App-header-brand-link"
-                            aria-label={canAccessOrders ? 'Перейти к заказам' : 'Перейти на главную'}
-                            title={canAccessOrders ? 'К странице заказов' : 'На главную'}
-                        />
-                        {canAccessOrders && ordersRoute ? (
-                            <div className="App-header-center">
-                                <div id="orders-header-primary-actions" className="App-header-orders-primary-slot" />
-                            </div>
-                        ) : null}
+                        <div className="App-header-orders-zone">
+                            <Link
+                                to={canAccessOrders ? '/orders' : '/'}
+                                className="App-header-brand-link"
+                                aria-label={canAccessOrders ? 'Перейти к заказам' : 'Перейти на главную'}
+                                title={canAccessOrders ? 'К странице заказов' : 'На главную'}
+                            />
+                            {canAccessOrders && ordersRoute ? (
+                                <div className="App-header-center">
+                                    <div id="orders-header-primary-actions" className="App-header-orders-primary-slot" />
+                                </div>
+                            ) : null}
+                        </div>
                         <div ref={mobileMenuAnchorRef} className="App-header-menu-anchor">
                             <button
                                 className="mobile-menu-toggle"
