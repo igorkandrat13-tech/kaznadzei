@@ -272,7 +272,63 @@ function getOrderManufacturingMeta(order) {
   };
 }
 
+function isOrderArchived(order) {
+  return Boolean(String(order?.archivedAt || '').trim());
+}
+
+function getOrderArchiveEligibility(order) {
+  if (!order || typeof order !== 'object') {
+    return {
+      isEligible: false,
+      reason: 'Заказ не найден.',
+    };
+  }
+
+  if (isOrderArchived(order)) {
+    return {
+      isEligible: false,
+      reason: 'Заказ уже находится в архиве.',
+    };
+  }
+
+  if (!String(order.orderNumber || '').trim()) {
+    return {
+      isEligible: false,
+      reason: 'Укажите номер заказа.',
+    };
+  }
+
+  if (!String(order.orderDate || '').trim()) {
+    return {
+      isEligible: false,
+      reason: 'Укажите дату заказа.',
+    };
+  }
+
+  const items = getOrderItems(order);
+  if (items.length === 0) {
+    return {
+      isEligible: false,
+      reason: 'В заказе пока нет изделий.',
+    };
+  }
+
+  const hasIncompleteItems = items.some((item) => !getItemManufacturingMeta(item).isCompleted);
+  if (hasIncompleteItems || !getOrderManufacturingMeta(order).isCompleted) {
+    return {
+      isEligible: false,
+      reason: 'Не все обязательные ячейки заполнены, закрашены и исполнены по счетчикам.',
+    };
+  }
+
+  return {
+    isEligible: true,
+    reason: '',
+  };
+}
+
 export {
+  getOrderArchiveEligibility,
   getOrderComments,
   getItemManufacturingMeta,
   getOrderManufacturingMeta,
@@ -284,4 +340,5 @@ export {
   getOrderPrimaryNotes,
   getOrderPrimaryQuantity,
   getOrderStages,
+  isOrderArchived,
 };

@@ -1,9 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { apiFetch, parseJsonSafely } from './api';
-import { getOrderOverallStatus, getOrderPrimaryMaterial, getOrderPrimaryName, getOrderPrimaryQuantity, getOrderStages } from './orderSelectors';
+import ConfirmDialog from './ConfirmDialog';
+import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import {
+  getOrderOverallStatus,
+  getOrderPrimaryMaterial,
+  getOrderPrimaryName,
+  getOrderPrimaryQuantity,
+  getOrderStages,
+  isOrderArchived,
+} from './orderSelectors';
 import { getOrderStatusMeta, ORDER_STATUS_OPTIONS } from './statusMeta';
 import { useRoleConfig } from './RoleConfigContext';
+import { Button } from './ui';
 
 function getRoleShortLabel(role, roleTabs = []) {
   return roleTabs.find(tab => tab.key === role)?.plainLabel || role;
@@ -73,13 +82,24 @@ function Archive() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
+  const [confirmRestore, setConfirmRestore] = useState(null);
+  const [restoringOrder, setRestoringOrder] = useState(false);
 
-  useEffect(() => {
+  const fetchOrders = useCallback(() => {
+    setError('');
     apiFetch('/api/orders')
       .then(res => parseJsonSafely(res))
       .then(data => setOrders(Array.isArray(data) ? data : []))
-      .catch(() => setOrders([]));
+      .catch(() => {
+        setOrders([]);
+        setError('Не удалось загрузить архив заказов.');
+      });
   }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   const calcDuration = (start, end) => {
     if (!start || !end) return '—';
@@ -89,28 +109,58 @@ function Archive() {
     return diff >= 0 ? diff + ' дн.' : '—';
   };
 
-  const filtered = orders.filter(o => {
-    if (statusFilter !== 'all' && getOrderOverallStatus(o) !== statusFilter) return false;
-    if (roleFilter !== 'all') {
-      const stages = getOrderStages(o);
-      const activeStage = stages.find(stage => stage.status === 'in_progress')
-        || stages.find(stage => stage.status !== 'completed');
-      if ((activeStage?.role || '') !== roleFilter) return false;
+  const filtered = orders
+    .filter(o => isOrderArchived(o))
+    .filter(o => {
+      if (statusFilter !== 'all' && getOrderOverallStatus(o) !== statusFilter) return false;
+      if (roleFilter !== 'all') {
+        const stages = getOrderStages(o);
+        const activeStage = stages.find(stage => stage.status === 'in_progress')
+          || stages.find(stage => stage.status !== 'completed');
+        if ((activeStage?.role || '') !== roleFilter) return false;
+      }
+      if (search) {
+        const q = search.toLowerCase();
+        const match = [
+          o.orderNumber,
+          getOrderPrimaryName(o),
+          o.customer,
+          getOrderPrimaryMaterial(o),
+        ].join(' ').toLowerCase();
+        if (!match.includes(q)) return false;
+      }
+      if (dateFrom && o.startDate && new Date(o.startDate) < new Date(dateFrom)) return false;
+      if (dateTo && o.endDate && new Date(o.endDate) > new Date(dateTo)) return false;
+      return true;
+    })
+    .sort((left, right) => new Date(right.archivedAt || right.updatedAt || 0) - new Date(left.archivedAt || left.updatedAt || 0));
+
+  const requestRestore = (order) => {
+    setError('');
+    setConfirmRestore({
+      id: order._id,
+      orderNumber: order.orderNumber || '',
+      name: getOrderPrimaryName(order) || '',
+      customer: order.customer || '',
+    });
+  };
+
+  const handleRestore = async () => {
+    if (!confirmRestore?.id || restoringOrder) return;
+    setRestoringOrder(true);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${confirmRestore.id}/restore`, { method: 'POST' });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось вернуть заказ в работу.'));
+        return;
+      }
+      setConfirmRestore(null);
+      fetchOrders();
+    } finally {
+      setRestoringOrder(false);
     }
-    if (search) {
-      const q = search.toLowerCase();
-      const match = [
-        o.orderNumber,
-        getOrderPrimaryName(o),
-        o.customer,
-        getOrderPrimaryMaterial(o),
-      ].join(' ').toLowerCase();
-      if (!match.includes(q)) return false;
-    }
-    if (dateFrom && o.startDate && new Date(o.startDate) < new Date(dateFrom)) return false;
-    if (dateTo && o.endDate && new Date(o.endDate) > new Date(dateTo)) return false;
-    return true;
-  });
+  };
 
   const renderArchiveRoleProgress = (order) => {
     const roleProgress = allRoleTabs
@@ -141,13 +191,18 @@ function Archive() {
         <div className="section-header">
           <div>
             <h2>📦 Архив заказов</h2>
-            <p>Фильтрация и просмотр завершенных и текущих заказов без возврата через историю браузера.</p>
+            <p>Здесь отображаются только заказы, которые вручную перенесены в архив после полного завершения.</p>
           </div>
           <div className="section-header-actions">
             <Link to="/orders" className="btn btn-secondary">К заказам</Link>
             <Link to="/settings" className="btn btn-secondary">К настройкам</Link>
           </div>
         </div>
+        {error ? (
+          <div className="settings-alert settings-alert-error" style={{ marginTop: 12, marginBottom: 0 }}>
+            {error}
+          </div>
+        ) : null}
         <div className="responsive-filters">
           <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
             <label>Поиск</label>
@@ -199,6 +254,7 @@ function Archive() {
                 <th>Время</th>
                 <th>Статус</th>
                 <th>По специалистам</th>
+                <th>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -219,9 +275,20 @@ function Archive() {
                     </span>
                   </td>
                   <td>{renderArchiveRoleProgress(order)}</td>
+                  <td>
+                    <Button
+                      variant="success"
+                      size="sm"
+                      className="archive-order-action-btn"
+                      onClick={() => requestRestore(order)}
+                      disabled={restoringOrder}
+                    >
+                      Вернуть в работу
+                    </Button>
+                  </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={11} className="empty-cell">Нет заказов</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={12} className="empty-cell">В архиве пока нет заказов</td></tr>}
             </tbody>
           </table>
         </div>
@@ -276,12 +343,34 @@ function Archive() {
                   <div className="mobile-order-card-label">По специалистам</div>
                   <div>{renderArchiveRoleProgress(order)}</div>
                 </div>
+                <div className="archive-mobile-actions">
+                  <Button
+                    variant="success"
+                    size="sm"
+                    className="archive-order-action-btn"
+                    onClick={() => requestRestore(order)}
+                    disabled={restoringOrder}
+                  >
+                    Вернуть в работу
+                  </Button>
+                </div>
               </div>
             );
           })}
-          {filtered.length === 0 && <div className="mobile-empty-state">Нет заказов</div>}
+          {filtered.length === 0 && <div className="mobile-empty-state">В архиве пока нет заказов</div>}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(confirmRestore)}
+        title="Вернуть заказ в работу?"
+        message={confirmRestore ? `Заказ № ${confirmRestore.orderNumber || '—'} снова появится в рабочей таблице заказов.\nОсновное изделие: ${confirmRestore.name || '—'}\nЗаказчик: ${confirmRestore.customer || '—'}` : ''}
+        confirmLabel="Вернуть в работу"
+        onConfirm={handleRestore}
+        onCancel={() => !restoringOrder && setConfirmRestore(null)}
+        loading={restoringOrder}
+        variant="primary"
+      />
     </div>
   );
 }

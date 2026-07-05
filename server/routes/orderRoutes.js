@@ -812,6 +812,80 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
   }
 });
 
+router.post('/orders/:id/archive', requireManagerAccess(), (req, res) => {
+  try {
+    const archiveResult = OrderStore.archive(req.params.id, {
+      role: req.auth?.role || 'manager',
+      name: '',
+    });
+    if (!archiveResult) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (archiveResult.status !== 'archived') {
+      return res.status(400).json({
+        message: archiveResult.message || 'Не удалось перенести заказ в архив.',
+      });
+    }
+
+    addActivityLog({
+      action: 'order.archive',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: OrderStore.getOrderPrimaryName(archiveResult.order) || '',
+      actor: getRequestActor(req),
+      message: 'Заказ перенесен в архив.',
+      details: {
+        orderNumber: archiveResult.order?.orderNumber || '',
+        archivedAt: archiveResult.order?.archivedAt || '',
+      },
+    });
+
+    res.json({
+      ok: true,
+      order: archiveResult.order,
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({
+      message: error.message || 'Не удалось перенести заказ в архив.',
+    });
+  }
+});
+
+router.post('/orders/:id/restore', requireManagerAccess(), (req, res) => {
+  try {
+    const restoreResult = OrderStore.restore(req.params.id);
+    if (!restoreResult) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (restoreResult.status !== 'restored') {
+      return res.status(400).json({
+        message: restoreResult.message || 'Не удалось вернуть заказ в работу.',
+      });
+    }
+
+    addActivityLog({
+      action: 'order.restore',
+      entityType: 'order',
+      entityId: req.params.id,
+      entityName: OrderStore.getOrderPrimaryName(restoreResult.order) || '',
+      actor: getRequestActor(req),
+      message: 'Заказ возвращен в работу.',
+      details: {
+        orderNumber: restoreResult.order?.orderNumber || '',
+      },
+    });
+
+    res.json({
+      ok: true,
+      order: restoreResult.order,
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({
+      message: error.message || 'Не удалось вернуть заказ в работу.',
+    });
+  }
+});
+
 router.get('/orders/:id/items/:itemId/attachments/:attachmentId/file', requireWriteAccess, (req, res) => {
   try {
     const attachmentScope = getAttachmentScope(req);

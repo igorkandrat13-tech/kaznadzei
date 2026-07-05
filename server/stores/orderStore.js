@@ -585,6 +585,13 @@ function normalizeOrderManualDateOverrides(source = {}) {
   };
 }
 
+function normalizeArchivedBy(source = {}) {
+  return {
+    role: String(source?.role || '').trim(),
+    name: String(source?.name || '').trim(),
+  };
+}
+
 function hasLegacyPrimaryItemData(order = {}) {
   return Boolean(
     String(order?.name || '').trim()
@@ -663,6 +670,35 @@ function deriveOrderManufacturingMeta(order = {}) {
     endDate: endAt ? endAt.split('T')[0] : '',
     isCompleted,
   };
+}
+
+function isOrderArchived(order = {}) {
+  return Boolean(String(order?.archivedAt || '').trim());
+}
+
+function getOrderArchiveEligibility(order = {}) {
+  if (!order || typeof order !== 'object') {
+    return { isEligible: false, reason: 'Заказ не найден.' };
+  }
+  if (isOrderArchived(order)) {
+    return { isEligible: false, reason: 'Заказ уже находится в архиве.' };
+  }
+  if (!String(order.orderNumber || '').trim()) {
+    return { isEligible: false, reason: 'Укажите номер заказа.' };
+  }
+  if (!String(order.orderDate || '').trim()) {
+    return { isEligible: false, reason: 'Укажите дату заказа.' };
+  }
+  if (!Array.isArray(order.items) || order.items.length === 0) {
+    return { isEligible: false, reason: 'В заказе пока нет изделий.' };
+  }
+  if (!deriveOrderManufacturingMeta(order).isCompleted) {
+    return {
+      isEligible: false,
+      reason: 'Не все обязательные ячейки заполнены, закрашены и исполнены по счетчикам.',
+    };
+  }
+  return { isEligible: true, reason: '' };
 }
 
 function cleanupLegacyOrderFields(order) {
@@ -762,6 +798,16 @@ function ensureOrderShape(order) {
     order.attachments = [];
     changed = true;
   }
+  const normalizedArchivedAt = String(order.archivedAt || '').trim();
+  if (order.archivedAt !== normalizedArchivedAt) {
+    order.archivedAt = normalizedArchivedAt;
+    changed = true;
+  }
+  const nextArchivedBy = normalizeArchivedBy(order.archivedBy);
+  if (JSON.stringify(order.archivedBy || {}) !== JSON.stringify(nextArchivedBy)) {
+    order.archivedBy = nextArchivedBy;
+    changed = true;
+  }
   const manufacturingMeta = deriveOrderManufacturingMeta(order);
   const nextStartDate = manufacturingMeta.startDate || '';
   const nextEndDate = manufacturingMeta.endDate || '';
@@ -850,6 +896,8 @@ const OrderStore = {
       startDate: '',
       endDate: '',
       manualDateOverrides: { startDate: '', endDate: '' },
+      archivedAt: '',
+      archivedBy: { role: '', name: '' },
       createdAt,
       attachments: [],
       items,
@@ -1042,6 +1090,58 @@ const OrderStore = {
     ensureOrderShape(order);
     save();
     return order;
+  },
+
+  getArchiveEligibility(order) {
+    return getOrderArchiveEligibility(order);
+  },
+
+  archive(orderId, actor = {}) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+
+    const eligibility = getOrderArchiveEligibility(order);
+    if (!eligibility.isEligible) {
+      return {
+        status: 'invalid',
+        message: eligibility.reason,
+        order,
+      };
+    }
+
+    order.archivedAt = new Date().toISOString();
+    order.archivedBy = normalizeArchivedBy(actor);
+    save();
+
+    return {
+      status: 'archived',
+      order,
+    };
+  },
+
+  restore(orderId) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    if (!isOrderArchived(order)) {
+      return {
+        status: 'invalid',
+        message: 'Заказ уже находится в работе.',
+        order,
+      };
+    }
+
+    order.archivedAt = '';
+    order.archivedBy = normalizeArchivedBy({});
+    save();
+
+    return {
+      status: 'restored',
+      order,
+    };
   },
 
   setManualStageMarks(entries = [], legendKey = '', actor = '') {

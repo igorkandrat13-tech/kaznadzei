@@ -131,18 +131,6 @@ body::before {
   isolation: isolate;
 }
 
-.App-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: var(--header-logo-image);
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: auto calc(100% - 12px);
-  opacity: 0.96;
-  pointer-events: none;
-}
-
 .App-header-main {
   position: relative;
   display: flex;
@@ -150,7 +138,60 @@ body::before {
   justify-content: flex-end;
   gap: 12px;
   width: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.App-header-brand-link {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(420px, calc(100% - 320px));
+  min-width: 220px;
+  height: calc(100% - 12px);
+  transform: translate(-50%, -50%);
+  border-radius: 18px;
+  background-image: var(--header-logo-image);
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain;
+  opacity: 0.96;
   z-index: 1;
+  overflow: visible;
+  transition: opacity 0.18s ease, transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.App-header-brand-link::before {
+  content: '';
+  position: absolute;
+  inset: -8px -14px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at center, rgba(122, 198, 255, 0.24) 0%, rgba(122, 198, 255, 0.1) 46%, rgba(122, 198, 255, 0) 74%);
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.App-header-brand-link:hover,
+.App-header-brand-link:focus-visible {
+  opacity: 1;
+  transform: translate(-50%, calc(-50% - 1px));
+  filter: saturate(1.04) brightness(1.02);
+  box-shadow: 0 0 0 1px rgba(143, 210, 255, 0.22);
+}
+
+.App-header-brand-link:hover::before,
+.App-header-brand-link:focus-visible::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.App-header-brand-link:focus-visible {
+  outline: 2px solid rgba(143, 210, 255, 0.46);
+  outline-offset: 4px;
 }
 
 .App-header-menu-anchor {
@@ -160,6 +201,7 @@ body::before {
   flex-shrink: 0;
   margin-left: 12px;
   z-index: 2;
+  pointer-events: auto;
 }
 
 .App-header-center {
@@ -168,6 +210,7 @@ body::before {
   justify-content: flex-end;
   min-width: 0;
   z-index: 2;
+  pointer-events: auto;
 }
 
 .App-header h1 {
@@ -1934,6 +1977,16 @@ body[data-theme='light'] .order-primary-title-button-badge {
 
 .archive-table .order-role-progress-list {
   min-width: 210px;
+}
+
+.archive-order-action-btn {
+  white-space: nowrap;
+}
+
+.archive-mobile-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .archive-table .order-role-progress-row {
@@ -6993,6 +7046,48 @@ body[data-theme='light'] .home-auth-status-pending {
     font-size: 10px;
   }
 
+  .App-header-brand-link {
+    width: min(360px, calc(100% - 300px));
+  }
+
+}
+
+@media (max-width: 1180px) {
+  .App-header {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .App-header-main {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 10px;
+    min-height: 56px;
+  }
+
+  .App-header-brand-link {
+    top: 20px;
+    width: min(320px, calc(100% - 120px));
+    height: 36px;
+    min-width: 180px;
+    transform: translateX(-50%);
+  }
+
+  .App-header-brand-link:hover,
+  .App-header-brand-link:focus-visible {
+    transform: translateX(-50%) translateY(-1px);
+  }
+
+  .App-header-center {
+    order: 3;
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 24px;
+  }
+
+  .App-header-orders-primary-slot {
+    justify-content: flex-end;
+  }
 }
 
 @media (max-width: 768px) {
@@ -7065,13 +7160,17 @@ body[data-theme='light'] .home-auth-status-pending {
     align-items: center;
     flex-wrap: wrap;
   }
-  .App-header::before {
-    background-size: auto calc(100% - 16px);
+  .App-header-brand-link {
+    top: 18px;
+    width: min(260px, calc(100% - 110px));
+    height: 32px;
+    min-width: 140px;
   }
   .App-header-center {
     order: 3;
     width: 100%;
     justify-content: stretch;
+    padding-top: 0;
   }
   .App-header-orders-primary-slot,
   .orders-header-primary-actions {
@@ -7359,8 +7458,11 @@ body[data-theme='light'] .home-auth-status-pending {
     font-size: 16px;
   }
 
-  .App-header::before {
-    background-size: auto calc(100% - 18px);
+  .App-header-brand-link {
+    top: 16px;
+    width: min(220px, calc(100% - 100px));
+    height: 28px;
+    min-width: 120px;
   }
 
   .App-header-controls {

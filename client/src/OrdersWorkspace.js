@@ -4,7 +4,13 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
-import { getItemManufacturingMeta, getOrderManufacturingMeta, getOrderPrimaryName } from './orderSelectors';
+import {
+  getItemManufacturingMeta,
+  getOrderArchiveEligibility,
+  getOrderManufacturingMeta,
+  getOrderPrimaryName,
+  isOrderArchived,
+} from './orderSelectors';
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
 
@@ -712,6 +718,8 @@ function OrdersWorkspace() {
   const [savingOrder, setSavingOrder] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deletingOrder, setDeletingOrder] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(null);
+  const [archivingOrder, setArchivingOrder] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState({});
   const [inlineSavingKey, setInlineSavingKey] = useState('');
   const [manualStageSaving, setManualStageSaving] = useState(false);
@@ -746,6 +754,10 @@ function OrdersWorkspace() {
   const manualDateSelectionSyncRef = useRef('');
   const attachmentInputRefs = useRef({});
   const syncingScrollRef = useRef(false);
+  const activeOrders = useMemo(
+    () => orders.filter((order) => !isOrderArchived(order)),
+    [orders],
+  );
 
   const fetchOrders = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) {
@@ -901,12 +913,12 @@ function OrdersWorkspace() {
     });
   }, [legendColorMap, secondaryHeaderSchema]);
   const roomEditorOrderOptions = useMemo(
-    () => orders.map((order) => ({ value: order._id || '', label: getOrderLabel(order) })),
-    [orders],
+    () => activeOrders.map((order) => ({ value: order._id || '', label: getOrderLabel(order) })),
+    [activeOrders],
   );
   const selectedRoomEditorOrder = useMemo(
-    () => orders.find((order) => order._id === roomEditor?.orderId) || null,
-    [orders, roomEditor],
+    () => activeOrders.find((order) => order._id === roomEditor?.orderId) || null,
+    [activeOrders, roomEditor],
   );
   const roomEditorRoomOptions = useMemo(
     () => (selectedRoomEditorOrder ? getOrderRoomOptions(selectedRoomEditorOrder) : []),
@@ -915,7 +927,7 @@ function OrdersWorkspace() {
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const sortedOrders = [...orders].sort(compareOrderNumbersAsc);
+    const sortedOrders = [...activeOrders].sort(compareOrderNumbersAsc);
     return sortedOrders.flatMap(order => {
       const items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
       const sourceRows = items.length > 0 ? items : [{
@@ -983,7 +995,7 @@ function OrdersWorkspace() {
         })
         .filter(Boolean);
     });
-  }, [orders, roomFilter, search, statusFilter]);
+  }, [activeOrders, roomFilter, search, statusFilter]);
 
   const rowsByKey = useMemo(() => rows.reduce((acc, row) => {
     acc[row.key] = row;
@@ -1078,9 +1090,13 @@ function OrdersWorkspace() {
 
   const availableRooms = useMemo(() => {
     return Array.from(new Set(
-      orders.flatMap(order => (order.items || []).map(item => String(item.room || '').trim()).filter(Boolean))
+      activeOrders.flatMap(order => (order.items || []).map(item => String(item.room || '').trim()).filter(Boolean))
     )).sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [orders]);
+  }, [activeOrders]);
+  const orderActionsArchiveState = useMemo(
+    () => (orderActionsOrder ? getOrderArchiveEligibility(orderActionsOrder) : { isEligible: false, reason: '' }),
+    [orderActionsOrder],
+  );
   const currentAttachmentDialogItem = useMemo(() => {
     const order = orders.find((currentOrder) => currentOrder._id === attachmentsDialog?.orderId) || null;
     if (!order) return null;
@@ -2588,6 +2604,21 @@ function OrdersWorkspace() {
     });
   };
 
+  const requestArchive = (order) => {
+    const archiveState = getOrderArchiveEligibility(order);
+    if (!archiveState.isEligible) {
+      setError(archiveState.reason || 'Заказ пока нельзя перенести в архив.');
+      return;
+    }
+    setError('');
+    setConfirmArchive({
+      id: order._id,
+      orderNumber: order.orderNumber || '',
+      name: getOrderPrimaryName(order) || '',
+      customer: order.customer || '',
+    });
+  };
+
   const openInlineEdit = (row) => {
     setError('');
     setInlineDrafts(current => ({
@@ -2812,6 +2843,26 @@ function OrdersWorkspace() {
       await fetchOrders();
     } finally {
       setDeletingOrder(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!confirmArchive?.id || archivingOrder) return;
+    setArchivingOrder(true);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${confirmArchive.id}/archive`, { method: 'POST' });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось перенести заказ в архив.'));
+        return;
+      }
+      setConfirmArchive(null);
+      if (orderPreview?._id === confirmArchive.id) {
+        setOrderPreview(null);
+      }
+      await fetchOrders();
+    } finally {
+      setArchivingOrder(false);
     }
   };
 
@@ -4230,6 +4281,26 @@ function OrdersWorkspace() {
               >
                 Редактировать помещения и изделия
               </Button>
+              <Button
+                variant="archive"
+                className="order-actions-modal-btn"
+                onClick={() => {
+                  requestArchive(orderActionsOrder);
+                  setOrderActionsOrder(null);
+                }}
+                disabled={
+                  archivingOrder
+                  || !orderActionsArchiveState.isEligible
+                  || (orderDraftKeys[orderActionsOrder._id || orderActionsOrder.orderNumber || ''] || []).length > 0
+                }
+                title={
+                  (orderDraftKeys[orderActionsOrder._id || orderActionsOrder.orderNumber || ''] || []).length > 0
+                    ? 'Сначала сохраните или отмените быстрые правки по заказу.'
+                    : (orderActionsArchiveState.reason || 'Перенести заказ в архив')
+                }
+              >
+                Перенести в архив
+              </Button>
               {(orderDraftKeys[orderActionsOrder._id || orderActionsOrder.orderNumber || ''] || []).length > 0 ? (
                 <Button
                   variant="secondary"
@@ -4264,6 +4335,17 @@ function OrdersWorkspace() {
         onConfirm={handleDelete}
         onCancel={() => !deletingOrder && setConfirmDelete(null)}
         loading={deletingOrder}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmArchive)}
+        title="Перенести заказ в архив?"
+        message={confirmArchive ? `Заказ № ${confirmArchive.orderNumber || '—'} будет скрыт из рабочего списка и появится в разделе архива.\nОсновное изделие: ${confirmArchive.name || '—'}\nЗаказчик: ${confirmArchive.customer || '—'}` : ''}
+        confirmLabel="В архив"
+        onConfirm={handleArchive}
+        onCancel={() => !archivingOrder && setConfirmArchive(null)}
+        loading={archivingOrder}
+        variant="primary"
       />
 
       <ConfirmDialog
