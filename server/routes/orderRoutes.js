@@ -4,6 +4,7 @@ const path = require('path');
 const multer = require('multer');
 const QRCode = require('qrcode');
 const OrderStore = require('../stores/orderStore');
+const RoleStore = require('../stores/roleStore');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const { requireAdminAccess, requireManagerAccess, requireWriteAccess } = require('../middleware/security');
@@ -168,6 +169,34 @@ function resolveLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders =
   const primaryColumnIndex = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX[String(columnKey || '').trim()];
   if (!Number.isInteger(primaryColumnIndex)) return '';
   return getStageLegendKeyForPrimaryColumn(primaryColumnIndex, secondaryHeaders);
+}
+
+function getActorAllowedManualColumns(roleKey = '') {
+  const normalizedRole = String(roleKey || '').trim();
+  if (!normalizedRole || normalizedRole === 'admin') {
+    return null;
+  }
+
+  const role = RoleStore.findByKey(normalizedRole, { includeDeleted: true });
+  if (!role || role.isDeleted) {
+    const error = new Error('Роль пользователя не найдена или отключена.');
+    error.status = 403;
+    throw error;
+  }
+
+  return new Set(Array.isArray(role.allowedColumns) ? role.allowedColumns : []);
+}
+
+function ensureActorCanUseManualColumns(roleKey = '', selections = []) {
+  const allowedColumns = getActorAllowedManualColumns(roleKey);
+  if (!allowedColumns) return;
+
+  const forbiddenSelection = selections.find((selection) => !allowedColumns.has(String(selection?.columnKey || '').trim()));
+  if (!forbiddenSelection) return;
+
+  const error = new Error(`У роли нет доступа к колонке "${forbiddenSelection.columnKey}".`);
+  error.status = 403;
+  throw error;
 }
 
 ensureDirectoryExists(ORDER_ATTACHMENTS_ROOT);
@@ -448,6 +477,8 @@ function handleManualStageMarks(req, res) {
       return res.status(400).json({ message: 'Некорректный список ячеек.' });
     }
 
+    ensureActorCanUseManualColumns(req.auth?.role || 'admin', normalizedSelections);
+
     const updatedOrders = OrderStore.setManualStageMarks(
       normalizedSelections,
       legendKey,
@@ -512,6 +543,8 @@ function handleManualDateOverrides(req, res) {
     if (normalizedSelections.length === 0) {
       return res.status(400).json({ message: 'Некорректный список ячеек для изменения даты.' });
     }
+
+    ensureActorCanUseManualColumns(req.auth?.role || 'admin', normalizedSelections);
 
     const payload = {
       columnKey,

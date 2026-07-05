@@ -1,3 +1,5 @@
+const { DEFAULT_ROLE_ALLOWED_COLUMNS, normalizeAllowedColumns } = require('./roleColumnAccess');
+
 const ROLE_DEFINITIONS = [
   {
     key: 'carpenter',
@@ -7,6 +9,7 @@ const ROLE_DEFINITIONS = [
     description: 'Раскрой древесины, фрезеровка и шлифовка деталей',
     noStepsText: 'Нет настроенных этапов для столяра',
     order: 1,
+    allowedColumns: DEFAULT_ROLE_ALLOWED_COLUMNS,
   },
   {
     key: 'assembler',
@@ -16,6 +19,7 @@ const ROLE_DEFINITIONS = [
     description: 'Сборка изделий, установка фурнитуры и упаковка',
     noStepsText: 'Нет настроенных этапов для комплектовщика',
     order: 2,
+    allowedColumns: DEFAULT_ROLE_ALLOWED_COLUMNS,
   },
   {
     key: 'painter',
@@ -25,6 +29,7 @@ const ROLE_DEFINITIONS = [
     description: 'Покраска и финишная обработка изделий',
     noStepsText: 'Нет настроенных этапов для маляра',
     order: 3,
+    allowedColumns: DEFAULT_ROLE_ALLOWED_COLUMNS,
   },
   {
     key: 'designer',
@@ -34,6 +39,7 @@ const ROLE_DEFINITIONS = [
     description: 'Разработка дизайна, чертежей и спецификаций',
     noStepsText: 'Нет настроенных этапов для дизайнера',
     order: 4,
+    allowedColumns: DEFAULT_ROLE_ALLOWED_COLUMNS,
   },
 ];
 
@@ -96,6 +102,7 @@ function normalizeRole(rawRole = {}, options = {}) {
     shortTitle,
     description,
     noStepsText,
+    allowedColumns: normalizeAllowedColumns(rawRole?.allowedColumns ?? fallback.allowedColumns),
     order: Number.isFinite(Number(rawRole?.order)) ? Number(rawRole.order) : (fallback.order || options.defaultOrder || 1),
     isDeleted: rawRole?.isDeleted === true,
     createdAt: String(rawRole?.createdAt || '').trim(),

@@ -5,6 +5,7 @@ function RoleModal({
   mode,
   roleForm,
   setRoleForm,
+  columnOptions = [],
   onAdd,
   onUpdate,
   onClose,
@@ -71,6 +72,37 @@ function RoleModal({
           disabled={saving}
           rows={3}
         />
+      </div>
+
+      <div className="form-group">
+        <label>Доступ к колонкам для цветовых отметок</label>
+        <div className="role-columns-picker">
+          {columnOptions.map((column) => {
+            const checked = Array.isArray(roleForm?.allowedColumns) && roleForm.allowedColumns.includes(column.key);
+            return (
+              <label key={column.key} className="role-columns-picker-item">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={saving}
+                  onChange={(event) => {
+                    const currentColumns = Array.isArray(roleForm?.allowedColumns) ? roleForm.allowedColumns : [];
+                    setRoleForm({
+                      ...roleForm,
+                      allowedColumns: event.target.checked
+                        ? [...currentColumns, column.key]
+                        : currentColumns.filter((value) => value !== column.key),
+                    });
+                  }}
+                />
+                <span className="role-columns-picker-body">
+                  <span className="role-columns-picker-title">{column.label}</span>
+                  <span className="role-columns-picker-description">{column.description}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
       </div>
 
       <div className="modal-actions">

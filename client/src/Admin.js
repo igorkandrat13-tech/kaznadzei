@@ -18,9 +18,21 @@ import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
 import { useRoleConfig } from './RoleConfigContext';
 import { buildOrderStageLegendConfig } from './orderStageLegend';
+import { DEFAULT_ROLE_ALLOWED_COLUMNS, ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
 import useEscapeKey from './useEscapeKey';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+
+function createEmptyRoleForm() {
+  return {
+    label: '',
+    icon: '🧩',
+    shortTitle: '',
+    description: '',
+    noStepsText: '',
+    allowedColumns: [...DEFAULT_ROLE_ALLOWED_COLUMNS],
+  };
+}
 
 function buildLegendSaveErrorMessage({
   summary,
@@ -120,7 +132,7 @@ function Admin() {
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
   const [legendConfigDraft, setLegendConfigDraft] = useState(() => buildOrderStageLegendConfig());
   const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
-  const [newRole, setNewRole] = useState({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
+  const [newRole, setNewRole] = useState(createEmptyRoleForm);
   const backupImportInputRef = useRef(null);
   const settingsTabs = buildSettingsTabs();
   const filteredSteps = steps.filter(s => s.role === selectedStepsRole).sort((a, b) => a.order - b.order);
@@ -184,6 +196,15 @@ function Admin() {
     }
     setNewRole(nextValue);
   };
+  const getAllowedColumnsSummary = (role) => {
+    const allowedColumns = Array.isArray(role?.allowedColumns) ? role.allowedColumns : [];
+    if (allowedColumns.length === 0) return 'Нет доступных колонок';
+    const labels = ROLE_COLUMN_ACCESS_OPTIONS
+      .filter((column) => allowedColumns.includes(column.key))
+      .map((column) => column.label);
+    if (labels.length <= 3) return labels.join(', ');
+    return `${labels.slice(0, 3).join(', ')} и еще ${labels.length - 3}`;
+  };
 
   useEffect(() => {
     setEditStep(null);
@@ -194,7 +215,7 @@ function Admin() {
     setStepModalMode('');
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
     setNewEmployee(getDefaultEmployeeForm());
-    setNewRole({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
+    setNewRole(createEmptyRoleForm());
     setSettingsError('');
     setSettingsSuccess('');
   }, [activeRole, filteredSteps.length, selectedStepsRole]);
@@ -758,7 +779,7 @@ function Admin() {
 
   const resetRoleForm = () => {
     setEditRole(null);
-    setNewRole({ label: '', icon: '🧩', shortTitle: '', description: '', noStepsText: '' });
+    setNewRole(createEmptyRoleForm());
   };
 
   const openCreateEmployeeModal = () => {
@@ -796,6 +817,7 @@ function Admin() {
       shortTitle: role.shortTitle || '',
       description: role.description || '',
       noStepsText: role.noStepsText || '',
+      allowedColumns: Array.isArray(role.allowedColumns) ? [...role.allowedColumns] : [...DEFAULT_ROLE_ALLOWED_COLUMNS],
     });
     setRoleModalMode('edit');
     setSettingsError('');
@@ -1351,6 +1373,7 @@ function Admin() {
         mode={roleModalMode}
         roleForm={roleForm}
         setRoleForm={setRoleForm}
+        columnOptions={ROLE_COLUMN_ACCESS_OPTIONS}
         onAdd={handleAddRole}
         onUpdate={handleUpdateRole}
         onClose={closeRoleModal}
@@ -2086,7 +2109,7 @@ function Admin() {
 
             <div className="table-scroll desktop-table-only">
               <table>
-                <thead><tr><th>Название</th><th>Заголовок страницы</th><th>Описание</th><th>Статус</th><th>Действия</th></tr></thead>
+                <thead><tr><th>Название</th><th>Заголовок страницы</th><th>Описание</th><th>Колонки доступа</th><th>Статус</th><th>Действия</th></tr></thead>
                 <tbody>
                   {visibleRoles.map(role => (
                     <tr key={role.key}>
@@ -2096,6 +2119,7 @@ function Admin() {
                       </td>
                       <td>{role.shortTitle || '—'}</td>
                       <td>{role.description || '—'}</td>
+                      <td title={getAllowedColumnsSummary(role)}>{getAllowedColumnsSummary(role)}</td>
                       <td>{role.isDeleted ? 'Удалена' : 'Активна'}</td>
                       <td>
                         {role.isDeleted ? (
@@ -2110,7 +2134,7 @@ function Admin() {
                       </td>
                     </tr>
                   ))}
-                  {visibleRoles.length === 0 && <tr><td colSpan={5} className="empty-cell">Роли не найдены</td></tr>}
+                  {visibleRoles.length === 0 && <tr><td colSpan={6} className="empty-cell">Роли не найдены</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -2127,6 +2151,9 @@ function Admin() {
                   </div>
                   <div className="mobile-settings-card-note">
                     {role.description || 'Описание не задано'}
+                  </div>
+                  <div className="mobile-settings-card-meta">
+                    <div><strong>Колонки доступа:</strong> {getAllowedColumnsSummary(role)}</div>
                   </div>
                   <div className="mobile-settings-card-actions">
                     {role.isDeleted ? (

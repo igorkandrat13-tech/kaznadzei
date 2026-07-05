@@ -1,3 +1,5 @@
+import { DEFAULT_ROLE_ALLOWED_COLUMNS, normalizeAllowedColumns } from './roleColumnAccess';
+
 export const BASE_ROLE_DEFINITIONS = [
   {
     key: 'carpenter',
@@ -7,6 +9,7 @@ export const BASE_ROLE_DEFINITIONS = [
     description: 'Раскрой древесины, фрезеровка и шлифовка деталей',
     noStepsText: 'Нет настроенных этапов для столяра',
     order: 1,
+    allowedColumns: DEFAULT_ROLE_ALLOWED_COLUMNS,
   },
   {
     key: 'assembler',
@@ -16,6 +19,7 @@ export const BASE_ROLE_DEFINITIONS = [
     description: 'Сборка изделий, установка фурнитуры и упаковка',
     noStepsText: 'Нет настроенных этапов для комплектовщика',
     order: 2,
+    allowedColumns: DEFAULT_ROLE_ALLOWED_COLUMNS,
   },
   {
     key: 'painter',
@@ -25,6 +29,7 @@ export const BASE_ROLE_DEFINITIONS = [
     description: 'Покраска и финишная обработка изделий',
     noStepsText: 'Нет настроенных этапов для маляра',
     order: 3,
+    allowedColumns: DEFAULT_ROLE_ALLOWED_COLUMNS,
   },
   {
     key: 'designer',
@@ -34,6 +39,7 @@ export const BASE_ROLE_DEFINITIONS = [
     description: 'Разработка дизайна, чертежей и спецификаций',
     noStepsText: 'Нет настроенных этапов для дизайнера',
     order: 4,
+    allowedColumns: DEFAULT_ROLE_ALLOWED_COLUMNS,
   },
 ];
 
@@ -79,6 +85,7 @@ export function normalizeRoles(source = []) {
         shortTitle: String(role?.shortTitle || fallback.shortTitle || plainLabel).trim() || plainLabel,
         description: String(role?.description || fallback.description || '').trim(),
         noStepsText: String(role?.noStepsText || fallback.noStepsText || `Нет настроенных этапов для роли "${plainLabel}"`).trim(),
+        allowedColumns: normalizeAllowedColumns(role?.allowedColumns ?? fallback.allowedColumns),
         order: Number.isFinite(Number(role?.order)) ? Number(role.order) : (fallback.order || index + 1),
         route: `/role/${String(role?.key || fallback.key || '').trim()}`,
         isDeleted: role?.isDeleted === true,

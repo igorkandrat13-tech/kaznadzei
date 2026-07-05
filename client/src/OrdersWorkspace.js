@@ -4,6 +4,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
+import { useRoleConfig } from './RoleConfigContext';
 import {
   getItemManufacturingMeta,
   getOrderArchiveEligibility,
@@ -701,6 +702,16 @@ function OrdersWorkspace() {
   const authRole = getAppAuthRole();
   const isAdmin = canAccessRole('admin', authRole);
   const canManageCustomers = canAccessRole('manager', authRole);
+  const { getRoleMetaByKey } = useRoleConfig();
+  const authRoleMeta = getRoleMetaByKey(authRole);
+  const allowedManualColumns = useMemo(
+    () => new Set(Array.isArray(authRoleMeta?.allowedColumns) ? authRoleMeta.allowedColumns : []),
+    [authRoleMeta?.allowedColumns],
+  );
+  const canEditManualColumn = useCallback(
+    (columnKey = '') => isAdmin || allowedManualColumns.has(String(columnKey || '').trim()),
+    [allowedManualColumns, isAdmin],
+  );
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1004,7 +1015,7 @@ function OrdersWorkspace() {
   const selectedStageSelections = useMemo(() => selectedStageCellKeys
     .map((cellKey) => {
       const [rowKey, columnKey] = String(cellKey || '').split('::');
-      if (!rowKey || !columnKey || !isManualStageSelectableColumn(columnKey)) return null;
+      if (!rowKey || !columnKey || !isManualStageSelectableColumn(columnKey) || !canEditManualColumn(columnKey)) return null;
       const row = rowsByKey[rowKey];
       if (!row?.item?.itemId || !row?.orderId) return null;
       const autoLegendKey = getLegendKeyForManualStageColumn(columnKey, secondaryHeaderSchema);
@@ -1025,7 +1036,7 @@ function OrdersWorkspace() {
         currentOrderEndDate: orderManufacturingMeta.endDate || '',
       };
     })
-    .filter(Boolean), [rowsByKey, secondaryHeaderSchema, selectedStageCellKeys]);
+    .filter(Boolean), [canEditManualColumn, rowsByKey, secondaryHeaderSchema, selectedStageCellKeys]);
   const selectedStageSelectionsWithLegend = useMemo(
     () => selectedStageSelections.filter((selection) => selection.autoLegendKey),
     [selectedStageSelections],
@@ -1258,7 +1269,7 @@ function OrdersWorkspace() {
   }, []);
 
   const handleManualStageCellClick = useCallback((event, rowKey, columnKey) => {
-    if (!isAdmin || manualStageSaving) return;
+    if ((!isAdmin && !canEditManualColumn(columnKey)) || manualStageSaving) return;
     if (!isManualStageSelectableColumn(columnKey)) return;
     if (event.target.closest('a, button, input, textarea, select, summary, details, label')) return;
 
@@ -1271,10 +1282,10 @@ function OrdersWorkspace() {
       }
       return [cellKey];
     });
-  }, [isAdmin, manualStageSaving]);
+  }, [canEditManualColumn, isAdmin, manualStageSaving]);
 
   const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
-    if (!isAdmin || manualStageSaving || selectedStageSelections.length === 0) return;
+    if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0) return;
 
     setManualStageSaving(true);
     setError('');
@@ -1399,7 +1410,7 @@ function OrdersWorkspace() {
   }, [orders]);
 
   const applyManualDateToSelection = useCallback(async () => {
-    if (!isAdmin || manualStageSaving || selectedStageSelections.length === 0 || !canEditSelectedDates) return;
+    if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0 || !canEditSelectedDates) return;
 
     if (selectedStageSingleColumnKey === 'duration') {
       if (!manualOrderDateDraft.startDate && !manualOrderDateDraft.endDate) {
@@ -1490,10 +1501,11 @@ function OrdersWorkspace() {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
     const isSelected = selectedStageCellKeys.includes(buildManualStageCellKey(rowKey, columnKey));
+    const canSelectCell = !disabled && canEditManualColumn(columnKey);
     const className = cn(
       baseClassName,
       manualMark ? 'manual-stage-cell-marked' : '',
-      isAdmin && !disabled ? 'manual-stage-cell-selectable' : '',
+      canSelectCell ? 'manual-stage-cell-selectable' : '',
       isSelected ? 'manual-stage-cell-selected' : '',
     );
     const style = manualClear
@@ -1518,11 +1530,11 @@ function OrdersWorkspace() {
     return {
       className,
       style,
-      onClick: isAdmin && !disabled ? (event) => handleManualStageCellClick(event, rowKey, columnKey) : undefined,
+      onClick: canSelectCell ? (event) => handleManualStageCellClick(event, rowKey, columnKey) : undefined,
       'data-manual-stage-cell-key': buildManualStageCellKey(rowKey, columnKey),
       title,
     };
-  }, [handleManualStageCellClick, isAdmin, legendColorMap, manualStageTextColorMap, selectedStageCellKeys]);
+  }, [canEditManualColumn, handleManualStageCellClick, legendColorMap, manualStageTextColorMap, selectedStageCellKeys]);
 
   const bindManualDateInputProps = useCallback((valueSetter) => ({
     onFocus: () => {

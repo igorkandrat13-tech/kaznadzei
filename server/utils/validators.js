@@ -88,6 +88,23 @@ function normalizeBoolean(value, fieldName) {
   return value;
 }
 
+function normalizeStringArray(value, fieldName, options = {}) {
+  if (value === undefined) {
+    return options.allowUndefined ? undefined : [];
+  }
+  if (!Array.isArray(value)) {
+    fail(`Поле "${fieldName}" должно быть массивом.`);
+  }
+  const maxItems = Number.isFinite(Number(options.maxItems)) ? Number(options.maxItems) : 100;
+  if (value.length > maxItems) {
+    fail(`Поле "${fieldName}" содержит слишком много элементов.`);
+  }
+  return value.map((item, index) => normalizeString(item, `${fieldName}[${index}]`, {
+    required: false,
+    maxLength: options.maxLength || 80,
+  }));
+}
+
 function normalizeManualStageMarks(value, fieldName) {
   if (value === undefined) {
     return undefined;
@@ -496,6 +513,7 @@ function sanitizeCustomerInput(payload, options = {}) {
 function sanitizeRoleInput(payload, options = {}) {
   const partial = options.partial === true;
   const data = {};
+  const { isAllowedColumnKey } = require('../config/roleColumnAccess');
 
   if (!partial || payload.label !== undefined) {
     data.label = normalizeString(payload.label, 'label', { required: !partial, maxLength: 80 });
@@ -511,6 +529,20 @@ function sanitizeRoleInput(payload, options = {}) {
   }
   if (!partial || payload.noStepsText !== undefined) {
     data.noStepsText = normalizeString(payload.noStepsText, 'noStepsText', { maxLength: 160 });
+  }
+  if (!partial || payload.allowedColumns !== undefined) {
+    const allowedColumns = normalizeStringArray(payload.allowedColumns, 'allowedColumns', {
+      allowUndefined: partial,
+      maxItems: 64,
+      maxLength: 80,
+    });
+    if (allowedColumns !== undefined) {
+      const invalidColumn = allowedColumns.find((columnKey) => !isAllowedColumnKey(columnKey));
+      if (invalidColumn) {
+        fail(`Колонка "${invalidColumn}" не может быть привязана к роли.`);
+      }
+      data.allowedColumns = Array.from(new Set(allowedColumns));
+    }
   }
 
   return data;
