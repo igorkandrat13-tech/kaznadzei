@@ -210,7 +210,7 @@ body::before {
   justify-content: flex-end;
   min-width: 0;
   z-index: 2;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .App-header h1 {
@@ -272,6 +272,7 @@ body::before {
   align-items: center;
   justify-content: flex-end;
   width: 100%;
+  pointer-events: none;
 }
 
 .orders-header-primary-actions {
@@ -280,6 +281,7 @@ body::before {
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+  pointer-events: auto;
 }
 
 .orders-header-toolbar-btn {
@@ -7013,6 +7015,36 @@ body[data-theme='light'] .home-auth-status-pending {
 }
 
 @media (max-width: 1366px) {
+  .App-header-main {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 10px;
+    min-height: 56px;
+  }
+
+  .App-header-brand-link {
+    top: 20px;
+    width: clamp(148px, calc(100% - 520px), 300px);
+    min-width: 148px;
+    height: 36px;
+    z-index: 3;
+  }
+
+  .App-header-center {
+    order: 3;
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 34px;
+  }
+
+  .App-header-orders-primary-slot {
+    justify-content: flex-end;
+  }
+
+  .orders-header-primary-actions {
+    max-width: min(100%, 720px);
+  }
+
   .unified-orders-table {
     --orders-col-customer-width: 142px;
     --orders-col-room-width: 86px;
@@ -7078,13 +7110,6 @@ body[data-theme='light'] .home-auth-status-pending {
     padding-bottom: 14px;
   }
 
-  .App-header-main {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    row-gap: 10px;
-    min-height: 56px;
-  }
-
   .App-header-brand-link {
     top: 20px;
     width: clamp(132px, calc(100% - 430px), 280px);
@@ -7096,13 +7121,6 @@ body[data-theme='light'] .home-auth-status-pending {
   .App-header-brand-link:hover,
   .App-header-brand-link:focus-visible {
     transform: translateX(-50%) translateY(-1px);
-  }
-
-  .App-header-center {
-    order: 3;
-    width: 100%;
-    justify-content: flex-end;
-    padding-top: 34px;
   }
 
   .App-header-orders-primary-slot {
