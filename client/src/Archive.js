@@ -1,8 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
 import {
+  getItemManufacturingMeta,
+  getOrderManufacturingMeta,
   getOrderOverallStatus,
   getOrderPrimaryMaterial,
   getOrderPrimaryName,
@@ -12,7 +15,181 @@ import {
 } from './orderSelectors';
 import { getOrderStatusMeta, ORDER_STATUS_OPTIONS } from './statusMeta';
 import { useRoleConfig } from './RoleConfigContext';
-import { Button } from './ui';
+import { Button, cn } from './ui';
+
+const ORDER_PRIMARY_HEADERS = DEFAULT_ORDER_PRIMARY_HEADERS;
+const ORDER_CARD_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа');
+const ORDER_PACKAGE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа');
+const ORDER_CARPENTER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР');
+const ORDER_PAINT_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Покраска');
+const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления изделия');
+const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
+const ORDER_ITEM_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий');
+const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
+
+function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
+  if (columnIndex < 0) return '';
+  let currentIndex = 0;
+  for (const cell of secondaryHeaders) {
+    const span = Number(cell.colSpan) || 1;
+    if (columnIndex >= currentIndex && columnIndex < currentIndex + span) {
+      return cell.legendKey || '';
+    }
+    currentIndex += span;
+  }
+  return '';
+}
+
+function getStageTextHex(legendKey = '', secondaryHeaders = []) {
+  return secondaryHeaders.find((item) => item.legendKey === legendKey)?.textHex || '#000000';
+}
+
+function buildManualStageTextColorMap(secondaryHeaders = []) {
+  return secondaryHeaders.reduce((acc, item) => {
+    if (item.legendKey && !acc[item.legendKey]) {
+      acc[item.legendKey] = item.textHex || '#000000';
+    }
+    return acc;
+  }, {});
+}
+
+function createPackageItemId() {
+  return `package-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizePackageItems(items = [], legacyPackageName = '') {
+  const sourceItems = Array.isArray(items) ? items : [];
+  const normalizedItems = sourceItems.reduce((acc, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
+    const name = String(item.name || '').trim();
+    if (!name) return acc;
+    acc.push({
+      id: String(item.id || createPackageItemId()).trim(),
+      name,
+      isCompleted: Boolean(item.isCompleted),
+      completedAt: item.isCompleted ? (String(item.completedAt || '').trim() || new Date().toISOString().split('T')[0]) : null,
+    });
+    return acc;
+  }, []);
+  if (normalizedItems.length > 0) return normalizedItems;
+
+  return String(legacyPackageName || '')
+    .split(/[\n,;]+/g)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((token) => {
+      const isCompleted = /^(\+|\[x\]|x\s+|✓\s+|✔\s+)/i.test(token);
+      const normalizedName = token
+        .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|✓\s+|✔\s+)/i, '')
+        .trim();
+      return {
+        id: createPackageItemId(),
+        name: normalizedName || token,
+        isCompleted,
+        completedAt: isCompleted ? new Date().toISOString().split('T')[0] : null,
+      };
+    })
+    .filter((item) => item.name)
+    .map((item) => ({
+      id: createPackageItemId(),
+      ...item,
+    }));
+}
+
+function getPackageStats(items = [], legacyPackageName = '') {
+  const normalizedItems = normalizePackageItems(items, legacyPackageName);
+  const total = normalizedItems.length;
+  const completed = normalizedItems.filter((item) => item.isCompleted).length;
+  const pending = Math.max(0, total - completed);
+  return { total, completed, pending, items: normalizedItems };
+}
+
+function getCommentPreview(comments = []) {
+  if (!Array.isArray(comments) || comments.length === 0) return '—';
+  return comments
+    .map(comment => `${comment.role}: ${comment.text}`)
+    .join(' | ');
+}
+
+function formatDateDisplay(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '—';
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? normalized : date.toLocaleDateString();
+}
+
+function formatManufacturingTime(startDate, endDate) {
+  const normalizedStart = String(startDate || '').trim();
+  if (!normalizedStart) return '—';
+
+  const start = new Date(normalizedStart);
+  if (Number.isNaN(start.getTime())) return '—';
+
+  const normalizedEnd = String(endDate || '').trim() || new Date().toISOString().split('T')[0];
+  const end = new Date(normalizedEnd);
+  if (Number.isNaN(end.getTime())) return '—';
+
+  const diffDays = Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+  return String(diffDays);
+}
+
+function getItemActiveRoleStage(item, role) {
+  return (item?.stages || []).find((stage) => stage.role === role && stage.status === 'in_progress') || null;
+}
+
+function getItemWorkerAssignment(item, role) {
+  if (!item?.workerAssignments || typeof item.workerAssignments !== 'object') return null;
+  return item.workerAssignments[role] || null;
+}
+
+function getItemActiveStage(item) {
+  return (item?.stages || []).find((stage) => stage.status === 'in_progress') || null;
+}
+
+function getItemAssignedStage(item) {
+  const stages = Array.isArray(item?.stages) ? item.stages : [];
+  return stages.find((stage) => stage.status === 'in_progress' && String(stage.employeeName || '').trim())
+    || stages.find((stage) => String(stage.employeeName || '').trim())
+    || null;
+}
+
+function getItemManualStageMark(item, columnKey) {
+  if (!item?.manualStageMarks || typeof item.manualStageMarks !== 'object') return null;
+  return item.manualStageMarks[columnKey] || null;
+}
+
+function getItemManualStageClear(item, columnKey) {
+  if (!item?.manualStageClears || typeof item.manualStageClears !== 'object') return null;
+  return item.manualStageClears[columnKey] || null;
+}
+
+function getLatestAutoHighlightAt(...timestamps) {
+  return timestamps
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .sort()
+    .at(-1) || '';
+}
+
+function getOrderIdentity(row) {
+  return row.order?._id || row.order?.orderNumber || row.key;
+}
+
+function compareOrderNumbersAsc(left = {}, right = {}) {
+  return String(left.orderNumber || '').localeCompare(String(right.orderNumber || ''), 'ru', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+}
+
+function getItemAttachments(item = {}, scope = '') {
+  const fieldName = String(scope || '').trim().toLowerCase() === 'paint' ? 'paintAttachments' : 'attachments';
+  return Array.isArray(item?.[fieldName]) ? item[fieldName] : [];
+}
+
+function isOrdersHeaderLeftAlignedColumn() {
+  return false;
+}
 
 function getRoleShortLabel(role, roleTabs = []) {
   return roleTabs.find(tab => tab.key === role)?.plainLabel || role;
@@ -75,7 +252,7 @@ function getRoleProgressInfo(order, role, roleTabs = []) {
 }
 
 function Archive() {
-  const { roleTabs, allRoleTabs } = useRoleConfig();
+  const { allRoleTabs } = useRoleConfig();
   const [orders, setOrders] = useState([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -85,21 +262,97 @@ function Archive() {
   const [error, setError] = useState('');
   const [confirmRestore, setConfirmRestore] = useState(null);
   const [restoringOrder, setRestoringOrder] = useState(false);
+  const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
+  const [hoveredOrderId, setHoveredOrderId] = useState('');
+  const [lastRefreshedAt, setLastRefreshedAt] = useState('');
+  const headerScrollRef = useRef(null);
+  const bodyScrollRef = useRef(null);
+  const syncingScrollRef = useRef(false);
 
   const fetchOrders = useCallback(() => {
     setError('');
     apiFetch('/api/orders')
       .then(res => parseJsonSafely(res))
-      .then(data => setOrders(Array.isArray(data) ? data : []))
+      .then(data => {
+        setOrders(Array.isArray(data) ? data : []);
+        setLastRefreshedAt(new Date().toISOString());
+      })
       .catch(() => {
         setOrders([]);
         setError('Не удалось загрузить архив заказов.');
       });
   }, []);
 
+  const fetchOrderStageLegendConfig = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/order-stage-legend-config');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось загрузить конфигурацию этапов.');
+      }
+      setOrderStageLegendConfig(buildOrderStageLegendConfig(data || {}));
+    } catch {
+      setOrderStageLegendConfig(buildOrderStageLegendConfig());
+    }
+  }, []);
+
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+    fetchOrderStageLegendConfig();
+  }, [fetchOrderStageLegendConfig, fetchOrders]);
+
+  const stageLegend = useMemo(() => orderStageLegendConfig.stages || [], [orderStageLegendConfig]);
+  const primaryHeaderLabels = useMemo(() => orderStageLegendConfig.primaryHeaders || DEFAULT_ORDER_PRIMARY_HEADERS, [orderStageLegendConfig]);
+  const secondaryHeaderSchema = useMemo(() => orderStageLegendConfig.secondaryHeaders || [], [orderStageLegendConfig]);
+  const manualStageTextColorMap = useMemo(
+    () => buildManualStageTextColorMap(secondaryHeaderSchema),
+    [secondaryHeaderSchema],
+  );
+  const columnStageMeta = useMemo(() => {
+    const createColumnMeta = (columnIndex) => {
+      const legendKey = getStageLegendKeyForPrimaryColumn(columnIndex, secondaryHeaderSchema);
+      return {
+        legendKey,
+        textHex: getStageTextHex(legendKey, secondaryHeaderSchema),
+      };
+    };
+
+    return {
+      carpenter: createColumnMeta(ORDER_CARPENTER_COLUMN_INDEX),
+      itemStart: createColumnMeta(ORDER_ITEM_START_COLUMN_INDEX),
+      itemEnd: createColumnMeta(ORDER_ITEM_END_COLUMN_INDEX),
+      itemDuration: createColumnMeta(ORDER_ITEM_DURATION_COLUMN_INDEX),
+      duration: createColumnMeta(ORDER_DURATION_COLUMN_INDEX),
+      card: createColumnMeta(ORDER_CARD_COLUMN_INDEX),
+      package: createColumnMeta(ORDER_PACKAGE_COLUMN_INDEX),
+      paint: createColumnMeta(ORDER_PAINT_COLUMN_INDEX),
+    };
+  }, [secondaryHeaderSchema]);
+
+  const legendColorMap = useMemo(() => {
+    return stageLegend.reduce((acc, item) => {
+      acc[item.key] = item.defaultHex || '#FFFFFF';
+      return acc;
+    }, {});
+  }, [stageLegend]);
+
+  const secondaryHeaderCells = useMemo(() => {
+    let startIndex = 0;
+    return secondaryHeaderSchema.map((item) => {
+      const hex = item.legendKey ? (legendColorMap[item.legendKey] || '#FFFFFF') : '';
+      const span = Number(item.colSpan) || 1;
+      const cellStartIndex = startIndex;
+      const cellEndIndex = cellStartIndex + span - 1;
+      startIndex += span;
+      return {
+        ...item,
+        hex,
+        textColor: item.textHex || '#000000',
+        startIndex: cellStartIndex,
+        endIndex: cellEndIndex,
+      };
+    });
+  }, [legendColorMap, secondaryHeaderSchema]);
 
   const calcDuration = (start, end) => {
     if (!start || !end) return '—';
@@ -109,7 +362,7 @@ function Archive() {
     return diff >= 0 ? diff + ' дн.' : '—';
   };
 
-  const filtered = orders
+  const filteredOrders = useMemo(() => orders
     .filter(o => isOrderArchived(o))
     .filter(o => {
       if (statusFilter !== 'all' && getOrderOverallStatus(o) !== statusFilter) return false;
@@ -133,7 +386,167 @@ function Archive() {
       if (dateTo && o.endDate && new Date(o.endDate) > new Date(dateTo)) return false;
       return true;
     })
-    .sort((left, right) => new Date(right.archivedAt || right.updatedAt || 0) - new Date(left.archivedAt || left.updatedAt || 0));
+    .sort((left, right) => new Date(right.archivedAt || right.updatedAt || 0) - new Date(left.archivedAt || left.updatedAt || 0)), [
+    dateFrom,
+    dateTo,
+    orders,
+    roleFilter,
+    search,
+    statusFilter,
+  ]);
+
+  const rows = useMemo(() => {
+    const sortedOrders = [...filteredOrders].sort(compareOrderNumbersAsc);
+    return sortedOrders.flatMap((order) => {
+      const items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
+      const sourceRows = items.length > 0 ? items : [{
+        itemId: '',
+        itemNumber: '',
+        room: '',
+        roomNumber: '',
+        quantity: '',
+        name: '',
+        deliveryDate: '',
+        material: '',
+        packageName: '',
+        packageItems: [],
+        photoLink: '',
+        notes: '',
+        comments: [],
+        manualStageMarks: {},
+        manualStageClears: {},
+        workerAssignments: {},
+        stages: [],
+        overallStatus: order?.overallStatus || 'pending',
+        __placeholder: true,
+      }];
+
+      return sourceRows.map((item) => ({
+        key: `${order._id}:${item.itemId || '__empty__'}`,
+        orderId: order._id || '',
+        order,
+        item,
+        carpenterActiveStage: getItemActiveRoleStage(item, 'carpenter'),
+        carpenterAssignment: getItemWorkerAssignment(item, 'carpenter'),
+        activeStage: getItemActiveStage(item),
+        assignedStage: getItemAssignedStage(item),
+        isPlaceholder: item?.__placeholder === true,
+      }));
+    });
+  }, [filteredOrders]);
+
+  const firstOrderRowKeys = useMemo(() => {
+    const seenOrders = new Set();
+    return rows.reduce((acc, row) => {
+      const orderId = getOrderIdentity(row);
+      const isFirst = !seenOrders.has(orderId);
+      if (isFirst) {
+        seenOrders.add(orderId);
+      }
+      acc[row.key] = isFirst;
+      return acc;
+    }, {});
+  }, [rows]);
+
+  const orderRowSpans = useMemo(() => {
+    const counts = rows.reduce((acc, row) => {
+      const orderId = getOrderIdentity(row);
+      acc[orderId] = (acc[orderId] || 0) + 1;
+      return acc;
+    }, {});
+    return rows.reduce((acc, row) => {
+      const orderId = getOrderIdentity(row);
+      acc[row.key] = firstOrderRowKeys[row.key] ? counts[orderId] || 1 : 0;
+      return acc;
+    }, {});
+  }, [firstOrderRowKeys, rows]);
+
+  const lastOrderRowKeys = useMemo(() => {
+    return rows.reduce((acc, row) => {
+      const orderId = getOrderIdentity(row);
+      acc[orderId] = row.key;
+      return acc;
+    }, {});
+  }, [rows]);
+
+  const syncHorizontalScroll = useCallback((source, target) => {
+    if (!source || !target) return;
+    if (syncingScrollRef.current) return;
+    syncingScrollRef.current = true;
+    target.scrollLeft = source.scrollLeft;
+    window.requestAnimationFrame(() => {
+      syncingScrollRef.current = false;
+    });
+  }, []);
+
+  const getReadOnlyCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle) => {
+    const manualMark = getItemManualStageMark(item, columnKey);
+    const manualClear = getItemManualStageClear(item, columnKey);
+    const style = manualClear
+      ? undefined
+      : manualMark
+      ? {
+          ...(baseStyle || {}),
+          ...(manualMark.legendKey
+            ? {
+                background: legendColorMap[manualMark.legendKey] || '#FFFFFF',
+                color: manualStageTextColorMap[manualMark.legendKey] || '#000000',
+              }
+            : {}),
+        }
+      : baseStyle;
+    const title = manualMark
+      ? `${manualMark.legendKey || 'Ручная дата'}${manualMark.updatedAt ? ` • ${new Date(manualMark.updatedAt).toLocaleString()}` : ''}`
+      : (manualClear
+          ? `Сброшено${manualClear.updatedAt ? ` • ${new Date(manualClear.updatedAt).toLocaleString()}` : ''}`
+          : undefined);
+
+    return {
+      className: baseClassName,
+      style,
+      'data-manual-stage-cell-key': `${rowKey}::${columnKey}`,
+      title,
+    };
+  }, [legendColorMap, manualStageTextColorMap]);
+
+  const renderOrdersColGroup = useCallback(() => (
+    <colgroup>
+      <col className="col-order-number" />
+      <col className="col-customer" />
+      <col className="col-room" />
+      <col className="col-room-number" />
+      <col className="col-item-number" />
+      <col className="col-quantity" />
+      <col className="col-name" />
+      <col className="col-item-actions" />
+      <col className="col-package" />
+      <col className="col-notes" />
+      <col className="col-delivery-date" />
+      <col className="col-carpenter" />
+      <col className="col-photo" />
+      <col className="col-paint" />
+      <col className="col-item-start-date" />
+      <col className="col-item-end-date" />
+      <col className="col-item-duration" />
+      <col className="col-duration" />
+    </colgroup>
+  ), []);
+
+  const renderAttachmentCountCell = useCallback((attachments = [], actionStyle = {}, emptyTitle = 'Файлы не прикреплены') => {
+    const names = attachments.map((attachment) => attachment.name || 'Без названия').join(', ');
+    return (
+      <div className="order-card-cell-content">
+        <span
+          className="order-card-action-btn order-card-count-btn"
+          style={actionStyle}
+          title={attachments.length > 0 ? names : emptyTitle}
+        >
+          <span className="order-card-count-btn-icon">⌕</span>
+          <span className="order-card-count-btn-value">{attachments.length}</span>
+        </span>
+      </div>
+    );
+  }, []);
 
   const requestRestore = (order) => {
     setError('');
@@ -234,67 +647,348 @@ function Archive() {
             <label>Дата по</label>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
-          <div className="filters-summary">Найдено: {filtered.length}</div>
+          <div className="filters-summary">Найдено: {filteredOrders.length}</div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="table-scroll desktop-table-only">
-          <table className="archive-table">
-            <thead>
-              <tr>
-                <th>Номер заказа</th>
-                <th>Заказчик</th>
-                <th>Наименование</th>
-                <th>Кол-во</th>
-                <th>Материал</th>
-                <th>Дата заказа</th>
-                <th>Начало</th>
-                <th>Окончание</th>
-                <th>Время</th>
-                <th>Статус</th>
-                <th>По специалистам</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(order => (
-                <tr key={order._id}>
-                  <td><strong>{order.orderNumber || '—'}</strong></td>
-                  <td>{order.customer || '—'}</td>
-                  <td><strong>{getOrderPrimaryName(order) || '—'}</strong></td>
-                  <td>{getOrderPrimaryQuantity(order)}</td>
-                  <td>{getOrderPrimaryMaterial(order) || '—'}</td>
-                  <td className="date-cell">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td>
-                  <td className="date-cell">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td>
-                  <td className="date-cell">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td>
-                  <td>{calcDuration(order.startDate, order.endDate) || '—'}</td>
-                  <td>
-                    <span className={getOrderStatusMeta(getOrderOverallStatus(order)).className}>
-                      {getOrderStatusMeta(getOrderOverallStatus(order)).label}
-                    </span>
-                  </td>
-                  <td>{renderArchiveRoleProgress(order)}</td>
-                  <td>
-                    <Button
-                      variant="success"
-                      size="sm"
-                      className="archive-order-action-btn"
-                      onClick={() => requestRestore(order)}
-                      disabled={restoringOrder}
+      <div className="card orders-workspace-table-card archive-orders-table-card">
+        <div className="desktop-table-only">
+          <div
+            ref={headerScrollRef}
+            className="table-scroll unified-orders-header-scroll"
+            onScroll={() => syncHorizontalScroll(headerScrollRef.current, bodyScrollRef.current)}
+          >
+            <table className="orders-table unified-orders-table unified-orders-header-table">
+              {renderOrdersColGroup()}
+              <thead>
+                <tr className="xlsx-header-row xlsx-header-row-primary">
+                  {primaryHeaderLabels.map((label, index) => (
+                    <th
+                      key={`archive-primary-header-${index}`}
+                      className={cn(
+                        'xlsx-header-primary-cell',
+                        isOrdersHeaderLeftAlignedColumn(index) ? 'xlsx-header-cell-left' : 'xlsx-header-cell-center',
+                      )}
                     >
-                      Вернуть в работу
-                    </Button>
-                  </td>
+                      {label || '\u00A0'}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={12} className="empty-cell">В архиве пока нет заказов</td></tr>}
-            </tbody>
-          </table>
+                <tr className="xlsx-header-row xlsx-header-row-secondary">
+                  {secondaryHeaderCells.map((cell, index) => (
+                    <th
+                      key={`archive-secondary-header-${cell.label}-${index}`}
+                      colSpan={cell.colSpan || 1}
+                      className={cn(
+                        'xlsx-header-secondary-cell',
+                        (cell.startIndex === 0 || cell.useTableBackground) && 'xlsx-header-secondary-cell-table-bg',
+                        cell.legendKey && 'xlsx-header-secondary-cell-colored',
+                        (cell.colSpan || 1) > 1 && 'xlsx-header-secondary-cell-merged',
+                        cell.noWrap && 'xlsx-header-secondary-cell-nowrap',
+                        (isOrdersHeaderLeftAlignedColumn(cell.startIndex) || isOrdersHeaderLeftAlignedColumn(cell.endIndex))
+                          ? 'xlsx-header-cell-left'
+                          : 'xlsx-header-cell-center',
+                      )}
+                      style={{
+                        background: (cell.startIndex === 0 || cell.useTableBackground)
+                          ? 'var(--orders-table-cell-background)'
+                          : (cell.hex || undefined),
+                        color: cell.textColor || '#000000',
+                      }}
+                    >
+                      {cell.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            </table>
+          </div>
+
+          <div
+            ref={bodyScrollRef}
+            className="table-scroll unified-orders-body-scroll"
+            onScroll={() => syncHorizontalScroll(bodyScrollRef.current, headerScrollRef.current)}
+          >
+            <table className="orders-table unified-orders-table unified-orders-body-table">
+              {renderOrdersColGroup()}
+              <tbody onMouseLeave={() => setHoveredOrderId('')}>
+                {rows.map(({ key, order, item, carpenterActiveStage, carpenterAssignment, activeStage, assignedStage, isPlaceholder }) => {
+                  const isFirstOrderRow = Boolean(firstOrderRowKeys[key]);
+                  const orderId = getOrderIdentity({ key, order });
+                  const isLastOrderRow = lastOrderRowKeys[orderId] === key;
+                  const orderRowSpan = orderRowSpans[key] || 1;
+                  const isHoveredOrder = hoveredOrderId === orderId;
+                  const orderGroupClass = `order-group-cell${isFirstOrderRow ? ' order-group-top' : ''}${isLastOrderRow ? ' order-group-bottom' : ''}`.trim();
+                  const orderOutlineClass = `${isHoveredOrder ? `order-outline-cell${isFirstOrderRow ? ' order-outline-top' : ''}${isLastOrderRow ? ' order-outline-bottom' : ''}` : ''}`.trim();
+                  const regularOrderClass = `order-filled-cell ${orderGroupClass} ${orderOutlineClass}`.trim();
+                  const orderManufacturingMeta = getOrderManufacturingMeta(order);
+                  const commentPreview = getCommentPreview(item.comments);
+                  const itemManufacturingMeta = getItemManufacturingMeta(item);
+                  const itemAttachments = getItemAttachments(item, 'order');
+                  const paintAttachments = getItemAttachments(item, 'paint');
+                  const packageStats = getPackageStats(item.packageItems, item.packageName);
+                  const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+                  const latestCarpenterAutoAt = getLatestAutoHighlightAt(
+                    carpenterAssignment?.scannedAt,
+                    carpenterActiveStage?.startedAt,
+                    workerStageForText?.startedAt,
+                  );
+                  const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
+                  const workerCellText = String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—';
+                  const workerCellTitle = carpenterAssignment?.employeeName
+                    ? 'Сотрудник взял изделие в работу по QR'
+                    : (workerStageForText?.stepName || activeStage?.stepName || '');
+                  const carpenterCellStyle = hasCarpenterAutoHighlight
+                    ? {
+                        background: legendColorMap[columnStageMeta.carpenter.legendKey] || '#C37C8E',
+                        color: columnStageMeta.carpenter.textHex,
+                      }
+                    : undefined;
+                  const carpenterCellClassName = `${hasCarpenterAutoHighlight ? '' : 'order-filled-cell'} ${orderGroupClass} ${orderOutlineClass}`.trim();
+                  const roomCellProps = getReadOnlyCellProps(key, item, 'room', regularOrderClass, undefined);
+                  const roomNumberCellPropsBase = getReadOnlyCellProps(key, item, 'roomNumber', regularOrderClass, undefined);
+                  const roomNumberCellProps = {
+                    ...roomNumberCellPropsBase,
+                    className: cn(roomNumberCellPropsBase.className, 'orders-cell-center'),
+                  };
+                  const itemNumberCellPropsBase = getReadOnlyCellProps(key, item, 'itemNumber', regularOrderClass, undefined);
+                  const itemNumberCellProps = {
+                    ...itemNumberCellPropsBase,
+                    className: cn(itemNumberCellPropsBase.className, 'orders-cell-center'),
+                  };
+                  const quantityCellPropsBase = getReadOnlyCellProps(key, item, 'quantity', regularOrderClass, undefined);
+                  const quantityCellProps = {
+                    ...quantityCellPropsBase,
+                    className: cn(quantityCellPropsBase.className, 'orders-cell-center'),
+                  };
+                  const nameCellProps = getReadOnlyCellProps(key, item, 'name', regularOrderClass, undefined);
+                  const deliveryDateCellProps = getReadOnlyCellProps(key, item, 'deliveryDate', regularOrderClass, undefined);
+                  const hasItemManufacturingStart = Boolean(itemManufacturingMeta.startDate);
+                  const itemStartDateCellStyle = hasItemManufacturingStart
+                    ? {
+                        background: legendColorMap[columnStageMeta.itemStart.legendKey] || '#C37C8E',
+                        color: columnStageMeta.itemStart.textHex,
+                      }
+                    : undefined;
+                  const itemStartDateCellProps = getReadOnlyCellProps(
+                    key,
+                    item,
+                    'itemStartDate',
+                    regularOrderClass,
+                    itemStartDateCellStyle,
+                  );
+                  const itemEndDateCellStyle = itemManufacturingMeta.endDate
+                    ? {
+                        background: legendColorMap[columnStageMeta.itemEnd.legendKey] || '#C37C8E',
+                        color: columnStageMeta.itemEnd.textHex,
+                      }
+                    : undefined;
+                  const itemEndDateCellPropsBase = getReadOnlyCellProps(
+                    key,
+                    item,
+                    'itemEndDate',
+                    regularOrderClass,
+                    itemEndDateCellStyle,
+                  );
+                  const itemEndDateCellProps = {
+                    ...itemEndDateCellPropsBase,
+                    className: cn(itemEndDateCellPropsBase.className, 'item-end-date-cell'),
+                  };
+                  const orderCardActionStyle = {
+                    background: legendColorMap[columnStageMeta.card.legendKey] || '#A8D7B6',
+                    color: columnStageMeta.card.textHex,
+                  };
+                  const paintActionStyle = {
+                    background: legendColorMap[columnStageMeta.paint.legendKey] || '#BDA6D5',
+                    color: columnStageMeta.paint.textHex,
+                  };
+                  const packageCellStyle = packageStats.total > 0 && packageStats.pending === 0
+                    ? {
+                        background: legendColorMap[columnStageMeta.package.legendKey] || '#99E5FF',
+                        color: columnStageMeta.package.textHex,
+                      }
+                    : undefined;
+                  const packageSummaryBadgeStyle = {
+                    background: legendColorMap[columnStageMeta.package.legendKey] || '#99E5FF',
+                    color: columnStageMeta.package.textHex,
+                  };
+                  const packageCellPropsBase = getReadOnlyCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle);
+                  const packageCellProps = {
+                    ...packageCellPropsBase,
+                    className: cn(packageCellPropsBase.className, 'package-cell'),
+                  };
+                  const paintCellProps = getReadOnlyCellProps(key, item, 'paint', `order-card-cell ${regularOrderClass}`, undefined);
+                  const photoCellProps = getReadOnlyCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, undefined);
+                  const notesCellProps = getReadOnlyCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined);
+                  const carpenterCellProps = getReadOnlyCellProps(key, item, 'carpenter', carpenterCellClassName, carpenterCellStyle);
+                  const orderNumberCellProps = getReadOnlyCellProps(
+                    key,
+                    item,
+                    'orderNumber',
+                    `sticky-col sticky-col-1 merged-order-cell merged-order-number-cell order-filled-cell order-group-cell order-group-top order-group-bottom order-group-left${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-left' : ''}`,
+                    undefined,
+                  );
+                  const customerCellProps = getReadOnlyCellProps(
+                    key,
+                    item,
+                    'customer',
+                    `sticky-col sticky-col-2 merged-order-cell merged-order-customer-cell order-filled-cell order-group-cell order-group-top order-group-bottom${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom' : ''}`,
+                    undefined,
+                  );
+                  const orderCardCellProps = getReadOnlyCellProps(
+                    key,
+                    item,
+                    'orderCard',
+                    `order-card-cell ${regularOrderClass}`,
+                  );
+                  const itemDurationValue = itemManufacturingMeta.endDate
+                    ? formatManufacturingTime(itemManufacturingMeta.startDate, itemManufacturingMeta.endDate)
+                    : '—';
+                  const hasItemManufacturingDuration = itemDurationValue !== '—';
+                  const itemDurationCellStyle = hasItemManufacturingDuration
+                    ? {
+                        background: legendColorMap[columnStageMeta.itemDuration.legendKey] || '#C37C8E',
+                        color: columnStageMeta.itemDuration.textHex,
+                      }
+                    : undefined;
+                  const itemDurationCellPropsBase = getReadOnlyCellProps(
+                    key,
+                    item,
+                    'itemDuration',
+                    regularOrderClass,
+                    itemDurationCellStyle,
+                  );
+                  const itemDurationCellProps = {
+                    ...itemDurationCellPropsBase,
+                    className: cn(itemDurationCellPropsBase.className, 'item-duration-cell'),
+                  };
+
+                  const orderDurationValue = orderManufacturingMeta.endDate
+                    ? formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate)
+                    : '—';
+                  const hasManufacturingDuration = Boolean(orderManufacturingMeta.startDate || orderManufacturingMeta.endDate || orderDurationValue !== '—');
+                  const durationMetaCellStyle = hasManufacturingDuration
+                    ? {
+                        background: legendColorMap[columnStageMeta.duration.legendKey] || '#F4C2A4',
+                        color: columnStageMeta.duration.textHex,
+                      }
+                    : undefined;
+                  const durationMetaCellProps = getReadOnlyCellProps(
+                    key,
+                    item,
+                    'duration',
+                    `merged-order-cell merged-order-meta-cell order-filled-cell order-group-cell order-group-top order-group-bottom order-group-right${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`,
+                    durationMetaCellStyle,
+                  );
+
+                  return (
+                    <tr key={key} onMouseEnter={() => setHoveredOrderId(orderId)}>
+                      {isFirstOrderRow ? (
+                        <td rowSpan={orderRowSpan} {...orderNumberCellProps}>
+                          <div className="merged-order-number-content">
+                            <div className="archive-order-number-stack">
+                              <div className="merged-order-number-link"><strong>{order.orderNumber || '—'}</strong></div>
+                              <Button
+                                variant="success"
+                                size="sm"
+                                className="archive-restore-trigger"
+                                onClick={() => requestRestore(order)}
+                                disabled={restoringOrder}
+                              >
+                                Вернуть
+                              </Button>
+                            </div>
+                          </div>
+                        </td>
+                      ) : null}
+                      {isFirstOrderRow ? (
+                        <td rowSpan={orderRowSpan} {...customerCellProps}>
+                          <div className="merged-order-customer-content">
+                            <div className="order-primary-title-button merged-order-customer-button merged-order-customer-text">
+                              <span className="order-primary-title-button-text"><strong>{order.customer || '—'}</strong></span>
+                            </div>
+                          </div>
+                        </td>
+                      ) : null}
+                      <td {...roomCellProps}>
+                        <div className="room-cell-content">
+                          <div className="room-cell-text">{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</div>
+                        </div>
+                      </td>
+                      <td {...roomNumberCellProps}>{item.roomNumber || '—'}</td>
+                      <td {...itemNumberCellProps}>{item.itemNumber || '—'}</td>
+                      <td {...quantityCellProps}>{isPlaceholder ? '—' : (item.quantity || 1)}</td>
+                      <td {...nameCellProps}>
+                        <div className="order-primary-title">
+                          <strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong>
+                        </div>
+                      </td>
+                      <td {...orderCardCellProps}>
+                        {renderAttachmentCountCell(itemAttachments, orderCardActionStyle, 'Файлы карточки заказа не прикреплены')}
+                      </td>
+                      <td {...packageCellProps}>
+                        <div className="package-cell-content">
+                          <span
+                            className={cn(
+                              'package-cell-summary-badge',
+                              packageStats.pending > 0 && 'package-cell-summary-badge-attention',
+                            )}
+                            style={packageSummaryBadgeStyle}
+                            title={packageStats.total > 0
+                              ? `Комплектация: сделано ${packageStats.completed} из ${packageStats.total}`
+                              : 'Комплектация не заполнена'}
+                          >
+                            <span className="package-cell-summary-badge-value">
+                              {packageStats.completed}/{packageStats.total}
+                            </span>
+                          </span>
+                        </div>
+                      </td>
+                      <td {...notesCellProps}>
+                        <>
+                          {commentPreview !== '—' ? (
+                            <div className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</div>
+                          ) : null}
+                          {item.notes || (commentPreview !== '—' ? null : '—')}
+                        </>
+                      </td>
+                      <td {...deliveryDateCellProps}>{formatDateDisplay(item.deliveryDate)}</td>
+                      <td {...carpenterCellProps} title={latestCarpenterAutoAt ? `${workerCellTitle}${workerCellTitle ? ' • ' : ''}${new Date(latestCarpenterAutoAt).toLocaleString()}` : workerCellTitle}>
+                        {isPlaceholder ? '—' : workerCellText}
+                      </td>
+                      <td {...photoCellProps}>
+                        {item.photoLink ? <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a> : '—'}
+                      </td>
+                      <td {...paintCellProps}>
+                        {renderAttachmentCountCell(paintAttachments, paintActionStyle, 'Файлы покраски не прикреплены')}
+                      </td>
+                      <td {...itemStartDateCellProps}>{formatDateDisplay(itemManufacturingMeta.startDate)}</td>
+                      <td {...itemEndDateCellProps}>{formatDateDisplay(itemManufacturingMeta.endDate)}</td>
+                      <td {...itemDurationCellProps}>{itemDurationValue}</td>
+                      {isFirstOrderRow ? (
+                        <td rowSpan={orderRowSpan} {...durationMetaCellProps}>
+                          <div className="merged-order-meta-content merged-order-meta-content-stacked">
+                            <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.startDate)}</span>
+                            <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.endDate)}</span>
+                            <span className="merged-order-meta-pill">{orderDurationValue}</span>
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={18} className="empty-cell">В архиве пока нет заказов</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="mobile-card-list">
-          {filtered.map(order => {
+          {filteredOrders.map(order => {
             const statusMeta = getOrderStatusMeta(getOrderOverallStatus(order));
             return (
               <div key={order._id} className="mobile-order-card">
@@ -357,7 +1051,11 @@ function Archive() {
               </div>
             );
           })}
-          {filtered.length === 0 && <div className="mobile-empty-state">В архиве пока нет заказов</div>}
+          {filteredOrders.length === 0 && <div className="mobile-empty-state">В архиве пока нет заказов</div>}
+        </div>
+
+        <div className="filters-summary" style={{ marginTop: 12 }}>
+          Обновлено: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : '—'}
         </div>
       </div>
 
