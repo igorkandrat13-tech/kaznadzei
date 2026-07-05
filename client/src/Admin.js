@@ -29,7 +29,6 @@ function createEmptyRoleForm() {
     icon: '🧩',
     shortTitle: '',
     description: '',
-    noStepsText: '',
     allowedColumns: [...DEFAULT_ROLE_ALLOWED_COLUMNS],
   };
 }
@@ -205,6 +204,34 @@ function Admin() {
     if (labels.length <= 3) return labels.join(', ');
     return `${labels.slice(0, 3).join(', ')} и еще ${labels.length - 3}`;
   };
+  const roleColumnOptions = useMemo(() => {
+    const secondaryHeaders = orderStageLegendConfig.secondaryHeaders || [];
+    const legendColorMap = (orderStageLegendConfig.stages || []).reduce((acc, item) => {
+      acc[item.key] = item.defaultHex || '#FFFFFF';
+      return acc;
+    }, {});
+    const getHeaderByPrimaryColumnIndex = (primaryColumnIndex = -1) => {
+      if (primaryColumnIndex < 0) return null;
+      let startIndex = 0;
+      for (const header of secondaryHeaders) {
+        const span = Number(header?.colSpan) || 1;
+        const endIndex = startIndex + span - 1;
+        if (primaryColumnIndex >= startIndex && primaryColumnIndex <= endIndex) {
+          return header;
+        }
+        startIndex += span;
+      }
+      return null;
+    };
+
+    return ROLE_COLUMN_ACCESS_OPTIONS.map((column) => {
+      const header = getHeaderByPrimaryColumnIndex(column.primaryColumnIndex);
+      return {
+        ...column,
+        previewColor: header?.legendKey ? (legendColorMap[header.legendKey] || '#FFFFFF') : '#DCEBFA',
+      };
+    });
+  }, [orderStageLegendConfig]);
 
   useEffect(() => {
     setEditStep(null);
@@ -816,7 +843,6 @@ function Admin() {
       icon: role.icon || '🧩',
       shortTitle: role.shortTitle || '',
       description: role.description || '',
-      noStepsText: role.noStepsText || '',
       allowedColumns: Array.isArray(role.allowedColumns) ? [...role.allowedColumns] : [...DEFAULT_ROLE_ALLOWED_COLUMNS],
     });
     setRoleModalMode('edit');
@@ -828,13 +854,6 @@ function Admin() {
     if (savingRole) return;
     setRoleModalMode('');
     resetRoleForm();
-  };
-
-  const openStageManager = (roleKey) => {
-    setSelectedStepsRole(roleKey);
-    setStageManagerRoleKey(roleKey);
-    setSettingsError('');
-    setSettingsSuccess('');
   };
 
   const closeStageManager = () => {
@@ -1373,7 +1392,7 @@ function Admin() {
         mode={roleModalMode}
         roleForm={roleForm}
         setRoleForm={setRoleForm}
-        columnOptions={ROLE_COLUMN_ACCESS_OPTIONS}
+        columnOptions={roleColumnOptions}
         onAdd={handleAddRole}
         onUpdate={handleUpdateRole}
         onClose={closeRoleModal}
@@ -2086,11 +2105,12 @@ function Admin() {
         <SettingsHeader title="⚙️ Настройки — Роли" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card" style={{ marginBottom: 20 }}>
-            <p>Здесь настраиваются производственные роли, которые используются в этапах, сотрудниках, таблицах и рабочих экранах.</p>
+            <p>Здесь настраиваются производственные роли, которые используются в сотрудниках, таблицах и рабочих экранах.</p>
             <SettingsHint>
               <div><strong>Удаление:</strong> роль не удаляется физически, а помечается как удаленная и скрывается из рабочих разделов.</div>
               <div><strong>Восстановление:</strong> включите показ удаленных ролей и нажмите "Восстановить".</div>
               <div><strong>Синхронизация:</strong> названия ролей из этого списка автоматически отображаются в "Общих параметрах", таблицах, карточках сотрудников и Telegram.</div>
+              <div><strong>Колонки и цвета:</strong> доступ к цветовым отметкам задается здесь, а названия и цвета самих колонок настраиваются отдельно через редактирование легенды.</div>
             </SettingsHint>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
 
@@ -2126,7 +2146,6 @@ function Admin() {
                           <button className="btn btn-secondary" onClick={() => handleRestoreRole(role.key)}>Восстановить</button>
                         ) : (
                           <>
-                            <button className="btn btn-secondary" style={{ marginRight: 6 }} onClick={() => openStageManager(role.key)}>Этапы</button>
                             <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditRoleModal(role)}>✎</button>
                             <button className="btn btn-danger" onClick={() => requestDeleteRole(role)}>✕</button>
                           </>
@@ -2160,7 +2179,6 @@ function Admin() {
                       <button className="btn btn-secondary" onClick={() => handleRestoreRole(role.key)}>Восстановить</button>
                     ) : (
                       <>
-                        <button className="btn btn-secondary" onClick={() => openStageManager(role.key)}>Этапы</button>
                         <button className="btn btn-primary" onClick={() => openEditRoleModal(role)}>Редактировать</button>
                         <button className="btn btn-danger" onClick={() => requestDeleteRole(role)}>Удалить</button>
                       </>
