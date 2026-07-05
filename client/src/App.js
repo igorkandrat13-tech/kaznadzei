@@ -182,13 +182,13 @@ function AppLayout() {
                     className={`App-header ${mobileMenuOpen ? 'App-header-mobile-open' : ''}`}
                     style={{ '--header-logo-image': `url("${HEADER_LOGO_SRC}")` }}
                 >
-                    <Link
-                        to={canAccessOrders ? '/orders' : '/'}
-                        className="App-header-brand-link"
-                        aria-label={canAccessOrders ? 'Перейти к заказам' : 'Перейти на главную'}
-                        title={canAccessOrders ? 'К странице заказов' : 'На главную'}
-                    />
                     <div className="App-header-main">
+                        <Link
+                            to={canAccessOrders ? '/orders' : '/'}
+                            className="App-header-brand-link"
+                            aria-label={canAccessOrders ? 'Перейти к заказам' : 'Перейти на главную'}
+                            title={canAccessOrders ? 'К странице заказов' : 'На главную'}
+                        />
                         {canAccessOrders && ordersRoute ? (
                             <div className="App-header-center">
                                 <div id="orders-header-primary-actions" className="App-header-orders-primary-slot" />
