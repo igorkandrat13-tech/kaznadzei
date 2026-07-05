@@ -144,15 +144,17 @@ body::before {
 .App-header-orders-zone {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
+  justify-content: stretch;
   gap: 18px;
   pointer-events: none;
 }
 
 .App-header-brand-link {
   display: block;
+  grid-column: 2;
   flex: 0 1 clamp(180px, 28vw, 360px);
   width: clamp(180px, 28vw, 360px);
   min-width: 180px;
@@ -213,6 +215,7 @@ body::before {
 }
 
 .App-header-center {
+  grid-column: 3;
   flex: 1 1 0;
   display: flex;
   justify-content: flex-end;
@@ -7132,6 +7135,7 @@ body[data-theme='light'] .home-auth-status-pending {
   }
 
   .App-header-center {
+    grid-column: 1;
     width: 100%;
     justify-content: center;
   }
