@@ -11,7 +11,7 @@ export const DEFAULT_ORDER_PRIMARY_HEADERS = [
   'Примечания',
   'Отгрузка до',
   'СТОЛЯР',
-  '',
+  'Заявки на расходники',
   'Покраска',
   'Начало изготовления изделия',
   'Окончание изготовления изделия',
@@ -130,11 +130,13 @@ export function buildOrderStageLegendConfig(source = {}) {
   const sourceHeaders = Array.isArray(source?.secondaryHeaders) ? source.secondaryHeaders : [];
   const sourcePrimaryHeaders = Array.isArray(source?.primaryHeaders) ? source.primaryHeaders : [];
 
-  const primaryHeaders = DEFAULT_ORDER_PRIMARY_HEADERS.map((fallbackLabel, index) => (
-    sourcePrimaryHeaders[index] === undefined
+  const primaryHeaders = DEFAULT_ORDER_PRIMARY_HEADERS.map((fallbackLabel, index) => {
+    const sourceLabel = sourcePrimaryHeaders[index];
+    const normalizedSourceLabel = String(sourceLabel ?? '').trim();
+    return sourceLabel === undefined || (!normalizedSourceLabel && fallbackLabel)
       ? String(fallbackLabel ?? '').trim()
-      : String(sourcePrimaryHeaders[index] ?? '').trim()
-  ));
+      : normalizedSourceLabel;
+  });
 
   const stages = DEFAULT_ORDER_STAGE_LEGEND.map((fallbackStage) => {
     const matched = sourceStages.find((item) => String(item?.key || '').trim() === fallbackStage.key) || {};

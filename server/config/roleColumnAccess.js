@@ -10,7 +10,7 @@ const ROLE_COLUMN_ACCESS_OPTIONS = [
   { key: 'packageName', label: 'Комплектация заказа', description: 'Комплектация и готовность комплектовки.' },
   { key: 'notes', label: 'Примечания', description: 'Текстовые примечания по изделию.' },
   { key: 'deliveryDate', label: 'Отгрузка до', description: 'Плановая дата отгрузки.' },
-  { key: 'photoLink', label: 'Фото/ссылка', description: 'Колонка ссылки или фото изделия.' },
+  { key: 'photoLink', label: 'Заявки на расходники', description: 'Заявки на расходники по изделию с чекбоксами исполнения.' },
   { key: 'carpenter', label: 'Столяр', description: 'Работа столярного этапа.' },
   { key: 'paint', label: 'Покраска', description: 'Работа по покраске и файлы покраски.' },
   { key: 'itemStartDate', label: 'Начало изготовления изделия', description: 'Дата начала изготовления изделия.' },

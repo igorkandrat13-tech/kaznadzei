@@ -368,6 +368,26 @@ function sanitizeOrderItemInput(payload, options = {}) {
       });
     }
   }
+  if (!partial || payload.materialRequestItems !== undefined) {
+    if (payload.materialRequestItems === undefined && partial) {
+      data.materialRequestItems = undefined;
+    } else {
+      if (!Array.isArray(payload.materialRequestItems)) {
+        fail('Поле "materialRequestItems" должно быть массивом.');
+      }
+      data.materialRequestItems = payload.materialRequestItems.map((item, index) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          fail(`Поле "materialRequestItems[${index}]" должно быть объектом.`);
+        }
+        return {
+          id: normalizeString(item.id, `materialRequestItems[${index}].id`, { maxLength: 80 }),
+          name: normalizeString(item.name, `materialRequestItems[${index}].name`, { required: true, maxLength: 160 }),
+          isCompleted: item.isCompleted === undefined ? false : normalizeBoolean(item.isCompleted, `materialRequestItems[${index}].isCompleted`),
+          completedAt: item.completedAt === undefined ? null : normalizeDate(item.completedAt, `materialRequestItems[${index}].completedAt`, { allowUndefined: true }),
+        };
+      });
+    }
+  }
   if (!partial || payload.photoLink !== undefined) {
     data.photoLink = normalizeString(payload.photoLink, 'photoLink', { maxLength: 500 });
   }

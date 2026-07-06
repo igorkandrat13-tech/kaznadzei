@@ -212,6 +212,14 @@ function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpe
     );
   }
 
+  if (columnKey === 'photoLink') {
+    const materialRequestItems = Array.isArray(item?.materialRequestItems) ? item.materialRequestItems : [];
+    if (materialRequestItems.length === 0 || materialRequestItems.some((requestItem) => !requestItem?.isCompleted)) return '';
+    return getLatestTimestamp(
+      ...materialRequestItems.map((requestItem) => requestItem?.completedAt || requestItem?.updatedAt || ''),
+    );
+  }
+
   if (columnKey !== 'carpenter') return '';
 
   const workerAssignments = helpers.workerAssignments || mergeWorkerAssignments(item?.workerAssignments, item?.stages);
@@ -427,7 +435,7 @@ function normalizeComments(source = []) {
     .filter(comment => comment.role && comment.text);
 }
 
-function normalizePackageItems(source = [], legacyPackageName = '') {
+function normalizeChecklistItems(source = [], legacyValue = '') {
   const sourceItems = Array.isArray(source) ? source : [];
   const normalizedItems = sourceItems.reduce((acc, item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
@@ -445,7 +453,7 @@ function normalizePackageItems(source = [], legacyPackageName = '') {
     return normalizedItems;
   }
 
-  const legacyTokens = String(legacyPackageName || '')
+  const legacyTokens = String(legacyValue || '')
     .split(/[\n,;]+/g)
     .map((token) => token.trim())
     .filter(Boolean);
@@ -468,34 +476,76 @@ function normalizePackageItems(source = [], legacyPackageName = '') {
   }));
 }
 
-function getPackageSummary(packageItems = []) {
-  return normalizePackageItems(packageItems)
+function normalizePackageItems(source = [], legacyPackageName = '') {
+  return normalizeChecklistItems(source, legacyPackageName);
+}
+
+function normalizeMaterialRequestItems(source = [], legacyRequests = '') {
+  return normalizeChecklistItems(source, legacyRequests);
+}
+
+function getChecklistSummary(items = []) {
+  return normalizeChecklistItems(items)
     .map((item) => `${item.isCompleted ? '+' : '-'} ${item.name}`)
     .join('; ');
 }
 
-function updateItemPackageState(item, nextPackageItems = []) {
-  const normalizedPackageItems = normalizePackageItems(nextPackageItems);
-  const currentPackageItems = normalizePackageItems(item?.packageItems, item?.packageName);
-  if (JSON.stringify(currentPackageItems) === JSON.stringify(normalizedPackageItems)) {
+function getPackageSummary(packageItems = []) {
+  return getChecklistSummary(packageItems);
+}
+
+function getMaterialRequestSummary(materialRequestItems = []) {
+  return getChecklistSummary(materialRequestItems);
+}
+
+function updateItemChecklistState(item, nextItems = [], {
+  itemsField,
+  legacyField,
+  clearColumnKey,
+  normalizeItems,
+  getSummary,
+} = {}) {
+  const normalizedNextItems = normalizeItems(nextItems);
+  const currentItems = normalizeItems(item?.[itemsField], item?.[legacyField]);
+  if (JSON.stringify(currentItems) === JSON.stringify(normalizedNextItems)) {
     return false;
   }
 
-  item.packageItems = normalizedPackageItems;
-  item.packageName = getPackageSummary(normalizedPackageItems);
+  item[itemsField] = normalizedNextItems;
+  item[legacyField] = getSummary(normalizedNextItems);
 
   const nextManualStageClears = normalizeManualStageClears(item?.manualStageClears);
   if (
-    normalizedPackageItems.length > 0
-    && normalizedPackageItems.every((packageItem) => packageItem.isCompleted)
-    && nextManualStageClears.packageName
+    normalizedNextItems.length > 0
+    && normalizedNextItems.every((entry) => entry.isCompleted)
+    && nextManualStageClears[clearColumnKey]
   ) {
-    delete nextManualStageClears.packageName;
+    delete nextManualStageClears[clearColumnKey];
     item.manualStageClears = normalizeManualStageClears(nextManualStageClears);
   }
 
   item.updatedAt = new Date().toISOString();
   return true;
+}
+
+function updateItemPackageState(item, nextPackageItems = []) {
+  return updateItemChecklistState(item, nextPackageItems, {
+    itemsField: 'packageItems',
+    legacyField: 'packageName',
+    clearColumnKey: 'packageName',
+    normalizeItems: normalizePackageItems,
+    getSummary: getPackageSummary,
+  });
+}
+
+function updateItemMaterialRequestState(item, nextMaterialRequestItems = []) {
+  return updateItemChecklistState(item, nextMaterialRequestItems, {
+    itemsField: 'materialRequestItems',
+    legacyField: 'photoLink',
+    clearColumnKey: 'photoLink',
+    normalizeItems: normalizeMaterialRequestItems,
+    getSummary: getMaterialRequestSummary,
+  });
 }
 
 function cloneStages(stages = []) {
@@ -528,6 +578,7 @@ function buildOrderItem(source = {}, options = {}) {
   const manualStageClears = normalizeManualStageClears(source.manualStageClears);
   const quantity = Number(source.quantity) || 1;
   const packageItems = normalizePackageItems(source.packageItems, source.packageName || source.package);
+  const materialRequestItems = normalizeMaterialRequestItems(source.materialRequestItems, source.photoLink || source.materialRequests);
   return {
     itemId: String(source.itemId || source._id || id()).trim(),
     itemNumber: String(source.itemNumber || source.orderItemNumber || options.defaultItemNumber || '').trim() || getDefaultItemNumber(options.index || 0),
@@ -540,7 +591,8 @@ function buildOrderItem(source = {}, options = {}) {
     material: String(source.material || '').trim(),
     packageName: getPackageSummary(packageItems),
     packageItems,
-    photoLink: String(source.photoLink || source.link || '').trim(),
+    photoLink: getMaterialRequestSummary(materialRequestItems),
+    materialRequestItems,
     notes: String(source.notes || '').trim(),
     attachments: normalizeOrderAttachments(source.attachments),
     paintAttachments: normalizeOrderAttachments(source.paintAttachments),
@@ -1080,6 +1132,9 @@ const OrderStore = {
         const currentPackageItems = normalizePackageItems(currentItem?.packageItems, currentItem?.packageName);
         const nextPackageItems = normalizePackageItems(item?.packageItems, item?.packageName);
         const packageItemsChanged = JSON.stringify(currentPackageItems) !== JSON.stringify(nextPackageItems);
+        const currentMaterialRequestItems = normalizeMaterialRequestItems(currentItem?.materialRequestItems, currentItem?.photoLink);
+        const nextMaterialRequestItems = normalizeMaterialRequestItems(item?.materialRequestItems, item?.photoLink);
+        const materialRequestItemsChanged = JSON.stringify(currentMaterialRequestItems) !== JSON.stringify(nextMaterialRequestItems);
         const nextManualStageClears = normalizeManualStageClears(item?.manualStageClears || currentItem?.manualStageClears || {});
         if (
           packageItemsChanged
@@ -1088,6 +1143,14 @@ const OrderStore = {
           && nextManualStageClears.packageName
         ) {
           delete nextManualStageClears.packageName;
+        }
+        if (
+          materialRequestItemsChanged
+          && nextMaterialRequestItems.length > 0
+          && nextMaterialRequestItems.every((requestItem) => requestItem.isCompleted)
+          && nextManualStageClears.photoLink
+        ) {
+          delete nextManualStageClears.photoLink;
         }
         return buildOrderItem({
           ...currentItem,
@@ -1174,6 +1237,72 @@ const OrderStore = {
     ));
 
     if (!updateItemPackageState(item, nextPackageItems)) {
+      return order;
+    }
+
+    syncOrderStatus(order);
+    save();
+    return order;
+  },
+
+  addMaterialRequestItem(orderId, itemId, materialRequestItem = {}) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return false;
+
+    const itemName = String(materialRequestItem?.name || '').trim();
+    if (!itemName) return 'invalid';
+
+    const nextMaterialRequestItems = [
+      ...normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
+      {
+        id: String(materialRequestItem?.id || id()).trim(),
+        name: itemName,
+        isCompleted: Boolean(materialRequestItem?.isCompleted),
+        completedAt: materialRequestItem?.isCompleted
+          ? (String(materialRequestItem?.completedAt || '').trim() || new Date().toISOString().split('T')[0])
+          : null,
+      },
+    ];
+
+    if (!updateItemMaterialRequestState(item, nextMaterialRequestItems)) {
+      return order;
+    }
+
+    syncOrderStatus(order);
+    save();
+    return order;
+  },
+
+  toggleMaterialRequestItem(orderId, itemId, materialRequestItemId) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return false;
+
+    const normalizedMaterialRequestItemId = String(materialRequestItemId || '').trim();
+    if (!normalizedMaterialRequestItemId) return 'invalid';
+
+    const currentMaterialRequestItems = normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink);
+    const hasTargetItem = currentMaterialRequestItems.some((requestItem) => requestItem.id === normalizedMaterialRequestItemId);
+    if (!hasTargetItem) return 'material_request_item_not_found';
+
+    const nextMaterialRequestItems = currentMaterialRequestItems.map((requestItem) => (
+      requestItem.id === normalizedMaterialRequestItemId
+        ? {
+            ...requestItem,
+            isCompleted: !requestItem.isCompleted,
+            completedAt: !requestItem.isCompleted ? new Date().toISOString().split('T')[0] : null,
+          }
+        : requestItem
+    ));
+
+    if (!updateItemMaterialRequestState(item, nextMaterialRequestItems)) {
       return order;
     }
 

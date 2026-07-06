@@ -31,7 +31,7 @@ const ORDER_ROOM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ пом
 const ORDER_ITEM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ изделия в заказе');
 const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй');
 const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
-const ORDER_PHOTO_LINK_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('');
+const ORDER_PHOTO_LINK_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
   let currentIndex = 0;
@@ -273,6 +273,22 @@ function getPackageStats(items = [], legacyPackageName = '') {
   return { total, completed, pending, items: normalizedItems };
 }
 
+function normalizeMaterialRequestItems(items = [], legacyRequests = '') {
+  return normalizePackageItems(items, legacyRequests);
+}
+
+function getMaterialRequestSummary(items = []) {
+  return normalizeMaterialRequestItems(items).map((item) => `${item.isCompleted ? '+' : '-'} ${item.name}`).join('; ');
+}
+
+function getMaterialRequestStats(items = [], legacyRequests = '') {
+  const normalizedItems = normalizeMaterialRequestItems(items, legacyRequests);
+  const total = normalizedItems.length;
+  const completed = normalizedItems.filter((item) => item.isCompleted).length;
+  const pending = Math.max(0, total - completed);
+  return { total, completed, pending, items: normalizedItems };
+}
+
 function getUsedItemNumbers(items = []) {
   return (Array.isArray(items) ? items : [])
     .map((item) => String(item?.itemNumber || '').trim())
@@ -429,6 +445,7 @@ function createInlineDraft(row) {
     packageName: row.item.packageName || '',
     packageItems: normalizePackageItems(row.item.packageItems, row.item.packageName),
     photoLink: row.item.photoLink || '',
+    materialRequestItems: normalizeMaterialRequestItems(row.item.materialRequestItems, row.item.photoLink),
     notes: row.item.notes || '',
   };
 }
@@ -445,6 +462,7 @@ const EMPTY_ITEM = {
   packageName: '',
   packageItems: [],
   photoLink: '',
+  materialRequestItems: [],
   notes: '',
 };
 
@@ -487,6 +505,7 @@ function mapItemToRoomEditorItem(item = {}, index = 0) {
     packageName: item.packageName || '',
     packageItems: normalizePackageItems(item.packageItems, item.packageName),
     photoLink: item.photoLink || '',
+    materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
     notes: item.notes || '',
   };
 }
@@ -575,7 +594,8 @@ function buildOrderItemsPayload(items = []) {
     deliveryDate: String(item.deliveryDate || '').trim(),
     packageName: getPackageSummary(item.packageItems || []) || String(item.packageName || '').trim(),
     packageItems: normalizePackageItems(item.packageItems, item.packageName),
-    photoLink: String(item.photoLink || '').trim(),
+    photoLink: getMaterialRequestSummary(item.materialRequestItems || []) || String(item.photoLink || '').trim(),
+    materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
     notes: String(item.notes || '').trim(),
   }));
 }
@@ -664,6 +684,7 @@ function mapOrderToForm(order) {
         packageName: item.packageName || '',
         packageItems: normalizePackageItems(item.packageItems, item.packageName),
         photoLink: item.photoLink || '',
+        materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
         notes: item.notes || '',
       }))
     : [];
@@ -757,6 +778,8 @@ function OrdersWorkspace() {
   const [roomEditorSaving, setRoomEditorSaving] = useState(false);
   const [packageEditor, setPackageEditor] = useState(null);
   const [packageEditorSaving, setPackageEditorSaving] = useState(false);
+  const [materialRequestEditor, setMaterialRequestEditor] = useState(null);
+  const [materialRequestEditorSaving, setMaterialRequestEditorSaving] = useState(false);
   const [attachmentUploadingTargetKey, setAttachmentUploadingTargetKey] = useState('');
   const [attachmentDeletingKey, setAttachmentDeletingKey] = useState('');
   const [attachmentOpeningKey, setAttachmentOpeningKey] = useState('');
@@ -898,6 +921,7 @@ function OrdersWorkspace() {
 
     return {
       carpenter: createColumnMeta(ORDER_CARPENTER_COLUMN_INDEX),
+      photoLink: createColumnMeta(ORDER_PHOTO_LINK_COLUMN_INDEX),
       itemStart: createColumnMeta(ORDER_ITEM_START_COLUMN_INDEX),
       itemEnd: createColumnMeta(ORDER_ITEM_END_COLUMN_INDEX),
       itemDuration: createColumnMeta(ORDER_ITEM_DURATION_COLUMN_INDEX),
@@ -962,6 +986,7 @@ function OrdersWorkspace() {
         packageName: '',
         packageItems: [],
         photoLink: '',
+        materialRequestItems: [],
         notes: '',
         comments: [],
         manualStageMarks: {},
@@ -1739,6 +1764,21 @@ function OrdersWorkspace() {
     });
   }, []);
 
+  const openMaterialRequestEditor = useCallback((order, item) => {
+    if (!order?._id || !item?.itemId) return;
+    setError('');
+    setMaterialRequestEditor({
+      orderId: order._id,
+      itemId: item.itemId,
+      orderNumber: order.orderNumber || '',
+      customer: order.customer || '',
+      itemName: item.name || '',
+      itemNumber: item.itemNumber || '',
+      newItemName: '',
+      items: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
+    });
+  }, []);
+
   useEscapeKey(() => {
     if (selectedStageCellKeys.length > 0 && !manualStageSaving) {
       clearSelectedStageCells();
@@ -1754,6 +1794,10 @@ function OrdersWorkspace() {
     }
     if (packageEditor && !packageEditorSaving) {
       setPackageEditor(null);
+      return;
+    }
+    if (materialRequestEditor && !materialRequestEditorSaving) {
+      setMaterialRequestEditor(null);
       return;
     }
     if (confirmAttachmentDelete && !attachmentDeletingKey) {
@@ -1791,7 +1835,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || packageEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || customerEditor || orderPreview || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || packageEditor || materialRequestEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || customerEditor || orderPreview || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -2135,6 +2179,102 @@ function OrdersWorkspace() {
       await fetchOrders();
     } finally {
       setPackageEditorSaving(false);
+    }
+  };
+
+  const handleMaterialRequestEditorDraftChange = (event) => {
+    const value = event.target.value;
+    setError('');
+    setMaterialRequestEditor((current) => current ? { ...current, newItemName: value } : current);
+  };
+
+  const addMaterialRequestEditorItem = () => {
+    const nextName = String(materialRequestEditor?.newItemName || '').trim();
+    if (!nextName) {
+      setError('Укажите заявку на расходники.');
+      return;
+    }
+    setError('');
+    setMaterialRequestEditor((current) => current ? {
+      ...current,
+      newItemName: '',
+      items: [
+        ...(current.items || []),
+        {
+          id: createPackageItemId(),
+          name: nextName,
+          isCompleted: false,
+          completedAt: null,
+        },
+      ],
+    } : current);
+  };
+
+  const toggleMaterialRequestEditorItem = (materialRequestItemId) => {
+    setError('');
+    setMaterialRequestEditor((current) => current ? {
+      ...current,
+      items: (current.items || []).map((item) => (
+        item.id === materialRequestItemId
+          ? {
+              ...item,
+              isCompleted: !item.isCompleted,
+              completedAt: !item.isCompleted ? new Date().toISOString().split('T')[0] : null,
+            }
+          : item
+      )),
+    } : current);
+  };
+
+  const removeMaterialRequestEditorItem = (materialRequestItemId) => {
+    setError('');
+    setMaterialRequestEditor((current) => current ? {
+      ...current,
+      items: (current.items || []).filter((item) => item.id !== materialRequestItemId),
+    } : current);
+  };
+
+  const saveMaterialRequestEditor = async () => {
+    if (!materialRequestEditor || materialRequestEditorSaving) return;
+    const order = orders.find((currentOrder) => currentOrder._id === materialRequestEditor.orderId);
+    const targetItem = (order?.items || []).find((item) => item.itemId === materialRequestEditor.itemId) || null;
+    if (!order || !targetItem) {
+      setError('Изделие для сохранения заявок на расходники не найдено.');
+      return;
+    }
+
+    const nextMaterialRequestItems = normalizeMaterialRequestItems(materialRequestEditor.items);
+    const payload = {
+      orderNumber: order.orderNumber || '',
+      customer: order.customer || '',
+      orderDate: order.orderDate || '',
+      items: buildOrderItemsPayload((order.items || []).map((item) => (
+        item.itemId === materialRequestEditor.itemId
+          ? {
+              ...item,
+              materialRequestItems: nextMaterialRequestItems,
+              photoLink: getMaterialRequestSummary(nextMaterialRequestItems),
+            }
+          : item
+      ))),
+    };
+
+    setMaterialRequestEditorSaving(true);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${order._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось сохранить заявки на расходники.'));
+        return;
+      }
+      setMaterialRequestEditor(null);
+      await fetchOrders();
+    } finally {
+      setMaterialRequestEditorSaving(false);
     }
   };
 
@@ -2714,7 +2854,8 @@ function OrdersWorkspace() {
             material: String(draft.material || '').trim(),
             packageName: String(draft.packageName || '').trim(),
             packageItems: normalizePackageItems(draft.packageItems, draft.packageName),
-            photoLink: String(draft.photoLink || '').trim(),
+            photoLink: getMaterialRequestSummary(draft.materialRequestItems || []) || String(draft.photoLink || '').trim(),
+            materialRequestItems: normalizeMaterialRequestItems(draft.materialRequestItems, draft.photoLink),
             notes: String(draft.notes || '').trim(),
           }
         : item
@@ -2739,6 +2880,7 @@ function OrdersWorkspace() {
         packageName: item.packageName || '',
         packageItems: normalizePackageItems(item.packageItems, item.packageName),
         photoLink: item.photoLink || '',
+        materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
         notes: item.notes || '',
       })),
     };
@@ -2800,7 +2942,7 @@ function OrdersWorkspace() {
       'Примечания',
       'Отгрузка до',
       'СТОЛЯР',
-      '',
+      'Заявки на расходники',
       'Покраска',
       'Начало изготовления изделия',
       'Окончание изготовления изделия',
@@ -2815,6 +2957,7 @@ function OrdersWorkspace() {
         const itemManufacturingMeta = getItemManufacturingMeta(item);
         const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
         const packageStats = getPackageStats(item.packageItems, item.packageName);
+        const materialRequestStats = getMaterialRequestStats(item.materialRequestItems, item.photoLink);
         const cells = [
           order.orderNumber || '',
           order.customer || '',
@@ -2828,7 +2971,7 @@ function OrdersWorkspace() {
           item.notes || '',
           item.deliveryDate || '',
           String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '',
-          item.photoLink || '',
+          `${materialRequestStats.completed}/${materialRequestStats.total}`,
           getItemAttachments(item, 'paint').map((attachment) => attachment.name).join(', '),
           itemManufacturingMeta.startDate || '',
           itemManufacturingMeta.endDate || '',
@@ -3039,6 +3182,7 @@ function OrdersWorkspace() {
                     const itemAttachments = getItemAttachments(item, 'order');
                     const paintAttachments = getItemAttachments(item, 'paint');
                     const packageStats = getPackageStats(item.packageItems, item.packageName);
+                    const materialRequestStats = getMaterialRequestStats(item.materialRequestItems, item.photoLink);
                     const orderAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'order');
                     const paintAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'paint');
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
@@ -3133,8 +3277,22 @@ function OrdersWorkspace() {
                       ...packageCellPropsBase,
                       className: cn(packageCellPropsBase.className, 'package-cell'),
                     };
+                    const materialRequestCellStyle = materialRequestStats.total > 0 && materialRequestStats.pending === 0
+                      ? {
+                          background: columnStageMeta.photoLink.hex || '#F4C2A4',
+                          color: columnStageMeta.photoLink.textHex,
+                        }
+                      : undefined;
+                    const materialRequestSummaryBadgeStyle = {
+                      background: columnStageMeta.photoLink.hex || '#F4C2A4',
+                      color: columnStageMeta.photoLink.textHex,
+                    };
                     const paintCellProps = getManualStageCellProps(key, item, 'paint', `order-card-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
-                    const photoCellProps = getManualStageCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
+                    const photoCellPropsBase = getManualStageCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, materialRequestCellStyle, { disabled: isInlineEditing });
+                    const photoCellProps = {
+                      ...photoCellPropsBase,
+                      className: cn(photoCellPropsBase.className, 'package-cell'),
+                    };
                     const notesCellProps = getManualStageCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const carpenterCellProps = getManualStageCellProps(key, item, 'carpenter', carpenterCellClassName, carpenterCellStyle, { disabled: isInlineEditing });
                     const orderNumberCellProps = getManualStageCellProps(
@@ -3351,11 +3509,30 @@ function OrdersWorkspace() {
                           {isPlaceholder ? '—' : workerCellText}
                         </td>
                         <td {...photoCellProps}>
-                          {isInlineEditing ? (
-                            <input className="table-inline-input" value={inlineDraft.photoLink} onChange={handleInlineChange(key, 'photoLink')} placeholder="https://..." />
-                          ) : item.photoLink ? (
-                            <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a>
-                          ) : '—'}
+                          <div className="package-cell-content">
+                            <button
+                              type="button"
+                              className={cn(
+                                'package-cell-summary-badge',
+                                'material-request-cell-summary-badge',
+                                materialRequestStats.pending > 0 && 'material-request-cell-summary-badge-attention',
+                              )}
+                              style={materialRequestSummaryBadgeStyle}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openMaterialRequestEditor(order, item);
+                              }}
+                              disabled={isPlaceholder}
+                              title={materialRequestStats.total > 0
+                                ? `Открыть и редактировать заявки на расходники: исполнено ${materialRequestStats.completed} из ${materialRequestStats.total}`
+                                : 'Открыть и редактировать заявки на расходники'}
+                              aria-label="Открыть и редактировать заявки на расходники"
+                            >
+                              <span className="package-cell-summary-badge-value">
+                                {materialRequestStats.completed}/{materialRequestStats.total}
+                              </span>
+                            </button>
+                          </div>
                         </td>
                         <td {...paintCellProps}>
                           {renderAttachmentCellControls({
@@ -3891,6 +4068,86 @@ function OrdersWorkspace() {
         </Modal>
       ) : null}
 
+      {materialRequestEditor ? (
+        <Modal open={Boolean(materialRequestEditor)} onClose={() => !materialRequestEditorSaving && setMaterialRequestEditor(null)} closeDisabled={materialRequestEditorSaving} size="lg" className="order-form-modal">
+          <ModalHeader
+            title="Заявки на расходники"
+            subtitle={`${materialRequestEditor.orderNumber ? `Заказ № ${materialRequestEditor.orderNumber}` : 'Без номера'}${materialRequestEditor.customer ? ` · ${materialRequestEditor.customer}` : ''}${materialRequestEditor.itemName ? ` · ${materialRequestEditor.itemName}` : ''}${materialRequestEditor.itemNumber ? ` · позиция ${materialRequestEditor.itemNumber}` : ''}`}
+            onClose={() => !materialRequestEditorSaving && setMaterialRequestEditor(null)}
+            closeDisabled={materialRequestEditorSaving}
+          />
+
+          <div className="package-editor-toolbar">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Новая заявка</label>
+              <input
+                value={materialRequestEditor.newItemName}
+                onChange={handleMaterialRequestEditorDraftChange}
+                placeholder="Например: сверло, клей, фреза"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addMaterialRequestEditorItem();
+                  }
+                }}
+              />
+            </div>
+            <div className="package-editor-toolbar-actions">
+              <Button variant="secondary" onClick={addMaterialRequestEditorItem} disabled={materialRequestEditorSaving}>Добавить заявку</Button>
+            </div>
+          </div>
+
+          <div className="package-editor-summary material-request-editor-summary">
+            Важные заявки: исполнено {getMaterialRequestStats(materialRequestEditor.items).completed} из {getMaterialRequestStats(materialRequestEditor.items).total}
+          </div>
+
+          <div className="package-editor-list">
+            {(materialRequestEditor.items || []).length > 0 ? (
+              materialRequestEditor.items.map((requestItem) => (
+                <label key={requestItem.id} className={cn('package-editor-item', 'material-request-editor-item', requestItem.isCompleted && 'package-editor-item-completed')}>
+                  <div className="package-editor-item-main">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(requestItem.isCompleted)}
+                      onChange={() => toggleMaterialRequestEditorItem(requestItem.id)}
+                      disabled={materialRequestEditorSaving}
+                    />
+                    <div className="package-editor-item-text">
+                      <span className="package-editor-item-name">{requestItem.name}</span>
+                      <span className="package-editor-item-meta">
+                        {requestItem.isCompleted
+                          ? `Исполнено${requestItem.completedAt ? ` · ${formatDateDisplay(requestItem.completedAt)}` : ''}`
+                          : 'Ожидает закупки'}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      removeMaterialRequestEditorItem(requestItem.id);
+                    }}
+                    disabled={materialRequestEditorSaving}
+                  >
+                    Удалить
+                  </Button>
+                </label>
+              ))
+            ) : (
+              <div className="order-card-empty">Заявки на расходники пока не добавлены.</div>
+            )}
+          </div>
+
+          <div className="modal-actions">
+            <Button onClick={() => setMaterialRequestEditor(null)} disabled={materialRequestEditorSaving}>Отмена</Button>
+            <Button variant="success" onClick={saveMaterialRequestEditor} disabled={materialRequestEditorSaving}>
+              {materialRequestEditorSaving ? 'Сохранение...' : 'Сохранить заявки'}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
+
       {attachmentsDialog ? (
         <Modal open={Boolean(attachmentsDialog)} onClose={() => setAttachmentsDialog(null)} size="lg" className="order-form-modal">
           <ModalHeader
@@ -4087,9 +4344,13 @@ function OrdersWorkspace() {
                       <div className="detail-value">{formatDateDisplay(item.deliveryDate)}</div>
                     </div>
                     <div className="detail-block detail-block-wide">
-                      <div className="detail-label">Ссылка / фото</div>
+                      <div className="detail-label">Заявки на расходники</div>
                       <div className="detail-value detail-value-multiline">
-                        {item.photoLink ? <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">{item.photoLink}</a> : '—'}
+                        {getMaterialRequestStats(item.materialRequestItems, item.photoLink).total > 0
+                          ? getMaterialRequestStats(item.materialRequestItems, item.photoLink).items.map((requestItem) => (
+                              `${requestItem.isCompleted ? '[x]' : '[ ]'} ${requestItem.name}`
+                            )).join(', ')
+                          : '—'}
                       </div>
                     </div>
                     <div className="detail-block detail-block-wide">

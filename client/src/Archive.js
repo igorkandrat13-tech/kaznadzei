@@ -35,7 +35,7 @@ const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во �
 const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
 const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
 const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
-const ORDER_PHOTO_LINK_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('');
+const ORDER_PHOTO_LINK_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
 
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
@@ -379,6 +379,7 @@ function Archive() {
 
     return {
       carpenter: createColumnMeta(ORDER_CARPENTER_COLUMN_INDEX),
+      photoLink: createColumnMeta(ORDER_PHOTO_LINK_COLUMN_INDEX),
       itemStart: createColumnMeta(ORDER_ITEM_START_COLUMN_INDEX),
       itemEnd: createColumnMeta(ORDER_ITEM_END_COLUMN_INDEX),
       itemDuration: createColumnMeta(ORDER_ITEM_DURATION_COLUMN_INDEX),

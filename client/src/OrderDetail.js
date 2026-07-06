@@ -85,6 +85,22 @@ function getPackageStats(items = [], legacyPackageName = '') {
   };
 }
 
+function normalizeMaterialRequestItems(items = [], legacyRequests = '') {
+  return normalizePackageItems(items, legacyRequests);
+}
+
+function getMaterialRequestStats(items = [], legacyRequests = '') {
+  const normalizedItems = normalizeMaterialRequestItems(items, legacyRequests);
+  const total = normalizedItems.length;
+  const completed = normalizedItems.filter((item) => item.isCompleted).length;
+  return {
+    total,
+    completed,
+    pending: Math.max(0, total - completed),
+    items: normalizedItems,
+  };
+}
+
 function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
   switch (String(columnKey || '').trim()) {
     case 'orderNumber':
@@ -186,6 +202,9 @@ function OrderDetail() {
   const [packageDraft, setPackageDraft] = useState('');
   const [packageError, setPackageError] = useState('');
   const [packageBusyKey, setPackageBusyKey] = useState('');
+  const [materialRequestDraft, setMaterialRequestDraft] = useState('');
+  const [materialRequestError, setMaterialRequestError] = useState('');
+  const [materialRequestBusyKey, setMaterialRequestBusyKey] = useState('');
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
@@ -424,7 +443,6 @@ function OrderDetail() {
     : null;
   const primaryItem = getOrderPrimaryItem(order);
   const statusMeta = getOrderStatusMeta(selectedItem?.overallStatus || getOrderOverallStatus(order));
-  const orderNotes = String(selectedItem?.notes || primaryItem?.notes || '').trim();
   const detailItems = order ? [
     { label: 'Номер заказа', value: order.orderNumber || '—' },
     { label: 'Заказчик', value: order.customer || '—' },
@@ -433,8 +451,6 @@ function OrderDetail() {
     { label: 'Помещение', value: selectedItem?.room || '—' },
     { label: '№ помещения', value: selectedItem?.roomNumber || '—' },
     { label: 'Количество', value: selectedItem?.quantity || primaryItem?.quantity || 1 },
-    { label: 'Отгрузка до', value: formatDateValue(selectedItem?.deliveryDate) },
-    { label: 'Старт заказа', value: formatDateValue(order.orderDate) },
   ] : [];
 
   const allowedColumns = useMemo(() => (
@@ -455,20 +471,26 @@ function OrderDetail() {
         }
         return {
           columnKey: column.key,
+          primaryColumnIndex: getPrimaryColumnIndexForManualStageColumn(column.key),
           label: header.label || column.label,
           legendKey: header.legendKey,
           hex: getSecondaryHeaderBackground(header),
           textHex: getSecondaryHeaderTextColor(header),
         };
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((left, right) => left.primaryColumnIndex - right.primaryColumnIndex);
   }, [allowedColumns, orderStageLegendConfig.secondaryHeaders]);
 
   const packageStats = useMemo(() => (
     getPackageStats(selectedItem?.packageItems, selectedItem?.packageName)
   ), [selectedItem?.packageItems, selectedItem?.packageName]);
+  const materialRequestStats = useMemo(() => (
+    getMaterialRequestStats(selectedItem?.materialRequestItems, selectedItem?.photoLink)
+  ), [selectedItem?.materialRequestItems, selectedItem?.photoLink]);
 
   const canManagePackage = allowedColumns.includes('packageName');
+  const canManageMaterialRequests = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId);
 
   useEffect(() => {
     if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
@@ -509,9 +531,9 @@ function OrderDetail() {
     telegramUnsafeUser,
   ]);
 
-  const applyTelegramStageMark = useCallback(async (columnKey) => {
+  const updateTelegramStageMark = useCallback(async (columnKey, { clear = false } = {}) => {
     if (!telegramMode || !telegramEmployee || !selectedItem?.itemId || !columnKey) return;
-    const pendingKey = `stage:${columnKey}`;
+    const pendingKey = `stage:${columnKey}:${clear ? 'clear' : 'mark'}`;
     setStageActionKey(pendingKey);
     setStageError('');
     setTelegramActionError('');
@@ -526,18 +548,19 @@ function OrderDetail() {
           sessionToken,
           itemId: selectedItem.itemId,
           columnKey,
+          clear,
         }),
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось отметить этап.');
+        throw new Error(data?.message || (clear ? 'Не удалось отменить принятие этапа.' : 'Не удалось отметить этап.'));
       }
       setOrder(data?.order || null);
       if (data?.employee) {
         setTelegramEmployee(data.employee);
       }
     } catch (error) {
-      setStageError(error.message || 'Не удалось отметить этап.');
+      setStageError(error.message || (clear ? 'Не удалось отменить принятие этапа.' : 'Не удалось отметить этап.'));
     } finally {
       setStageActionKey('');
     }
@@ -639,6 +662,94 @@ function OrderDetail() {
     telegramUnsafeUser,
   ]);
 
+  const addTelegramMaterialRequestItem = useCallback(async () => {
+    const nextName = String(materialRequestDraft || '').trim();
+    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
+    if (!nextName) {
+      setMaterialRequestError('Введите название заявки на расходники.');
+      return;
+    }
+
+    setMaterialRequestBusyKey('add');
+    setMaterialRequestError('');
+    try {
+      const sessionToken = getActiveTelegramSessionToken();
+      const res = await apiFetch(`/api/orders/${id}/telegram-material-request-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken,
+          itemId: selectedItem.itemId,
+          name: nextName,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось добавить заявку на расходники.');
+      }
+      setOrder(data?.order || null);
+      if (data?.employee) {
+        setTelegramEmployee(data.employee);
+      }
+      setMaterialRequestDraft('');
+    } catch (error) {
+      setMaterialRequestError(error.message || 'Не удалось добавить заявку на расходники.');
+    } finally {
+      setMaterialRequestBusyKey('');
+    }
+  }, [
+    getActiveTelegramSessionToken,
+    id,
+    materialRequestDraft,
+    selectedItem?.itemId,
+    telegramEmployee,
+    telegramInitData,
+    telegramMode,
+    telegramUnsafeUser,
+  ]);
+
+  const toggleTelegramMaterialRequestItem = useCallback(async (materialRequestItemId) => {
+    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId || !materialRequestItemId) return;
+    const pendingKey = `toggle:${materialRequestItemId}`;
+    setMaterialRequestBusyKey(pendingKey);
+    setMaterialRequestError('');
+    try {
+      const sessionToken = getActiveTelegramSessionToken();
+      const res = await apiFetch(`/api/orders/${id}/telegram-material-request-items/${materialRequestItemId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken,
+          itemId: selectedItem.itemId,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось изменить состояние заявки на расходники.');
+      }
+      setOrder(data?.order || null);
+      if (data?.employee) {
+        setTelegramEmployee(data.employee);
+      }
+    } catch (error) {
+      setMaterialRequestError(error.message || 'Не удалось изменить состояние заявки на расходники.');
+    } finally {
+      setMaterialRequestBusyKey('');
+    }
+  }, [
+    getActiveTelegramSessionToken,
+    id,
+    selectedItem?.itemId,
+    telegramEmployee,
+    telegramInitData,
+    telegramMode,
+    telegramUnsafeUser,
+  ]);
+
   if (loading) {
     return (
       <div className="card">
@@ -718,15 +829,6 @@ function OrderDetail() {
             ))}
           </div>
 
-          {orderNotes && (
-            <div className="detail-block detail-block-wide">
-              <div className="detail-label">Примечания</div>
-              <div className="detail-value detail-value-multiline">
-                {orderNotes}
-              </div>
-            </div>
-          )}
-
           <div className="telegram-stage-section">
             <div className="telegram-section-title">Этапы</div>
 
@@ -760,27 +862,30 @@ function OrderDetail() {
                   const stageMark = selectedItem?.manualStageMarks?.[stage.columnKey] || null;
                   const stageCleared = Boolean(selectedItem?.manualStageClears?.[stage.columnKey]);
                   const isMarked = Boolean(stageMark && !stageCleared);
-                  const isBusy = stageActionKey === `stage:${stage.columnKey}`;
+                  const isMarkBusy = stageActionKey === `stage:${stage.columnKey}:mark`;
+                  const isClearBusy = stageActionKey === `stage:${stage.columnKey}:clear`;
+                  const isBusy = isMarkBusy || isClearBusy;
                   return (
                     <div
                       key={stage.columnKey}
                       className={`telegram-stage-card${isMarked ? ' telegram-stage-card-complete' : ''}`}
                       style={{
-                        borderColor: stage.hex,
-                        background: isMarked
-                          ? `linear-gradient(135deg, ${stage.hex}, #ffffff)`
-                          : `linear-gradient(135deg, #ffffff, ${stage.hex})`,
+                        '--telegram-stage-accent': stage.hex,
+                        '--telegram-stage-text': stage.textHex,
                       }}
                     >
                       <div className="telegram-stage-card-top">
-                        <div>
-                          <div className="telegram-stage-card-title" style={{ color: stage.textHex }}>
+                        <div className="telegram-stage-card-main">
+                          <div className="telegram-stage-card-swatch" aria-hidden="true" />
+                          <div className="telegram-stage-card-copy">
+                            <div className="telegram-stage-card-title">
                             {stage.label}
-                          </div>
-                          <div className="telegram-stage-card-subtitle" style={{ color: stage.textHex }}>
-                            {isMarked
-                              ? `Принято${stageMark?.updatedAt ? ` · ${formatDateTimeValue(stageMark.updatedAt)}` : ''}`
-                              : 'Ожидает принятия'}
+                            </div>
+                            <div className="telegram-stage-card-subtitle">
+                              {isMarked
+                                ? `Принято${stageMark?.updatedAt ? ` · ${formatDateTimeValue(stageMark.updatedAt)}` : ''}`
+                                : 'Ожидает принятия'}
+                            </div>
                           </div>
                         </div>
                         <span className={`telegram-stage-pill ${isMarked ? 'telegram-stage-pill-complete' : 'telegram-stage-pill-pending'}`}>
@@ -790,11 +895,20 @@ function OrderDetail() {
                       <div className="telegram-stage-card-actions">
                         <button
                           className={`btn ${isMarked ? 'btn-secondary' : 'btn-primary'}`}
-                          onClick={() => applyTelegramStageMark(stage.columnKey)}
+                          onClick={() => updateTelegramStageMark(stage.columnKey)}
                           disabled={isBusy || isMarked}
                         >
-                          {isBusy ? 'Сохраняю...' : isMarked ? 'Этап принят' : 'Принять этап'}
+                          {isMarkBusy ? 'Сохраняю...' : isMarked ? 'Этап принят' : 'Принять этап'}
                         </button>
+                        {isMarked && (
+                          <button
+                            className="btn btn-secondary telegram-stage-reset-btn"
+                            onClick={() => updateTelegramStageMark(stage.columnKey, { clear: true })}
+                            disabled={isBusy}
+                          >
+                            {isClearBusy ? 'Отменяю...' : 'Отменить принятие'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -803,95 +917,177 @@ function OrderDetail() {
             )}
           </div>
 
-          <div className="telegram-package-section">
-            <div className="telegram-section-title">Комплектация изделия</div>
+          {(sessionLoading || sessionError || canManagePackage) && (
+            <div className="telegram-package-section">
+              <div className="telegram-section-title">Комплектация изделия</div>
 
-            {sessionLoading && (
-              <div className="telegram-empty-box">
-                Проверяю доступ к комплектации...
-              </div>
-            )}
-
-            {!sessionLoading && !sessionError && telegramEmployee && !canManagePackage && (
-              <div className="telegram-empty-box">
-                У сотрудника нет доступа к комплектации изделия.
-              </div>
-            )}
-
-            {canManagePackage && (
-              <>
-                <div className="telegram-package-meta">
-                  Выполнено {packageStats.completed} из {packageStats.total}
+              {sessionLoading && (
+                <div className="telegram-empty-box">
+                  Проверяю доступ к комплектации...
                 </div>
+              )}
 
-                <div className="telegram-package-input-row">
-                  <input
-                    type="text"
-                    value={packageDraft}
-                    onChange={(event) => {
-                      setPackageDraft(event.target.value);
-                      setPackageError('');
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        addTelegramPackageItem();
-                      }
-                    }}
-                    placeholder="Добавить позицию, например отвертка"
-                    disabled={packageBusyKey === 'add'}
-                  />
-                  <button
-                    className="btn btn-primary"
-                    onClick={addTelegramPackageItem}
-                    disabled={packageBusyKey === 'add'}
-                  >
-                    {packageBusyKey === 'add' ? 'Добавляю...' : 'Добавить'}
-                  </button>
+              {canManagePackage && (
+                <>
+                  <div className="telegram-package-meta">
+                    Выполнено {packageStats.completed} из {packageStats.total}
+                  </div>
+
+                  <div className="telegram-package-input-row">
+                    <input
+                      type="text"
+                      value={packageDraft}
+                      onChange={(event) => {
+                        setPackageDraft(event.target.value);
+                        setPackageError('');
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          addTelegramPackageItem();
+                        }
+                      }}
+                      placeholder="Добавить позицию, например отвертка"
+                      disabled={packageBusyKey === 'add'}
+                    />
+                    <button
+                      className="btn btn-primary"
+                      onClick={addTelegramPackageItem}
+                      disabled={packageBusyKey === 'add'}
+                    >
+                      {packageBusyKey === 'add' ? 'Добавляю...' : 'Добавить'}
+                    </button>
+                  </div>
+
+                  {packageError && (
+                    <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                      {packageError}
+                    </div>
+                  )}
+
+                  {packageStats.items.length > 0 ? (
+                    <div className="telegram-package-list">
+                      {packageStats.items.map((packageItem) => {
+                        const toggleKey = `toggle:${packageItem.id}`;
+                        const isBusy = packageBusyKey === toggleKey;
+                        return (
+                          <label
+                            key={packageItem.id}
+                            className={`telegram-package-item${packageItem.isCompleted ? ' telegram-package-item-complete' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={packageItem.isCompleted}
+                              onChange={() => toggleTelegramPackageItem(packageItem.id)}
+                              disabled={isBusy}
+                            />
+                            <span className="telegram-package-item-name">{packageItem.name}</span>
+                            <span className="telegram-package-item-status">
+                              {isBusy
+                                ? 'Сохраняю...'
+                                : packageItem.isCompleted
+                                  ? 'Исполнено'
+                                  : 'Ожидает'}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="telegram-empty-box">
+                      Позиции комплектации пока не добавлены.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {(sessionLoading || sessionError || canManageMaterialRequests) && (
+            <div className="telegram-package-section telegram-material-request-section">
+              <div className="telegram-section-title">Заявки на расходники</div>
+
+              {sessionLoading && (
+                <div className="telegram-empty-box">
+                  Проверяю доступ к заявкам на расходники...
                 </div>
+              )}
 
-                {packageError && (
-                  <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
-                    {packageError}
+              {canManageMaterialRequests && (
+                <>
+                  <div className="telegram-package-meta telegram-material-request-meta">
+                    Важные заявки: исполнено {materialRequestStats.completed} из {materialRequestStats.total}
                   </div>
-                )}
 
-                {packageStats.items.length > 0 ? (
-                  <div className="telegram-package-list">
-                    {packageStats.items.map((packageItem) => {
-                      const toggleKey = `toggle:${packageItem.id}`;
-                      const isBusy = packageBusyKey === toggleKey;
-                      return (
-                        <label
-                          key={packageItem.id}
-                          className={`telegram-package-item${packageItem.isCompleted ? ' telegram-package-item-complete' : ''}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={packageItem.isCompleted}
-                            onChange={() => toggleTelegramPackageItem(packageItem.id)}
-                            disabled={isBusy}
-                          />
-                          <span className="telegram-package-item-name">{packageItem.name}</span>
-                          <span className="telegram-package-item-status">
-                            {isBusy
-                              ? 'Сохраняю...'
-                              : packageItem.isCompleted
-                                ? 'Исполнено'
-                                : 'Ожидает'}
-                          </span>
-                        </label>
-                      );
-                    })}
+                  <div className="telegram-package-input-row">
+                    <input
+                      type="text"
+                      value={materialRequestDraft}
+                      onChange={(event) => {
+                        setMaterialRequestDraft(event.target.value);
+                        setMaterialRequestError('');
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          addTelegramMaterialRequestItem();
+                        }
+                      }}
+                      placeholder="Добавить заявку, например сверло"
+                      disabled={materialRequestBusyKey === 'add'}
+                    />
+                    <button
+                      className="btn btn-primary"
+                      onClick={addTelegramMaterialRequestItem}
+                      disabled={materialRequestBusyKey === 'add'}
+                    >
+                      {materialRequestBusyKey === 'add' ? 'Добавляю...' : 'Добавить'}
+                    </button>
                   </div>
-                ) : (
-                  <div className="telegram-empty-box">
-                    Позиции комплектации пока не добавлены.
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+
+                  {materialRequestError && (
+                    <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                      {materialRequestError}
+                    </div>
+                  )}
+
+                  {materialRequestStats.items.length > 0 ? (
+                    <div className="telegram-package-list">
+                      {materialRequestStats.items.map((requestItem) => {
+                        const toggleKey = `toggle:${requestItem.id}`;
+                        const isBusy = materialRequestBusyKey === toggleKey;
+                        return (
+                          <label
+                            key={requestItem.id}
+                            className={`telegram-package-item telegram-material-request-item${requestItem.isCompleted ? ' telegram-package-item-complete' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={requestItem.isCompleted}
+                              onChange={() => toggleTelegramMaterialRequestItem(requestItem.id)}
+                              disabled={isBusy}
+                            />
+                            <span className="telegram-package-item-name">{requestItem.name}</span>
+                            <span className="telegram-package-item-status">
+                              {isBusy
+                                ? 'Сохраняю...'
+                                : requestItem.isCompleted
+                                  ? 'Исполнено'
+                                  : 'Срочно'}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="telegram-empty-box">
+                      Заявки на расходники пока не добавлены.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <div className="table-scroll">
@@ -906,6 +1102,7 @@ function OrderDetail() {
               <tr><td><strong>Кол-во изделий</strong></td><td>{selectedItem?.quantity || primaryItem?.quantity || 1}</td></tr>
               <tr><td><strong>Материал</strong></td><td>{selectedItem?.material || primaryItem?.material || '—'}</td></tr>
               <tr><td><strong>Комплектация</strong></td><td>{selectedItem?.packageName || '—'}</td></tr>
+              <tr><td><strong>Заявки на расходники</strong></td><td>{materialRequestStats.total > 0 ? `${materialRequestStats.completed}/${materialRequestStats.total}` : '—'}</td></tr>
               <tr><td><strong>Примечания</strong></td><td>{selectedItem?.notes || primaryItem?.notes || '—'}</td></tr>
               <tr><td><strong>Дата заказа</strong></td><td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td></tr>
               <tr><td><strong>Начало изготовления</strong></td><td>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td></tr>

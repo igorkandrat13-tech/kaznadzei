@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import ConfirmDialog from './ConfirmDialog';
@@ -54,6 +54,7 @@ function buildLegendSaveErrorMessage({
 function Admin() {
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { roleTabs, allRoleTabs, refreshRoleConfig, getRoleMetaByKey } = useRoleConfig();
   const getDefaultEmployeeForm = (role = '') => ({
     ...emptyEmployeeForm,
@@ -116,6 +117,12 @@ function Admin() {
   const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
   const backupImportInputRef = useRef(null);
   const settingsTabs = buildSettingsTabs();
+  const settingsTabKeySet = useMemo(() => new Set(settingsTabs.map((tab) => tab.key)), [settingsTabs]);
+  const requestedSettingsTab = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const nextTab = String(params.get('tab') || '').trim();
+    return settingsTabKeySet.has(nextTab) ? nextTab : 'general';
+  }, [location.search, settingsTabKeySet]);
   const filteredSteps = steps.filter(s => s.role === selectedStepsRole).sort((a, b) => a.order - b.order);
   const employeeForm = employeeModalMode === 'edit' ? editEmployee : newEmployee;
   const legendItems = useMemo(() => {
@@ -304,6 +311,12 @@ function Admin() {
       setSelectedStepsRole(roleTabs[0]?.key || '');
     }
   }, [roleTabs, selectedStepsRole]);
+
+  useEffect(() => {
+    if (activeRole !== requestedSettingsTab) {
+      setActiveRole(requestedSettingsTab);
+    }
+  }, [activeRole, requestedSettingsTab]);
 
   useEffect(() => {
     fetchSteps();
@@ -556,6 +569,12 @@ function Admin() {
   const getRoleLabel = (role) => {
     return allRoleTabs.find(item => item.key === role)?.label || role;
   };
+
+  const handleSettingsTabChange = useCallback((nextTab) => {
+    const normalizedTab = settingsTabKeySet.has(nextTab) ? nextTab : 'general';
+    setActiveRole(normalizedTab);
+    navigate(normalizedTab === 'general' ? '/settings' : `/settings?tab=${normalizedTab}`, { replace: true });
+  }, [navigate, settingsTabKeySet]);
 
   const getEmployeeTelegramSummary = (employee) => {
     if (!employee.telegramUserId) {
@@ -1421,7 +1440,7 @@ function Admin() {
   if (activeRole === 'general') {
     return (
       <div>
-        <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+        <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={settingsTabs} />
 
           <div className="card">
             <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
@@ -1627,7 +1646,7 @@ function Admin() {
   if (activeRole === 'employees') {
     return (
       <div>
-        <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+        <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={settingsTabs} />
 
           <div className="card" style={{ marginBottom: 20 }}>
             <p>Список сотрудников для входа в Telegram-бот и работы с заказами по ролям.</p>
@@ -1707,7 +1726,7 @@ function Admin() {
   if (activeRole === 'colors') {
     return (
       <div>
-        <SettingsHeader title="⚙️ Настройки — Этапы производства" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+        <SettingsHeader title="⚙️ Настройки — Этапы производства" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={settingsTabs} />
 
           <div className="card">
             <p>Здесь настраиваются этапы производства, цвета ячеек второй строки и привязка колонок для единой таблицы заказов.</p>
