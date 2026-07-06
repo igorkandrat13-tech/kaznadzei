@@ -172,12 +172,13 @@ function Admin() {
     }
     return fallbackAllowedColumns.filter((columnKey) => Boolean(optionsByKey[columnKey]));
   }, [getOwnAllowedColumns, getRoleMetaByKey]);
-  const getAllowedColumnsSummary = (entity, { ownOnly = false, optionsByKey = roleColumnOptionsByKey, columnOptions = ROLE_COLUMN_ACCESS_OPTIONS } = {}) => {
+  const getAllowedColumnsSummary = (entity, { ownOnly = false, optionsByKey = roleColumnOptionsByKey, columnOptions = null } = {}) => {
     const allowedColumns = ownOnly
       ? getOwnAllowedColumns(entity, optionsByKey)
       : getEntityAllowedColumns(entity, optionsByKey);
     if (allowedColumns.length === 0) return 'Нет доступных колонок';
-    const labels = columnOptions
+    const resolvedColumnOptions = Array.isArray(columnOptions) ? columnOptions : Object.values(optionsByKey || {});
+    const labels = resolvedColumnOptions
       .filter((column) => allowedColumns.includes(column.key))
       .map((column) => column.label);
     if (labels.length <= 3) return labels.join(', ');
@@ -203,14 +204,26 @@ function Admin() {
       const header = getHeaderByPrimaryColumnIndex(column.primaryColumnIndex);
       return {
         ...column,
+        headerLabel: header?.label || '',
+        legendKey: header?.legendKey || '',
+        useTableBackground: Boolean(header?.useTableBackground),
         previewColor: header?.useTableBackground ? '#0C1A2A' : (header?.hex || '#DCEBFA'),
       };
     });
   }, [orderStageLegendConfig]);
-  const employeeColumnOptions = useMemo(
-    () => roleColumnOptions.filter((column) => !EMPLOYEE_HIDDEN_COLUMN_KEYS.has(column.key)),
-    [roleColumnOptions],
-  );
+  const employeeColumnOptions = useMemo(() => {
+    return roleColumnOptions
+      .filter((column) => (
+        !EMPLOYEE_HIDDEN_COLUMN_KEYS.has(column.key)
+        && column.legendKey
+        && !column.useTableBackground
+      ))
+      .map((column) => ({
+        ...column,
+        label: column.headerLabel || column.label,
+        description: column.label,
+      }));
+  }, [roleColumnOptions]);
   const roleColumnOptionsByKey = useMemo(() => {
     return roleColumnOptions.reduce((acc, column) => {
       acc[column.key] = column;
