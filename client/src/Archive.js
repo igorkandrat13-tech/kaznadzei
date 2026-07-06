@@ -68,7 +68,7 @@ function getSecondaryHeaderBackground(header = null) {
 }
 function getSecondaryHeaderTextColor(header = null) {
   if (!header) return '#000000';
-  if (header.useTableBackground) return '#D8ECFF';
+  if (header.useTableBackground) return '#000000';
   return String(header.textHex || '').trim() || '#000000';
 }
 function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {

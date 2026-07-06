@@ -155,6 +155,11 @@ function Admin() {
     }
     setNewEmployee(nextValue);
   };
+  const getOwnAllowedColumns = useCallback((entity, optionsByKey = null) => {
+    const normalized = normalizeAllowedColumns(entity?.allowedColumns, { fallbackToAll: false });
+    if (!optionsByKey) return normalized;
+    return normalized.filter((columnKey) => Boolean(optionsByKey[columnKey]));
+  }, []);
   const getEntityAllowedColumns = useCallback((entity, optionsByKey = null) => {
     const ownAllowedColumns = getOwnAllowedColumns(entity, optionsByKey);
     if (ownAllowedColumns.length > 0 || Array.isArray(entity?.allowedColumns)) {
@@ -218,11 +223,6 @@ function Admin() {
       return acc;
     }, {});
   }, [employeeColumnOptions]);
-  const getOwnAllowedColumns = useCallback((entity, optionsByKey = null) => {
-    const normalized = normalizeAllowedColumns(entity?.allowedColumns, { fallbackToAll: false });
-    if (!optionsByKey) return normalized;
-    return normalized.filter((columnKey) => Boolean(optionsByKey[columnKey]));
-  }, []);
   const renderAllowedColumnsMarkers = (entity, { compact = false, ownOnly = false, optionsByKey = roleColumnOptionsByKey } = {}) => {
     const allowedColumns = ownOnly
       ? getOwnAllowedColumns(entity, optionsByKey)
