@@ -1550,6 +1550,9 @@ function OrdersWorkspace() {
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
+    const actorName = !manualClear && manualMark?.updatedBy && columnKey !== 'carpenter'
+      ? String(manualMark.updatedBy).trim()
+      : '';
     const columnHeader = getSecondaryHeaderForPrimaryColumn(
       getPrimaryColumnIndexForManualStageColumn(columnKey),
       secondaryHeaderSchema,
@@ -1559,6 +1562,7 @@ function OrdersWorkspace() {
     const className = cn(
       baseClassName,
       manualMark ? 'manual-stage-cell-marked' : '',
+      actorName ? 'manual-stage-cell-actor-visible' : '',
       canSelectCell ? 'manual-stage-cell-selectable' : '',
       isSelected ? 'manual-stage-cell-selected' : '',
     );
@@ -1594,6 +1598,7 @@ function OrdersWorkspace() {
       style,
       onClick: canSelectCell ? (event) => handleManualStageCellClick(event, rowKey, columnKey) : undefined,
       'data-manual-stage-cell-key': buildManualStageCellKey(rowKey, columnKey),
+      'data-manual-stage-actor': actorName,
       title,
     };
   }, [canEditManualColumn, handleManualStageCellClick, secondaryHeaderSchema, selectedStageCellKeys]);

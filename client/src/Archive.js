@@ -551,6 +551,9 @@ function Archive() {
   const getReadOnlyCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle) => {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
+    const actorName = !manualClear && manualMark?.updatedBy && columnKey !== 'carpenter'
+      ? String(manualMark.updatedBy).trim()
+      : '';
     const columnHeader = getSecondaryHeaderForPrimaryColumn(
       getPrimaryColumnIndexForManualStageColumn(columnKey),
       secondaryHeaderSchema,
@@ -583,9 +586,10 @@ function Archive() {
           : undefined);
 
     return {
-      className: baseClassName,
+      className: cn(baseClassName, actorName && 'manual-stage-cell-actor-visible'),
       style,
       'data-manual-stage-cell-key': `${rowKey}::${columnKey}`,
+      'data-manual-stage-actor': actorName,
       title,
     };
   }, [secondaryHeaderSchema]);

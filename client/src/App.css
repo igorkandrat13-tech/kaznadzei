@@ -4303,6 +4303,22 @@ body .attachment-preview-table td {
   box-shadow: inset 0 0 0 2px rgba(14, 22, 34, 0.5), inset 0 0 0 4px rgba(76, 208, 255, 0.9);
 }
 
+.unified-orders-table td.manual-stage-cell-actor-visible {
+  white-space: normal;
+}
+
+.unified-orders-table td.manual-stage-cell-actor-visible::after {
+  content: attr(data-manual-stage-actor);
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  opacity: 0.92;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .unified-orders-table .comments-cell {
   min-width: 220px;
   max-width: 320px;
@@ -6579,6 +6595,10 @@ body .manual-stage-cell-selected {
 
 body .manual-stage-cell-marked.manual-stage-cell-selected {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.84), inset 0 0 0 4px rgba(41, 131, 210, 0.92);
+}
+
+body .unified-orders-table td.manual-stage-cell-actor-visible::after {
+  opacity: 0.84;
 }
 
 body .unified-orders-table thead .sticky-col.sticky-col-2,
