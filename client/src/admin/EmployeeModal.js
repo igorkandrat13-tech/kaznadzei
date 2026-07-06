@@ -145,7 +145,9 @@ function EmployeeModal({
                 />
                 <span className="role-columns-picker-body">
                   <span className="role-columns-picker-title" style={{ color: column.textColor }}>{column.label}</span>
-                  <span className="role-columns-picker-description" style={{ color: column.descriptionColor }}>{column.description}</span>
+                  {column.description ? (
+                    <span className="role-columns-picker-description" style={{ color: column.descriptionColor }}>{column.description}</span>
+                  ) : null}
                 </span>
               </label>
             );

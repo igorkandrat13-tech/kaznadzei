@@ -221,7 +221,7 @@ function Admin() {
       .map((column) => ({
         ...column,
         label: column.headerLabel || column.label,
-        description: column.label,
+        description: '',
       }));
   }, [roleColumnOptions]);
   const roleColumnOptionsByKey = useMemo(() => {
