@@ -17,11 +17,12 @@ import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
 import { useRoleConfig } from './RoleConfigContext';
 import { buildOrderStageLegendConfig } from './orderStageLegend';
-import { ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
+import { ROLE_COLUMN_ACCESS_OPTIONS, normalizeAllowedColumns } from './roleColumnAccess';
 import useEscapeKey from './useEscapeKey';
 import { Button, Modal, ModalHeader } from './ui';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+const EMPLOYEE_HIDDEN_COLUMN_KEYS = new Set(['orderNumber', 'customer']);
 
 function buildLegendSaveErrorMessage({
   summary,
@@ -154,20 +155,24 @@ function Admin() {
     }
     setNewEmployee(nextValue);
   };
-  const getEntityAllowedColumns = useCallback((entity) => {
-    if (Array.isArray(entity?.allowedColumns)) {
-      return entity.allowedColumns;
+  const getEntityAllowedColumns = useCallback((entity, optionsByKey = null) => {
+    const ownAllowedColumns = getOwnAllowedColumns(entity, optionsByKey);
+    if (ownAllowedColumns.length > 0 || Array.isArray(entity?.allowedColumns)) {
+      return ownAllowedColumns;
     }
     const fallbackRole = getRoleMetaByKey(String(entity?.role || '').trim());
-    if (Array.isArray(fallbackRole?.allowedColumns)) {
-      return fallbackRole.allowedColumns;
+    const fallbackAllowedColumns = normalizeAllowedColumns(fallbackRole?.allowedColumns, { fallbackToAll: false });
+    if (!optionsByKey) {
+      return fallbackAllowedColumns;
     }
-    return [];
-  }, [getRoleMetaByKey]);
-  const getAllowedColumnsSummary = (entity) => {
-    const allowedColumns = getEntityAllowedColumns(entity);
+    return fallbackAllowedColumns.filter((columnKey) => Boolean(optionsByKey[columnKey]));
+  }, [getOwnAllowedColumns, getRoleMetaByKey]);
+  const getAllowedColumnsSummary = (entity, { ownOnly = false, optionsByKey = roleColumnOptionsByKey, columnOptions = ROLE_COLUMN_ACCESS_OPTIONS } = {}) => {
+    const allowedColumns = ownOnly
+      ? getOwnAllowedColumns(entity, optionsByKey)
+      : getEntityAllowedColumns(entity, optionsByKey);
     if (allowedColumns.length === 0) return 'Нет доступных колонок';
-    const labels = ROLE_COLUMN_ACCESS_OPTIONS
+    const labels = columnOptions
       .filter((column) => allowedColumns.includes(column.key))
       .map((column) => column.label);
     if (labels.length <= 3) return labels.join(', ');
@@ -197,24 +202,41 @@ function Admin() {
       };
     });
   }, [orderStageLegendConfig]);
+  const employeeColumnOptions = useMemo(
+    () => roleColumnOptions.filter((column) => !EMPLOYEE_HIDDEN_COLUMN_KEYS.has(column.key)),
+    [roleColumnOptions],
+  );
   const roleColumnOptionsByKey = useMemo(() => {
     return roleColumnOptions.reduce((acc, column) => {
       acc[column.key] = column;
       return acc;
     }, {});
   }, [roleColumnOptions]);
-  const renderAllowedColumnsMarkers = (entity, { compact = false } = {}) => {
-    const allowedColumns = getEntityAllowedColumns(entity);
+  const employeeColumnOptionsByKey = useMemo(() => {
+    return employeeColumnOptions.reduce((acc, column) => {
+      acc[column.key] = column;
+      return acc;
+    }, {});
+  }, [employeeColumnOptions]);
+  const getOwnAllowedColumns = useCallback((entity, optionsByKey = null) => {
+    const normalized = normalizeAllowedColumns(entity?.allowedColumns, { fallbackToAll: false });
+    if (!optionsByKey) return normalized;
+    return normalized.filter((columnKey) => Boolean(optionsByKey[columnKey]));
+  }, []);
+  const renderAllowedColumnsMarkers = (entity, { compact = false, ownOnly = false, optionsByKey = roleColumnOptionsByKey } = {}) => {
+    const allowedColumns = ownOnly
+      ? getOwnAllowedColumns(entity, optionsByKey)
+      : getEntityAllowedColumns(entity, optionsByKey);
     if (allowedColumns.length === 0) {
       return <span className="text-subtle">Нет доступа</span>;
     }
     return (
       <div
         className={`role-allowed-columns-markers ${compact ? 'role-allowed-columns-markers-compact' : ''}`}
-        title={getAllowedColumnsSummary(entity)}
+        title={getAllowedColumnsSummary(entity, { ownOnly, optionsByKey })}
       >
         {allowedColumns.map((columnKey) => {
-          const column = roleColumnOptionsByKey[columnKey];
+          const column = optionsByKey[columnKey];
           if (!column) return null;
           return (
             <span
@@ -809,7 +831,7 @@ function Admin() {
     setEditEmployee({
       ...getDefaultEmployeeForm(employee.role),
       ...employee,
-      allowedColumns: [...getEntityAllowedColumns(employee)],
+      allowedColumns: [...getOwnAllowedColumns(employee, employeeColumnOptionsByKey)],
     });
     setEmployeeModalMode('edit');
     setSettingsError('');
@@ -967,10 +989,14 @@ function Admin() {
     setSettingsSuccess('');
     setSavingEmployee(true);
     try {
+      const payload = {
+        ...newEmployee,
+        allowedColumns: getOwnAllowedColumns(newEmployee, employeeColumnOptionsByKey),
+      };
       const res = await apiFetch('/api/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEmployee),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         setSettingsError(await getErrorMessage(res, 'Не удалось добавить сотрудника.'));
@@ -993,10 +1019,14 @@ function Admin() {
     setSettingsSuccess('');
     setSavingEmployee(true);
     try {
+      const payload = {
+        ...editEmployee,
+        allowedColumns: getOwnAllowedColumns(editEmployee, employeeColumnOptionsByKey),
+      };
       const res = await apiFetch(`/api/employees/${editEmployee._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editEmployee),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         setSettingsError(await getErrorMessage(res, 'Не удалось обновить сотрудника.'));
@@ -1195,7 +1225,7 @@ function Admin() {
         onUpdate={handleUpdateEmployee}
         onClose={closeEmployeeModal}
         saving={savingEmployee}
-        columnOptions={roleColumnOptions}
+        columnOptions={employeeColumnOptions}
       />
 
       {stageManagerRoleKey ? (
@@ -1608,7 +1638,7 @@ function Admin() {
                     <tr key={employee._id}>
                       <td>{employee.fullName}</td>
                       <td>{getRoleLabel(employee.role) || '—'}</td>
-                      <td>{renderAllowedColumnsMarkers(employee, { compact: true })}</td>
+                      <td>{renderAllowedColumnsMarkers(employee, { compact: true, ownOnly: true, optionsByKey: employeeColumnOptionsByKey })}</td>
                       <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
                       <td>{getEmployeeTelegramSummary(employee)}</td>
                       <td>{employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</td>
@@ -1639,7 +1669,7 @@ function Admin() {
                   </div>
                   <div className="mobile-settings-card-note">
                     <strong>Колонки:</strong>
-                    <div style={{ marginTop: 8 }}>{renderAllowedColumnsMarkers(employee, { compact: true })}</div>
+                    <div style={{ marginTop: 8 }}>{renderAllowedColumnsMarkers(employee, { compact: true, ownOnly: true, optionsByKey: employeeColumnOptionsByKey })}</div>
                   </div>
                   {employee.telegramUserId ? (
                     <div className="mobile-settings-card-note">
