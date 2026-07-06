@@ -105,6 +105,7 @@ function EmployeeModal({
             />
             <Button
               variant="secondary"
+              className="employee-pin-generate-btn"
               disabled={saving}
               onClick={() => setEmployeeForm({ ...employeeForm, pinCode: generatePinCode() })}
             >

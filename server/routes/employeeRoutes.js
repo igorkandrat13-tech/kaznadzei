@@ -3,7 +3,7 @@ const EmployeeStore = require('../stores/employeeStore');
 const SettingsStore = require('../stores/settingsStore');
 const { requireAdminAccess } = require('../middleware/security');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
-const { sendMessage } = require('../services/telegramService');
+const { sendMessage, setChatMenuButton } = require('../services/telegramService');
 const { sanitizeEmployeeInput } = require('../utils/validators');
 
 const router = express.Router();
@@ -93,11 +93,13 @@ router.delete('/employees/:id', requireAdminAccess(), (req, res) => {
     return;
   }
 
-  sendMessage(
-    token,
-    chatId,
-    `Ваш профиль в системе Kaznadzei удален администратором.\nСотрудник: ${employee.fullName}\nДоступ к заказам и Telegram-функциям отключен.\nЕсли это ошибка, обратитесь к администратору.`
-  )
+  setChatMenuButton(token, { chatId, type: 'default' })
+    .catch(() => null)
+    .then(() => sendMessage(
+      token,
+      chatId,
+      `Ваш профиль в системе Kaznadzei удален администратором.\nСотрудник: ${employee.fullName}\nДоступ к заказам и Telegram-функциям отключен.\nЕсли это ошибка, обратитесь к администратору.`
+    ))
     .then(() => finishResponse())
     .catch(() => finishResponse('Сотрудник удален, но уведомление в Telegram отправить не удалось.'));
 });

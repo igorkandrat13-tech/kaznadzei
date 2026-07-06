@@ -1621,6 +1621,19 @@ body .order-primary-title-button-badge {
   background: linear-gradient(135deg, #274567, #345f90);
 }
 
+.employee-pin-generate-btn.btn-secondary {
+  background: linear-gradient(135deg, #e3eefb, #f3f9ff);
+  color: #173857;
+  border-color: rgba(111, 156, 203, 0.24);
+  box-shadow: 0 8px 18px rgba(60, 97, 138, 0.1);
+}
+
+.employee-pin-generate-btn.btn-secondary:hover {
+  background: linear-gradient(135deg, #edf5ff, #fbfdff);
+  border-color: rgba(99, 159, 221, 0.32);
+  color: #102b45;
+}
+
 .btn-danger {
   background: linear-gradient(135deg, #d54f4f, #ff7171);
   color: white;
