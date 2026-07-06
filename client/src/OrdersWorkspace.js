@@ -1567,9 +1567,17 @@ function OrdersWorkspace() {
         }
       : baseStyle;
     const title = manualMark
-      ? `${manualMark.legendKey || 'Ручная дата'}${manualMark.updatedAt ? ` • ${new Date(manualMark.updatedAt).toLocaleString()}` : ''}`
+      ? [
+          manualMark.legendKey || 'Ручная дата',
+          manualMark.updatedBy ? `Сотрудник: ${manualMark.updatedBy}` : '',
+          manualMark.updatedAt ? new Date(manualMark.updatedAt).toLocaleString() : '',
+        ].filter(Boolean).join(' • ')
       : (manualClear
-          ? `Сброшено${manualClear.updatedAt ? ` • ${new Date(manualClear.updatedAt).toLocaleString()}` : ''}`
+          ? [
+              'Сброшено',
+              manualClear.updatedBy ? `Сотрудник: ${manualClear.updatedBy}` : '',
+              manualClear.updatedAt ? new Date(manualClear.updatedAt).toLocaleString() : '',
+            ].filter(Boolean).join(' • ')
           : undefined);
 
     return {

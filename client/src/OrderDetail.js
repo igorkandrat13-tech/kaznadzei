@@ -767,7 +767,7 @@ function OrderDetail() {
                             </div>
                             <div className="telegram-stage-card-subtitle">
                               {isMarked
-                                ? `Принято${stageMark?.updatedAt ? ` · ${formatDateTimeValue(stageMark.updatedAt)}` : ''}`
+                                ? `Принято${stageMark?.updatedBy ? ` · ${stageMark.updatedBy}` : ''}${stageMark?.updatedAt ? ` · ${formatDateTimeValue(stageMark.updatedAt)}` : ''}`
                                 : 'Ожидает принятия'}
                             </div>
                           </div>
@@ -911,4 +911,3 @@ function OrderDetail() {
 }
 
 export default OrderDetail;
-

@@ -829,6 +829,7 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
     const settings = SettingsStore.get();
     const secondaryHeaders = settings?.orderStageLegendConfig?.secondaryHeaders || [];
     const legendKey = resolveLegendKeyForManualStageColumn(context.columnKey, secondaryHeaders);
+    const stageActorName = getTelegramEmployeeDisplayName(employee) || employee.role || 'telegram';
     if (!context.clear && !legendKey) {
       return res.status(400).json({ message: 'Для выбранной колонки не найден цветовой этап.' });
     }
@@ -838,9 +839,32 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
       itemId: context.itemId,
       columnKey: context.columnKey,
       legendKey: context.clear ? '' : legendKey,
-    }], '', employee.fullName || employee.role || 'telegram');
+    }], '', stageActorName);
 
     if (!Array.isArray(updatedOrders) || updatedOrders.length === 0) {
+      if (context.clear) {
+        const currentOrder = OrderStore.findById(req.params.id);
+        const currentItem = OrderStore.getOrderItem(currentOrder, context.itemId) || null;
+        const stageMark = currentItem?.manualStageMarks?.[context.columnKey] || null;
+        const stageCleared = Boolean(currentItem?.manualStageClears?.[context.columnKey]);
+
+        // Treat repeated "clear" requests as successful when the stage is already unmarked.
+        if (currentOrder && currentItem && (!stageMark || stageCleared)) {
+          const allowedColumns = Array.from(getEmployeeAllowedColumns(employee));
+
+          return res.json({
+            ok: true,
+            order: currentOrder,
+            item: currentItem,
+            employee: {
+              _id: employee._id,
+              fullName: employee.fullName,
+              role: employee.role,
+              allowedColumns,
+            },
+          });
+        }
+      }
       return res.status(400).json({ message: 'Не удалось отметить этап.' });
     }
 
@@ -1734,4 +1758,3 @@ router.get('/orders/:id/qrcode', async (req, res) => {
 });
 
 module.exports = router;
-
