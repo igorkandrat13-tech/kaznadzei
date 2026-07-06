@@ -26,13 +26,15 @@ export function SettingsHeader({ title, onBack, activeRole, onTabChange, tabs = 
         <h2>{title}</h2>
         <Button onClick={onBack}>← Назад</Button>
       </div>
-      <div className="tabs">
-        {tabs.map(tab => (
-          <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => onTabChange(tab.key)} type="button">
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {tabs.length > 0 ? (
+        <div className="tabs">
+          {tabs.map(tab => (
+            <button key={tab.key} className={`tab ${activeRole === tab.key ? 'tab-active' : ''}`} onClick={() => onTabChange(tab.key)} type="button">
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

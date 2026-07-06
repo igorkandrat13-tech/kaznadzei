@@ -1440,7 +1440,7 @@ function Admin() {
   if (activeRole === 'general') {
     return (
       <div>
-        <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={settingsTabs} />
+        <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />
 
           <div className="card">
             <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
@@ -1646,7 +1646,7 @@ function Admin() {
   if (activeRole === 'employees') {
     return (
       <div>
-        <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={settingsTabs} />
+        <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />
 
           <div className="card" style={{ marginBottom: 20 }}>
             <p>Список сотрудников для входа в Telegram-бот и работы с заказами по ролям.</p>
@@ -1726,7 +1726,7 @@ function Admin() {
   if (activeRole === 'colors') {
     return (
       <div>
-        <SettingsHeader title="⚙️ Настройки — Этапы производства" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={settingsTabs} />
+        <SettingsHeader title="⚙️ Настройки — Этапы производства" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />
 
           <div className="card">
             <p>Здесь настраиваются этапы производства, цвета ячеек второй строки и привязка колонок для единой таблицы заказов.</p>
