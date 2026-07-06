@@ -24,9 +24,17 @@ const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
   'notes',
   'deliveryDate',
   'carpenter',
-  'photoLink',
+  'materialRequests',
   'paint',
 ];
+const LEGACY_ORDER_COLUMN_KEY_MAP = {
+  photoLink: 'materialRequests',
+};
+
+function normalizeOrderColumnKey(columnKey = '') {
+  const normalizedColumnKey = String(columnKey || '').trim();
+  return LEGACY_ORDER_COLUMN_KEY_MAP[normalizedColumnKey] || normalizedColumnKey;
+}
 
 function compareSteps(a, b) {
   const roleOrder = RoleStore.findAll({ includeDeleted: true }).map(role => role.key);
@@ -124,7 +132,7 @@ function normalizeManualStageMarks(source = {}) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
 
   return Object.entries(source).reduce((acc, [columnKey, mark]) => {
-    const normalizedColumnKey = String(columnKey || '').trim();
+    const normalizedColumnKey = normalizeOrderColumnKey(columnKey);
     if (!normalizedColumnKey || !mark || typeof mark !== 'object') return acc;
 
     const legendKey = String(mark.legendKey || '').trim();
@@ -144,7 +152,7 @@ function normalizeManualStageClears(source = {}) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
 
   return Object.entries(source).reduce((acc, [columnKey, clearMeta]) => {
-    const normalizedColumnKey = String(columnKey || '').trim();
+    const normalizedColumnKey = normalizeOrderColumnKey(columnKey);
     if (!normalizedColumnKey || !clearMeta || typeof clearMeta !== 'object') return acc;
 
     acc[normalizedColumnKey] = {
@@ -212,7 +220,7 @@ function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpe
     );
   }
 
-  if (columnKey === 'photoLink') {
+  if (columnKey === 'materialRequests') {
     const materialRequestItems = Array.isArray(item?.materialRequestItems) ? item.materialRequestItems : [];
     if (materialRequestItems.length === 0 || materialRequestItems.some((requestItem) => !requestItem?.isCompleted)) return '';
     return getLatestTimestamp(
@@ -541,8 +549,8 @@ function updateItemPackageState(item, nextPackageItems = []) {
 function updateItemMaterialRequestState(item, nextMaterialRequestItems = []) {
   return updateItemChecklistState(item, nextMaterialRequestItems, {
     itemsField: 'materialRequestItems',
-    legacyField: 'photoLink',
-    clearColumnKey: 'photoLink',
+    legacyField: 'materialRequests',
+    clearColumnKey: 'materialRequests',
     normalizeItems: normalizeMaterialRequestItems,
     getSummary: getMaterialRequestSummary,
   });
@@ -578,7 +586,7 @@ function buildOrderItem(source = {}, options = {}) {
   const manualStageClears = normalizeManualStageClears(source.manualStageClears);
   const quantity = Number(source.quantity) || 1;
   const packageItems = normalizePackageItems(source.packageItems, source.packageName || source.package);
-  const materialRequestItems = normalizeMaterialRequestItems(source.materialRequestItems, source.photoLink || source.materialRequests);
+  const materialRequestItems = normalizeMaterialRequestItems(source.materialRequestItems, source.materialRequests || source.photoLink);
   return {
     itemId: String(source.itemId || source._id || id()).trim(),
     itemNumber: String(source.itemNumber || source.orderItemNumber || options.defaultItemNumber || '').trim() || getDefaultItemNumber(options.index || 0),
@@ -591,7 +599,7 @@ function buildOrderItem(source = {}, options = {}) {
     material: String(source.material || '').trim(),
     packageName: getPackageSummary(packageItems),
     packageItems,
-    photoLink: getMaterialRequestSummary(materialRequestItems),
+    materialRequests: getMaterialRequestSummary(materialRequestItems),
     materialRequestItems,
     notes: String(source.notes || '').trim(),
     attachments: normalizeOrderAttachments(source.attachments),
@@ -1132,8 +1140,8 @@ const OrderStore = {
         const currentPackageItems = normalizePackageItems(currentItem?.packageItems, currentItem?.packageName);
         const nextPackageItems = normalizePackageItems(item?.packageItems, item?.packageName);
         const packageItemsChanged = JSON.stringify(currentPackageItems) !== JSON.stringify(nextPackageItems);
-        const currentMaterialRequestItems = normalizeMaterialRequestItems(currentItem?.materialRequestItems, currentItem?.photoLink);
-        const nextMaterialRequestItems = normalizeMaterialRequestItems(item?.materialRequestItems, item?.photoLink);
+        const currentMaterialRequestItems = normalizeMaterialRequestItems(currentItem?.materialRequestItems, currentItem?.materialRequests);
+        const nextMaterialRequestItems = normalizeMaterialRequestItems(item?.materialRequestItems, item?.materialRequests);
         const materialRequestItemsChanged = JSON.stringify(currentMaterialRequestItems) !== JSON.stringify(nextMaterialRequestItems);
         const nextManualStageClears = normalizeManualStageClears(item?.manualStageClears || currentItem?.manualStageClears || {});
         if (
@@ -1148,9 +1156,9 @@ const OrderStore = {
           materialRequestItemsChanged
           && nextMaterialRequestItems.length > 0
           && nextMaterialRequestItems.every((requestItem) => requestItem.isCompleted)
-          && nextManualStageClears.photoLink
+          && nextManualStageClears.materialRequests
         ) {
-          delete nextManualStageClears.photoLink;
+          delete nextManualStageClears.materialRequests;
         }
         return buildOrderItem({
           ...currentItem,
@@ -1257,7 +1265,7 @@ const OrderStore = {
     if (!itemName) return 'invalid';
 
     const nextMaterialRequestItems = [
-      ...normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
+      ...normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests),
       {
         id: String(materialRequestItem?.id || id()).trim(),
         name: itemName,
@@ -1288,7 +1296,7 @@ const OrderStore = {
     const normalizedMaterialRequestItemId = String(materialRequestItemId || '').trim();
     if (!normalizedMaterialRequestItemId) return 'invalid';
 
-    const currentMaterialRequestItems = normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink);
+    const currentMaterialRequestItems = normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests);
     const hasTargetItem = currentMaterialRequestItems.some((requestItem) => requestItem.id === normalizedMaterialRequestItemId);
     if (!hasTargetItem) return 'material_request_item_not_found';
 
@@ -1715,3 +1723,4 @@ const OrderStore = {
 };
 
 module.exports = OrderStore;
+

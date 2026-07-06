@@ -35,7 +35,7 @@ const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во �
 const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
 const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
 const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
-const ORDER_PHOTO_LINK_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
+const ORDER_MATERIAL_REQUESTS_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
 
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
@@ -95,8 +95,8 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
       return ORDER_NOTES_COLUMN_INDEX;
     case 'deliveryDate':
       return ORDER_DELIVERY_DATE_COLUMN_INDEX;
-    case 'photoLink':
-      return ORDER_PHOTO_LINK_COLUMN_INDEX;
+    case 'materialRequests':
+      return ORDER_MATERIAL_REQUESTS_COLUMN_INDEX;
     case 'carpenter':
       return ORDER_CARPENTER_COLUMN_INDEX;
     case 'paint':
@@ -379,7 +379,7 @@ function Archive() {
 
     return {
       carpenter: createColumnMeta(ORDER_CARPENTER_COLUMN_INDEX),
-      photoLink: createColumnMeta(ORDER_PHOTO_LINK_COLUMN_INDEX),
+      materialRequests: createColumnMeta(ORDER_MATERIAL_REQUESTS_COLUMN_INDEX),
       itemStart: createColumnMeta(ORDER_ITEM_START_COLUMN_INDEX),
       itemEnd: createColumnMeta(ORDER_ITEM_END_COLUMN_INDEX),
       itemDuration: createColumnMeta(ORDER_ITEM_DURATION_COLUMN_INDEX),
@@ -470,7 +470,7 @@ function Archive() {
         material: '',
         packageName: '',
         packageItems: [],
-        photoLink: '',
+        materialRequests: '',
         notes: '',
         comments: [],
         manualStageMarks: {},
@@ -587,7 +587,7 @@ function Archive() {
       <col className="col-notes" />
       <col className="col-delivery-date" />
       <col className="col-carpenter" />
-      <col className="col-photo" />
+      <col className="col-material-requests" />
       <col className="col-paint" />
       <col className="col-item-start-date" />
       <col className="col-item-end-date" />
@@ -882,7 +882,7 @@ function Archive() {
                     className: cn(packageCellPropsBase.className, 'package-cell'),
                   };
                   const paintCellProps = getReadOnlyCellProps(key, item, 'paint', `order-card-cell ${regularOrderClass}`, undefined);
-                  const photoCellProps = getReadOnlyCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, undefined);
+                  const materialRequestCellProps = getReadOnlyCellProps(key, item, 'materialRequests', `material-requests-cell ${regularOrderClass}`, undefined);
                   const notesCellProps = getReadOnlyCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined);
                   const carpenterCellProps = getReadOnlyCellProps(key, item, 'carpenter', carpenterCellClassName, carpenterCellStyle);
                   const orderNumberCellProps = getReadOnlyCellProps(
@@ -1020,8 +1020,8 @@ function Archive() {
                       <td {...carpenterCellProps} title={latestCarpenterAutoAt ? `${workerCellTitle}${workerCellTitle ? ' • ' : ''}${new Date(latestCarpenterAutoAt).toLocaleString()}` : workerCellTitle}>
                         {isPlaceholder ? '—' : workerCellText}
                       </td>
-                      <td {...photoCellProps}>
-                        {item.photoLink ? <a className="table-inline-link" href={item.photoLink} target="_blank" rel="noreferrer">Открыть</a> : '—'}
+                      <td {...materialRequestCellProps}>
+                        {item.materialRequests || '—'}
                       </td>
                       <td {...paintCellProps}>
                         {renderAttachmentCountCell(paintAttachments, paintActionStyle, 'Файлы покраски не прикреплены')}

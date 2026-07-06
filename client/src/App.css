@@ -2033,7 +2033,7 @@ body .order-primary-title-button-badge {
   --orders-col-delivery-date-width: 96px;
   --orders-col-package-width: 96px;
   --orders-col-paint-width: 92px;
-  --orders-col-photo-width: 96px;
+  --orders-col-material-requests-width: 96px;
   --orders-col-notes-width: 220px;
   --orders-col-meta-width: 84px;
   --orders-col-carpenter-width: 96px;
@@ -2988,8 +2988,8 @@ body .order-primary-title-button-badge {
   width: var(--orders-col-paint-width);
 }
 
-.unified-orders-table col.col-photo {
-  width: var(--orders-col-photo-width);
+.unified-orders-table col.col-material-requests {
+  width: var(--orders-col-material-requests-width);
 }
 
 .unified-orders-table col.col-notes {
@@ -4017,7 +4017,7 @@ body .attachment-preview-table td {
 }
 
 .unified-orders-table tbody td.order-filled-cell,
-.unified-orders-table tbody td.photo-cell.order-filled-cell,
+.unified-orders-table tbody td.material-requests-cell.order-filled-cell,
 .unified-orders-table tbody td.notes-cell.order-filled-cell,
 .unified-orders-table tbody .merged-order-cell.order-filled-cell,
 .unified-orders-table tbody .merged-order-cell.sticky-col.order-filled-cell {
@@ -4025,7 +4025,7 @@ body .attachment-preview-table td {
 }
 
 .unified-orders-table tbody tr:hover td.order-filled-cell,
-.unified-orders-table tbody tr:hover td.photo-cell.order-filled-cell,
+.unified-orders-table tbody tr:hover td.material-requests-cell.order-filled-cell,
 .unified-orders-table tbody tr:hover td.notes-cell.order-filled-cell,
 .unified-orders-table tbody tr:hover .merged-order-cell.order-filled-cell,
 .unified-orders-table tbody tr:hover .merged-order-cell.sticky-col.order-filled-cell {
@@ -4545,7 +4545,7 @@ body .attachment-preview-table td {
   word-break: break-word;
 }
 
-.photo-cell,
+.material-requests-cell,
 .notes-cell {
   transition: background 0.2s ease, color 0.2s ease;
 }
@@ -6206,7 +6206,7 @@ body .role-allowed-column-marker {
     --orders-col-delivery-date-width: 102px;
     --orders-col-package-width: 104px;
     --orders-col-paint-width: 98px;
-    --orders-col-photo-width: 104px;
+    --orders-col-material-requests-width: 104px;
     --orders-col-notes-width: 260px;
     --orders-col-meta-width: 94px;
     --orders-col-carpenter-width: 104px;
@@ -6257,7 +6257,7 @@ body .role-allowed-column-marker {
     --orders-col-delivery-date-width: 108px;
     --orders-col-package-width: 112px;
     --orders-col-paint-width: 104px;
-    --orders-col-photo-width: 112px;
+    --orders-col-material-requests-width: 112px;
     --orders-col-notes-width: 280px;
     --orders-col-meta-width: 100px;
     --orders-col-carpenter-width: 112px;
@@ -6509,7 +6509,7 @@ body .sticky-col.order-outline-cell::after {
 }
 
 body .unified-orders-table tbody td.order-filled-cell,
-body .unified-orders-table tbody td.photo-cell.order-filled-cell,
+body .unified-orders-table tbody td.material-requests-cell.order-filled-cell,
 body .unified-orders-table tbody td.notes-cell.order-filled-cell,
 body .unified-orders-table tbody .merged-order-cell.order-filled-cell,
 body .unified-orders-table tbody .merged-order-cell.sticky-col.order-filled-cell {
@@ -6517,7 +6517,7 @@ body .unified-orders-table tbody .merged-order-cell.sticky-col.order-filled-cell
 }
 
 body .unified-orders-table tbody tr:hover td.order-filled-cell,
-body .unified-orders-table tbody tr:hover td.photo-cell.order-filled-cell,
+body .unified-orders-table tbody tr:hover td.material-requests-cell.order-filled-cell,
 body .unified-orders-table tbody tr:hover td.notes-cell.order-filled-cell,
 body .unified-orders-table tbody tr:hover .merged-order-cell.order-filled-cell,
 body .unified-orders-table tbody tr:hover .merged-order-cell.sticky-col.order-filled-cell {
@@ -7396,7 +7396,7 @@ body .home-auth-status-pending {
     --orders-col-delivery-date-width: 98px;
     --orders-col-package-width: 98px;
     --orders-col-paint-width: 92px;
-    --orders-col-photo-width: 98px;
+    --orders-col-material-requests-width: 98px;
     --orders-col-notes-width: 220px;
     --orders-col-meta-width: 88px;
     --orders-col-carpenter-width: 98px;
@@ -7609,7 +7609,7 @@ body .home-auth-status-pending {
     --orders-col-delivery-date-width: 92px;
     --orders-col-package-width: 92px;
     --orders-col-paint-width: 84px;
-    --orders-col-photo-width: 92px;
+    --orders-col-material-requests-width: 92px;
     --orders-col-notes-width: 204px;
     --orders-col-meta-width: 82px;
     --orders-col-carpenter-width: 90px;
@@ -7934,7 +7934,7 @@ body .home-auth-status-pending {
     --orders-col-delivery-date-width: 84px;
     --orders-col-package-width: 84px;
     --orders-col-paint-width: 78px;
-    --orders-col-photo-width: 84px;
+    --orders-col-material-requests-width: 84px;
     --orders-col-notes-width: 184px;
     --orders-col-meta-width: 76px;
     --orders-col-carpenter-width: 84px;

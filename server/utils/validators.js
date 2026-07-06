@@ -105,6 +105,15 @@ function normalizeStringArray(value, fieldName, options = {}) {
   }));
 }
 
+const LEGACY_ORDER_COLUMN_KEY_MAP = {
+  photoLink: 'materialRequests',
+};
+
+function normalizeOrderColumnKey(value = '') {
+  const normalizedValue = normalizeString(value, 'columnKey', { required: true, maxLength: 80 });
+  return LEGACY_ORDER_COLUMN_KEY_MAP[normalizedValue] || normalizedValue;
+}
+
 function normalizeManualStageMarks(value, fieldName) {
   if (value === undefined) {
     return undefined;
@@ -114,7 +123,7 @@ function normalizeManualStageMarks(value, fieldName) {
   }
 
   return Object.entries(value).reduce((acc, [columnKey, mark]) => {
-    const normalizedColumnKey = normalizeString(columnKey, `${fieldName}.key`, { required: true, maxLength: 80 });
+    const normalizedColumnKey = normalizeOrderColumnKey(columnKey);
     if (!mark || typeof mark !== 'object' || Array.isArray(mark)) {
       fail(`Поле "${fieldName}.${normalizedColumnKey}" должно быть объектом.`);
     }
@@ -137,7 +146,7 @@ function normalizeManualStageClears(value, fieldName) {
   }
 
   return Object.entries(value).reduce((acc, [columnKey, mark]) => {
-    const normalizedColumnKey = normalizeString(columnKey, `${fieldName}.key`, { required: true, maxLength: 80 });
+    const normalizedColumnKey = normalizeOrderColumnKey(columnKey);
     if (!mark || typeof mark !== 'object' || Array.isArray(mark)) {
       fail(`Поле "${fieldName}.${normalizedColumnKey}" должно быть объектом.`);
     }
@@ -388,8 +397,9 @@ function sanitizeOrderItemInput(payload, options = {}) {
       });
     }
   }
-  if (!partial || payload.photoLink !== undefined) {
-    data.photoLink = normalizeString(payload.photoLink, 'photoLink', { maxLength: 500 });
+  if (!partial || payload.materialRequests !== undefined || payload.photoLink !== undefined) {
+    const materialRequestsValue = payload.materialRequests !== undefined ? payload.materialRequests : payload.photoLink;
+    data.materialRequests = normalizeString(materialRequestsValue, 'materialRequests', { maxLength: 500 });
   }
   if (!partial || payload.notes !== undefined) {
     data.notes = normalizeString(payload.notes, 'notes', { maxLength: 2000 });
@@ -591,3 +601,4 @@ module.exports = {
   sanitizeRoleInput,
   sanitizeSettingsInput,
 };
+

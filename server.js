@@ -109,7 +109,7 @@ function seedDemoMultiItemOrders() {
           material: 'МДФ крашеный',
           deliveryDate: '2026-07-18',
           packageName: 'Фурнитура Blum',
-          photoLink: 'https://example.com/demo-kitchen-top',
+          materialRequests: 'https://example.com/demo-kitchen-top',
           notes: 'Тестовое изделие для проверки inline-редактирования',
           stages: buildDemoStages(2),
         },
@@ -123,7 +123,7 @@ function seedDemoMultiItemOrders() {
           material: 'Шпон дуба',
           deliveryDate: '2026-07-18',
           packageName: 'Столешница + опоры',
-          photoLink: 'https://example.com/demo-kitchen-island',
+          materialRequests: 'https://example.com/demo-kitchen-island',
           notes: 'Проверка item-level QR и Telegram-комментариев',
           stages: buildDemoStages(1),
         },
@@ -146,7 +146,7 @@ function seedDemoMultiItemOrders() {
           material: 'ЛДСП Egger',
           deliveryDate: '2026-07-25',
           packageName: 'Корпус + фасады',
-          photoLink: 'https://example.com/demo-tv-stand',
+          materialRequests: 'https://example.com/demo-tv-stand',
           notes: 'Проверка отображения нескольких помещений в одном заказе',
           stages: buildDemoStages(3),
         },
@@ -160,7 +160,7 @@ function seedDemoMultiItemOrders() {
           material: 'ЛДСП + зеркало',
           deliveryDate: '2026-07-26',
           packageName: 'Раздвижная система',
-          photoLink: 'https://example.com/demo-wardrobe',
+          materialRequests: 'https://example.com/demo-wardrobe',
           notes: 'Строка для проверки прямого редактирования в таблице',
           stages: buildDemoStages(0),
         },
@@ -343,3 +343,4 @@ server.on('error', (error) => {
 
   throw error;
 });
+

@@ -31,7 +31,15 @@ const ORDER_ROOM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ пом
 const ORDER_ITEM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ изделия в заказе');
 const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй');
 const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
-const ORDER_PHOTO_LINK_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
+const ORDER_MATERIAL_REQUESTS_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
+const LEGACY_ORDER_COLUMN_KEY_MAP = {
+  photoLink: 'materialRequests',
+};
+
+function normalizeOrderColumnKey(columnKey = '') {
+  const normalizedColumnKey = String(columnKey || '').trim();
+  return LEGACY_ORDER_COLUMN_KEY_MAP[normalizedColumnKey] || normalizedColumnKey;
+}
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
   let currentIndex = 0;
@@ -89,7 +97,7 @@ const ATTACHMENT_SCOPE_CONFIG = {
 };
 
 function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
-  switch (String(columnKey || '').trim()) {
+  switch (normalizeOrderColumnKey(columnKey)) {
     case 'orderNumber':
       return ORDER_NUMBER_COLUMN_INDEX;
     case 'customer':
@@ -112,8 +120,8 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
       return ORDER_NOTES_COLUMN_INDEX;
     case 'deliveryDate':
       return ORDER_DELIVERY_DATE_COLUMN_INDEX;
-    case 'photoLink':
-      return ORDER_PHOTO_LINK_COLUMN_INDEX;
+    case 'materialRequests':
+      return ORDER_MATERIAL_REQUESTS_COLUMN_INDEX;
     case 'carpenter':
       return ORDER_CARPENTER_COLUMN_INDEX;
     case 'paint':
@@ -444,8 +452,8 @@ function createInlineDraft(row) {
     material: row.item.material || '',
     packageName: row.item.packageName || '',
     packageItems: normalizePackageItems(row.item.packageItems, row.item.packageName),
-    photoLink: row.item.photoLink || '',
-    materialRequestItems: normalizeMaterialRequestItems(row.item.materialRequestItems, row.item.photoLink),
+    materialRequests: row.item.materialRequests || '',
+    materialRequestItems: normalizeMaterialRequestItems(row.item.materialRequestItems, row.item.materialRequests),
     notes: row.item.notes || '',
   };
 }
@@ -461,7 +469,7 @@ const EMPTY_ITEM = {
   deliveryDate: '',
   packageName: '',
   packageItems: [],
-  photoLink: '',
+  materialRequests: '',
   materialRequestItems: [],
   notes: '',
 };
@@ -504,8 +512,8 @@ function mapItemToRoomEditorItem(item = {}, index = 0) {
     deliveryDate: item.deliveryDate || '',
     packageName: item.packageName || '',
     packageItems: normalizePackageItems(item.packageItems, item.packageName),
-    photoLink: item.photoLink || '',
-    materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
+    materialRequests: item.materialRequests || '',
+    materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests),
     notes: item.notes || '',
   };
 }
@@ -594,8 +602,8 @@ function buildOrderItemsPayload(items = []) {
     deliveryDate: String(item.deliveryDate || '').trim(),
     packageName: getPackageSummary(item.packageItems || []) || String(item.packageName || '').trim(),
     packageItems: normalizePackageItems(item.packageItems, item.packageName),
-    photoLink: getMaterialRequestSummary(item.materialRequestItems || []) || String(item.photoLink || '').trim(),
-    materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
+    materialRequests: getMaterialRequestSummary(item.materialRequestItems || []) || String(item.materialRequests || '').trim(),
+    materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests),
     notes: String(item.notes || '').trim(),
   }));
 }
@@ -683,8 +691,8 @@ function mapOrderToForm(order) {
         deliveryDate: item.deliveryDate || '',
         packageName: item.packageName || '',
         packageItems: normalizePackageItems(item.packageItems, item.packageName),
-        photoLink: item.photoLink || '',
-        materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
+        materialRequests: item.materialRequests || '',
+        materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests),
         notes: item.notes || '',
       }))
     : [];
@@ -921,7 +929,7 @@ function OrdersWorkspace() {
 
     return {
       carpenter: createColumnMeta(ORDER_CARPENTER_COLUMN_INDEX),
-      photoLink: createColumnMeta(ORDER_PHOTO_LINK_COLUMN_INDEX),
+      materialRequests: createColumnMeta(ORDER_MATERIAL_REQUESTS_COLUMN_INDEX),
       itemStart: createColumnMeta(ORDER_ITEM_START_COLUMN_INDEX),
       itemEnd: createColumnMeta(ORDER_ITEM_END_COLUMN_INDEX),
       itemDuration: createColumnMeta(ORDER_ITEM_DURATION_COLUMN_INDEX),
@@ -985,7 +993,7 @@ function OrdersWorkspace() {
         material: '',
         packageName: '',
         packageItems: [],
-        photoLink: '',
+        materialRequests: '',
         materialRequestItems: [],
         notes: '',
         comments: [],
@@ -1602,7 +1610,7 @@ function OrdersWorkspace() {
       <col className="col-notes" />
       <col className="col-delivery-date" />
       <col className="col-carpenter" />
-      <col className="col-photo" />
+      <col className="col-material-requests" />
       <col className="col-paint" />
       <col className="col-item-start-date" />
       <col className="col-item-end-date" />
@@ -1775,7 +1783,7 @@ function OrdersWorkspace() {
       itemName: item.name || '',
       itemNumber: item.itemNumber || '',
       newItemName: '',
-      items: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
+      items: normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests),
     });
   }, []);
 
@@ -2253,7 +2261,7 @@ function OrdersWorkspace() {
           ? {
               ...item,
               materialRequestItems: nextMaterialRequestItems,
-              photoLink: getMaterialRequestSummary(nextMaterialRequestItems),
+              materialRequests: getMaterialRequestSummary(nextMaterialRequestItems),
             }
           : item
       ))),
@@ -2854,8 +2862,8 @@ function OrdersWorkspace() {
             material: String(draft.material || '').trim(),
             packageName: String(draft.packageName || '').trim(),
             packageItems: normalizePackageItems(draft.packageItems, draft.packageName),
-            photoLink: getMaterialRequestSummary(draft.materialRequestItems || []) || String(draft.photoLink || '').trim(),
-            materialRequestItems: normalizeMaterialRequestItems(draft.materialRequestItems, draft.photoLink),
+            materialRequests: getMaterialRequestSummary(draft.materialRequestItems || []) || String(draft.materialRequests || '').trim(),
+            materialRequestItems: normalizeMaterialRequestItems(draft.materialRequestItems, draft.materialRequests),
             notes: String(draft.notes || '').trim(),
           }
         : item
@@ -2879,8 +2887,8 @@ function OrdersWorkspace() {
         material: item.material || '',
         packageName: item.packageName || '',
         packageItems: normalizePackageItems(item.packageItems, item.packageName),
-        photoLink: item.photoLink || '',
-        materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.photoLink),
+        materialRequests: item.materialRequests || '',
+        materialRequestItems: normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests),
         notes: item.notes || '',
       })),
     };
@@ -2957,7 +2965,7 @@ function OrdersWorkspace() {
         const itemManufacturingMeta = getItemManufacturingMeta(item);
         const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
         const packageStats = getPackageStats(item.packageItems, item.packageName);
-        const materialRequestStats = getMaterialRequestStats(item.materialRequestItems, item.photoLink);
+        const materialRequestStats = getMaterialRequestStats(item.materialRequestItems, item.materialRequests);
         const cells = [
           order.orderNumber || '',
           order.customer || '',
@@ -3182,7 +3190,7 @@ function OrdersWorkspace() {
                     const itemAttachments = getItemAttachments(item, 'order');
                     const paintAttachments = getItemAttachments(item, 'paint');
                     const packageStats = getPackageStats(item.packageItems, item.packageName);
-                    const materialRequestStats = getMaterialRequestStats(item.materialRequestItems, item.photoLink);
+                    const materialRequestStats = getMaterialRequestStats(item.materialRequestItems, item.materialRequests);
                     const orderAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'order');
                     const paintAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'paint');
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
@@ -3279,19 +3287,19 @@ function OrdersWorkspace() {
                     };
                     const materialRequestCellStyle = materialRequestStats.total > 0 && materialRequestStats.pending === 0
                       ? {
-                          background: columnStageMeta.photoLink.hex || '#F4C2A4',
-                          color: columnStageMeta.photoLink.textHex,
+                          background: columnStageMeta.materialRequests.hex || '#F4C2A4',
+                          color: columnStageMeta.materialRequests.textHex,
                         }
                       : undefined;
                     const materialRequestSummaryBadgeStyle = {
-                      background: columnStageMeta.photoLink.hex || '#F4C2A4',
-                      color: columnStageMeta.photoLink.textHex,
+                      background: columnStageMeta.materialRequests.hex || '#F4C2A4',
+                      color: columnStageMeta.materialRequests.textHex,
                     };
                     const paintCellProps = getManualStageCellProps(key, item, 'paint', `order-card-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
-                    const photoCellPropsBase = getManualStageCellProps(key, item, 'photoLink', `photo-cell ${regularOrderClass}`, materialRequestCellStyle, { disabled: isInlineEditing });
-                    const photoCellProps = {
-                      ...photoCellPropsBase,
-                      className: cn(photoCellPropsBase.className, 'package-cell'),
+                    const materialRequestCellPropsBase = getManualStageCellProps(key, item, 'materialRequests', `material-requests-cell ${regularOrderClass}`, materialRequestCellStyle, { disabled: isInlineEditing });
+                    const materialRequestCellProps = {
+                      ...materialRequestCellPropsBase,
+                      className: cn(materialRequestCellPropsBase.className, 'package-cell'),
                     };
                     const notesCellProps = getManualStageCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const carpenterCellProps = getManualStageCellProps(key, item, 'carpenter', carpenterCellClassName, carpenterCellStyle, { disabled: isInlineEditing });
@@ -3508,7 +3516,7 @@ function OrdersWorkspace() {
                         <td {...carpenterCellProps} title={workerCellTitle}>
                           {isPlaceholder ? '—' : workerCellText}
                         </td>
-                        <td {...photoCellProps}>
+                        <td {...materialRequestCellProps}>
                           <div className="package-cell-content">
                             <button
                               type="button"
@@ -4346,8 +4354,8 @@ function OrdersWorkspace() {
                     <div className="detail-block detail-block-wide">
                       <div className="detail-label">Заявки на расходники</div>
                       <div className="detail-value detail-value-multiline">
-                        {getMaterialRequestStats(item.materialRequestItems, item.photoLink).total > 0
-                          ? getMaterialRequestStats(item.materialRequestItems, item.photoLink).items.map((requestItem) => (
+                        {getMaterialRequestStats(item.materialRequestItems, item.materialRequests).total > 0
+                          ? getMaterialRequestStats(item.materialRequestItems, item.materialRequests).items.map((requestItem) => (
                               `${requestItem.isCompleted ? '[x]' : '[ ]'} ${requestItem.name}`
                             )).join(', ')
                           : '—'}

@@ -10,7 +10,7 @@ const ROLE_COLUMN_ACCESS_OPTIONS = [
   { key: 'packageName', label: 'Комплектация заказа', description: 'Комплектация и готовность комплектовки.' },
   { key: 'notes', label: 'Примечания', description: 'Текстовые примечания по изделию.' },
   { key: 'deliveryDate', label: 'Отгрузка до', description: 'Плановая дата отгрузки.' },
-  { key: 'photoLink', label: 'Заявки на расходники', description: 'Заявки на расходники по изделию с чекбоксами исполнения.' },
+  { key: 'materialRequests', label: 'Заявки на расходники', description: 'Заявки на расходники по изделию с чекбоксами исполнения.' },
   { key: 'carpenter', label: 'Столяр', description: 'Работа столярного этапа.' },
   { key: 'paint', label: 'Покраска', description: 'Работа по покраске и файлы покраски.' },
   { key: 'itemStartDate', label: 'Начало изготовления изделия', description: 'Дата начала изготовления изделия.' },
@@ -21,6 +21,9 @@ const ROLE_COLUMN_ACCESS_OPTIONS = [
 
 const ROLE_COLUMN_ACCESS_KEY_SET = new Set(ROLE_COLUMN_ACCESS_OPTIONS.map((item) => item.key));
 const DEFAULT_ROLE_ALLOWED_COLUMNS = ROLE_COLUMN_ACCESS_OPTIONS.map((item) => item.key);
+const ROLE_COLUMN_ACCESS_LEGACY_KEY_MAP = {
+  photoLink: 'materialRequests',
+};
 
 function normalizeAllowedColumns(source, options = {}) {
   const fallbackToAll = options.fallbackToAll !== false;
@@ -31,7 +34,8 @@ function normalizeAllowedColumns(source, options = {}) {
   const seen = new Set();
   const normalized = [];
   for (const rawKey of source) {
-    const key = String(rawKey || '').trim();
+    const rawNormalizedKey = String(rawKey || '').trim();
+    const key = ROLE_COLUMN_ACCESS_LEGACY_KEY_MAP[rawNormalizedKey] || rawNormalizedKey;
     if (!ROLE_COLUMN_ACCESS_KEY_SET.has(key) || seen.has(key)) continue;
     seen.add(key);
     normalized.push(key);

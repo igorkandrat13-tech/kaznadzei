@@ -66,7 +66,7 @@ const ORDER_PRIMARY_HEADERS = [
   'Примечания',
   'Отгрузка до',
   'СТОЛЯР',
-  '',
+  'Заявки на расходники',
   'Покраска',
   'Начало изготовления изделия',
   'Окончание изготовления изделия',
@@ -86,13 +86,21 @@ const ORDER_COLUMN_KEY_TO_PRIMARY_INDEX = {
   notes: ORDER_PRIMARY_HEADERS.indexOf('Примечания'),
   deliveryDate: ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до'),
   carpenter: ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР'),
-  photoLink: ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники'),
+  materialRequests: ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники'),
   paint: ORDER_PRIMARY_HEADERS.indexOf('Покраска'),
   itemStartDate: ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления изделия'),
   itemEndDate: ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия'),
   itemDuration: ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий'),
   duration: ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа'),
 };
+const LEGACY_ORDER_COLUMN_KEY_MAP = {
+  photoLink: 'materialRequests',
+};
+
+function normalizeOrderColumnKey(columnKey = '') {
+  const normalizedColumnKey = String(columnKey || '').trim();
+  return LEGACY_ORDER_COLUMN_KEY_MAP[normalizedColumnKey] || normalizedColumnKey;
+}
 
 function getAttachmentScope(req = {}) {
   return String(req.query?.scope || req.body?.scope || '').trim().toLowerCase() === 'paint'
@@ -167,7 +175,7 @@ function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = 
 }
 
 function resolveLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders = []) {
-  const primaryColumnIndex = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX[String(columnKey || '').trim()];
+  const primaryColumnIndex = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX[normalizeOrderColumnKey(columnKey)];
   if (!Number.isInteger(primaryColumnIndex)) return '';
   return getStageLegendKeyForPrimaryColumn(primaryColumnIndex, secondaryHeaders);
 }
@@ -205,7 +213,7 @@ function ensureActorCanUseManualColumns(actor = {}, selections = []) {
   const allowedColumns = getActorAllowedManualColumns(actor);
   if (!allowedColumns) return;
 
-  const forbiddenSelection = selections.find((selection) => !allowedColumns.has(String(selection?.columnKey || '').trim()));
+  const forbiddenSelection = selections.find((selection) => !allowedColumns.has(normalizeOrderColumnKey(selection?.columnKey)));
   if (!forbiddenSelection) return;
 
   const error = new Error(`У роли нет доступа к колонке "${forbiddenSelection.columnKey}".`);
@@ -795,7 +803,7 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
       route: 'telegram-stage-mark',
       orderId: String(req.params.id || ''),
       itemId: String(req.body?.itemId || '').trim(),
-      columnKey: String(req.body?.columnKey || '').trim(),
+      columnKey: normalizeOrderColumnKey(req.body?.columnKey),
       clear: Boolean(req.body?.clear),
     };
     const employee = resolveTelegramEmployee(token, req.body || {}, context);
@@ -837,7 +845,7 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
     }
 
     const updatedOrder = updatedOrders.find((order) => order._id === req.params.id) || OrderStore.findById(req.params.id);
-    const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
+    const updatedItem = OrderStore.getOrderItem(updatedOrder, context.itemId) || null;
     const allowedColumns = Array.from(getEmployeeAllowedColumns(employee));
 
     logTelegramOrderDebug('telegram-stage-mark.success', {
@@ -1121,19 +1129,27 @@ router.post('/orders/:id/telegram-material-request-items', (req, res) => {
       itemName,
     });
 
-    addActivityLog({
-      action: 'order.material-request.telegram.add',
-      entityType: 'orderItem',
-      entityId: updatedItem.itemId,
-      entityName: updatedItem.name || '',
-      actor: getTelegramActivityActor(employee),
-      message: 'Заявка на расходники добавлена из Telegram.',
-      details: {
-        orderId: req.params.id,
-        itemId: updatedItem.itemId,
-        itemName,
-      },
-    });
+    try {
+      addActivityLog({
+        action: 'order.material-request.telegram.add',
+        entityType: 'orderItem',
+        entityId: updatedItem?.itemId || context.itemId,
+        entityName: updatedItem?.name || '',
+        actor: getTelegramActivityActor(employee),
+        message: 'Заявка на расходники добавлена из Telegram.',
+        details: {
+          orderId: req.params.id,
+          itemId: updatedItem?.itemId || context.itemId,
+          itemName,
+        },
+      });
+    } catch (activityLogError) {
+      logTelegramOrderDebug('telegram-material-request-item-add.activity-log-error', {
+        ...context,
+        employeeId: employee._id,
+        message: activityLogError.message || 'Не удалось записать activity log.',
+      });
+    }
 
     res.status(201).json({
       ok: true,
@@ -1152,6 +1168,7 @@ router.post('/orders/:id/telegram-material-request-items', (req, res) => {
       error?.message ? `Причина: ${error.message}` : '',
       req.params.id ? `Заказ: ${String(req.params.id).trim()}` : '',
       req.body?.itemId ? `Изделие: ${String(req.body.itemId).trim()}` : '',
+      req.body?.name ? `Заявка: ${String(req.body.name).trim()}` : '',
       'Проверьте авторизацию сотрудника в Telegram и повторите попытку.',
     ].filter(Boolean).join('\n');
     logTelegramOrderDebug('telegram-material-request-item-add.error', {
@@ -1717,3 +1734,4 @@ router.get('/orders/:id/qrcode', async (req, res) => {
 });
 
 module.exports = router;
+

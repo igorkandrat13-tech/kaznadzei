@@ -18,7 +18,7 @@ const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
   'notes',
   'deliveryDate',
   'carpenter',
-  'photoLink',
+  'materialRequests',
   'paint',
 ];
 
@@ -342,3 +342,4 @@ export {
   getOrderStages,
   isOrderArchived,
 };
+
