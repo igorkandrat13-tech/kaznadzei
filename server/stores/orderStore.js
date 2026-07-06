@@ -189,9 +189,18 @@ function getItemActiveStage(item = {}) {
 
 function getItemAssignedStage(item = {}) {
   const stages = Array.isArray(item?.stages) ? item.stages : [];
-  return stages.find((stage) => stage.status === 'in_progress' && getStageEmployeeName(stage))
-    || stages.find((stage) => getStageEmployeeName(stage))
-    || null;
+  const stagesWithEmployee = stages.filter((stage) => getStageEmployeeName(stage));
+  if (stagesWithEmployee.length === 0) return null;
+
+  const inProgressStages = stagesWithEmployee.filter((stage) => stage.status === 'in_progress');
+  const candidates = inProgressStages.length > 0 ? inProgressStages : stagesWithEmployee;
+
+  return candidates.reduce((currentStage, stage) => {
+    if (!currentStage) return stage;
+    const currentTs = Date.parse(currentStage.startedAt || currentStage.completedAt || '') || 0;
+    const nextTs = Date.parse(stage.startedAt || stage.completedAt || '') || 0;
+    return nextTs >= currentTs ? stage : currentStage;
+  }, null);
 }
 
 function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpers = {}) {
@@ -1723,4 +1732,3 @@ const OrderStore = {
 };
 
 module.exports = OrderStore;
-
