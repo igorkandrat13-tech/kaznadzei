@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
@@ -13,25 +13,15 @@ import {
   emptyEmployeeForm,
 } from './adminUI';
 import EmployeeModal from './admin/EmployeeModal';
-import RoleModal from './admin/RoleModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
 import { useRoleConfig } from './RoleConfigContext';
 import { buildOrderStageLegendConfig } from './orderStageLegend';
-import { DEFAULT_ROLE_ALLOWED_COLUMNS, ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
+import { ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
 import useEscapeKey from './useEscapeKey';
+import { Button, Modal, ModalHeader } from './ui';
 
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
-
-function createEmptyRoleForm() {
-  return {
-    label: '',
-    icon: '🧩',
-    shortTitle: '',
-    description: '',
-    allowedColumns: [...DEFAULT_ROLE_ALLOWED_COLUMNS],
-  };
-}
 
 function buildLegendSaveErrorMessage({
   summary,
@@ -63,10 +53,10 @@ function buildLegendSaveErrorMessage({
 function Admin() {
 
   const navigate = useNavigate();
-  const { roleTabs, allRoleTabs, refreshRoleConfig } = useRoleConfig();
+  const { roleTabs, allRoleTabs, refreshRoleConfig, getRoleMetaByKey } = useRoleConfig();
   const getDefaultEmployeeForm = (role = '') => ({
     ...emptyEmployeeForm,
-    role: role || roleTabs[0]?.key || '',
+    role: role || '',
   });
   const [activeRole, setActiveRole] = useState('general');
   const [selectedStepsRole, setSelectedStepsRole] = useState(() => roleTabs[0]?.key || '');
@@ -105,38 +95,28 @@ function Admin() {
   const [exportingBackup, setExportingBackup] = useState(false);
   const [importingBackup, setImportingBackup] = useState(false);
   const [employees, setEmployees] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [showDeletedRoles, setShowDeletedRoles] = useState(false);
   const [employeeModalMode, setEmployeeModalMode] = useState('');
-  const [roleModalMode, setRoleModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
   const [showLegendColorModal, setShowLegendColorModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
-  const [savingRole, setSavingRole] = useState(false);
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [savingStep, setSavingStep] = useState(false);
   const [savingLegendColors, setSavingLegendColors] = useState(false);
   const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
-  const [selectedLegendStageKey, setSelectedLegendStageKey] = useState('brief');
-  const [selectedLegendHeaderId, setSelectedLegendHeaderId] = useState('');
-  const [selectedLegendPrimaryHeaderIndex, setSelectedLegendPrimaryHeaderIndex] = useState(0);
-  const [legendModalTab, setLegendModalTab] = useState('columns');
+  const [legendEditForm, setLegendEditForm] = useState(null);
+  const [modalErrorMessage, setModalErrorMessage] = useState('');
   const [savingAppSettings, setSavingAppSettings] = useState(false);
   const [savingUpdateSettings, setSavingUpdateSettings] = useState(false);
 
   const [editStep, setEditStep] = useState(null);
   const [editEmployee, setEditEmployee] = useState(null);
-  const [editRole, setEditRole] = useState(null);
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
-  const [legendConfigDraft, setLegendConfigDraft] = useState(() => buildOrderStageLegendConfig());
   const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
-  const [newRole, setNewRole] = useState(createEmptyRoleForm);
   const backupImportInputRef = useRef(null);
   const settingsTabs = buildSettingsTabs();
   const filteredSteps = steps.filter(s => s.role === selectedStepsRole).sort((a, b) => a.order - b.order);
   const employeeForm = employeeModalMode === 'edit' ? editEmployee : newEmployee;
-  const roleForm = roleModalMode === 'edit' ? editRole : newRole;
   const legendItems = useMemo(() => {
     return orderStageLegendConfig.stages.map((item) => {
       return {
@@ -145,42 +125,28 @@ function Admin() {
       };
     });
   }, [orderStageLegendConfig]);
-  const legendDraftStageMap = useMemo(() => {
-    return (legendConfigDraft.stages || []).reduce((acc, item) => {
+  const stageLegendMap = useMemo(() => {
+    return legendItems.reduce((acc, item) => {
       acc[item.key] = item;
       return acc;
     }, {});
-  }, [legendConfigDraft]);
-  const selectedLegendStage = useMemo(
-    () => (legendConfigDraft.stages || []).find((item) => item.key === selectedLegendStageKey) || (legendConfigDraft.stages || [])[0] || null,
-    [legendConfigDraft, selectedLegendStageKey],
+  }, [legendItems]);
+  const productionHeaderPreviewItems = useMemo(() => {
+    return (orderStageLegendConfig.secondaryHeaders || []).flatMap((item, index) => (
+      item.legendKey && !item.useTableBackground
+        ? [{
+            ...item,
+            headerIndex: index,
+            previewHex: item.useTableBackground ? '#0C1A2A' : (item.hex || '#FFFFFF'),
+            currentStageLabel: stageLegendMap[item.legendKey]?.label || 'Без этапа',
+            previewTitle: item.label || 'Без названия',
+          }]
+        : []
+    ));
+  }, [orderStageLegendConfig.secondaryHeaders, stageLegendMap]);
+  const hasModalWindowOpen = Boolean(
+    employeeModalMode || stepModalMode || showLegendColorModal || stageManagerRoleKey || showTelegramLogs || showActivityLogs || confirmAction,
   );
-  const selectedLegendHeader = useMemo(
-    () => (legendConfigDraft.secondaryHeaders || []).find((item) => item.draftId === selectedLegendHeaderId) || null,
-    [legendConfigDraft, selectedLegendHeaderId],
-  );
-  const legendDraftPrimaryHeaders = legendConfigDraft.primaryHeaders || [];
-  const legendDraftHeaders = legendConfigDraft.secondaryHeaders || [];
-  const legendDraftStages = legendConfigDraft.stages || [];
-  const selectedLegendPrimaryHeaderLabel = legendDraftPrimaryHeaders[selectedLegendPrimaryHeaderIndex] ?? '';
-  const legendAssignedColumnsCount = useMemo(
-    () => legendDraftHeaders.filter((item) => item.legendKey).length,
-    [legendDraftHeaders],
-  );
-  const selectedLegendStageUsageCount = useMemo(
-    () => legendDraftHeaders.filter((item) => item.legendKey === selectedLegendStageKey).length,
-    [legendDraftHeaders, selectedLegendStageKey],
-  );
-  const employeeRoleTabs = (() => {
-    if (!employeeForm?.role) {
-      return roleTabs;
-    }
-    const currentRole = allRoleTabs.find(role => role.key === employeeForm.role);
-    if (!currentRole || !currentRole.isDeleted || roleTabs.some(role => role.key === currentRole.key)) {
-      return roleTabs;
-    }
-    return [...roleTabs, currentRole].sort((a, b) => a.order - b.order || a.plainLabel.localeCompare(b.plainLabel, 'ru'));
-  })();
   const setEmployeeForm = (nextValue) => {
     if (employeeModalMode === 'edit') {
       setEditEmployee(nextValue);
@@ -188,15 +154,18 @@ function Admin() {
     }
     setNewEmployee(nextValue);
   };
-  const setRoleForm = (nextValue) => {
-    if (roleModalMode === 'edit') {
-      setEditRole(nextValue);
-      return;
+  const getEntityAllowedColumns = useCallback((entity) => {
+    if (Array.isArray(entity?.allowedColumns)) {
+      return entity.allowedColumns;
     }
-    setNewRole(nextValue);
-  };
-  const getAllowedColumnsSummary = (role) => {
-    const allowedColumns = Array.isArray(role?.allowedColumns) ? role.allowedColumns : [];
+    const fallbackRole = getRoleMetaByKey(String(entity?.role || '').trim());
+    if (Array.isArray(fallbackRole?.allowedColumns)) {
+      return fallbackRole.allowedColumns;
+    }
+    return [];
+  }, [getRoleMetaByKey]);
+  const getAllowedColumnsSummary = (entity) => {
+    const allowedColumns = getEntityAllowedColumns(entity);
     if (allowedColumns.length === 0) return 'Нет доступных колонок';
     const labels = ROLE_COLUMN_ACCESS_OPTIONS
       .filter((column) => allowedColumns.includes(column.key))
@@ -206,10 +175,6 @@ function Admin() {
   };
   const roleColumnOptions = useMemo(() => {
     const secondaryHeaders = orderStageLegendConfig.secondaryHeaders || [];
-    const legendColorMap = (orderStageLegendConfig.stages || []).reduce((acc, item) => {
-      acc[item.key] = item.defaultHex || '#FFFFFF';
-      return acc;
-    }, {});
     const getHeaderByPrimaryColumnIndex = (primaryColumnIndex = -1) => {
       if (primaryColumnIndex < 0) return null;
       let startIndex = 0;
@@ -228,29 +193,70 @@ function Admin() {
       const header = getHeaderByPrimaryColumnIndex(column.primaryColumnIndex);
       return {
         ...column,
-        previewColor: header?.legendKey ? (legendColorMap[header.legendKey] || '#FFFFFF') : '#DCEBFA',
+        previewColor: header?.useTableBackground ? '#0C1A2A' : (header?.hex || '#DCEBFA'),
       };
     });
   }, [orderStageLegendConfig]);
+  const roleColumnOptionsByKey = useMemo(() => {
+    return roleColumnOptions.reduce((acc, column) => {
+      acc[column.key] = column;
+      return acc;
+    }, {});
+  }, [roleColumnOptions]);
+  const renderAllowedColumnsMarkers = (entity, { compact = false } = {}) => {
+    const allowedColumns = getEntityAllowedColumns(entity);
+    if (allowedColumns.length === 0) {
+      return <span className="text-subtle">Нет доступа</span>;
+    }
+    return (
+      <div
+        className={`role-allowed-columns-markers ${compact ? 'role-allowed-columns-markers-compact' : ''}`}
+        title={getAllowedColumnsSummary(entity)}
+      >
+        {allowedColumns.map((columnKey) => {
+          const column = roleColumnOptionsByKey[columnKey];
+          if (!column) return null;
+          return (
+            <span
+              key={column.key}
+              className="role-allowed-column-marker"
+              title={`${column.label}: ${column.description}`}
+              style={{
+                background: column.previewColor,
+                width: column.widthVar ? `clamp(18px, calc(var(${column.widthVar}) / 4), 64px)` : undefined,
+              }}
+              aria-label={column.label}
+            />
+          );
+        })}
+      </div>
+    );
+  };
 
   useEffect(() => {
     setEditStep(null);
     setEditEmployee(null);
-    setEditRole(null);
     setEmployeeModalMode('');
-    setRoleModalMode('');
     setStepModalMode('');
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
     setNewEmployee(getDefaultEmployeeForm());
-    setNewRole(createEmptyRoleForm());
     setSettingsError('');
     setSettingsSuccess('');
   }, [activeRole, filteredSteps.length, selectedStepsRole]);
 
   useEffect(() => {
+    if (!settingsError) {
+      setModalErrorMessage('');
+      return;
+    }
+    if (hasModalWindowOpen) {
+      setModalErrorMessage(settingsError);
+    }
+  }, [hasModalWindowOpen, settingsError]);
+
+  useEffect(() => {
     fetchAppSettings().catch(error => setSettingsError(error.message || 'Не удалось загрузить настройки.'));
     fetchEmployees().catch(error => setSettingsError(error.message || 'Не удалось загрузить сотрудников.'));
-    fetchRoles({ includeDeleted: true }).catch(error => setSettingsError(error.message || 'Не удалось загрузить роли.'));
   }, []);
 
   useEffect(() => {
@@ -318,18 +324,6 @@ function Admin() {
       throw new Error(data?.message || 'Не удалось загрузить конфигурацию легенды этапов.');
     }
     setOrderStageLegendConfig(buildOrderStageLegendConfig(data || {}));
-  };
-
-  const fetchRoles = async ({ includeDeleted = false } = {}) => {
-    const res = await apiFetch(`/api/roles${includeDeleted ? '?includeDeleted=1' : ''}`);
-    const data = await parseJsonSafely(res);
-    if (!res.ok) {
-      throw new Error(data?.message || 'Не удалось загрузить роли.');
-    }
-    if (includeDeleted) {
-      setRoles(Array.isArray(data) ? data : []);
-    }
-    return Array.isArray(data) ? data : [];
   };
 
   const fetchAppSettings = async () => {
@@ -804,11 +798,6 @@ function Admin() {
     setNewEmployee(getDefaultEmployeeForm());
   };
 
-  const resetRoleForm = () => {
-    setEditRole(null);
-    setNewRole(createEmptyRoleForm());
-  };
-
   const openCreateEmployeeModal = () => {
     resetEmployeeForm();
     setEmployeeModalMode('create');
@@ -817,7 +806,11 @@ function Admin() {
   };
 
   const openEditEmployeeModal = (employee) => {
-    setEditEmployee({ ...getDefaultEmployeeForm(employee.role), ...employee });
+    setEditEmployee({
+      ...getDefaultEmployeeForm(employee.role),
+      ...employee,
+      allowedColumns: [...getEntityAllowedColumns(employee)],
+    });
     setEmployeeModalMode('edit');
     setSettingsError('');
     setSettingsSuccess('');
@@ -827,33 +820,6 @@ function Admin() {
     if (savingEmployee) return;
     setEmployeeModalMode('');
     resetEmployeeForm();
-  };
-
-  const openCreateRoleModal = () => {
-    resetRoleForm();
-    setRoleModalMode('create');
-    setSettingsError('');
-    setSettingsSuccess('');
-  };
-
-  const openEditRoleModal = (role) => {
-    setEditRole({
-      key: role.key,
-      label: role.plainLabel || role.label || '',
-      icon: role.icon || '🧩',
-      shortTitle: role.shortTitle || '',
-      description: role.description || '',
-      allowedColumns: Array.isArray(role.allowedColumns) ? [...role.allowedColumns] : [...DEFAULT_ROLE_ALLOWED_COLUMNS],
-    });
-    setRoleModalMode('edit');
-    setSettingsError('');
-    setSettingsSuccess('');
-  };
-
-  const closeRoleModal = () => {
-    if (savingRole) return;
-    setRoleModalMode('');
-    resetRoleForm();
   };
 
   const closeStageManager = () => {
@@ -883,28 +849,19 @@ function Admin() {
     setNewStep({ stepName: '', description: '', order: filteredSteps.length + 1 });
   };
 
-  const openLegendColorModal = () => {
-    const nextStages = legendItems.map(item => ({
-      key: item.key,
-      label: item.label,
-      description: item.description,
-      storeName: item.storeName,
-      hex: item.hex,
-      defaultHex: item.hex,
-    }));
-    const nextHeaders = orderStageLegendConfig.secondaryHeaders.map((item, index) => ({
-      ...item,
-      draftId: `secondary-header-${index}`,
-    }));
-    setLegendConfigDraft({
-      primaryHeaders: [...(orderStageLegendConfig.primaryHeaders || [])],
-      stages: nextStages,
-      secondaryHeaders: nextHeaders,
+  const openLegendColorModal = (targetHeaderIndex = null) => {
+    const headerIndex = Number.isInteger(targetHeaderIndex) ? targetHeaderIndex : -1;
+    const targetHeader = orderStageLegendConfig.secondaryHeaders?.[headerIndex];
+    if (!targetHeader) return;
+    const linkedStage = stageLegendMap[targetHeader.legendKey] || null;
+    setLegendEditForm({
+      headerIndex,
+      label: targetHeader.label || '',
+      legendKey: targetHeader.legendKey || '',
+      stageLabel: linkedStage?.label || 'Без этапа',
+      useTableBackground: Boolean(targetHeader.useTableBackground),
+      hex: targetHeader.useTableBackground ? '#0C1A2A' : (targetHeader.hex || '#FFFFFF'),
     });
-    setSelectedLegendStageKey(nextStages.find((item) => item.key)?.key || '');
-    setSelectedLegendHeaderId(nextHeaders.find((item) => !item.stickyCol)?.draftId || nextHeaders[0]?.draftId || '');
-    setSelectedLegendPrimaryHeaderIndex(0);
-    setLegendModalTab('columns');
     setShowLegendColorModal(true);
     setSettingsError('');
     setSettingsSuccess('');
@@ -913,11 +870,7 @@ function Admin() {
   const closeLegendColorModal = () => {
     if (savingLegendColors) return;
     setShowLegendColorModal(false);
-    setLegendConfigDraft(buildOrderStageLegendConfig());
-    setSelectedLegendStageKey('brief');
-    setSelectedLegendHeaderId('');
-    setSelectedLegendPrimaryHeaderIndex(0);
-    setLegendModalTab('columns');
+    setLegendEditForm(null);
   };
 
   useEscapeKey(() => {
@@ -942,43 +895,6 @@ function Admin() {
     }
   }, Boolean(confirmAction || showActivityLogs || showTelegramLogs || showLegendColorModal || stageManagerRoleKey));
 
-  const updateLegendStageDraft = (key, patch) => {
-    setLegendConfigDraft(current => ({
-      ...current,
-      stages: (current.stages || []).map(item => (
-        item.key === key ? { ...item, ...patch } : item
-      )),
-    }));
-  };
-
-  const updateLegendSecondaryHeaderDraft = (draftId, patch) => {
-    setLegendConfigDraft(current => ({
-      ...current,
-      secondaryHeaders: (current.secondaryHeaders || []).map(item => (
-        item.draftId === draftId ? { ...item, ...patch } : item
-      )),
-    }));
-  };
-
-  const updateLegendPrimaryHeaderDraft = (index, value) => {
-    setLegendConfigDraft(current => ({
-      ...current,
-      primaryHeaders: (current.primaryHeaders || []).map((item, itemIndex) => (
-        itemIndex === index ? value : item
-      )),
-    }));
-  };
-
-  const assignLegendStageToHeader = (draftId, legendKey) => {
-    if (savingLegendColors) return;
-    updateLegendSecondaryHeaderDraft(draftId, { legendKey });
-  };
-  const openLegendStageEditor = (legendKey) => {
-    if (!legendKey || savingLegendColors) return;
-    setSelectedLegendStageKey(legendKey);
-    setLegendModalTab('stages');
-  };
-
   const requestDeleteAction = (action) => {
     setSettingsError('');
     setSettingsSuccess('');
@@ -1002,16 +918,6 @@ function Admin() {
       title: 'Удалить этап?',
       message: `Этап "${step.stepName}" будет удален из роли "${getRoleLabel(step.role)}". Проверьте, что он больше не нужен в рабочих сценариях.`,
       confirmLabel: 'Удалить этап',
-    });
-  };
-
-  const requestDeleteRole = (role) => {
-    requestDeleteAction({
-      type: 'role',
-      id: role.key,
-      title: 'Удалить роль?',
-      message: `Роль "${role.plainLabel || role.label}" будет скрыта из рабочих экранов, но останется в истории и сможет быть восстановлена.`,
-      confirmLabel: 'Пометить удаленной',
     });
   };
 
@@ -1041,8 +947,6 @@ function Admin() {
     try {
       if (confirmAction.type === 'employee') {
         success = await handleDeleteEmployee(confirmAction.id);
-      } else if (confirmAction.type === 'role') {
-        success = await handleDeleteRole(confirmAction.id);
       } else if (confirmAction.type === 'step') {
         success = await handleDeleteStep(confirmAction.id);
       } else if (confirmAction.type === 'clearTelegramLogs') {
@@ -1131,110 +1035,6 @@ function Admin() {
     }
   };
 
-  const handleAddRole = async () => {
-    setSettingsError('');
-    setSettingsSuccess('');
-    setSavingRole(true);
-    try {
-      const res = await apiFetch('/api/roles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newRole),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        setSettingsError(data?.message || 'Не удалось добавить роль.');
-        return;
-      }
-      closeRoleModal();
-      await fetchRoles({ includeDeleted: true });
-      await refreshRoleConfig();
-      setSettingsSuccess('Роль добавлена.');
-    } catch (error) {
-      setSettingsError(error.message || 'Не удалось добавить роль.');
-    } finally {
-      setSavingRole(false);
-    }
-  };
-
-  const handleUpdateRole = async () => {
-    if (!editRole?.key) return;
-    setSettingsError('');
-    setSettingsSuccess('');
-    setSavingRole(true);
-    try {
-      const res = await apiFetch(`/api/roles/${editRole.key}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editRole),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        setSettingsError(data?.message || 'Не удалось обновить роль.');
-        return;
-      }
-      closeRoleModal();
-      await fetchRoles({ includeDeleted: true });
-      await refreshRoleConfig();
-      setSettingsSuccess('Роль обновлена.');
-    } catch (error) {
-      setSettingsError(error.message || 'Не удалось обновить роль.');
-    } finally {
-      setSavingRole(false);
-    }
-  };
-
-  const handleDeleteRole = async (roleKey) => {
-    setSettingsError('');
-    setSettingsSuccess('');
-    try {
-      const res = await apiFetch(`/api/roles/${roleKey}`, { method: 'DELETE' });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        setSettingsError(data?.message || 'Не удалось удалить роль.');
-        return false;
-      }
-      if (activeRole === roleKey) {
-        setActiveRole('roles');
-      }
-      if (selectedStepsRole === roleKey) {
-        const nextRole = roleTabs.find(role => role.key !== roleKey);
-        setSelectedStepsRole(nextRole?.key || '');
-      }
-      if (stageManagerRoleKey === roleKey) {
-        setStageManagerRoleKey('');
-      }
-      if (editRole?.key === roleKey) {
-        closeRoleModal();
-      }
-      await fetchRoles({ includeDeleted: true });
-      await refreshRoleConfig();
-      setSettingsSuccess('Роль помечена удаленной.');
-      return true;
-    } catch (error) {
-      setSettingsError(error.message || 'Не удалось удалить роль.');
-      return false;
-    }
-  };
-
-  const handleRestoreRole = async (roleKey) => {
-    setSettingsError('');
-    setSettingsSuccess('');
-    try {
-      const res = await apiFetch(`/api/roles/${roleKey}/restore`, { method: 'POST' });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        setSettingsError(data?.message || 'Не удалось восстановить роль.');
-        return;
-      }
-      await fetchRoles({ includeDeleted: true });
-      await refreshRoleConfig();
-      setSettingsSuccess('Роль восстановлена.');
-    } catch (error) {
-      setSettingsError(error.message || 'Не удалось восстановить роль.');
-    }
-  };
-
   // Settings
   const handleAddStep = async () => {
     if (!selectedStepsRole || !newStep.stepName || !newStep.description) return;
@@ -1307,30 +1107,35 @@ function Admin() {
   };
 
   const handleSaveLegendColors = async () => {
+    if (!legendEditForm) return;
     setSettingsError('');
     setSettingsSuccess('');
     setSavingLegendColors(true);
     try {
-      const normalizedStages = (legendConfigDraft.stages || []).map((draft) => {
-        const normalizedHex = String(draft.hex || '').trim().toUpperCase() || '#000000';
-        if (!HEX_COLOR_PATTERN.test(normalizedHex)) {
-          throw new Error(`Цвет этапа "${draft.label || 'Без названия'}" должен быть в формате #RRGGBB.`);
-        }
-        return {
-          key: draft.key,
-          label: String(draft.label || '').trim(),
-          description: String(draft.description || '').trim(),
-          storeName: draft.storeName,
-          defaultHex: normalizedHex,
-        };
-      });
+      const normalizedHex = legendEditForm.useTableBackground
+        ? ''
+        : String(legendEditForm.hex || '').trim().toUpperCase();
+      if (!legendEditForm.useTableBackground && !HEX_COLOR_PATTERN.test(normalizedHex)) {
+        throw new Error(`Цвет ячейки "${legendEditForm.label || 'Без названия'}" должен быть в формате #RRGGBB.`);
+      }
+
+      const normalizedStages = (orderStageLegendConfig.stages || []).map((stage) => ({
+        key: stage.key,
+        label: String(stage.label || '').trim(),
+        description: String(stage.description || '').trim(),
+        storeName: stage.storeName,
+        defaultHex: String(stage.defaultHex || '').trim().toUpperCase() || '#000000',
+      }));
 
       const configPayload = {
-        primaryHeaders: legendDraftPrimaryHeaders.map((label) => String(label ?? '')),
+        primaryHeaders: (orderStageLegendConfig.primaryHeaders || []).map((label) => String(label ?? '')),
         stages: normalizedStages,
-        secondaryHeaders: (legendConfigDraft.secondaryHeaders || []).map((item) => ({
-          label: item.label,
+        secondaryHeaders: (orderStageLegendConfig.secondaryHeaders || []).map((item, index) => ({
+          label: index === legendEditForm.headerIndex ? String(legendEditForm.label || '').trim() : item.label,
           legendKey: item.legendKey,
+          hex: index === legendEditForm.headerIndex
+            ? (legendEditForm.useTableBackground ? '' : normalizedHex)
+            : (item.useTableBackground ? '' : String(item.hex || '').trim()),
         })),
       };
 
@@ -1347,8 +1152,8 @@ function Admin() {
           status: configRes.status,
           statusText: configRes.statusText,
           serverMessage: errorData?.details || errorData?.message || '',
-          selectedStageLabel: selectedLegendStage?.label || '',
-          selectedHeaderLabel: selectedLegendHeader?.label || '',
+          selectedStageLabel: legendEditForm.stageLabel || '',
+          selectedHeaderLabel: legendEditForm.label || '',
           stagesCount: normalizedStages.length,
           headersCount: configPayload.secondaryHeaders.length,
         });
@@ -1358,27 +1163,21 @@ function Admin() {
       }
 
       await fetchOrderStageLegendConfig();
-      setSettingsSuccess('Цвета, названия этапов и привязка колонок обновлены.');
-      setShowLegendColorModal(false);
-      setLegendConfigDraft(buildOrderStageLegendConfig());
-      setSelectedLegendStageKey('brief');
-      setSelectedLegendHeaderId('');
-      setLegendModalTab('columns');
+      setSettingsSuccess('Название и цвет ячейки обновлены.');
+      closeLegendColorModal();
     } catch (error) {
       const detailedMessage = error?.legendDebugMessage || buildLegendSaveErrorMessage({
         summary: 'Не удалось сохранить настройки этапов.',
         step: 'Локальная подготовка данных',
         error,
-        selectedStageLabel: selectedLegendStage?.label || '',
-        selectedHeaderLabel: selectedLegendHeader?.label || '',
-        stagesCount: legendConfigDraft.stages?.length,
-        headersCount: legendConfigDraft.secondaryHeaders?.length,
+        selectedStageLabel: legendEditForm?.stageLabel || '',
+        selectedHeaderLabel: legendEditForm?.label || '',
+        stagesCount: orderStageLegendConfig.stages?.length,
+        headersCount: orderStageLegendConfig.secondaryHeaders?.length,
       });
       console.error('Legend save failed:', {
         error,
-        selectedStage: selectedLegendStage,
-        selectedHeader: selectedLegendHeader,
-        draft: legendConfigDraft,
+        selectedHeader: legendEditForm,
       });
       setSettingsError(detailedMessage);
     } finally {
@@ -1388,16 +1187,6 @@ function Admin() {
 
   const settingsCrudModals = (
     <>
-      <RoleModal
-        mode={roleModalMode}
-        roleForm={roleForm}
-        setRoleForm={setRoleForm}
-        columnOptions={roleColumnOptions}
-        onAdd={handleAddRole}
-        onUpdate={handleUpdateRole}
-        onClose={closeRoleModal}
-        saving={savingRole}
-      />
       <EmployeeModal
         mode={employeeModalMode}
         employeeForm={employeeForm}
@@ -1406,7 +1195,7 @@ function Admin() {
         onUpdate={handleUpdateEmployee}
         onClose={closeEmployeeModal}
         saving={savingEmployee}
-        roleTabs={employeeRoleTabs}
+        columnOptions={roleColumnOptions}
       />
 
       {stageManagerRoleKey ? (
@@ -1490,317 +1279,70 @@ function Admin() {
         saving={savingStep}
       />
 
-      {showLegendColorModal ? (
-        <div className="modal-overlay" onClick={savingLegendColors ? undefined : closeLegendColorModal}>
-          <div className="modal-window modal-window-xl stage-legend-modal-window" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <div className="modal-title">Выбор колонок и этапов</div>
-                <div className="modal-subtitle">Настройка разбита на два коротких шага: сначала колонки, потом сами этапы.</div>
+      <Modal
+        open={showLegendColorModal}
+        onClose={closeLegendColorModal}
+        closeDisabled={savingLegendColors}
+        size="md"
+        className="stage-legend-simple-modal"
+      >
+        <ModalHeader
+          title="Редактирование ячейки"
+          subtitle={legendEditForm ? `Текущий этап: ${legendEditForm.stageLabel}` : 'Измените название и цвет выбранной ячейки второй строки.'}
+          onClose={closeLegendColorModal}
+          closeDisabled={savingLegendColors}
+        />
+        {legendEditForm ? (
+          <>
+            <div className="stage-legend-simple-preview-row">
+              <span
+                className={`orders-stage-legend-swatch ${legendEditForm.useTableBackground ? 'orders-stage-legend-swatch-table' : ''}`}
+                style={{ background: legendEditForm.useTableBackground ? '#0C1A2A' : legendEditForm.hex }}
+              />
+              <div className="stage-legend-simple-preview-text">
+                <strong>{legendEditForm.label || 'Без названия'}</strong>
+                <span>{legendEditForm.stageLabel}</span>
               </div>
-              <button className="btn btn-small modal-close-btn" onClick={closeLegendColorModal} disabled={savingLegendColors}>✕</button>
             </div>
-            <SettingsFeedback error={settingsError} success={settingsSuccess} />
-
-            <div className="stage-legend-modal-body">
-              <div className="stage-legend-modal-tabs" role="tablist" aria-label="Настройка легенды этапов">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={legendModalTab === 'columns'}
-                  className={`stage-legend-modal-tab ${legendModalTab === 'columns' ? 'stage-legend-modal-tab-active' : ''}`}
-                  onClick={() => setLegendModalTab('columns')}
-                  disabled={savingLegendColors}
-                >
-                  <span className="stage-legend-modal-tab-title">Колонки</span>
-                  <span className="stage-legend-modal-tab-meta">{legendAssignedColumnsCount}/{legendDraftHeaders.length} привязано</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={legendModalTab === 'stages'}
-                  className={`stage-legend-modal-tab ${legendModalTab === 'stages' ? 'stage-legend-modal-tab-active' : ''}`}
-                  onClick={() => setLegendModalTab('stages')}
-                  disabled={savingLegendColors}
-                >
-                  <span className="stage-legend-modal-tab-title">Этапы</span>
-                  <span className="stage-legend-modal-tab-meta">{legendDraftStages.length} этапов</span>
-                </button>
-              </div>
-
-              {legendModalTab === 'columns' ? (
-                <>
-                  <div className="stage-legend-modal-summary">
-                    <div className="stage-legend-modal-summary-card">
-                      <span className="stage-legend-modal-summary-label">Выбрана</span>
-                      <strong>
-                        {selectedLegendHeader
-                          ? (selectedLegendHeader.label || 'Без названия')
-                          : 'Колонка не выбрана'}
-                      </strong>
-                    </div>
-                    <div className="stage-legend-modal-summary-card">
-                      <span className="stage-legend-modal-summary-label">Этап</span>
-                      <strong>{legendDraftStageMap[selectedLegendHeader?.legendKey]?.label || 'Без этапа'}</strong>
-                    </div>
-                    <div className="stage-legend-modal-summary-card">
-                      <span className="stage-legend-modal-summary-label">Подсказка</span>
-                      <strong>Выберите ячейку слева и сразу назначьте этап справа</strong>
-                    </div>
-                  </div>
-
-                  <div className="stage-legend-builder-layout stage-legend-builder-layout-tab">
-                    <div className="stage-legend-builder-panel stage-legend-builder-panel-wide">
-                      <div className="stage-legend-config-section-title">Колонки таблицы</div>
-                      <div className="stage-legend-builder-note">Нажмите на колонку второй строки шапки, которую хотите переименовать или перекрасить. Названия первой строки редактируются кнопками с карандашом.</div>
-                      <div className="stage-legend-primary-header-block">
-                        <div className="stage-legend-config-section-title stage-legend-config-section-subtitle">Первая строка шапки</div>
-                        <div className="stage-legend-primary-header-list">
-                          {legendDraftPrimaryHeaders.map((label, index) => (
-                            <div
-                              key={`primary-header-draft-${index}`}
-                              className={`stage-legend-primary-header-item ${selectedLegendPrimaryHeaderIndex === index ? 'stage-legend-primary-header-item-active' : ''}`}
-                            >
-                              <div className="stage-legend-primary-header-text">
-                                <span className="stage-legend-primary-header-index">Колонка {index + 1}</span>
-                                <strong>{label || 'Без названия'}</strong>
-                              </div>
-                              <button
-                                type="button"
-                                className="stage-legend-primary-header-edit-btn"
-                                onClick={() => setSelectedLegendPrimaryHeaderIndex(index)}
-                                disabled={savingLegendColors}
-                                title="Редактировать название колонки первой строки"
-                              >
-                                ✎
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="stage-legend-table-preview">
-                        {legendDraftHeaders.map((item, index) => {
-                          const stage = legendDraftStageMap[item.legendKey] || null;
-                          const isSelectedHeader = selectedLegendHeaderId === item.draftId;
-                          return (
-                            <div
-                              key={item.draftId || `${item.label}-${index}`}
-                              className={`stage-legend-table-cell ${isSelectedHeader ? 'stage-legend-table-cell-active' : ''} ${item.stickyCol ? 'stage-legend-table-cell-service' : ''}`}
-                              style={{ background: stage?.hex || (item.useTableBackground ? 'rgba(12, 26, 42, 0.94)' : undefined), color: item.useTableBackground ? '#d8ecff' : '#000000' }}
-                              onClick={() => !savingLegendColors && setSelectedLegendHeaderId(item.draftId)}
-                              onKeyDown={(event) => {
-                                if ((event.key === 'Enter' || event.key === ' ') && !savingLegendColors) {
-                                  event.preventDefault();
-                                  setSelectedLegendHeaderId(item.draftId);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={savingLegendColors ? -1 : 0}
-                              title={stage ? `Этап: ${stage.label}` : 'Этап не назначен'}
-                            >
-                              <span className="stage-legend-table-cell-index">Колонка {index + 1}</span>
-                              <span className="stage-legend-table-cell-title">{item.label || 'Без названия'}</span>
-                              <span className="stage-legend-table-cell-stage">
-                                {stage ? stage.label : 'Без этапа'}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="stage-legend-builder-panel stage-legend-column-editor">
-                      <div className="stage-legend-config-section-title">Редактор колонки</div>
-                      {selectedLegendHeader ? (
-                        <>
-                          <div className="stage-legend-column-editor-meta">
-                            <span className="stage-legend-column-editor-index">
-                              Первая строка: колонка {selectedLegendPrimaryHeaderIndex + 1}
-                            </span>
-                          </div>
-                          <label className="stage-legend-field">
-                            <span>Название колонки первой строки</span>
-                            <input
-                              value={selectedLegendPrimaryHeaderLabel}
-                              onChange={(event) => updateLegendPrimaryHeaderDraft(selectedLegendPrimaryHeaderIndex, event.target.value)}
-                              placeholder="Введите название колонки первой строки"
-                              disabled={savingLegendColors}
-                            />
-                          </label>
-                          <div className="stage-legend-column-editor-meta">
-                            <span className="stage-legend-column-editor-index">
-                              {selectedLegendHeader.stickyCol ? `Служебная колонка ${selectedLegendHeader.stickyCol}` : `Колонка ${Number(String(selectedLegendHeader.draftId || '').split('-').pop()) + 1 || ''}`}
-                            </span>
-                            <span className="stage-legend-column-editor-stage">
-                              Текущий этап: {legendDraftStageMap[selectedLegendHeader.legendKey]?.label || 'Без этапа'}
-                            </span>
-                          </div>
-                          <label className="stage-legend-field">
-                            <span>Название колонки</span>
-                            <input
-                              value={selectedLegendHeader.label}
-                              onChange={(event) => updateLegendSecondaryHeaderDraft(selectedLegendHeader.draftId, { label: event.target.value })}
-                              placeholder="Введите название колонки"
-                              disabled={savingLegendColors}
-                            />
-                          </label>
-                          <div className="stage-legend-config-section-title stage-legend-config-section-subtitle">Назначение этапа</div>
-                          <div className="stage-legend-assignment-toolbar">
-                            <button
-                              type="button"
-                              className={`stage-legend-stage-chip ${!selectedLegendHeader.legendKey ? 'stage-legend-stage-chip-active' : ''}`}
-                              onClick={() => assignLegendStageToHeader(selectedLegendHeader.draftId, '')}
-                              disabled={savingLegendColors}
-                            >
-                              Без этапа
-                            </button>
-                            {legendDraftStages.map((stage) => (
-                              <button
-                                key={stage.key}
-                                type="button"
-                                className={`stage-legend-stage-chip ${selectedLegendHeader.legendKey === stage.key ? 'stage-legend-stage-chip-active' : ''}`}
-                                style={{ background: stage.hex, color: '#000000' }}
-                                onClick={() => assignLegendStageToHeader(selectedLegendHeader.draftId, stage.key)}
-                                disabled={savingLegendColors}
-                                title={stage.description || stage.label}
-                              >
-                                {stage.label}
-                              </button>
-                            ))}
-                          </div>
-                          {selectedLegendHeader.legendKey ? (
-                            <div className="stage-legend-linked-stage-card">
-                              <div className="stage-legend-linked-stage-card-info">
-                                <span className="stage-legend-linked-stage-card-label">Редактирование этапа</span>
-                                <strong>{legendDraftStageMap[selectedLegendHeader.legendKey]?.label || 'Этап'}</strong>
-                              </div>
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => openLegendStageEditor(selectedLegendHeader.legendKey)}
-                                disabled={savingLegendColors}
-                              >
-                                Изменить название и цвет
-                              </button>
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        <div className="stage-legend-builder-note">Выберите колонку слева, чтобы изменить название и назначить этап.</div>
-                      )}
-                    </div>
-                  </div>
-                </>
+            <div className="form-group">
+              <label>Название ячейки</label>
+              <input
+                value={legendEditForm.label}
+                onChange={(event) => setLegendEditForm((current) => current ? { ...current, label: event.target.value } : current)}
+                placeholder="Введите название из второй строки"
+                disabled={savingLegendColors}
+              />
+            </div>
+            <div className="form-group">
+              <label>Цвет ячейки</label>
+              {legendEditForm.useTableBackground ? (
+                <input value="Цвет таблицы" disabled />
               ) : (
-                <>
-                  <div className="stage-legend-modal-summary">
-                    <div className="stage-legend-modal-summary-card">
-                      <span className="stage-legend-modal-summary-label">Выбран этап</span>
-                      <strong>{selectedLegendStage?.label || 'Этап не выбран'}</strong>
-                    </div>
-                    <div className="stage-legend-modal-summary-card">
-                      <span className="stage-legend-modal-summary-label">Используется</span>
-                      <strong>{selectedLegendStageUsageCount} колонок</strong>
-                    </div>
-                    <div className="stage-legend-modal-summary-card">
-                      <span className="stage-legend-modal-summary-label">Подсказка</span>
-                      <strong>Измените название, описание и цвет выбранного этапа</strong>
-                    </div>
-                  </div>
-
-                  <div className="stage-legend-builder-layout stage-legend-builder-layout-tab stage-legend-builder-layout-bottom">
-                    <div className="stage-legend-builder-panel stage-legend-stage-list-panel">
-                      <div className="stage-legend-config-section-title">Этапы</div>
-                      <div className="stage-legend-builder-note">Выберите этап из списка, чтобы отредактировать его справа.</div>
-                      <div className="stage-legend-stage-list">
-                        {legendDraftStages.map((item) => (
-                          <button
-                            key={item.key}
-                            type="button"
-                            className={`stage-legend-stage-list-item ${selectedLegendStageKey === item.key ? 'stage-legend-stage-list-item-active' : ''}`}
-                            onClick={() => setSelectedLegendStageKey(item.key)}
-                            disabled={savingLegendColors}
-                          >
-                            <span className="stage-legend-stage-list-swatch" style={{ background: item.hex }} />
-                            <span className="stage-legend-stage-list-text">
-                              <strong>{item.label || 'Этап'}</strong>
-                              <small>{item.description || 'Без описания'}</small>
-                            </span>
-                            <span className="stage-legend-stage-list-usage">
-                              {legendDraftHeaders.filter((header) => header.legendKey === item.key).length}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="stage-legend-builder-panel stage-legend-stage-editor-panel">
-                      <div className="stage-legend-config-section-title">Редактор этапа</div>
-                      {selectedLegendStage ? (
-                        <div className="stage-legend-stage-card stage-legend-stage-editor-card">
-                          <div className="stage-legend-stage-card-header">
-                            <div
-                              className="stage-legend-stage-preview"
-                              style={{ background: selectedLegendStage.hex, color: '#000000' }}
-                            >
-                              {selectedLegendStage.label || 'Этап'}
-                            </div>
-                            <div className="stage-legend-stage-color">
-                              <input
-                                type="color"
-                                value={selectedLegendStage.hex}
-                                onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { hex: event.target.value })}
-                                disabled={savingLegendColors}
-                              />
-                              <input
-                                value={selectedLegendStage.hex}
-                                onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { hex: event.target.value })}
-                                disabled={savingLegendColors}
-                              />
-                            </div>
-                          </div>
-                          <div className="stage-legend-stage-fields">
-                            <label className="stage-legend-field">
-                              <span>Название этапа</span>
-                              <input
-                                value={selectedLegendStage.label}
-                                onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { label: event.target.value })}
-                                placeholder="Например: Чертежи"
-                                disabled={savingLegendColors}
-                              />
-                            </label>
-                            <label className="stage-legend-field">
-                              <span>Подсказка</span>
-                              <input
-                                value={selectedLegendStage.description}
-                                onChange={(event) => updateLegendStageDraft(selectedLegendStage.key, { description: event.target.value })}
-                                placeholder="Что входит в этот этап"
-                                disabled={savingLegendColors}
-                              />
-                            </label>
-                            <div className="stage-legend-builder-note">
-                              Этот этап сейчас привязан к {selectedLegendStageUsageCount} колонкам таблицы.
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="stage-legend-builder-note">Выберите этап слева, чтобы изменить его название, описание и цвет.</div>
-                      )}
-                    </div>
-                  </div>
-                </>
+                <div className="stage-legend-simple-color-row">
+                  <input
+                    type="color"
+                    value={legendEditForm.hex || '#FFFFFF'}
+                    onChange={(event) => setLegendEditForm((current) => current ? { ...current, hex: event.target.value } : current)}
+                    disabled={savingLegendColors}
+                  />
+                  <input
+                    value={legendEditForm.hex || '#FFFFFF'}
+                    onChange={(event) => setLegendEditForm((current) => current ? { ...current, hex: event.target.value } : current)}
+                    placeholder="#RRGGBB"
+                    disabled={savingLegendColors}
+                  />
+                </div>
               )}
             </div>
-
-            <div className="modal-actions stage-legend-modal-actions">
-              <button className="btn btn-success" onClick={handleSaveLegendColors} disabled={savingLegendColors}>
-                {savingLegendColors ? 'Сохранение...' : 'Сохранить настройки этапов'}
-              </button>
-              <button className="btn" onClick={closeLegendColorModal} disabled={savingLegendColors}>Отмена</button>
+            <div className="modal-actions">
+              <Button variant="success" onClick={handleSaveLegendColors} disabled={savingLegendColors}>
+                {savingLegendColors ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+              <Button onClick={closeLegendColorModal} disabled={savingLegendColors}>Отмена</Button>
             </div>
-          </div>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </Modal>
 
       <ConfirmDialog
         open={Boolean(confirmAction)}
@@ -1811,6 +1353,25 @@ function Admin() {
         onCancel={() => !confirmLoading && setConfirmAction(null)}
         loading={confirmLoading}
       />
+
+      <Modal
+        open={Boolean(modalErrorMessage)}
+        onClose={() => setModalErrorMessage('')}
+        size="sm"
+        className="modal-window-top"
+      >
+        <ModalHeader
+          title="Ошибка"
+          subtitle="Исправьте данные и повторите действие."
+          onClose={() => setModalErrorMessage('')}
+        />
+        <div className="settings-alert settings-alert-error" style={{ whiteSpace: 'pre-wrap', marginBottom: 16 }}>
+          {modalErrorMessage}
+        </div>
+        <div className="modal-actions">
+          <Button onClick={() => setModalErrorMessage('')}>Закрыть</Button>
+        </div>
+      </Modal>
     </>
   );
 
@@ -1870,9 +1431,6 @@ function Admin() {
               </button>
               <button className="btn btn-secondary" onClick={() => fetchActivityLogs({ openModal: true })} disabled={activityLogsLoading}>
                 {activityLogsLoading ? 'Загрузка журнала...' : 'Журнал действий'}
-              </button>
-              <button className="btn btn-secondary" onClick={() => setActiveRole('roles')}>
-                Управление ролями
               </button>
               <button className="btn btn-secondary" onClick={exportBackup} disabled={exportingBackup}>
                 {exportingBackup ? 'Экспорт...' : 'Экспорт данных'}
@@ -2031,7 +1589,7 @@ function Admin() {
           <div className="card" style={{ marginBottom: 20 }}>
             <p>Список сотрудников для входа в Telegram-бот и работы с заказами по ролям.</p>
             <SettingsHint>
-              <div><strong>Как работать:</strong> нажмите "Добавить сотрудника", заполните ФИО, роль и PIN-код.</div>
+              <div><strong>Как работать:</strong> нажмите "Добавить сотрудника", заполните ФИО, должность, закрепленные колонки и PIN-код.</div>
               <div><strong>Редактирование:</strong> используйте кнопку ✎ или "Редактировать" в карточке сотрудника.</div>
               <div><strong>Удаление:</strong> используйте кнопку ✕ или "Удалить", подтвердите действие, после чего привязанному сотруднику придет уведомление в Telegram.</div>
             </SettingsHint>
@@ -2044,12 +1602,13 @@ function Admin() {
 
             <div className="table-scroll desktop-table-only">
               <table>
-                <thead><tr><th>ФИО</th><th>Роль</th><th>Статус TG</th><th>Пользователь TG</th><th>Авторизован</th><th>PIN</th><th>Действия</th></tr></thead>
+                <thead><tr><th>ФИО</th><th>Должность</th><th>Колонки</th><th>Статус TG</th><th>Пользователь TG</th><th>Авторизован</th><th>PIN</th><th>Действия</th></tr></thead>
                 <tbody>
                   {employees.map(employee => (
                     <tr key={employee._id}>
                       <td>{employee.fullName}</td>
-                      <td>{getRoleLabel(employee.role)}</td>
+                      <td>{getRoleLabel(employee.role) || '—'}</td>
+                      <td>{renderAllowedColumnsMarkers(employee, { compact: true })}</td>
                       <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
                       <td>{getEmployeeTelegramSummary(employee)}</td>
                       <td>{employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</td>
@@ -2060,7 +1619,7 @@ function Admin() {
                       </td>
                     </tr>
                   ))}
-                  {employees.length === 0 && <tr><td colSpan={7} className="empty-cell">Сотрудники пока не добавлены</td></tr>}
+                  {employees.length === 0 && <tr><td colSpan={8} className="empty-cell">Сотрудники пока не добавлены</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -2070,13 +1629,17 @@ function Admin() {
                 <div key={employee._id} className="mobile-settings-card">
                   <div className="mobile-settings-card-header">
                     <div className="mobile-order-card-title">{employee.fullName}</div>
-                    <div className="mobile-order-card-subtitle">{getRoleLabel(employee.role)}</div>
+                    <div className="mobile-order-card-subtitle">{getRoleLabel(employee.role) || 'Должность не указана'}</div>
                   </div>
                   <div className="mobile-settings-card-meta">
                     <div><strong>Статус TG:</strong> {employee.telegramUserId ? 'Привязан' : 'Не привязан'}</div>
                     <div><strong>Пользователь TG:</strong> {employee.telegramUserId ? employee.telegramUsername || 'без username' : '—'}</div>
                     <div><strong>Авторизован:</strong> {employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</div>
                     <div><strong>PIN:</strong> {employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</div>
+                  </div>
+                  <div className="mobile-settings-card-note">
+                    <strong>Колонки:</strong>
+                    <div style={{ marginTop: 8 }}>{renderAllowedColumnsMarkers(employee, { compact: true })}</div>
                   </div>
                   {employee.telegramUserId ? (
                     <div className="mobile-settings-card-note">
@@ -2098,128 +1661,43 @@ function Admin() {
     );
   }
 
-  if (activeRole === 'roles') {
-    const visibleRoles = roles.filter(role => showDeletedRoles || !role.isDeleted);
-    return (
-      <div>
-        <SettingsHeader title="⚙️ Настройки — Роли" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
-
-          <div className="card" style={{ marginBottom: 20 }}>
-            <p>Здесь настраиваются производственные роли, которые используются в сотрудниках, таблицах и рабочих экранах.</p>
-            <SettingsHint>
-              <div><strong>Удаление:</strong> роль не удаляется физически, а помечается как удаленная и скрывается из рабочих разделов.</div>
-              <div><strong>Восстановление:</strong> включите показ удаленных ролей и нажмите "Восстановить".</div>
-              <div><strong>Синхронизация:</strong> названия ролей из этого списка автоматически отображаются в "Общих параметрах", таблицах, карточках сотрудников и Telegram.</div>
-              <div><strong>Колонки и цвета:</strong> доступ к цветовым отметкам задается здесь, а названия и цвета самих колонок настраиваются отдельно через редактирование легенды.</div>
-            </SettingsHint>
-            <SettingsFeedback error={settingsError} success={settingsSuccess} />
-
-            <SettingsActions>
-              <button className="btn btn-success" onClick={openCreateRoleModal}>Добавить роль</button>
-              <button className="btn" onClick={() => fetchRoles({ includeDeleted: true })}>Обновить список</button>
-              <label className="checkbox-inline" style={{ marginLeft: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={showDeletedRoles}
-                  onChange={event => setShowDeletedRoles(event.target.checked)}
-                />
-                Показывать удаленные
-              </label>
-            </SettingsActions>
-
-            <div className="table-scroll desktop-table-only">
-              <table>
-                <thead><tr><th>Название</th><th>Заголовок страницы</th><th>Описание</th><th>Колонки доступа</th><th>Статус</th><th>Действия</th></tr></thead>
-                <tbody>
-                  {visibleRoles.map(role => (
-                    <tr key={role.key}>
-                      <td>
-                        <strong>{role.icon} {role.label}</strong>
-                        <div className="text-small text-subtle text-mono">{role.key}</div>
-                      </td>
-                      <td>{role.shortTitle || '—'}</td>
-                      <td>{role.description || '—'}</td>
-                      <td title={getAllowedColumnsSummary(role)}>{getAllowedColumnsSummary(role)}</td>
-                      <td>{role.isDeleted ? 'Удалена' : 'Активна'}</td>
-                      <td>
-                        {role.isDeleted ? (
-                          <button className="btn btn-secondary" onClick={() => handleRestoreRole(role.key)}>Восстановить</button>
-                        ) : (
-                          <>
-                            <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditRoleModal(role)}>✎</button>
-                            <button className="btn btn-danger" onClick={() => requestDeleteRole(role)}>✕</button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {visibleRoles.length === 0 && <tr><td colSpan={6} className="empty-cell">Роли не найдены</td></tr>}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mobile-card-list">
-              {visibleRoles.map(role => (
-                <div key={role.key} className="mobile-settings-card">
-                  <div className="mobile-settings-card-header">
-                    <div>
-                      <div className="mobile-order-card-title">{role.icon} {role.label}</div>
-                      <div className="mobile-order-card-subtitle">{role.shortTitle || role.key}</div>
-                    </div>
-                    <div className="mobile-order-card-subtitle">{role.isDeleted ? 'Удалена' : 'Активна'}</div>
-                  </div>
-                  <div className="mobile-settings-card-note">
-                    {role.description || 'Описание не задано'}
-                  </div>
-                  <div className="mobile-settings-card-meta">
-                    <div><strong>Колонки доступа:</strong> {getAllowedColumnsSummary(role)}</div>
-                  </div>
-                  <div className="mobile-settings-card-actions">
-                    {role.isDeleted ? (
-                      <button className="btn btn-secondary" onClick={() => handleRestoreRole(role.key)}>Восстановить</button>
-                    ) : (
-                      <>
-                        <button className="btn btn-primary" onClick={() => openEditRoleModal(role)}>Редактировать</button>
-                        <button className="btn btn-danger" onClick={() => requestDeleteRole(role)}>Удалить</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {visibleRoles.length === 0 && <div className="mobile-empty-state">Роли не найдены</div>}
-            </div>
-          </div>
-
-          {settingsCrudModals}
-      </div>
-    );
-  }
-
   if (activeRole === 'colors') {
     return (
       <div>
-        <SettingsHeader title="⚙️ Настройки — Легенда этапов" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
+        <SettingsHeader title="⚙️ Настройки — Этапы производства" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={setActiveRole} tabs={settingsTabs} />
 
           <div className="card">
-            <p>Здесь настраиваются этапы, их цвета, названия и привязка колонок для единой таблицы заказов.</p>
+            <p>Здесь настраиваются этапы производства, цвета ячеек второй строки и привязка колонок для единой таблицы заказов.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
             <div className="orders-stage-legend">
               <div className="orders-stage-legend-header">
                 <div>
-                  <div className="orders-stage-legend-title">Легенда этапов</div>
-                  <div className="orders-stage-legend-subtitle">Цвета, названия этапов и привязка колонок ниже применяются ко всей логике таблицы заказов.</div>
+                  <div className="orders-stage-legend-title">Этапы производства</div>
+                  <div className="orders-stage-legend-subtitle">Цвета ячеек второй строки, названия этапов и привязка колонок ниже применяются ко всей логике таблицы заказов.</div>
                 </div>
-                <button className="btn btn-secondary" onClick={openLegendColorModal}>Выбор колонок</button>
               </div>
               <div className="orders-stage-legend-grid">
-                {legendItems.map(item => (
-                  <div key={item.key} className="orders-stage-legend-item">
-                    <span className="orders-stage-legend-swatch" style={{ background: item.hex }} />
+                {productionHeaderPreviewItems.map((item, index) => (
+                  <div key={`${item.label}-${index}`} className="orders-stage-legend-item">
+                    <span
+                      className={`orders-stage-legend-swatch ${item.useTableBackground ? 'orders-stage-legend-swatch-table' : ''}`}
+                      style={{ background: item.previewHex }}
+                    />
                     <div className="orders-stage-legend-content">
-                      <div className="orders-stage-legend-item-title">{item.label}</div>
-                      <div className="orders-stage-legend-item-subtitle">{item.description}</div>
+                      <div className="orders-stage-legend-item-title">{item.previewTitle}</div>
                     </div>
-                    <div className="orders-stage-legend-hex">{item.hex}</div>
+                    <div className="orders-stage-legend-editor">
+                      <div className="orders-stage-legend-hex">{item.useTableBackground ? 'Цвет таблицы' : item.hex}</div>
+                      <button
+                        type="button"
+                        className="btn btn-small btn-secondary"
+                        onClick={() => openLegendColorModal(item.headerIndex)}
+                        title={`Редактировать "${item.label || item.previewTitle}"`}
+                        aria-label={`Редактировать "${item.label || item.previewTitle}"`}
+                      >
+                        ✎
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

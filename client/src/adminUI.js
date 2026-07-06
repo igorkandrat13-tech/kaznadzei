@@ -1,9 +1,11 @@
 import React from 'react';
 import { Button } from './ui';
+import { DEFAULT_ROLE_ALLOWED_COLUMNS } from './roleColumnAccess';
 
 export const emptyEmployeeForm = {
   fullName: '',
   role: '',
+  allowedColumns: [],
   telegramUsername: '',
   pinCode: '',
 };
@@ -71,8 +73,7 @@ export function generatePinCode() {
 export function buildSettingsTabs() {
   return [
     { key: 'general', label: '⚙️ Общие' },
-    { key: 'roles', label: '🧩 Роли' },
     { key: 'employees', label: '👥 Сотрудники' },
-    { key: 'colors', label: '🎨 Легенда этапов' },
+    { key: 'colors', label: '🎨 Этапы производства' },
   ];
 }

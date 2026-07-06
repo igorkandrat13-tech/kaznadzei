@@ -17,7 +17,6 @@ import { canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, su
 import { RoleConfigProvider } from './RoleConfigContext';
 import './App.css';
 
-const THEME_STORAGE_KEY = 'kaznadzei.theme';
 const HEADER_LOGO_SRC = `${process.env.PUBLIC_URL || ''}/kaznadzei-header-logo.png`;
 class AppErrorBoundary extends React.Component {
     constructor(props) {
@@ -83,10 +82,6 @@ function AppLayout() {
     const routeTelegramMode = location.pathname === '/telegram-app';
     const ordersRoute = location.pathname === '/orders';
     const telegramMode = detectTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
-    const [theme, setTheme] = useState(() => {
-        const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-        return storedTheme === 'dark' ? 'dark' : 'light';
-    });
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
     const canAccessOrders = canAccessRole('manager', authRole);
@@ -99,11 +94,11 @@ function AppLayout() {
     }, [location.pathname]);
 
     useEffect(() => {
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
-        document.body.dataset.theme = theme;
-        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    }, [theme]);
+        document.documentElement.dataset.theme = 'light';
+        document.documentElement.style.colorScheme = 'light';
+        document.body.dataset.theme = 'light';
+        window.localStorage.removeItem('kaznadzei.theme');
+    }, []);
 
     useEffect(() => {
         setMobileMenuOpen(false);
@@ -211,21 +206,11 @@ function AppLayout() {
                             </button>
                             <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
                                 <nav className="App-header-nav App-header-nav-primary">
-                                    <Link to="/" onClick={() => setMobileMenuOpen(false)}>Главная</Link>
                                     {canAccessOrders && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
                                     {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
                                     {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
                                 </nav>
                                 <div className="App-header-menu-footer">
-                                    <button
-                                        className="theme-icon-toggle App-header-menu-theme-toggle"
-                                        type="button"
-                                        onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')}
-                                        aria-label={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
-                                        title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
-                                    >
-                                        {theme === 'dark' ? '☀' : '◐'}
-                                    </button>
                                     {authRole ? (
                                         <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
                                             Выйти

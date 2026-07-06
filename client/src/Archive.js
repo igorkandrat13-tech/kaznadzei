@@ -26,6 +26,16 @@ const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начал�
 const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
 const ORDER_ITEM_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий');
 const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
+const ORDER_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Номер заказа');
+const ORDER_CUSTOMER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заказчик');
+const ORDER_ROOM_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Помещение');
+const ORDER_ROOM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ помещения');
+const ORDER_ITEM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ изделия в заказе');
+const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй');
+const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
+const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
+const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
+const ORDER_PHOTO_LINK_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('');
 
 function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
   if (columnIndex < 0) return '';
@@ -39,18 +49,69 @@ function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = 
   }
   return '';
 }
-
-function getStageTextHex(legendKey = '', secondaryHeaders = []) {
-  return secondaryHeaders.find((item) => item.legendKey === legendKey)?.textHex || '#000000';
-}
-
-function buildManualStageTextColorMap(secondaryHeaders = []) {
-  return secondaryHeaders.reduce((acc, item) => {
-    if (item.legendKey && !acc[item.legendKey]) {
-      acc[item.legendKey] = item.textHex || '#000000';
+function getSecondaryHeaderForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
+  if (columnIndex < 0) return null;
+  let currentIndex = 0;
+  for (const cell of secondaryHeaders) {
+    const span = Number(cell.colSpan) || 1;
+    if (columnIndex >= currentIndex && columnIndex < currentIndex + span) {
+      return cell || null;
     }
-    return acc;
-  }, {});
+    currentIndex += span;
+  }
+  return null;
+}
+function getSecondaryHeaderBackground(header = null) {
+  if (!header) return '#FFFFFF';
+  if (header.useTableBackground) return 'var(--orders-table-cell-background)';
+  return String(header.hex || '').trim() || '#FFFFFF';
+}
+function getSecondaryHeaderTextColor(header = null) {
+  if (!header) return '#000000';
+  if (header.useTableBackground) return '#D8ECFF';
+  return String(header.textHex || '').trim() || '#000000';
+}
+function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
+  switch (String(columnKey || '').trim()) {
+    case 'orderNumber':
+      return ORDER_NUMBER_COLUMN_INDEX;
+    case 'customer':
+      return ORDER_CUSTOMER_COLUMN_INDEX;
+    case 'room':
+      return ORDER_ROOM_COLUMN_INDEX;
+    case 'roomNumber':
+      return ORDER_ROOM_NUMBER_COLUMN_INDEX;
+    case 'itemNumber':
+      return ORDER_ITEM_NUMBER_COLUMN_INDEX;
+    case 'quantity':
+      return ORDER_QUANTITY_COLUMN_INDEX;
+    case 'name':
+      return ORDER_NAME_COLUMN_INDEX;
+    case 'orderCard':
+      return ORDER_CARD_COLUMN_INDEX;
+    case 'packageName':
+      return ORDER_PACKAGE_COLUMN_INDEX;
+    case 'notes':
+      return ORDER_NOTES_COLUMN_INDEX;
+    case 'deliveryDate':
+      return ORDER_DELIVERY_DATE_COLUMN_INDEX;
+    case 'photoLink':
+      return ORDER_PHOTO_LINK_COLUMN_INDEX;
+    case 'carpenter':
+      return ORDER_CARPENTER_COLUMN_INDEX;
+    case 'paint':
+      return ORDER_PAINT_COLUMN_INDEX;
+    case 'itemStartDate':
+      return ORDER_ITEM_START_COLUMN_INDEX;
+    case 'itemEndDate':
+      return ORDER_ITEM_END_COLUMN_INDEX;
+    case 'itemDuration':
+      return ORDER_ITEM_DURATION_COLUMN_INDEX;
+    case 'duration':
+      return ORDER_DURATION_COLUMN_INDEX;
+    default:
+      return -1;
+  }
 }
 
 function createPackageItemId() {
@@ -304,16 +365,15 @@ function Archive() {
   const stageLegend = useMemo(() => orderStageLegendConfig.stages || [], [orderStageLegendConfig]);
   const primaryHeaderLabels = useMemo(() => orderStageLegendConfig.primaryHeaders || DEFAULT_ORDER_PRIMARY_HEADERS, [orderStageLegendConfig]);
   const secondaryHeaderSchema = useMemo(() => orderStageLegendConfig.secondaryHeaders || [], [orderStageLegendConfig]);
-  const manualStageTextColorMap = useMemo(
-    () => buildManualStageTextColorMap(secondaryHeaderSchema),
-    [secondaryHeaderSchema],
-  );
   const columnStageMeta = useMemo(() => {
     const createColumnMeta = (columnIndex) => {
+      const header = getSecondaryHeaderForPrimaryColumn(columnIndex, secondaryHeaderSchema);
       const legendKey = getStageLegendKeyForPrimaryColumn(columnIndex, secondaryHeaderSchema);
       return {
         legendKey,
-        textHex: getStageTextHex(legendKey, secondaryHeaderSchema),
+        header,
+        hex: getSecondaryHeaderBackground(header),
+        textHex: getSecondaryHeaderTextColor(header),
       };
     };
 
@@ -339,20 +399,19 @@ function Archive() {
   const secondaryHeaderCells = useMemo(() => {
     let startIndex = 0;
     return secondaryHeaderSchema.map((item) => {
-      const hex = item.legendKey ? (legendColorMap[item.legendKey] || '#FFFFFF') : '';
       const span = Number(item.colSpan) || 1;
       const cellStartIndex = startIndex;
       const cellEndIndex = cellStartIndex + span - 1;
       startIndex += span;
       return {
         ...item,
-        hex,
-        textColor: item.textHex || '#000000',
+        hex: getSecondaryHeaderBackground(item),
+        textColor: getSecondaryHeaderTextColor(item),
         startIndex: cellStartIndex,
         endIndex: cellEndIndex,
       };
     });
-  }, [legendColorMap, secondaryHeaderSchema]);
+  }, [secondaryHeaderSchema]);
 
   const calcDuration = (start, end) => {
     if (!start || !end) return '—';
@@ -482,6 +541,10 @@ function Archive() {
   const getReadOnlyCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle) => {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
+    const columnHeader = getSecondaryHeaderForPrimaryColumn(
+      getPrimaryColumnIndexForManualStageColumn(columnKey),
+      secondaryHeaderSchema,
+    );
     const style = manualClear
       ? undefined
       : manualMark
@@ -489,8 +552,8 @@ function Archive() {
           ...(baseStyle || {}),
           ...(manualMark.legendKey
             ? {
-                background: legendColorMap[manualMark.legendKey] || '#FFFFFF',
-                color: manualStageTextColorMap[manualMark.legendKey] || '#000000',
+                background: getSecondaryHeaderBackground(columnHeader),
+                color: getSecondaryHeaderTextColor(columnHeader),
               }
             : {}),
         }
@@ -507,7 +570,7 @@ function Archive() {
       'data-manual-stage-cell-key': `${rowKey}::${columnKey}`,
       title,
     };
-  }, [legendColorMap, manualStageTextColorMap]);
+  }, [secondaryHeaderSchema]);
 
   const renderOrdersColGroup = useCallback(() => (
     <colgroup>
@@ -740,7 +803,7 @@ function Archive() {
                     : (workerStageForText?.stepName || activeStage?.stepName || '');
                   const carpenterCellStyle = hasCarpenterAutoHighlight
                     ? {
-                        background: legendColorMap[columnStageMeta.carpenter.legendKey] || '#C37C8E',
+                        background: columnStageMeta.carpenter.hex || '#C37C8E',
                         color: columnStageMeta.carpenter.textHex,
                       }
                     : undefined;
@@ -766,7 +829,7 @@ function Archive() {
                   const hasItemManufacturingStart = Boolean(itemManufacturingMeta.startDate);
                   const itemStartDateCellStyle = hasItemManufacturingStart
                     ? {
-                        background: legendColorMap[columnStageMeta.itemStart.legendKey] || '#C37C8E',
+                        background: columnStageMeta.itemStart.hex || '#C37C8E',
                         color: columnStageMeta.itemStart.textHex,
                       }
                     : undefined;
@@ -779,7 +842,7 @@ function Archive() {
                   );
                   const itemEndDateCellStyle = itemManufacturingMeta.endDate
                     ? {
-                        background: legendColorMap[columnStageMeta.itemEnd.legendKey] || '#C37C8E',
+                        background: columnStageMeta.itemEnd.hex || '#C37C8E',
                         color: columnStageMeta.itemEnd.textHex,
                       }
                     : undefined;
@@ -795,21 +858,21 @@ function Archive() {
                     className: cn(itemEndDateCellPropsBase.className, 'item-end-date-cell'),
                   };
                   const orderCardActionStyle = {
-                    background: legendColorMap[columnStageMeta.card.legendKey] || '#A8D7B6',
+                    background: columnStageMeta.card.hex || '#A8D7B6',
                     color: columnStageMeta.card.textHex,
                   };
                   const paintActionStyle = {
-                    background: legendColorMap[columnStageMeta.paint.legendKey] || '#BDA6D5',
+                    background: columnStageMeta.paint.hex || '#BDA6D5',
                     color: columnStageMeta.paint.textHex,
                   };
                   const packageCellStyle = packageStats.total > 0 && packageStats.pending === 0
                     ? {
-                        background: legendColorMap[columnStageMeta.package.legendKey] || '#99E5FF',
+                        background: columnStageMeta.package.hex || '#99E5FF',
                         color: columnStageMeta.package.textHex,
                       }
                     : undefined;
                   const packageSummaryBadgeStyle = {
-                    background: legendColorMap[columnStageMeta.package.legendKey] || '#99E5FF',
+                    background: columnStageMeta.package.hex || '#99E5FF',
                     color: columnStageMeta.package.textHex,
                   };
                   const packageCellPropsBase = getReadOnlyCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle);
@@ -847,7 +910,7 @@ function Archive() {
                   const hasItemManufacturingDuration = itemDurationValue !== '—';
                   const itemDurationCellStyle = hasItemManufacturingDuration
                     ? {
-                        background: legendColorMap[columnStageMeta.itemDuration.legendKey] || '#C37C8E',
+                        background: columnStageMeta.itemDuration.hex || '#C37C8E',
                         color: columnStageMeta.itemDuration.textHex,
                       }
                     : undefined;
@@ -869,7 +932,7 @@ function Archive() {
                   const hasManufacturingDuration = Boolean(orderManufacturingMeta.startDate || orderManufacturingMeta.endDate || orderDurationValue !== '—');
                   const durationMetaCellStyle = hasManufacturingDuration
                     ? {
-                        background: legendColorMap[columnStageMeta.duration.legendKey] || '#F4C2A4',
+                        background: columnStageMeta.duration.hex || '#F4C2A4',
                         color: columnStageMeta.duration.textHex,
                       }
                     : undefined;

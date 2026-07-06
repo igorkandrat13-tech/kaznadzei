@@ -11,7 +11,7 @@ router.get('/order-stage-legend-config', (req, res) => {
     const settings = SettingsStore.get();
     res.json(normalizeOrderStageLegendConfig(settings.orderStageLegendConfig || {}));
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Не удалось загрузить конфигурацию легенды этапов.' });
+    res.status(500).json({ message: error.message || 'Не удалось загрузить конфигурацию этапов производства.' });
   }
 });
 
@@ -22,9 +22,9 @@ router.put('/order-stage-legend-config', requireAdminAccess(), (req, res) => {
     addActivityLog({
       action: 'settings.order-stage-legend.update',
       entityType: 'settings',
-      entityName: 'Легенда этапов заказов',
+      entityName: 'Этапы производства',
       actor: getRequestActor(req),
-      message: 'Конфигурация легенды этапов обновлена.',
+      message: 'Конфигурация этапов производства обновлена.',
       details: {
         stageKeys: nextConfig.stages.map((item) => item.key),
         secondaryHeaders: nextConfig.secondaryHeaders.length,
@@ -32,7 +32,7 @@ router.put('/order-stage-legend-config', requireAdminAccess(), (req, res) => {
     });
     res.json(settings.orderStageLegendConfig || nextConfig);
   } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось сохранить конфигурацию легенды этапов.' });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось сохранить конфигурацию этапов производства.' });
   }
 });
 

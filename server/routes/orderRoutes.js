@@ -171,8 +171,21 @@ function resolveLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders =
   return getStageLegendKeyForPrimaryColumn(primaryColumnIndex, secondaryHeaders);
 }
 
-function getActorAllowedManualColumns(roleKey = '') {
-  const normalizedRole = String(roleKey || '').trim();
+function getActorAllowedManualColumns(actor = {}) {
+  const normalizedEmployeeId = String(actor?.employeeId || '').trim();
+  if (normalizedEmployeeId) {
+    const employee = EmployeeStore.findById(normalizedEmployeeId);
+    if (!employee) {
+      const error = new Error('Сотрудник пользователя не найден.');
+      error.status = 403;
+      throw error;
+    }
+    if (Array.isArray(employee.allowedColumns)) {
+      return new Set(employee.allowedColumns);
+    }
+  }
+
+  const normalizedRole = String(actor?.role || '').trim();
   if (!normalizedRole || normalizedRole === 'admin') {
     return null;
   }
@@ -187,8 +200,8 @@ function getActorAllowedManualColumns(roleKey = '') {
   return new Set(Array.isArray(role.allowedColumns) ? role.allowedColumns : []);
 }
 
-function ensureActorCanUseManualColumns(roleKey = '', selections = []) {
-  const allowedColumns = getActorAllowedManualColumns(roleKey);
+function ensureActorCanUseManualColumns(actor = {}, selections = []) {
+  const allowedColumns = getActorAllowedManualColumns(actor);
   if (!allowedColumns) return;
 
   const forbiddenSelection = selections.find((selection) => !allowedColumns.has(String(selection?.columnKey || '').trim()));
@@ -477,7 +490,7 @@ function handleManualStageMarks(req, res) {
       return res.status(400).json({ message: 'Некорректный список ячеек.' });
     }
 
-    ensureActorCanUseManualColumns(req.auth?.role || 'admin', normalizedSelections);
+    ensureActorCanUseManualColumns(req.auth || { role: 'admin' }, normalizedSelections);
 
     const updatedOrders = OrderStore.setManualStageMarks(
       normalizedSelections,
@@ -544,7 +557,7 @@ function handleManualDateOverrides(req, res) {
       return res.status(400).json({ message: 'Некорректный список ячеек для изменения даты.' });
     }
 
-    ensureActorCanUseManualColumns(req.auth?.role || 'admin', normalizedSelections);
+    ensureActorCanUseManualColumns(req.auth || { role: 'admin' }, normalizedSelections);
 
     const payload = {
       columnKey,

@@ -386,7 +386,7 @@ function sanitizeOrderItemInput(payload, options = {}) {
 
 function sanitizeCommentInput(payload) {
   return {
-    role: normalizeString(payload.role, 'role', { required: true, maxLength: 40 }),
+    role: normalizeString(payload.role, 'role', { required: true, maxLength: 80 }),
     text: normalizeString(payload.text, 'text', { required: true, maxLength: 1000 }),
   };
 }
@@ -456,17 +456,27 @@ function sanitizeSettingsInput(payload, options = {}) {
 function sanitizeEmployeeInput(payload, options = {}) {
   const partial = options.partial === true;
   const data = {};
-  const allowedRoles = getKnownRoleKeys();
+  const { isAllowedColumnKey } = require('../config/roleColumnAccess');
 
   if (!partial || payload.fullName !== undefined) {
     data.fullName = normalizeString(payload.fullName, 'fullName', { required: !partial, maxLength: 160 });
   }
   if (!partial || payload.role !== undefined) {
-    const role = normalizeString(payload.role, 'role', { required: !partial, maxLength: 40 });
-    if (role && !allowedRoles.has(role)) {
-      fail('Поле "role" содержит недопустимую роль.');
+    data.role = normalizeString(payload.role, 'role', { required: !partial, maxLength: 80 });
+  }
+  if (!partial || payload.allowedColumns !== undefined) {
+    const allowedColumns = normalizeStringArray(payload.allowedColumns, 'allowedColumns', {
+      allowUndefined: partial,
+      maxItems: 64,
+      maxLength: 80,
+    });
+    if (allowedColumns !== undefined) {
+      const invalidColumn = allowedColumns.find((columnKey) => !isAllowedColumnKey(columnKey));
+      if (invalidColumn) {
+        fail(`Колонка "${invalidColumn}" не может быть привязана к сотруднику.`);
+      }
+      data.allowedColumns = Array.from(new Set(allowedColumns));
     }
-    data.role = role;
   }
   if (!partial || payload.telegramUsername !== undefined) {
     const username = normalizeString(payload.telegramUsername, 'telegramUsername', { maxLength: 80 });
