@@ -1147,14 +1147,24 @@ router.post('/orders/:id/telegram-material-request-items', (req, res) => {
       },
     });
   } catch (error) {
+    const fallbackMessage = 'Не удалось добавить заявку на расходники из Telegram.';
+    const details = [
+      error?.message ? `Причина: ${error.message}` : '',
+      req.params.id ? `Заказ: ${String(req.params.id).trim()}` : '',
+      req.body?.itemId ? `Изделие: ${String(req.body.itemId).trim()}` : '',
+      'Проверьте авторизацию сотрудника в Telegram и повторите попытку.',
+    ].filter(Boolean).join('\n');
     logTelegramOrderDebug('telegram-material-request-item-add.error', {
       route: 'telegram-material-request-item-add',
       orderId: String(req.params.id || ''),
       itemId: String(req.body?.itemId || '').trim(),
       ...getTelegramPayloadDebug(req.body || {}),
-      message: error.message || 'Не удалось добавить заявку на расходники из Telegram.',
+      message: error.message || fallbackMessage,
     });
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось добавить заявку на расходники из Telegram.' });
+    res.status(error.status || 400).json({
+      message: error.message || fallbackMessage,
+      details,
+    });
   }
 });
 

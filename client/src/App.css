@@ -6054,6 +6054,23 @@ body .role-allowed-column-marker {
   font-weight: 700;
 }
 
+.telegram-material-request-list {
+  gap: 10px;
+}
+
+.telegram-material-request-card {
+  background: linear-gradient(180deg, rgba(255, 252, 245, 0.98), rgba(255, 245, 228, 0.96));
+  border-color: rgba(227, 162, 73, 0.26);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.44),
+    0 10px 22px rgba(186, 125, 39, 0.1);
+}
+
+.telegram-material-request-pill {
+  background: rgba(255, 221, 153, 0.95);
+  color: #7a3612;
+}
+
 .telegram-package-input-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

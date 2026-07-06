@@ -101,6 +101,14 @@ function getMaterialRequestStats(items = [], legacyRequests = '') {
   };
 }
 
+function getTelegramMaterialRequestErrorMessage(error, fallbackMessage = 'Не удалось добавить заявку на расходники.') {
+  const rawMessage = String(error?.message || '').trim();
+  if (rawMessage && !/^error\.?$/i.test(rawMessage)) {
+    return rawMessage;
+  }
+  return `${fallbackMessage} Проверьте, что сотрудник авторизован в Telegram-боте, QR открыт на существующее изделие и сервер доступен для сохранения заказа.`;
+}
+
 function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
   switch (String(columnKey || '').trim()) {
     case 'orderNumber':
@@ -199,9 +207,6 @@ function OrderDetail() {
   const [scanActivationError, setScanActivationError] = useState('');
   const [stageActionKey, setStageActionKey] = useState('');
   const [stageError, setStageError] = useState('');
-  const [packageDraft, setPackageDraft] = useState('');
-  const [packageError, setPackageError] = useState('');
-  const [packageBusyKey, setPackageBusyKey] = useState('');
   const [materialRequestDraft, setMaterialRequestDraft] = useState('');
   const [materialRequestError, setMaterialRequestError] = useState('');
   const [materialRequestBusyKey, setMaterialRequestBusyKey] = useState('');
@@ -482,14 +487,10 @@ function OrderDetail() {
       .sort((left, right) => left.primaryColumnIndex - right.primaryColumnIndex);
   }, [allowedColumns, orderStageLegendConfig.secondaryHeaders]);
 
-  const packageStats = useMemo(() => (
-    getPackageStats(selectedItem?.packageItems, selectedItem?.packageName)
-  ), [selectedItem?.packageItems, selectedItem?.packageName]);
   const materialRequestStats = useMemo(() => (
     getMaterialRequestStats(selectedItem?.materialRequestItems, selectedItem?.photoLink)
   ), [selectedItem?.materialRequestItems, selectedItem?.photoLink]);
 
-  const canManagePackage = allowedColumns.includes('packageName');
   const canManageMaterialRequests = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId);
 
   useEffect(() => {
@@ -574,94 +575,6 @@ function OrderDetail() {
     telegramUnsafeUser,
   ]);
 
-  const addTelegramPackageItem = useCallback(async () => {
-    const nextName = String(packageDraft || '').trim();
-    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
-    if (!nextName) {
-      setPackageError('Введите название позиции комплектации.');
-      return;
-    }
-
-    setPackageBusyKey('add');
-    setPackageError('');
-    try {
-      const sessionToken = getActiveTelegramSessionToken();
-      const res = await apiFetch(`/api/orders/${id}/telegram-package-items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
-          sessionToken,
-          itemId: selectedItem.itemId,
-          name: nextName,
-        }),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось добавить позицию комплектации.');
-      }
-      setOrder(data?.order || null);
-      if (data?.employee) {
-        setTelegramEmployee(data.employee);
-      }
-      setPackageDraft('');
-    } catch (error) {
-      setPackageError(error.message || 'Не удалось добавить позицию комплектации.');
-    } finally {
-      setPackageBusyKey('');
-    }
-  }, [
-    getActiveTelegramSessionToken,
-    id,
-    packageDraft,
-    selectedItem?.itemId,
-    telegramEmployee,
-    telegramInitData,
-    telegramMode,
-    telegramUnsafeUser,
-  ]);
-
-  const toggleTelegramPackageItem = useCallback(async (packageItemId) => {
-    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId || !packageItemId) return;
-    const pendingKey = `toggle:${packageItemId}`;
-    setPackageBusyKey(pendingKey);
-    setPackageError('');
-    try {
-      const sessionToken = getActiveTelegramSessionToken();
-      const res = await apiFetch(`/api/orders/${id}/telegram-package-items/${packageItemId}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
-          sessionToken,
-          itemId: selectedItem.itemId,
-        }),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось изменить состояние позиции комплектации.');
-      }
-      setOrder(data?.order || null);
-      if (data?.employee) {
-        setTelegramEmployee(data.employee);
-      }
-    } catch (error) {
-      setPackageError(error.message || 'Не удалось изменить состояние позиции комплектации.');
-    } finally {
-      setPackageBusyKey('');
-    }
-  }, [
-    getActiveTelegramSessionToken,
-    id,
-    selectedItem?.itemId,
-    telegramEmployee,
-    telegramInitData,
-    telegramMode,
-    telegramUnsafeUser,
-  ]);
-
   const addTelegramMaterialRequestItem = useCallback(async () => {
     const nextName = String(materialRequestDraft || '').trim();
     if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
@@ -685,17 +598,17 @@ function OrderDetail() {
           name: nextName,
         }),
       });
-      const data = await parseJsonSafely(res);
       if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось добавить заявку на расходники.');
+        throw new Error(await getErrorMessage(res, 'Не удалось добавить заявку на расходники.'));
       }
+      const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
       if (data?.employee) {
         setTelegramEmployee(data.employee);
       }
       setMaterialRequestDraft('');
     } catch (error) {
-      setMaterialRequestError(error.message || 'Не удалось добавить заявку на расходники.');
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error));
     } finally {
       setMaterialRequestBusyKey('');
     }
@@ -703,46 +616,6 @@ function OrderDetail() {
     getActiveTelegramSessionToken,
     id,
     materialRequestDraft,
-    selectedItem?.itemId,
-    telegramEmployee,
-    telegramInitData,
-    telegramMode,
-    telegramUnsafeUser,
-  ]);
-
-  const toggleTelegramMaterialRequestItem = useCallback(async (materialRequestItemId) => {
-    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId || !materialRequestItemId) return;
-    const pendingKey = `toggle:${materialRequestItemId}`;
-    setMaterialRequestBusyKey(pendingKey);
-    setMaterialRequestError('');
-    try {
-      const sessionToken = getActiveTelegramSessionToken();
-      const res = await apiFetch(`/api/orders/${id}/telegram-material-request-items/${materialRequestItemId}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
-          sessionToken,
-          itemId: selectedItem.itemId,
-        }),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось изменить состояние заявки на расходники.');
-      }
-      setOrder(data?.order || null);
-      if (data?.employee) {
-        setTelegramEmployee(data.employee);
-      }
-    } catch (error) {
-      setMaterialRequestError(error.message || 'Не удалось изменить состояние заявки на расходники.');
-    } finally {
-      setMaterialRequestBusyKey('');
-    }
-  }, [
-    getActiveTelegramSessionToken,
-    id,
     selectedItem?.itemId,
     telegramEmployee,
     telegramInitData,
@@ -785,7 +658,7 @@ function OrderDetail() {
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
       <h2>{telegramMode ? `Изделие: ${selectedItem?.name || primaryItem?.name || '—'}` : `📋 Изделие: ${selectedItem?.name || primaryItem?.name || '—'}`}</h2>
       {telegramMode && (
-        <p className="telegram-order-subtitle">Общие данные заказа, доступные этапы и комплектация изделия.</p>
+        <p className="telegram-order-subtitle">Общие данные заказа, доступные этапы и заявки на расходники.</p>
       )}
 
       {telegramMode && (
@@ -917,92 +790,6 @@ function OrderDetail() {
             )}
           </div>
 
-          {(sessionLoading || sessionError || canManagePackage) && (
-            <div className="telegram-package-section">
-              <div className="telegram-section-title">Комплектация изделия</div>
-
-              {sessionLoading && (
-                <div className="telegram-empty-box">
-                  Проверяю доступ к комплектации...
-                </div>
-              )}
-
-              {canManagePackage && (
-                <>
-                  <div className="telegram-package-meta">
-                    Выполнено {packageStats.completed} из {packageStats.total}
-                  </div>
-
-                  <div className="telegram-package-input-row">
-                    <input
-                      type="text"
-                      value={packageDraft}
-                      onChange={(event) => {
-                        setPackageDraft(event.target.value);
-                        setPackageError('');
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          addTelegramPackageItem();
-                        }
-                      }}
-                      placeholder="Добавить позицию, например отвертка"
-                      disabled={packageBusyKey === 'add'}
-                    />
-                    <button
-                      className="btn btn-primary"
-                      onClick={addTelegramPackageItem}
-                      disabled={packageBusyKey === 'add'}
-                    >
-                      {packageBusyKey === 'add' ? 'Добавляю...' : 'Добавить'}
-                    </button>
-                  </div>
-
-                  {packageError && (
-                    <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
-                      {packageError}
-                    </div>
-                  )}
-
-                  {packageStats.items.length > 0 ? (
-                    <div className="telegram-package-list">
-                      {packageStats.items.map((packageItem) => {
-                        const toggleKey = `toggle:${packageItem.id}`;
-                        const isBusy = packageBusyKey === toggleKey;
-                        return (
-                          <label
-                            key={packageItem.id}
-                            className={`telegram-package-item${packageItem.isCompleted ? ' telegram-package-item-complete' : ''}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={packageItem.isCompleted}
-                              onChange={() => toggleTelegramPackageItem(packageItem.id)}
-                              disabled={isBusy}
-                            />
-                            <span className="telegram-package-item-name">{packageItem.name}</span>
-                            <span className="telegram-package-item-status">
-                              {isBusy
-                                ? 'Сохраняю...'
-                                : packageItem.isCompleted
-                                  ? 'Исполнено'
-                                  : 'Ожидает'}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="telegram-empty-box">
-                      Позиции комплектации пока не добавлены.
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
           {(sessionLoading || sessionError || canManageMaterialRequests) && (
             <div className="telegram-package-section telegram-material-request-section">
               <div className="telegram-section-title">Заявки на расходники</div>
@@ -1016,7 +803,7 @@ function OrderDetail() {
               {canManageMaterialRequests && (
                 <>
                   <div className="telegram-package-meta telegram-material-request-meta">
-                    Важные заявки: исполнено {materialRequestStats.completed} из {materialRequestStats.total}
+                    Важные заявки: добавлено {materialRequestStats.total}
                   </div>
 
                   <div className="telegram-package-input-row">
@@ -1052,32 +839,34 @@ function OrderDetail() {
                   )}
 
                   {materialRequestStats.items.length > 0 ? (
-                    <div className="telegram-package-list">
-                      {materialRequestStats.items.map((requestItem) => {
-                        const toggleKey = `toggle:${requestItem.id}`;
-                        const isBusy = materialRequestBusyKey === toggleKey;
-                        return (
-                          <label
-                            key={requestItem.id}
-                            className={`telegram-package-item telegram-material-request-item${requestItem.isCompleted ? ' telegram-package-item-complete' : ''}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={requestItem.isCompleted}
-                              onChange={() => toggleTelegramMaterialRequestItem(requestItem.id)}
-                              disabled={isBusy}
-                            />
-                            <span className="telegram-package-item-name">{requestItem.name}</span>
-                            <span className="telegram-package-item-status">
-                              {isBusy
-                                ? 'Сохраняю...'
-                                : requestItem.isCompleted
-                                  ? 'Исполнено'
-                                  : 'Срочно'}
+                    <div className="telegram-stage-list telegram-material-request-list">
+                      {materialRequestStats.items.map((requestItem) => (
+                        <div
+                          key={requestItem.id}
+                          className="telegram-stage-card telegram-material-request-card"
+                          style={{
+                            '--telegram-stage-accent': '#FFD27A',
+                            '--telegram-stage-text': '#6C2A10',
+                          }}
+                        >
+                          <div className="telegram-stage-card-top">
+                            <div className="telegram-stage-card-main">
+                              <div className="telegram-stage-card-swatch" aria-hidden="true" />
+                              <div className="telegram-stage-card-copy">
+                                <div className="telegram-stage-card-title">
+                                  {requestItem.name}
+                                </div>
+                                <div className="telegram-stage-card-subtitle">
+                                  Добавлено в заявку на расходники
+                                </div>
+                              </div>
+                            </div>
+                            <span className="telegram-stage-pill telegram-material-request-pill">
+                              Срочно
                             </span>
-                          </label>
-                        );
-                      })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="telegram-empty-box">
