@@ -13,7 +13,7 @@ const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
 } = require('../services/telegramWebAppAuth');
-const { getRoleLabel } = require('../config/roles');
+const { getRoleDefinitions, getRoleLabel } = require('../config/roles');
 
 const router = express.Router();
 
@@ -39,6 +39,16 @@ function getTelegramWebAppUrl() {
 
 function getEmployeeRoleLabel(role) {
   return getRoleLabel(role, SettingsStore.get().roles || SettingsStore.get().roleLabels || {});
+}
+
+function getEmployeeAllowedColumns(employee = {}) {
+  if (Array.isArray(employee?.allowedColumns)) {
+    return [...employee.allowedColumns];
+  }
+
+  const roleDefinitions = getRoleDefinitions(SettingsStore.get());
+  const roleDefinition = roleDefinitions.find((role) => role.key === String(employee?.role || '').trim());
+  return Array.isArray(roleDefinition?.allowedColumns) ? [...roleDefinition.allowedColumns] : [];
 }
 
 function maskTelegramValue(value, { tail = 6 } = {}) {
@@ -445,6 +455,7 @@ router.post('/telegram/webapp/session', async (req, res) => {
         fullName: employee.fullName,
         role: employee.role,
         telegramUsername: employee.telegramUsername || '',
+        allowedColumns: getEmployeeAllowedColumns(employee),
       },
     });
   } catch (error) {

@@ -474,6 +474,30 @@ function getPackageSummary(packageItems = []) {
     .join('; ');
 }
 
+function updateItemPackageState(item, nextPackageItems = []) {
+  const normalizedPackageItems = normalizePackageItems(nextPackageItems);
+  const currentPackageItems = normalizePackageItems(item?.packageItems, item?.packageName);
+  if (JSON.stringify(currentPackageItems) === JSON.stringify(normalizedPackageItems)) {
+    return false;
+  }
+
+  item.packageItems = normalizedPackageItems;
+  item.packageName = getPackageSummary(normalizedPackageItems);
+
+  const nextManualStageClears = normalizeManualStageClears(item?.manualStageClears);
+  if (
+    normalizedPackageItems.length > 0
+    && normalizedPackageItems.every((packageItem) => packageItem.isCompleted)
+    && nextManualStageClears.packageName
+  ) {
+    delete nextManualStageClears.packageName;
+    item.manualStageClears = normalizeManualStageClears(nextManualStageClears);
+  }
+
+  item.updatedAt = new Date().toISOString();
+  return true;
+}
+
 function cloneStages(stages = []) {
   return Array.isArray(stages)
     ? stages.map(stage => ({
@@ -1088,6 +1112,72 @@ const OrderStore = {
     }
 
     ensureOrderShape(order);
+    save();
+    return order;
+  },
+
+  addPackageItem(orderId, itemId, packageItem = {}) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return false;
+
+    const itemName = String(packageItem?.name || '').trim();
+    if (!itemName) return 'invalid';
+
+    const nextPackageItems = [
+      ...normalizePackageItems(item.packageItems, item.packageName),
+      {
+        id: String(packageItem?.id || id()).trim(),
+        name: itemName,
+        isCompleted: Boolean(packageItem?.isCompleted),
+        completedAt: packageItem?.isCompleted
+          ? (String(packageItem?.completedAt || '').trim() || new Date().toISOString().split('T')[0])
+          : null,
+      },
+    ];
+
+    if (!updateItemPackageState(item, nextPackageItems)) {
+      return order;
+    }
+
+    syncOrderStatus(order);
+    save();
+    return order;
+  },
+
+  togglePackageItem(orderId, itemId, packageItemId) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return false;
+
+    const normalizedPackageItemId = String(packageItemId || '').trim();
+    if (!normalizedPackageItemId) return 'invalid';
+
+    const currentPackageItems = normalizePackageItems(item.packageItems, item.packageName);
+    const hasTargetItem = currentPackageItems.some((packageItem) => packageItem.id === normalizedPackageItemId);
+    if (!hasTargetItem) return 'package_item_not_found';
+
+    const nextPackageItems = currentPackageItems.map((packageItem) => (
+      packageItem.id === normalizedPackageItemId
+        ? {
+            ...packageItem,
+            isCompleted: !packageItem.isCompleted,
+            completedAt: !packageItem.isCompleted ? new Date().toISOString().split('T')[0] : null,
+          }
+        : packageItem
+    ));
+
+    if (!updateItemPackageState(item, nextPackageItems)) {
+      return order;
+    }
+
+    syncOrderStatus(order);
     save();
     return order;
   },

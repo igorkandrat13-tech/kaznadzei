@@ -22,6 +22,7 @@ const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
 } = require('../services/telegramWebAppAuth');
+const { getRoleDefinitions } = require('../config/roles');
 const router = express.Router();
 
 const ORDER_ATTACHMENTS_ROOT = path.join(__dirname, '..', 'uploads', 'order-attachments');
@@ -301,6 +302,26 @@ function getTelegramEmployeeDisplayName(employee, telegramUser = null) {
   }
 
   return '';
+}
+
+function getTelegramActivityActor(employee = {}) {
+  return {
+    type: 'telegram',
+    role: employee.role,
+    name: employee.fullName,
+    label: `TG: ${employee.fullName}`,
+  };
+}
+
+function getEmployeeAllowedColumns(employee = {}) {
+  const ownAllowedColumns = Array.isArray(employee?.allowedColumns) ? employee.allowedColumns : null;
+  if (ownAllowedColumns) {
+    return new Set(ownAllowedColumns);
+  }
+
+  const roleDefinitions = getRoleDefinitions(SettingsStore.get());
+  const roleDefinition = roleDefinitions.find((role) => role.key === String(employee?.role || '').trim());
+  return new Set(Array.isArray(roleDefinition?.allowedColumns) ? roleDefinition.allowedColumns : []);
 }
 
 function resolveTelegramEmployee(token, payload, context = {}) {
@@ -732,12 +753,7 @@ router.post('/orders/:id/telegram-item-scan', (req, res) => {
       entityType: 'orderItem',
       entityId: updatedItem.itemId,
       entityName: updatedItem.name || '',
-      actor: {
-        type: 'telegram',
-        role: employee.role,
-        name: employee.fullName,
-        label: `TG: ${employee.fullName}`,
-      },
+      actor: getTelegramActivityActor(employee),
       message: 'Изделие открыто сотрудником по QR-коду.',
       details: {
         orderId: req.params.id,
@@ -765,6 +781,289 @@ router.post('/orders/:id/telegram-item-scan', (req, res) => {
       message: error.message || 'Не удалось отметить изделие как взятое в работу.',
     });
     res.status(error.status || 400).json({ message: error.message || 'Не удалось отметить изделие как взятое в работу.' });
+  }
+});
+
+router.post('/orders/:id/telegram-stage-mark', (req, res) => {
+  try {
+    const token = String(SettingsStore.get().telegramBotToken || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+    }
+
+    const context = {
+      route: 'telegram-stage-mark',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+      columnKey: String(req.body?.columnKey || '').trim(),
+    };
+    const employee = resolveTelegramEmployee(token, req.body || {}, context);
+    if (!employee) {
+      logTelegramOrderDebug('telegram-stage-mark.reject.employee-not-found', context);
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+    if (!context.itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+    if (!context.columnKey) {
+      return res.status(400).json({ message: 'Не указана колонка этапа.' });
+    }
+    if (context.columnKey === 'packageName') {
+      return res.status(400).json({ message: 'Комплектация отмечается через список позиций, а не через кнопку этапа.' });
+    }
+
+    ensureActorCanUseManualColumns({
+      employeeId: employee._id,
+      role: employee.role,
+    }, [{ columnKey: context.columnKey }]);
+
+    const settings = SettingsStore.get();
+    const secondaryHeaders = settings?.orderStageLegendConfig?.secondaryHeaders || [];
+    const legendKey = resolveLegendKeyForManualStageColumn(context.columnKey, secondaryHeaders);
+    if (!legendKey) {
+      return res.status(400).json({ message: 'Для выбранной колонки не найден цветовой этап.' });
+    }
+
+    const updatedOrders = OrderStore.setManualStageMarks([{
+      orderId: req.params.id,
+      itemId: context.itemId,
+      columnKey: context.columnKey,
+      legendKey,
+    }], '', employee.fullName || employee.role || 'telegram');
+
+    if (!Array.isArray(updatedOrders) || updatedOrders.length === 0) {
+      return res.status(400).json({ message: 'Не удалось отметить этап.' });
+    }
+
+    const updatedOrder = updatedOrders.find((order) => order._id === req.params.id) || OrderStore.findById(req.params.id);
+    const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
+    const allowedColumns = Array.from(getEmployeeAllowedColumns(employee));
+
+    logTelegramOrderDebug('telegram-stage-mark.success', {
+      ...context,
+      employeeId: employee._id,
+      employeeRole: employee.role,
+      legendKey,
+    });
+
+    addActivityLog({
+      action: 'order.manual-stage.telegram',
+      entityType: 'orderItem',
+      entityId: updatedItem.itemId,
+      entityName: updatedItem.name || '',
+      actor: getTelegramActivityActor(employee),
+      message: `Этап "${context.columnKey}" отмечен из Telegram.`,
+      details: {
+        orderId: req.params.id,
+        itemId: updatedItem.itemId,
+        columnKey: context.columnKey,
+        legendKey,
+      },
+    });
+
+    res.json({
+      ok: true,
+      order: updatedOrder,
+      item: updatedItem,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+        allowedColumns,
+      },
+    });
+  } catch (error) {
+    logTelegramOrderDebug('telegram-stage-mark.error', {
+      route: 'telegram-stage-mark',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+      columnKey: String(req.body?.columnKey || '').trim(),
+      ...getTelegramPayloadDebug(req.body || {}),
+      message: error.message || 'Не удалось отметить этап из Telegram.',
+    });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось отметить этап из Telegram.' });
+  }
+});
+
+router.post('/orders/:id/telegram-package-items', (req, res) => {
+  try {
+    const token = String(SettingsStore.get().telegramBotToken || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+    }
+
+    const context = {
+      route: 'telegram-package-item-add',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+    };
+    const employee = resolveTelegramEmployee(token, req.body || {}, context);
+    if (!employee) {
+      logTelegramOrderDebug('telegram-package-item-add.reject.employee-not-found', context);
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+    if (!context.itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+
+    const itemName = String(req.body?.name || '').trim();
+    if (!itemName) {
+      return res.status(400).json({ message: 'Введите название позиции комплектации.' });
+    }
+
+    ensureActorCanUseManualColumns({
+      employeeId: employee._id,
+      role: employee.role,
+    }, [{ columnKey: 'packageName' }]);
+
+    const updatedOrder = OrderStore.addPackageItem(req.params.id, context.itemId, {
+      name: itemName,
+    });
+    if (updatedOrder === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (updatedOrder === false) {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+    if (updatedOrder === 'invalid') {
+      return res.status(400).json({ message: 'Не удалось добавить позицию комплектации.' });
+    }
+
+    const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
+    const allowedColumns = Array.from(getEmployeeAllowedColumns(employee));
+
+    logTelegramOrderDebug('telegram-package-item-add.success', {
+      ...context,
+      employeeId: employee._id,
+      employeeRole: employee.role,
+      itemName,
+    });
+
+    addActivityLog({
+      action: 'order.package-item.telegram.add',
+      entityType: 'orderItem',
+      entityId: updatedItem.itemId,
+      entityName: updatedItem.name || '',
+      actor: getTelegramActivityActor(employee),
+      message: 'Позиция комплектации добавлена из Telegram.',
+      details: {
+        orderId: req.params.id,
+        itemId: updatedItem.itemId,
+        itemName,
+      },
+    });
+
+    res.status(201).json({
+      ok: true,
+      order: updatedOrder,
+      item: updatedItem,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+        allowedColumns,
+      },
+    });
+  } catch (error) {
+    logTelegramOrderDebug('telegram-package-item-add.error', {
+      route: 'telegram-package-item-add',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+      ...getTelegramPayloadDebug(req.body || {}),
+      message: error.message || 'Не удалось добавить позицию комплектации из Telegram.',
+    });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось добавить позицию комплектации из Telegram.' });
+  }
+});
+
+router.post('/orders/:id/telegram-package-items/:packageItemId/toggle', (req, res) => {
+  try {
+    const token = String(SettingsStore.get().telegramBotToken || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+    }
+
+    const context = {
+      route: 'telegram-package-item-toggle',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+      packageItemId: String(req.params.packageItemId || '').trim(),
+    };
+    const employee = resolveTelegramEmployee(token, req.body || {}, context);
+    if (!employee) {
+      logTelegramOrderDebug('telegram-package-item-toggle.reject.employee-not-found', context);
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+    if (!context.itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+    if (!context.packageItemId) {
+      return res.status(400).json({ message: 'Не указана позиция комплектации.' });
+    }
+
+    ensureActorCanUseManualColumns({
+      employeeId: employee._id,
+      role: employee.role,
+    }, [{ columnKey: 'packageName' }]);
+
+    const updatedOrder = OrderStore.togglePackageItem(req.params.id, context.itemId, context.packageItemId);
+    if (updatedOrder === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (updatedOrder === false) {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+    if (updatedOrder === 'invalid') {
+      return res.status(400).json({ message: 'Некорректная позиция комплектации.' });
+    }
+    if (updatedOrder === 'package_item_not_found') {
+      return res.status(404).json({ message: 'Позиция комплектации не найдена.' });
+    }
+
+    const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
+    const allowedColumns = Array.from(getEmployeeAllowedColumns(employee));
+
+    logTelegramOrderDebug('telegram-package-item-toggle.success', {
+      ...context,
+      employeeId: employee._id,
+      employeeRole: employee.role,
+    });
+
+    addActivityLog({
+      action: 'order.package-item.telegram.toggle',
+      entityType: 'orderItem',
+      entityId: updatedItem.itemId,
+      entityName: updatedItem.name || '',
+      actor: getTelegramActivityActor(employee),
+      message: 'Позиция комплектации отмечена из Telegram.',
+      details: {
+        orderId: req.params.id,
+        itemId: updatedItem.itemId,
+        packageItemId: context.packageItemId,
+      },
+    });
+
+    res.json({
+      ok: true,
+      order: updatedOrder,
+      item: updatedItem,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+        allowedColumns,
+      },
+    });
+  } catch (error) {
+    logTelegramOrderDebug('telegram-package-item-toggle.error', {
+      route: 'telegram-package-item-toggle',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+      packageItemId: String(req.params.packageItemId || '').trim(),
+      ...getTelegramPayloadDebug(req.body || {}),
+      message: error.message || 'Не удалось изменить позицию комплектации из Telegram.',
+    });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось изменить позицию комплектации из Telegram.' });
   }
 });
 

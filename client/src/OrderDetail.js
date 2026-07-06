@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { buildOrderStageLegendConfig } from './orderStageLegend';
 import { getOrderOverallStatus, getOrderPrimaryItem } from './orderSelectors';
+import { ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
 import { getOrderStatusMeta } from './statusMeta';
 import {
   buildTelegramOrderPath,
@@ -18,7 +20,6 @@ import {
   persistTelegramUnsafeUser,
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
-import { useRoleConfig } from './RoleConfigContext';
 
 function isRecoverableTelegramSessionMessage(message) {
   const normalized = String(message || '').toLowerCase();
@@ -33,22 +34,158 @@ function isRecoverableTelegramSessionMessage(message) {
     );
 }
 
+function createPackageItemId() {
+  return `package-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizePackageItems(items = [], legacyPackageName = '') {
+  const sourceItems = Array.isArray(items) ? items : [];
+  const normalizedItems = sourceItems.reduce((acc, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
+    const name = String(item.name || '').trim();
+    if (!name) return acc;
+    acc.push({
+      id: String(item.id || createPackageItemId()).trim(),
+      name,
+      isCompleted: Boolean(item.isCompleted),
+      completedAt: item.isCompleted ? (String(item.completedAt || '').trim() || new Date().toISOString().split('T')[0]) : null,
+    });
+    return acc;
+  }, []);
+  if (normalizedItems.length > 0) return normalizedItems;
+
+  return String(legacyPackageName || '')
+    .split(/[\n,;]+/g)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((token) => {
+      const isCompleted = /^(\+|\[x\]|x\s+|✓\s+|✔\s+)/i.test(token);
+      const normalizedName = token
+        .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|✓\s+|✔\s+)/i, '')
+        .trim();
+      return {
+        id: createPackageItemId(),
+        name: normalizedName || token,
+        isCompleted,
+        completedAt: isCompleted ? new Date().toISOString().split('T')[0] : null,
+      };
+    })
+    .filter((item) => item.name);
+}
+
+function getPackageStats(items = [], legacyPackageName = '') {
+  const normalizedItems = normalizePackageItems(items, legacyPackageName);
+  const total = normalizedItems.length;
+  const completed = normalizedItems.filter((item) => item.isCompleted).length;
+  return {
+    total,
+    completed,
+    pending: Math.max(0, total - completed),
+    items: normalizedItems,
+  };
+}
+
+function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
+  switch (String(columnKey || '').trim()) {
+    case 'orderNumber':
+      return 0;
+    case 'customer':
+      return 1;
+    case 'room':
+      return 2;
+    case 'roomNumber':
+      return 3;
+    case 'itemNumber':
+      return 4;
+    case 'quantity':
+      return 5;
+    case 'name':
+      return 6;
+    case 'orderCard':
+      return 7;
+    case 'packageName':
+      return 8;
+    case 'notes':
+      return 9;
+    case 'deliveryDate':
+      return 10;
+    case 'carpenter':
+      return 11;
+    case 'photoLink':
+      return 12;
+    case 'paint':
+      return 13;
+    case 'itemStartDate':
+      return 14;
+    case 'itemEndDate':
+      return 15;
+    case 'itemDuration':
+      return 16;
+    case 'duration':
+      return 17;
+    default:
+      return -1;
+  }
+}
+
+function getSecondaryHeaderForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
+  if (columnIndex < 0) return null;
+  let currentIndex = 0;
+  for (const cell of secondaryHeaders) {
+    const span = Number(cell?.colSpan) || 1;
+    if (columnIndex >= currentIndex && columnIndex < currentIndex + span) {
+      return cell || null;
+    }
+    currentIndex += span;
+  }
+  return null;
+}
+
+function getSecondaryHeaderBackground(header = null) {
+  if (!header) return '#FFFFFF';
+  if (header.useTableBackground) return 'var(--orders-table-cell-background)';
+  return String(header.hex || '').trim() || '#FFFFFF';
+}
+
+function getSecondaryHeaderTextColor(header = null) {
+  if (!header) return '#000000';
+  if (header.useTableBackground) return '#000000';
+  return String(header.textHex || '').trim() || '#000000';
+}
+
+function formatDateValue(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '—';
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return normalized;
+  return parsed.toLocaleDateString();
+}
+
+function formatDateTimeValue(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return normalized;
+  return parsed.toLocaleString();
+}
+
 function OrderDetail() {
-  const { getRoleShortLabel } = useRoleConfig();
   const location = useLocation();
   const navigate = useNavigate();
   const { id, itemId } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
   const [telegramEmployee, setTelegramEmployee] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const [telegramActionError, setTelegramActionError] = useState('');
-  const [commentDraft, setCommentDraft] = useState('');
-  const [commentError, setCommentError] = useState('');
-  const [savingComment, setSavingComment] = useState(false);
-  const [commentEditing, setCommentEditing] = useState(false);
   const [scanActivationError, setScanActivationError] = useState('');
+  const [stageActionKey, setStageActionKey] = useState('');
+  const [stageError, setStageError] = useState('');
+  const [packageDraft, setPackageDraft] = useState('');
+  const [packageError, setPackageError] = useState('');
+  const [packageBusyKey, setPackageBusyKey] = useState('');
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
@@ -106,9 +243,23 @@ function OrderDetail() {
     }
   }, [id]);
 
+  const fetchOrderStageLegendConfig = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/order-stage-legend-config');
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось загрузить этапы производства.');
+      }
+      setOrderStageLegendConfig(buildOrderStageLegendConfig(data || {}));
+    } catch {
+      setOrderStageLegendConfig(buildOrderStageLegendConfig());
+    }
+  }, []);
+
   useEffect(() => {
     fetchOrder({ showLoader: true });
-  }, [fetchOrder]);
+    fetchOrderStageLegendConfig();
+  }, [fetchOrder, fetchOrderStageLegendConfig]);
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
@@ -228,7 +379,6 @@ function OrderDetail() {
 
     const handleVisibilityRefresh = () => {
       if (document.visibilityState === 'hidden') return;
-      if (commentEditing) return;
       refreshTelegramAuth();
     };
 
@@ -239,14 +389,13 @@ function OrderDetail() {
       window.removeEventListener('focus', handleVisibilityRefresh);
       document.removeEventListener('visibilitychange', handleVisibilityRefresh);
     };
-  }, [commentEditing, refreshTelegramAuth, telegramMode]);
+  }, [refreshTelegramAuth, telegramMode]);
 
   useEffect(() => {
     if (!telegramMode) return undefined;
 
     const refreshOrder = () => {
       if (document.visibilityState === 'hidden') return;
-      if (commentEditing) return;
       fetchOrder();
     };
 
@@ -259,7 +408,7 @@ function OrderDetail() {
       window.removeEventListener('focus', refreshOrder);
       document.removeEventListener('visibilitychange', refreshOrder);
     };
-  }, [commentEditing, fetchOrder, telegramMode]);
+  }, [fetchOrder, telegramMode]);
 
   const calcDuration = (start, end) => {
     if (!start || !end) return '—';
@@ -276,30 +425,50 @@ function OrderDetail() {
   const primaryItem = getOrderPrimaryItem(order);
   const statusMeta = getOrderStatusMeta(selectedItem?.overallStatus || getOrderOverallStatus(order));
   const orderNotes = String(selectedItem?.notes || primaryItem?.notes || '').trim();
-  const currentRoleComment = telegramEmployee?.role
-    ? (selectedItem?.comments || []).find(comment => comment.role === telegramEmployee.role)?.text || ''
-    : '';
   const detailItems = order ? [
     { label: 'Номер заказа', value: order.orderNumber || '—' },
     { label: 'Заказчик', value: order.customer || '—' },
     { label: 'Изделие', value: selectedItem?.name || primaryItem?.name || '—' },
     { label: '№ изделия в заказе', value: selectedItem?.itemNumber || '—' },
-    { label: 'Артикул изделия', value: selectedItem?.productNumber || '—' },
     { label: 'Помещение', value: selectedItem?.room || '—' },
     { label: '№ помещения', value: selectedItem?.roomNumber || '—' },
-    { label: 'Кол-во', value: selectedItem?.quantity || primaryItem?.quantity || 1 },
-    { label: 'Материал', value: selectedItem?.material || primaryItem?.material || '—' },
-    { label: 'Комплектация', value: selectedItem?.packageName || '—' },
-    { label: 'Отгрузка до', value: selectedItem?.deliveryDate ? new Date(selectedItem.deliveryDate).toLocaleDateString() : '—' },
-    { label: 'Дата заказа', value: order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—' },
-    { label: 'Начало изготовления', value: order.startDate ? new Date(order.startDate).toLocaleDateString() : '—' },
-    { label: 'Окончание изготовления', value: order.endDate ? new Date(order.endDate).toLocaleDateString() : '—' },
-    { label: 'Время изготовления', value: calcDuration(order.startDate, order.endDate) },
+    { label: 'Количество', value: selectedItem?.quantity || primaryItem?.quantity || 1 },
+    { label: 'Отгрузка до', value: formatDateValue(selectedItem?.deliveryDate) },
+    { label: 'Старт заказа', value: formatDateValue(order.orderDate) },
   ] : [];
-  useEffect(() => {
-    if (!telegramMode || !telegramEmployee || commentEditing) return;
-    setCommentDraft(currentRoleComment);
-  }, [commentEditing, currentRoleComment, telegramEmployee, telegramMode]);
+
+  const allowedColumns = useMemo(() => (
+    Array.isArray(telegramEmployee?.allowedColumns) ? telegramEmployee.allowedColumns : []
+  ), [telegramEmployee?.allowedColumns]);
+
+  const telegramStageOptions = useMemo(() => {
+    const secondaryHeaders = orderStageLegendConfig.secondaryHeaders || [];
+    return ROLE_COLUMN_ACCESS_OPTIONS
+      .filter((column) => allowedColumns.includes(column.key) && column.key !== 'packageName')
+      .map((column) => {
+        const header = getSecondaryHeaderForPrimaryColumn(
+          getPrimaryColumnIndexForManualStageColumn(column.key),
+          secondaryHeaders,
+        );
+        if (!header || !header.legendKey || header.useTableBackground) {
+          return null;
+        }
+        return {
+          columnKey: column.key,
+          label: header.label || column.label,
+          legendKey: header.legendKey,
+          hex: getSecondaryHeaderBackground(header),
+          textHex: getSecondaryHeaderTextColor(header),
+        };
+      })
+      .filter(Boolean);
+  }, [allowedColumns, orderStageLegendConfig.secondaryHeaders]);
+
+  const packageStats = useMemo(() => (
+    getPackageStats(selectedItem?.packageItems, selectedItem?.packageName)
+  ), [selectedItem?.packageItems, selectedItem?.packageName]);
+
+  const canManagePackage = allowedColumns.includes('packageName');
 
   useEffect(() => {
     if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
@@ -340,6 +509,136 @@ function OrderDetail() {
     telegramUnsafeUser,
   ]);
 
+  const applyTelegramStageMark = useCallback(async (columnKey) => {
+    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId || !columnKey) return;
+    const pendingKey = `stage:${columnKey}`;
+    setStageActionKey(pendingKey);
+    setStageError('');
+    setTelegramActionError('');
+    try {
+      const sessionToken = getActiveTelegramSessionToken();
+      const res = await apiFetch(`/api/orders/${id}/telegram-stage-mark`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken,
+          itemId: selectedItem.itemId,
+          columnKey,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось отметить этап.');
+      }
+      setOrder(data?.order || null);
+      if (data?.employee) {
+        setTelegramEmployee(data.employee);
+      }
+    } catch (error) {
+      setStageError(error.message || 'Не удалось отметить этап.');
+    } finally {
+      setStageActionKey('');
+    }
+  }, [
+    getActiveTelegramSessionToken,
+    id,
+    selectedItem?.itemId,
+    telegramEmployee,
+    telegramInitData,
+    telegramMode,
+    telegramUnsafeUser,
+  ]);
+
+  const addTelegramPackageItem = useCallback(async () => {
+    const nextName = String(packageDraft || '').trim();
+    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
+    if (!nextName) {
+      setPackageError('Введите название позиции комплектации.');
+      return;
+    }
+
+    setPackageBusyKey('add');
+    setPackageError('');
+    try {
+      const sessionToken = getActiveTelegramSessionToken();
+      const res = await apiFetch(`/api/orders/${id}/telegram-package-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken,
+          itemId: selectedItem.itemId,
+          name: nextName,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось добавить позицию комплектации.');
+      }
+      setOrder(data?.order || null);
+      if (data?.employee) {
+        setTelegramEmployee(data.employee);
+      }
+      setPackageDraft('');
+    } catch (error) {
+      setPackageError(error.message || 'Не удалось добавить позицию комплектации.');
+    } finally {
+      setPackageBusyKey('');
+    }
+  }, [
+    getActiveTelegramSessionToken,
+    id,
+    packageDraft,
+    selectedItem?.itemId,
+    telegramEmployee,
+    telegramInitData,
+    telegramMode,
+    telegramUnsafeUser,
+  ]);
+
+  const toggleTelegramPackageItem = useCallback(async (packageItemId) => {
+    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId || !packageItemId) return;
+    const pendingKey = `toggle:${packageItemId}`;
+    setPackageBusyKey(pendingKey);
+    setPackageError('');
+    try {
+      const sessionToken = getActiveTelegramSessionToken();
+      const res = await apiFetch(`/api/orders/${id}/telegram-package-items/${packageItemId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken,
+          itemId: selectedItem.itemId,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось изменить состояние позиции комплектации.');
+      }
+      setOrder(data?.order || null);
+      if (data?.employee) {
+        setTelegramEmployee(data.employee);
+      }
+    } catch (error) {
+      setPackageError(error.message || 'Не удалось изменить состояние позиции комплектации.');
+    } finally {
+      setPackageBusyKey('');
+    }
+  }, [
+    getActiveTelegramSessionToken,
+    id,
+    selectedItem?.itemId,
+    telegramEmployee,
+    telegramInitData,
+    telegramMode,
+    telegramUnsafeUser,
+  ]);
+
   if (loading) {
     return (
       <div className="card">
@@ -356,44 +655,6 @@ function OrderDetail() {
       </div>
     );
   }
-
-  const saveTelegramComment = async () => {
-    if (!telegramMode || !telegramEmployee) return;
-
-    const text = commentDraft.trim();
-    if (!text) {
-      setCommentError('Введите текст комментария.');
-      return;
-    }
-
-    setSavingComment(true);
-    setCommentError('');
-    try {
-      const sessionToken = getActiveTelegramSessionToken();
-      const res = await apiFetch(`/api/orders/${id}/telegram-comment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
-          sessionToken,
-                  itemId: selectedItem?.itemId || '',
-          text,
-        }),
-      });
-
-      if (!res.ok) {
-        setCommentError(await getErrorMessage(res, 'Не удалось сохранить комментарий.'));
-        return;
-      }
-
-      await fetchOrder();
-      setCommentDraft(text);
-      setCommentEditing(false);
-    } finally {
-      setSavingComment(false);
-    }
-  };
 
   const handleScanAnotherQr = () => {
     setTelegramActionError('');
@@ -413,7 +674,7 @@ function OrderDetail() {
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
       <h2>{telegramMode ? `Изделие: ${selectedItem?.name || primaryItem?.name || '—'}` : `📋 Изделие: ${selectedItem?.name || primaryItem?.name || '—'}`}</h2>
       {telegramMode && (
-        <p className="telegram-order-subtitle">Актуальная информация по изделию в заказе.</p>
+        <p className="telegram-order-subtitle">Общие данные заказа, доступные этапы и комплектация изделия.</p>
       )}
 
       {telegramMode && (
@@ -457,16 +718,180 @@ function OrderDetail() {
             ))}
           </div>
 
-          <div className="detail-block detail-block-wide">
-            <div className="detail-label">Примечания по заказу</div>
-            <div className="detail-value detail-value-multiline">
-              {orderNotes || 'Примечание по заказу пока не добавлено.'}
+          {orderNotes && (
+            <div className="detail-block detail-block-wide">
+              <div className="detail-label">Примечания</div>
+              <div className="detail-value detail-value-multiline">
+                {orderNotes}
+              </div>
             </div>
-            <div className="mt-8 text-small text-subtle">
-              Данные заказа обновляются автоматически.
-            </div>
+          )}
+
+          <div className="telegram-stage-section">
+            <div className="telegram-section-title">Этапы</div>
+
+            {sessionLoading && (
+              <div className="telegram-empty-box">
+                Проверяю доступ сотрудника...
+              </div>
+            )}
+
+            {!sessionLoading && sessionError && (
+              <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                {sessionError}
+              </div>
+            )}
+
+            {!sessionLoading && !sessionError && telegramEmployee && telegramStageOptions.length === 0 && (
+              <div className="telegram-empty-box">
+                Для этого сотрудника не настроены этапы в Telegram Web App.
+              </div>
+            )}
+
+            {stageError && (
+              <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                {stageError}
+              </div>
+            )}
+
+            {telegramStageOptions.length > 0 && (
+              <div className="telegram-stage-list">
+                {telegramStageOptions.map((stage) => {
+                  const stageMark = selectedItem?.manualStageMarks?.[stage.columnKey] || null;
+                  const stageCleared = Boolean(selectedItem?.manualStageClears?.[stage.columnKey]);
+                  const isMarked = Boolean(stageMark && !stageCleared);
+                  const isBusy = stageActionKey === `stage:${stage.columnKey}`;
+                  return (
+                    <div
+                      key={stage.columnKey}
+                      className={`telegram-stage-card${isMarked ? ' telegram-stage-card-complete' : ''}`}
+                      style={{
+                        borderColor: stage.hex,
+                        background: isMarked
+                          ? `linear-gradient(135deg, ${stage.hex}, #ffffff)`
+                          : `linear-gradient(135deg, #ffffff, ${stage.hex})`,
+                      }}
+                    >
+                      <div className="telegram-stage-card-top">
+                        <div>
+                          <div className="telegram-stage-card-title" style={{ color: stage.textHex }}>
+                            {stage.label}
+                          </div>
+                          <div className="telegram-stage-card-subtitle" style={{ color: stage.textHex }}>
+                            {isMarked
+                              ? `Принято${stageMark?.updatedAt ? ` · ${formatDateTimeValue(stageMark.updatedAt)}` : ''}`
+                              : 'Ожидает принятия'}
+                          </div>
+                        </div>
+                        <span className={`telegram-stage-pill ${isMarked ? 'telegram-stage-pill-complete' : 'telegram-stage-pill-pending'}`}>
+                          {isMarked ? 'Принято' : 'Ожидает'}
+                        </span>
+                      </div>
+                      <div className="telegram-stage-card-actions">
+                        <button
+                          className={`btn ${isMarked ? 'btn-secondary' : 'btn-primary'}`}
+                          onClick={() => applyTelegramStageMark(stage.columnKey)}
+                          disabled={isBusy || isMarked}
+                        >
+                          {isBusy ? 'Сохраняю...' : isMarked ? 'Этап принят' : 'Принять этап'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
+          <div className="telegram-package-section">
+            <div className="telegram-section-title">Комплектация изделия</div>
+
+            {sessionLoading && (
+              <div className="telegram-empty-box">
+                Проверяю доступ к комплектации...
+              </div>
+            )}
+
+            {!sessionLoading && !sessionError && telegramEmployee && !canManagePackage && (
+              <div className="telegram-empty-box">
+                У сотрудника нет доступа к комплектации изделия.
+              </div>
+            )}
+
+            {canManagePackage && (
+              <>
+                <div className="telegram-package-meta">
+                  Выполнено {packageStats.completed} из {packageStats.total}
+                </div>
+
+                <div className="telegram-package-input-row">
+                  <input
+                    type="text"
+                    value={packageDraft}
+                    onChange={(event) => {
+                      setPackageDraft(event.target.value);
+                      setPackageError('');
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        addTelegramPackageItem();
+                      }
+                    }}
+                    placeholder="Добавить позицию, например отвертка"
+                    disabled={packageBusyKey === 'add'}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={addTelegramPackageItem}
+                    disabled={packageBusyKey === 'add'}
+                  >
+                    {packageBusyKey === 'add' ? 'Добавляю...' : 'Добавить'}
+                  </button>
+                </div>
+
+                {packageError && (
+                  <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                    {packageError}
+                  </div>
+                )}
+
+                {packageStats.items.length > 0 ? (
+                  <div className="telegram-package-list">
+                    {packageStats.items.map((packageItem) => {
+                      const toggleKey = `toggle:${packageItem.id}`;
+                      const isBusy = packageBusyKey === toggleKey;
+                      return (
+                        <label
+                          key={packageItem.id}
+                          className={`telegram-package-item${packageItem.isCompleted ? ' telegram-package-item-complete' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={packageItem.isCompleted}
+                            onChange={() => toggleTelegramPackageItem(packageItem.id)}
+                            disabled={isBusy}
+                          />
+                          <span className="telegram-package-item-name">{packageItem.name}</span>
+                          <span className="telegram-package-item-status">
+                            {isBusy
+                              ? 'Сохраняю...'
+                              : packageItem.isCompleted
+                                ? 'Исполнено'
+                                : 'Ожидает'}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="telegram-empty-box">
+                    Позиции комплектации пока не добавлены.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </>
       ) : (
         <div className="table-scroll">
@@ -476,7 +901,6 @@ function OrderDetail() {
               <tr><td><strong>Заказчик</strong></td><td>{order.customer || '—'}</td></tr>
               <tr><td><strong>Изделие</strong></td><td>{selectedItem?.name || primaryItem?.name || '—'}</td></tr>
               <tr><td><strong>№ изделия в заказе</strong></td><td>{selectedItem?.itemNumber || '—'}</td></tr>
-              <tr><td><strong>Артикул изделия</strong></td><td>{selectedItem?.productNumber || '—'}</td></tr>
               <tr><td><strong>Помещение</strong></td><td>{selectedItem?.room || '—'}</td></tr>
               <tr><td><strong>№ помещения</strong></td><td>{selectedItem?.roomNumber || '—'}</td></tr>
               <tr><td><strong>Кол-во изделий</strong></td><td>{selectedItem?.quantity || primaryItem?.quantity || 1}</td></tr>
@@ -490,84 +914,6 @@ function OrderDetail() {
               <tr><td><strong>Статус</strong></td><td><span className={statusMeta.className}>{statusMeta.label}</span></td></tr>
             </tbody>
           </table>
-        </div>
-      )}
-
-      {telegramMode && (
-        <div className="telegram-comment-section">
-          <div className="telegram-comment-title">Комментарий сотрудника</div>
-
-          {sessionLoading && (
-            <div className="telegram-comment-placeholder">
-              Проверяю доступ...
-            </div>
-          )}
-
-          {sessionError && (
-            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
-              {sessionError}
-            </div>
-          )}
-
-          {!sessionLoading && !telegramEmployee && (
-            <div className="telegram-comment-placeholder">
-              Комментарий пока недоступен.
-              <div style={{ marginTop: 10 }}>
-                <button className="btn btn-primary" onClick={loadTelegramEmployeeSession}>
-                  {sessionLoading ? 'Проверка...' : 'Повторить проверку'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {telegramEmployee && (
-            <>
-              <div className="telegram-comment-meta">
-                <div><strong>Сотрудник:</strong> {telegramEmployee.fullName}</div>
-                <div><strong>Роль:</strong> {getRoleShortLabel(telegramEmployee.role)}</div>
-              </div>
-
-              <div className="telegram-comment-label">
-                Текущий комментарий по вашей роли
-              </div>
-              <div className={`telegram-comment-current${currentRoleComment ? '' : ' telegram-comment-current-empty'}`}>
-                {currentRoleComment || 'Комментарий пока не добавлен.'}
-              </div>
-
-              <div className="form-group" style={{ marginBottom: 12 }}>
-                <label>{currentRoleComment ? 'Изменить комментарий' : 'Добавить комментарий'}</label>
-                <textarea
-                  value={commentDraft}
-                  onChange={(e) => {
-                    setCommentDraft(e.target.value);
-                    setCommentError('');
-                  }}
-                  onFocus={() => setCommentEditing(true)}
-                  onBlur={() => setCommentEditing(false)}
-                  rows={5}
-                  placeholder="Введите комментарий по заказу"
-                  style={{ fontSize: 16 }}
-                  disabled={savingComment}
-                />
-              </div>
-
-              {commentError && (
-                <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
-                  {commentError}
-                </div>
-              )}
-
-              <div className="telegram-comment-actions">
-                <button className="btn btn-success" onClick={saveTelegramComment} disabled={savingComment}>
-                  {savingComment
-                    ? 'Сохранение...'
-                    : currentRoleComment
-                      ? 'Сохранить комментарий'
-                      : 'Добавить комментарий'}
-                </button>
-              </div>
-            </>
-          )}
         </div>
       )}
     </div>

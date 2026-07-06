@@ -5745,8 +5745,8 @@ body .role-allowed-column-marker {
   margin-bottom: 14px;
   padding: 16px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(18, 35, 56, 0.92), rgba(14, 28, 46, 0.9));
-  border: 1px solid rgba(133, 186, 247, 0.1);
+  background: linear-gradient(135deg, #f6fbff, #eef5fd);
+  border: 1px solid rgba(108, 153, 201, 0.18);
 }
 
 .telegram-order-summary-label {
@@ -5772,8 +5772,8 @@ body .role-allowed-column-marker {
 .detail-block {
   padding: 14px;
   border-radius: 14px;
-  background: rgba(14, 27, 46, 0.82);
-  border: 1px solid rgba(133, 186, 247, 0.1);
+  background: linear-gradient(135deg, #ffffff, #f7fbff);
+  border: 1px solid rgba(108, 153, 201, 0.16);
 }
 
 .detail-block-wide {
@@ -5802,12 +5802,12 @@ body .role-allowed-column-marker {
 .telegram-comment-section {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid rgba(133, 186, 247, 0.1);
+  border-top: 1px solid rgba(108, 153, 201, 0.16);
 }
 
 .telegram-comment-title {
   font-weight: 700;
-  color: #f2f9ff;
+  color: var(--text-main);
   margin-bottom: 10px;
   font-size: 17px;
 }
@@ -5817,10 +5817,10 @@ body .role-allowed-column-marker {
 .telegram-comment-current {
   padding: 14px;
   border-radius: 14px;
-  background: rgba(14, 27, 46, 0.82);
+  background: linear-gradient(135deg, #ffffff, #f7fbff);
   margin-bottom: 12px;
   line-height: 1.55;
-  border: 1px solid rgba(133, 186, 247, 0.08);
+  border: 1px solid rgba(108, 153, 201, 0.12);
 }
 
 .telegram-comment-meta {
@@ -5863,8 +5863,8 @@ body .role-allowed-column-marker {
 .telegram-stage-card {
   padding: 14px;
   border-radius: 14px;
-  background: rgba(14, 27, 46, 0.82);
-  border: 1px solid rgba(133, 186, 247, 0.1);
+  background: linear-gradient(135deg, #ffffff, #f7fbff);
+  border: 1px solid rgba(108, 153, 201, 0.16);
 }
 
 .telegram-stage-card-top {
@@ -5886,6 +5886,113 @@ body .role-allowed-column-marker {
   margin-top: 4px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.telegram-stage-card-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.telegram-stage-card-complete {
+  box-shadow: 0 10px 22px rgba(86, 129, 179, 0.12);
+}
+
+.telegram-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.telegram-empty-box {
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ffffff, #f7fbff);
+  border: 1px dashed rgba(108, 153, 201, 0.28);
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.telegram-stage-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.telegram-stage-pill-pending {
+  background: rgba(236, 244, 253, 0.95);
+  color: #335678;
+}
+
+.telegram-stage-pill-complete {
+  background: rgba(223, 244, 229, 0.95);
+  color: #1b6a37;
+}
+
+.telegram-package-section {
+  margin-top: 18px;
+}
+
+.telegram-package-meta {
+  margin-bottom: 10px;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.telegram-package-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.telegram-package-input-row input {
+  min-width: 0;
+}
+
+.telegram-package-list {
+  display: grid;
+  gap: 10px;
+}
+
+.telegram-package-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ffffff, #f7fbff);
+  border: 1px solid rgba(108, 153, 201, 0.16);
+}
+
+.telegram-package-item-complete {
+  background: linear-gradient(135deg, #eef9f1, #ffffff);
+}
+
+.telegram-package-item input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.telegram-package-item-name {
+  min-width: 0;
+  color: var(--text-main);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.telegram-package-item-status {
+  color: var(--text-soft);
+  font-size: 13px;
+  text-align: right;
 }
 
 @keyframes overlayFadeIn {
@@ -7537,6 +7644,16 @@ body .home-auth-status-pending {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
+  .telegram-package-input-row {
+    grid-template-columns: 1fr;
+  }
+  .telegram-package-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .telegram-package-item-status {
+    grid-column: 2;
+    text-align: left;
+  }
   .telegram-order-card {
     padding: 14px;
   }
@@ -7825,6 +7942,9 @@ body .home-auth-status-pending {
   .telegram-order-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
+  }
+  .telegram-package-item {
+    padding: 10px 12px;
   }
 
   .telegram-order-subtitle {
