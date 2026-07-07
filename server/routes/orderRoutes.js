@@ -174,18 +174,40 @@ function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = 
   return '';
 }
 
-function resolveLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders = []) {
-  if (normalizeOrderColumnKey(columnKey) === 'carpenter') {
-    const sandingHeader = (Array.isArray(secondaryHeaders) ? secondaryHeaders : []).find(
-      (cell) => String(cell?.label || '').trim() === 'Шлифуется'
-    );
-    if (sandingHeader?.legendKey) {
-      return String(sandingHeader.legendKey || '').trim();
+function getSecondaryHeaderForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
+  if (columnIndex < 0) return null;
+  let currentIndex = 0;
+  for (const cell of Array.isArray(secondaryHeaders) ? secondaryHeaders : []) {
+    const span = Number(cell?.colSpan) || 1;
+    if (columnIndex >= currentIndex && columnIndex < currentIndex + span) {
+      return cell || null;
     }
+    currentIndex += span;
   }
+  return null;
+}
+
+function resolveLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders = []) {
   const primaryColumnIndex = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX[normalizeOrderColumnKey(columnKey)];
   if (!Number.isInteger(primaryColumnIndex)) return '';
   return getStageLegendKeyForPrimaryColumn(primaryColumnIndex, secondaryHeaders);
+}
+
+function getManualStageCellLabel(columnKey = '', settings = {}) {
+  const secondaryHeaders = settings?.orderStageLegendConfig?.secondaryHeaders || [];
+  const primaryColumnIndex = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX[normalizeOrderColumnKey(columnKey)];
+  if (!Number.isInteger(primaryColumnIndex)) {
+    return String(columnKey || '').trim();
+  }
+  const header = getSecondaryHeaderForPrimaryColumn(primaryColumnIndex, secondaryHeaders);
+  return String(header?.label || ORDER_PRIMARY_HEADERS[primaryColumnIndex] || columnKey || '').trim();
+}
+
+function getManualStageLegendLabel(columnKey = '', settings = {}) {
+  const legendKey = resolveLegendKeyForManualStageColumn(columnKey, settings?.orderStageLegendConfig?.secondaryHeaders || []);
+  const stages = Array.isArray(settings?.orderStageLegendConfig?.stages) ? settings.orderStageLegendConfig.stages : [];
+  const stage = stages.find((item) => String(item?.key || '').trim() === legendKey);
+  return String(stage?.label || getManualStageCellLabel(columnKey, settings) || columnKey || '').trim();
 }
 
 function getActorAllowedManualColumns(actor = {}) {
@@ -530,6 +552,10 @@ function handleManualStageMarks(req, res) {
     ensureActorCanUseManualColumns(req.auth || { role: 'admin' }, normalizedSelections);
 
     const requestActor = getRequestActor(req, { label: 'Администратор' });
+    const cellLabelByColumnKey = normalizedSelections.reduce((acc, selection) => {
+      acc[selection.columnKey] = getManualStageCellLabel(selection.columnKey, settings);
+      return acc;
+    }, {});
     const updatedOrders = OrderStore.setManualStageMarks(
       normalizedSelections,
       legendKey,
@@ -555,8 +581,8 @@ function handleManualStageMarks(req, res) {
         entityName: targetItem?.name || '',
         actor: requestActor,
         message: isApplyAction
-          ? `Ячейка "${selection.columnKey}" закрашена вручную.`
-          : `Ячейка "${selection.columnKey}" сброшена вручную.`,
+          ? `Ячейка "${cellLabelByColumnKey[selection.columnKey] || selection.columnKey}" закрашена вручную.`
+          : `Ячейка "${cellLabelByColumnKey[selection.columnKey] || selection.columnKey}" сброшена вручную.`,
         details: {
           orderId: selection.orderId,
           itemId: selection.itemId,
@@ -605,6 +631,10 @@ function handleManualDateOverrides(req, res) {
     ensureActorCanUseManualColumns(req.auth || { role: 'admin' }, normalizedSelections);
 
     const requestActor = getRequestActor(req, { label: 'Администратор' });
+    const cellLabelByColumnKey = normalizedSelections.reduce((acc, selection) => {
+      acc[selection.columnKey] = getManualStageCellLabel(selection.columnKey, settings);
+      return acc;
+    }, {});
     const payload = {
       columnKey,
       actor: requestActor.label || req.auth?.role || 'admin',
@@ -645,7 +675,7 @@ function handleManualDateOverrides(req, res) {
         entityId: selection.columnKey === 'duration' ? selection.orderId : selection.itemId,
         entityName: targetItem?.name || OrderStore.getOrderPrimaryName(targetOrder) || '',
         actor: requestActor,
-        message: `Ячейка "${selection.columnKey}" обновлена вручную.`,
+        message: `Ячейка "${cellLabelByColumnKey[selection.columnKey] || selection.columnKey}" обновлена вручную.`,
         details: {
           orderId: selection.orderId,
           itemId: selection.itemId,
@@ -831,8 +861,14 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
       orderId: String(req.params.id || ''),
       itemId: String(req.body?.itemId || '').trim(),
       columnKey: normalizeOrderColumnKey(req.body?.columnKey),
+      columnKeys: Array.isArray(req.body?.columnKeys)
+        ? req.body.columnKeys.map((columnKey) => normalizeOrderColumnKey(columnKey)).filter(Boolean)
+        : [],
       clear: Boolean(req.body?.clear),
     };
+    if (context.columnKeys.length === 0 && context.columnKey) {
+      context.columnKeys = [context.columnKey];
+    }
     const employee = resolveTelegramEmployee(token, req.body || {}, context);
     if (!employee) {
       logTelegramOrderDebug('telegram-stage-mark.reject.employee-not-found', context);
@@ -841,42 +877,45 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
     if (!context.itemId) {
       return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
     }
-    if (!context.columnKey) {
+    if (context.columnKeys.length === 0) {
       return res.status(400).json({ message: 'Не указана колонка этапа.' });
     }
-    if (context.columnKey === 'packageName') {
+    if (context.columnKeys.includes('packageName')) {
       return res.status(400).json({ message: 'Комплектация отмечается через список позиций, а не через кнопку этапа.' });
     }
 
     ensureActorCanUseManualColumns({
       employeeId: employee._id,
       role: employee.role,
-    }, [{ columnKey: context.columnKey }]);
+    }, context.columnKeys.map((columnKey) => ({ columnKey })));
 
     const settings = SettingsStore.get();
-    const secondaryHeaders = settings?.orderStageLegendConfig?.secondaryHeaders || [];
-    const legendKey = resolveLegendKeyForManualStageColumn(context.columnKey, secondaryHeaders);
+    const selections = context.columnKeys.map((columnKey) => ({
+      orderId: req.params.id,
+      itemId: context.itemId,
+      columnKey,
+      legendKey: context.clear ? '' : resolveLegendKeyForManualStageColumn(columnKey, settings?.orderStageLegendConfig?.secondaryHeaders || []),
+    }));
+    const legendKey = String(selections[0]?.legendKey || '').trim();
     const stageActorName = getTelegramEmployeeDisplayName(employee) || employee.role || 'telegram';
-    if (!context.clear && !legendKey) {
+    if (!context.clear && selections.some((selection) => !selection.legendKey)) {
       return res.status(400).json({ message: 'Для выбранной колонки не найден цветовой этап.' });
     }
 
-    const updatedOrders = OrderStore.setManualStageMarks([{
-      orderId: req.params.id,
-      itemId: context.itemId,
-      columnKey: context.columnKey,
-      legendKey: context.clear ? '' : legendKey,
-    }], '', stageActorName);
+    const updatedOrders = OrderStore.setManualStageMarks(selections, '', stageActorName);
 
     if (!Array.isArray(updatedOrders) || updatedOrders.length === 0) {
       if (context.clear) {
         const currentOrder = OrderStore.findById(req.params.id);
         const currentItem = OrderStore.getOrderItem(currentOrder, context.itemId) || null;
-        const stageMark = currentItem?.manualStageMarks?.[context.columnKey] || null;
-        const stageCleared = Boolean(currentItem?.manualStageClears?.[context.columnKey]);
+        const hasActiveStageMark = context.columnKeys.some((columnKey) => {
+          const stageMark = currentItem?.manualStageMarks?.[columnKey] || null;
+          const stageCleared = Boolean(currentItem?.manualStageClears?.[columnKey]);
+          return Boolean(stageMark && !stageCleared);
+        });
 
         // Treat repeated "clear" requests as successful when the stage is already unmarked.
-        if (currentOrder && currentItem && (!stageMark || stageCleared)) {
+        if (currentOrder && currentItem && !hasActiveStageMark) {
           const allowedColumns = Array.from(getEmployeeAllowedColumns(employee));
 
           return res.json({
@@ -913,12 +952,13 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
       entityName: updatedItem.name || '',
       actor: getTelegramActivityActor(employee),
       message: context.clear
-        ? `Этап "${context.columnKey}" отменен из Telegram.`
-        : `Этап "${context.columnKey}" отмечен из Telegram.`,
+        ? `Этап "${getManualStageLegendLabel(context.columnKeys[0], settings)}" отменен из Telegram.`
+        : `Этап "${getManualStageLegendLabel(context.columnKeys[0], settings)}" отмечен из Telegram.`,
       details: {
         orderId: req.params.id,
         itemId: updatedItem.itemId,
-        columnKey: context.columnKey,
+        columnKey: context.columnKeys[0],
+        columnKeys: context.columnKeys,
         legendKey: context.clear ? '' : legendKey,
         clear: context.clear,
       },

@@ -141,12 +141,6 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
 }
 
 function getManualStageSecondaryHeader(columnKey = '', secondaryHeaders = []) {
-  if (normalizeOrderColumnKey(columnKey) === 'carpenter') {
-    const sandingHeader = (Array.isArray(secondaryHeaders) ? secondaryHeaders : []).find(
-      (cell) => String(cell?.label || '').trim() === 'Шлифуется'
-    );
-    if (sandingHeader) return sandingHeader;
-  }
   return getSecondaryHeaderForPrimaryColumn(getPrimaryColumnIndexForManualStageColumn(columnKey), secondaryHeaders);
 }
 
@@ -1653,6 +1647,13 @@ function OrdersWorkspace() {
     }
   }, []);
 
+  const getLegendLabelByKey = useCallback((legendKey = '') => {
+    const normalizedLegendKey = String(legendKey || '').trim();
+    if (!normalizedLegendKey) return '';
+    const legend = stageLegend.find((item) => String(item?.key || '').trim() === normalizedLegendKey);
+    return String(legend?.label || normalizedLegendKey).trim();
+  }, [stageLegend]);
+
   const formatCellLogDetails = useCallback((entry) => {
     const details = entry?.details && typeof entry.details === 'object' ? entry.details : {};
     const timestamp = entry?.createdAt ? formatDateTimeDisplay(entry.createdAt) : '';
@@ -1668,10 +1669,31 @@ function OrdersWorkspace() {
       parts.push(`Период: ${formatDateDisplay(details.startDate)} - ${formatDateDisplay(details.endDate)}`);
     }
     if (details.legendKey) {
-      parts.push(`Этап: ${details.legendKey}`);
+      parts.push(`Этап: ${getLegendLabelByKey(details.legendKey)}`);
     }
     return parts.filter(Boolean).join(' • ');
-  }, []);
+  }, [getLegendLabelByKey]);
+
+  const formatCellLogMessage = useCallback((entry, columnLabel = '') => {
+    const details = entry?.details && typeof entry.details === 'object' ? entry.details : {};
+    const cellLabel = String(columnLabel || '').trim()
+      || String(getManualStageSecondaryHeader(details.columnKey, secondaryHeaderSchema)?.label || details.columnKey || '').trim();
+    const stageLabel = getLegendLabelByKey(details.legendKey);
+    switch (String(entry?.action || '').trim()) {
+      case 'order.manual-stage.apply':
+        return `Ячейка "${cellLabel || 'Этап'}" закрашена вручную.`;
+      case 'order.manual-stage.clear':
+        return `Ячейка "${cellLabel || 'Этап'}" сброшена вручную.`;
+      case 'order.manual-stage.telegram':
+        return `Этап "${stageLabel || cellLabel || 'Этап'}" отмечен из Telegram.`;
+      case 'order.manual-stage.telegram.clear':
+        return `Этап "${stageLabel || cellLabel || 'Этап'}" отменен из Telegram.`;
+      case 'order.manual-date.apply':
+        return `Ячейка "${cellLabel || 'Дата'}" обновлена вручную.`;
+      default:
+        return entry?.message || 'Без описания';
+    }
+  }, [getLegendLabelByKey, secondaryHeaderSchema]);
 
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
@@ -3891,7 +3913,7 @@ function OrdersWorkspace() {
                 <div key={entry._id || `${entry.createdAt}-${entry.action}`} className="cell-log-entry">
                   <div className="cell-log-entry-title">{formatCellLogActionLabel(entry)}</div>
                   <div className="cell-log-entry-meta">{formatCellLogDetails(entry)}</div>
-                  <div className="cell-log-entry-message">{entry?.message || 'Без описания'}</div>
+                  <div className="cell-log-entry-message">{formatCellLogMessage(entry, cellLogsDialog?.columnLabel || '')}</div>
                 </div>
               ))}
             </div>

@@ -116,12 +116,6 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
 }
 
 function getManualStageSecondaryHeader(columnKey = '', secondaryHeaders = []) {
-  if (String(columnKey || '').trim() === 'carpenter') {
-    const sandingHeader = (Array.isArray(secondaryHeaders) ? secondaryHeaders : []).find(
-      (cell) => String(cell?.label || '').trim() === 'Шлифуется'
-    );
-    if (sandingHeader) return sandingHeader;
-  }
   return getSecondaryHeaderForPrimaryColumn(getPrimaryColumnIndexForManualStageColumn(columnKey), secondaryHeaders);
 }
 

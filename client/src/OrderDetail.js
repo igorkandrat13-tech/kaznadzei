@@ -144,19 +144,19 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
     case 'deliveryDate':
       return 10;
     case 'carpenter':
-      return 12;
+      return 11;
     case 'materialRequests':
-      return 13;
+      return 12;
     case 'paint':
-      return 14;
+      return 13;
     case 'itemStartDate':
-      return 15;
+      return 14;
     case 'itemEndDate':
-      return 16;
+      return 15;
     case 'itemDuration':
-      return 17;
+      return 16;
     case 'duration':
-      return 18;
+      return 17;
     default:
       return -1;
   }
@@ -461,13 +461,10 @@ function OrderDetail() {
     const options = ROLE_COLUMN_ACCESS_OPTIONS
       .filter((column) => allowedColumns.includes(column.key) && column.key !== 'packageName')
       .map((column) => {
-        const preferredHeaderLabel = column.key === 'carpenter' ? 'Шлифуется' : '';
-        const header = preferredHeaderLabel
-          ? secondaryHeaders.find((item) => String(item?.label || '').trim() === preferredHeaderLabel)
-          : getSecondaryHeaderForPrimaryColumn(
-              getPrimaryColumnIndexForManualStageColumn(column.key),
-              secondaryHeaders,
-            );
+        const header = getSecondaryHeaderForPrimaryColumn(
+          getPrimaryColumnIndexForManualStageColumn(column.key),
+          secondaryHeaders,
+        );
         if (!header || !header.legendKey || header.useTableBackground) {
           return null;
         }
@@ -486,9 +483,17 @@ function OrderDetail() {
     const groupedOptions = new Map();
     options.forEach((option) => {
       const groupKey = `${option.label}::${option.legendKey}`;
-      if (!groupedOptions.has(groupKey)) {
-        groupedOptions.set(groupKey, option);
+      const current = groupedOptions.get(groupKey);
+      if (!current) {
+        groupedOptions.set(groupKey, {
+          ...option,
+          columnKeys: [option.columnKey],
+          actionKey: option.columnKey,
+        });
+        return;
       }
+      current.columnKeys = Array.from(new Set([...(current.columnKeys || []), option.columnKey]));
+      current.actionKey = current.columnKeys.join('|');
     });
     return Array.from(groupedOptions.values());
   }, [allowedColumns, orderStageLegendConfig.secondaryHeaders]);
@@ -538,9 +543,12 @@ function OrderDetail() {
     telegramUnsafeUser,
   ]);
 
-  const updateTelegramStageMark = useCallback(async (columnKey, { clear = false } = {}) => {
-    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId || !columnKey) return;
-    const pendingKey = `stage:${columnKey}:${clear ? 'clear' : 'mark'}`;
+  const updateTelegramStageMark = useCallback(async (columnKeys, { clear = false } = {}) => {
+    const normalizedColumnKeys = Array.isArray(columnKeys)
+      ? columnKeys.map((columnKey) => normalizeOrderColumnKey(columnKey)).filter(Boolean)
+      : [normalizeOrderColumnKey(columnKeys)].filter(Boolean);
+    if (!telegramMode || !telegramEmployee || !selectedItem?.itemId || normalizedColumnKeys.length === 0) return;
+    const pendingKey = `stage:${normalizedColumnKeys.join('|')}:${clear ? 'clear' : 'mark'}`;
     setStageActionKey(pendingKey);
     setStageError('');
     setTelegramActionError('');
@@ -554,7 +562,8 @@ function OrderDetail() {
           unsafeUser: telegramUnsafeUser,
           sessionToken,
           itemId: selectedItem.itemId,
-          columnKey,
+          columnKey: normalizedColumnKeys[0],
+          columnKeys: normalizedColumnKeys,
           clear,
         }),
       });
@@ -740,11 +749,26 @@ function OrderDetail() {
             {telegramStageOptions.length > 0 && (
               <div className="telegram-stage-list">
                 {telegramStageOptions.map((stage) => {
-                  const stageMark = selectedItem?.manualStageMarks?.[stage.columnKey] || null;
-                  const stageCleared = Boolean(selectedItem?.manualStageClears?.[stage.columnKey]);
-                  const isMarked = Boolean(stageMark && !stageCleared);
-                  const isMarkBusy = stageActionKey === `stage:${stage.columnKey}:mark`;
-                  const isClearBusy = stageActionKey === `stage:${stage.columnKey}:clear`;
+                  const stageColumnKeys = Array.isArray(stage.columnKeys) && stage.columnKeys.length > 0
+                    ? stage.columnKeys
+                    : [stage.columnKey];
+                  const stageMarks = stageColumnKeys
+                    .map((columnKey) => selectedItem?.manualStageMarks?.[columnKey] || null)
+                    .filter(Boolean);
+                  const stageMark = stageMarks
+                    .sort((left, right) => (
+                      Date.parse(String(right?.updatedAt || '')) || 0
+                    ) - (
+                      Date.parse(String(left?.updatedAt || '')) || 0
+                    ))[0] || null;
+                  const isMarked = stageColumnKeys.every((columnKey) => {
+                    const nextMark = selectedItem?.manualStageMarks?.[columnKey] || null;
+                    const nextClear = Boolean(selectedItem?.manualStageClears?.[columnKey]);
+                    return Boolean(nextMark && !nextClear);
+                  });
+                  const stageBusyKey = stage.actionKey || stageColumnKeys.join('|');
+                  const isMarkBusy = stageActionKey === `stage:${stageBusyKey}:mark`;
+                  const isClearBusy = stageActionKey === `stage:${stageBusyKey}:clear`;
                   const isBusy = isMarkBusy || isClearBusy;
                   return (
                     <div
@@ -776,7 +800,7 @@ function OrderDetail() {
                       <div className="telegram-stage-card-actions">
                         <button
                           className={`btn ${isMarked ? 'btn-secondary telegram-stage-reset-btn' : 'btn-primary'}`}
-                          onClick={() => updateTelegramStageMark(stage.columnKey, { clear: isMarked })}
+                          onClick={() => updateTelegramStageMark(stageColumnKeys, { clear: isMarked })}
                           disabled={isBusy}
                         >
                           {isBusy
