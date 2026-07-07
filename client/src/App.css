@@ -4146,14 +4146,25 @@ body .attachment-preview-table td {
 
 .manual-stage-toolbar-floating {
   position: fixed;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   z-index: var(--z-overlay-floating);
   margin-bottom: 0;
   padding: 10px 12px;
-  width: max-content;
+  width: fit-content;
   min-width: 0;
   max-width: min(420px, calc(100vw - 24px));
   box-shadow: 0 18px 38px rgba(2, 8, 16, 0.28);
   backdrop-filter: blur(10px);
+}
+
+.manual-stage-toolbar-floating .manual-stage-toolbar-summary,
+.manual-stage-toolbar-floating .manual-stage-toolbar-date-editor,
+.manual-stage-toolbar-floating .manual-stage-toolbar-actions {
+  width: fit-content;
+  max-width: 100%;
 }
 
 .manual-stage-toolbar-summary {
