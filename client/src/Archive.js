@@ -794,13 +794,19 @@ function Archive() {
                   const paintAttachments = getItemAttachments(item, 'paint');
                   const packageStats = getPackageStats(item.packageItems, item.packageName);
                   const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+                  const carpenterManualMark = getItemManualStageMark(item, 'carpenter');
+                  const carpenterManualClear = Boolean(getItemManualStageClear(item, 'carpenter'));
                   const latestCarpenterAutoAt = getLatestAutoHighlightAt(
                     carpenterAssignment?.scannedAt,
                     carpenterActiveStage?.startedAt,
                     workerStageForText?.startedAt,
                   );
                   const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
-                  const workerCellText = '—';
+                  const workerCellText = String(
+                    !carpenterManualClear && carpenterManualMark?.updatedBy
+                      ? carpenterManualMark.updatedBy
+                      : ''
+                  ).trim() || '—';
                   const workerCellTitle = workerStageForText?.stepName || activeStage?.stepName || '';
                   const carpenterCellStyle = hasCarpenterAutoHighlight
                     ? {

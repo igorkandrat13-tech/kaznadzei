@@ -3324,7 +3324,11 @@ function OrdersWorkspace() {
                       workerStageForText?.startedAt,
                     );
                     const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
-                    const workerCellText = '—';
+                    const workerCellText = String(
+                      !carpenterManualClear && carpenterManualMark?.updatedBy
+                        ? carpenterManualMark.updatedBy
+                        : ''
+                    ).trim() || '—';
                     const workerCellTitle = workerStageForText?.stepName || activeStage?.stepName || '';
                     const carpenterCellStyle = hasCarpenterAutoHighlight
                       ? {
