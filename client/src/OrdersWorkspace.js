@@ -1644,6 +1644,10 @@ function OrdersWorkspace() {
     return parts.filter(Boolean).join(' • ');
   }, [getLegendLabelByKey]);
 
+  const formatCellLogHeadline = useCallback((entry) => (
+    formatCellLogDetails(entry) || formatCellLogActionLabel(entry)
+  ), [formatCellLogActionLabel, formatCellLogDetails]);
+
   const formatCellLogMessage = useCallback((entry, columnLabel = '') => {
     const details = entry?.details && typeof entry.details === 'object' ? entry.details : {};
     const cellLabel = String(columnLabel || '').trim()
@@ -3826,8 +3830,7 @@ function OrdersWorkspace() {
                 <div className="cell-log-list manual-stage-toolbar-log-list">
                   {cellLogs.map((entry) => (
                     <div key={entry._id || `${entry.createdAt}-${entry.action}`} className="cell-log-entry">
-                      <div className="cell-log-entry-title">{formatCellLogActionLabel(entry)}</div>
-                      <div className="cell-log-entry-meta">{formatCellLogDetails(entry)}</div>
+                      <div className="cell-log-entry-title">{formatCellLogHeadline(entry)}</div>
                       <div className="cell-log-entry-message">{formatCellLogMessage(entry, selectedStageSingleSelection.columnLabel || '')}</div>
                     </div>
                   ))}
