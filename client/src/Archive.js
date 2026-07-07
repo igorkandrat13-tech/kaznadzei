@@ -833,8 +833,10 @@ function Archive() {
                   };
                   const nameCellProps = getReadOnlyCellProps(key, item, 'name', regularOrderClass, undefined);
                   const deliveryDateCellProps = getReadOnlyCellProps(key, item, 'deliveryDate', regularOrderClass, undefined);
-                  const hasItemManufacturingStart = Boolean(itemManufacturingMeta.startDate);
-                  const itemStartDateCellStyle = hasItemManufacturingStart
+                  const itemStartDateManualMark = getItemManualStageMark(item, 'itemStartDate');
+                  const itemStartDateManualClear = Boolean(getItemManualStageClear(item, 'itemStartDate'));
+                  const hasItemStartStageMark = Boolean(itemStartDateManualMark && !itemStartDateManualClear);
+                  const itemStartDateCellStyle = hasItemStartStageMark
                     ? {
                         background: columnStageMeta.itemStart.hex || '#C37C8E',
                         color: columnStageMeta.itemStart.textHex,

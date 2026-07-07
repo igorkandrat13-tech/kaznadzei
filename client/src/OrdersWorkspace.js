@@ -3355,8 +3355,10 @@ function OrdersWorkspace() {
                     };
                     const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const hasItemManufacturingStart = Boolean(itemManufacturingMeta.startDate);
-                    const itemStartDateCellStyle = hasItemManufacturingStart
+                    const itemStartDateManualMark = getItemManualStageMark(item, 'itemStartDate');
+                    const itemStartDateManualClear = Boolean(getItemManualStageClear(item, 'itemStartDate'));
+                    const hasItemStartStageMark = Boolean(itemStartDateManualMark && !itemStartDateManualClear);
+                    const itemStartDateCellStyle = hasItemStartStageMark
                       ? {
                           background: columnStageMeta.itemStart.hex || '#C37C8E',
                           color: columnStageMeta.itemStart.textHex,
