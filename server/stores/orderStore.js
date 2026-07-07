@@ -208,7 +208,13 @@ function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpe
   const manualStageClears = helpers.manualStageClears || normalizeManualStageClears(item?.manualStageClears);
   if (manualStageClears[columnKey]) return '';
 
-  const updatedAt = String(manualStageMarks[columnKey]?.updatedAt || '').trim();
+  const manualMark = manualStageMarks[columnKey] || null;
+  const manualMarkLegendKey = String(manualMark?.legendKey || '').trim();
+  if ((columnKey === 'itemStartDate' || columnKey === 'itemEndDate') && manualMarkLegendKey) {
+    return '';
+  }
+
+  const updatedAt = String(manualMark?.updatedAt || '').trim();
   if (updatedAt) return updatedAt;
 
   if (columnKey === 'orderAttachments' || columnKey === 'paintAttachments' || columnKey === 'orderCard' || columnKey === 'paint') {

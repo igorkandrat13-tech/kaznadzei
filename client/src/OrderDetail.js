@@ -212,7 +212,6 @@ function OrderDetail() {
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
-  const packageSectionRef = useRef(null);
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
@@ -853,7 +852,6 @@ function OrderDetail() {
             {telegramStageOptions.length > 0 && (
               <div className="telegram-stage-list">
                 {telegramStageOptions.map((stage) => {
-                  const isPackageStage = stage.columnKey === 'packageName';
                   const stageColumnKeys = Array.isArray(stage.columnKeys) && stage.columnKeys.length > 0
                     ? stage.columnKeys
                     : [stage.columnKey];
@@ -866,17 +864,15 @@ function OrderDetail() {
                     ) - (
                       Date.parse(String(left?.updatedAt || '')) || 0
                     ))[0] || null;
-                  const isMarked = isPackageStage
-                    ? Boolean(packageStats.total > 0 && packageStats.pending === 0)
-                    : stageColumnKeys.every((columnKey) => {
-                      const nextMark = selectedItem?.manualStageMarks?.[columnKey] || null;
-                      const nextClear = Boolean(selectedItem?.manualStageClears?.[columnKey]);
-                      return Boolean(nextMark && !nextClear);
-                    });
+                  const isMarked = stageColumnKeys.every((columnKey) => {
+                    const nextMark = selectedItem?.manualStageMarks?.[columnKey] || null;
+                    const nextClear = Boolean(selectedItem?.manualStageClears?.[columnKey]);
+                    return Boolean(nextMark && !nextClear);
+                  });
                   const stageBusyKey = stage.actionKey || stageColumnKeys.join('|');
                   const isMarkBusy = stageActionKey === `stage:${stageBusyKey}:mark`;
                   const isClearBusy = stageActionKey === `stage:${stageBusyKey}:clear`;
-                  const isBusy = isPackageStage ? false : (isMarkBusy || isClearBusy);
+                  const isBusy = isMarkBusy || isClearBusy;
                   return (
                     <div
                       key={stage.columnKey}
@@ -894,37 +890,23 @@ function OrderDetail() {
                             {stage.label}
                             </div>
                             <div className="telegram-stage-card-subtitle">
-                              {isPackageStage
-                                ? (packageStats.total > 0
-                                    ? `Комплектация: ${packageStats.completed}/${packageStats.total}`
-                                    : 'Позиции комплектации пока не добавлены')
-                                : isMarked
+                              {isMarked
                                 ? `Принято${stageMark?.updatedBy ? ` · ${stageMark.updatedBy}` : ''}${stageMark?.updatedAt ? ` · ${formatDateTimeDisplay(stageMark.updatedAt)}` : ''}`
                                 : 'Ожидает принятия'}
                             </div>
                           </div>
                         </div>
                         <span className={`telegram-stage-pill ${isMarked ? 'telegram-stage-pill-complete' : 'telegram-stage-pill-pending'}`}>
-                          {isPackageStage
-                            ? (isMarked ? 'Готово' : 'В работе')
-                            : (isMarked ? 'Принято' : 'Ожидает')}
+                          {isMarked ? 'Принято' : 'Ожидает'}
                         </span>
                       </div>
                       <div className="telegram-stage-card-actions">
                         <button
-                          className={`btn ${isPackageStage || !isMarked ? 'btn-primary' : 'btn-secondary telegram-stage-reset-btn'}`}
-                          onClick={() => {
-                            if (isPackageStage) {
-                              packageSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                              return;
-                            }
-                            updateTelegramStageMark(stageColumnKeys, { clear: isMarked });
-                          }}
+                          className={`btn ${isMarked ? 'btn-secondary telegram-stage-reset-btn' : 'btn-primary'}`}
+                          onClick={() => updateTelegramStageMark(stageColumnKeys, { clear: isMarked })}
                           disabled={isBusy}
                         >
-                          {isPackageStage
-                            ? (packageStats.total > 0 ? 'Открыть комплектацию' : 'Добавить позиции')
-                            : isBusy
+                          {isBusy
                             ? (isMarked ? 'Отменяю...' : 'Сохраняю...')
                             : (isMarked ? 'Отменить принятие' : 'Принять этап')}
                         </button>
@@ -937,7 +919,7 @@ function OrderDetail() {
           </div>
 
           {(sessionLoading || sessionError || canManagePackage) && (
-            <div ref={packageSectionRef} className="telegram-package-section">
+            <div className="telegram-package-section">
               <div className="telegram-section-title">Укомплектовано</div>
 
               {sessionLoading && (

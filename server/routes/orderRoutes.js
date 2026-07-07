@@ -347,7 +347,7 @@ function getTelegramActivityActor(employee = {}) {
     type: 'telegram',
     role: employee.role,
     name: employee.fullName,
-    label: `TG: ${employee.fullName}`,
+    label: String(employee.fullName || '').trim(),
   };
 }
 
@@ -746,7 +746,7 @@ router.post('/orders/:id/telegram-comment', (req, res) => {
         type: 'telegram',
         role: employee.role,
         name: employee.fullName,
-        label: `TG: ${employee.fullName}`,
+        label: String(employee.fullName || '').trim(),
       },
       message: 'Комментарий сохранен из Telegram.',
       details: { role: employee.role, itemId: item.itemId, textLength: text.length },
@@ -880,10 +880,6 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
     if (context.columnKeys.length === 0) {
       return res.status(400).json({ message: 'Не указана колонка этапа.' });
     }
-    if (context.columnKeys.includes('packageName')) {
-      return res.status(400).json({ message: 'Комплектация отмечается через список позиций, а не через кнопку этапа.' });
-    }
-
     ensureActorCanUseManualColumns({
       employeeId: employee._id,
       role: employee.role,

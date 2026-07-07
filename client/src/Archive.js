@@ -801,7 +801,7 @@ function Archive() {
                     carpenterActiveStage?.startedAt,
                     workerStageForText?.startedAt,
                   );
-                  const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
+                  const hasCarpenterAutoHighlight = !carpenterManualClear && Boolean(carpenterAssignment || workerStageForText);
                   const workerCellText = String(
                     !carpenterManualClear && carpenterManualMark?.updatedBy
                       ? carpenterManualMark.updatedBy

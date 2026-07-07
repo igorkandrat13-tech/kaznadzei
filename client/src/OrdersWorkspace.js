@@ -1627,8 +1627,9 @@ function OrdersWorkspace() {
   const formatCellLogDetails = useCallback((entry) => {
     const details = entry?.details && typeof entry.details === 'object' ? entry.details : {};
     const timestamp = entry?.createdAt ? formatDateTimeDisplay(entry.createdAt) : '';
+    const actorLabel = String(entry?.actor?.label || entry?.actor?.name || '').replace(/^TG:\s*/i, '').trim();
     const parts = [
-      entry?.actor?.label || '',
+      actorLabel,
       timestamp,
     ];
 
@@ -3327,7 +3328,7 @@ function OrdersWorkspace() {
                       carpenterActiveStage?.startedAt,
                       workerStageForText?.startedAt,
                     );
-                    const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
+                    const hasCarpenterAutoHighlight = !carpenterManualClear && Boolean(carpenterAssignment || workerStageForText);
                     const workerCellText = String(
                       !carpenterManualClear && carpenterManualMark?.updatedBy
                         ? carpenterManualMark.updatedBy
