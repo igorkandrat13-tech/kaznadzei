@@ -49,10 +49,31 @@ function addActivityLog(entry = {}) {
   return nextEntry;
 }
 
-function getActivityLogs({ limit = 200 } = {}) {
+function matchesActivityLogFilters(entry = {}, filters = {}) {
+  const details = entry?.details && typeof entry.details === 'object' ? entry.details : {};
+  const orderId = String(filters?.orderId || '').trim();
+  const itemId = String(filters?.itemId || '').trim();
+  const columnKey = String(filters?.columnKey || '').trim();
+
+  if (orderId && String(details.orderId || '').trim() !== orderId) {
+    return false;
+  }
+  if (itemId && String(details.itemId || '').trim() !== itemId) {
+    return false;
+  }
+  if (columnKey && String(details.columnKey || '').trim() !== columnKey) {
+    return false;
+  }
+  return true;
+}
+
+function getActivityLogs({ limit = 200, filters = {} } = {}) {
   const db = load();
   const normalizedLimit = Math.max(1, Math.min(Number(limit) || 200, MAX_ACTIVITY_LOGS));
-  return db.activityLogs.slice(-normalizedLimit).reverse();
+  return db.activityLogs
+    .filter((entry) => matchesActivityLogFilters(entry, filters))
+    .slice(-normalizedLimit)
+    .reverse();
 }
 
 function clearActivityLogs() {

@@ -99,7 +99,12 @@ router.post('/backup/import', requireAdminAccess(), (req, res) => {
 
 router.get('/activity-logs', requireAdminAccess(), (req, res) => {
   const limit = Math.max(1, Math.min(Number(req.query?.limit) || 200, 1000));
-  const logs = getActivityLogs({ limit });
+  const filters = {
+    orderId: String(req.query?.orderId || '').trim(),
+    itemId: String(req.query?.itemId || '').trim(),
+    columnKey: String(req.query?.columnKey || '').trim(),
+  };
+  const logs = getActivityLogs({ limit, filters });
   res.json({
     ok: true,
     logs,

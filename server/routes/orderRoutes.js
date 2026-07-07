@@ -521,35 +521,43 @@ function handleManualStageMarks(req, res) {
 
     ensureActorCanUseManualColumns(req.auth || { role: 'admin' }, normalizedSelections);
 
+    const requestActor = getRequestActor(req, { label: 'Администратор' });
     const updatedOrders = OrderStore.setManualStageMarks(
       normalizedSelections,
       legendKey,
-      req.auth?.role || 'admin'
+      requestActor.label || req.auth?.role || 'admin'
     );
 
     if (updatedOrders === false) {
       return res.status(400).json({ message: 'Не удалось обновить ручные этапные отметки.' });
     }
 
-    addActivityLog({
-      action: (legendKey || normalizedSelections.some((selection) => selection.legendKey))
-        ? 'order.manual-stage.apply'
-        : 'order.manual-stage.clear',
-      entityType: 'order',
-      entityId: normalizedSelections[0]?.orderId || '',
-      entityName: normalizedSelections.length === 1
-        ? (OrderStore.getOrderPrimaryName(updatedOrders[0]) || '')
-        : `Массовое обновление (${normalizedSelections.length} ячеек)`,
-      actor: getRequestActor(req, { label: 'Администратор' }),
-      message: (legendKey || normalizedSelections.some((selection) => selection.legendKey))
-        ? `Ручные этапные отметки применены к ${normalizedSelections.length} ячейкам таблицы.`
-        : `Ручные этапные отметки очищены для ${normalizedSelections.length} ячеек таблицы.`,
-      details: {
-        legendKey,
-        selections: normalizedSelections.length,
-        mixedLegendKeys: normalizedSelections.some((selection) => selection.legendKey),
-      },
-    });
+    const updatedOrdersById = new Map(
+      (Array.isArray(updatedOrders) ? updatedOrders : []).map((order) => [String(order?._id || '').trim(), order]),
+    );
+    const isApplyAction = Boolean(legendKey || normalizedSelections.some((selection) => selection.legendKey));
+
+    for (const selection of normalizedSelections) {
+      const targetOrder = updatedOrdersById.get(selection.orderId) || OrderStore.findById(selection.orderId);
+      const targetItem = OrderStore.getOrderItem(targetOrder, selection.itemId);
+      addActivityLog({
+        action: isApplyAction ? 'order.manual-stage.apply' : 'order.manual-stage.clear',
+        entityType: 'orderItem',
+        entityId: selection.itemId,
+        entityName: targetItem?.name || '',
+        actor: requestActor,
+        message: isApplyAction
+          ? `Ячейка "${selection.columnKey}" закрашена вручную.`
+          : `Ячейка "${selection.columnKey}" сброшена вручную.`,
+        details: {
+          orderId: selection.orderId,
+          itemId: selection.itemId,
+          columnKey: selection.columnKey,
+          legendKey: selection.legendKey || legendKey || '',
+          clear: !isApplyAction,
+        },
+      });
+    }
 
     res.json({
       ok: true,
@@ -588,9 +596,10 @@ function handleManualDateOverrides(req, res) {
 
     ensureActorCanUseManualColumns(req.auth || { role: 'admin' }, normalizedSelections);
 
+    const requestActor = getRequestActor(req, { label: 'Администратор' });
     const payload = {
       columnKey,
-      actor: req.auth?.role || 'admin',
+      actor: requestActor.label || req.auth?.role || 'admin',
     };
     if (columnKey === 'duration') {
       const startDate = normalizeDate(req.body?.startDate ?? '', 'startDate', { allowUndefined: false });
@@ -615,20 +624,30 @@ function handleManualDateOverrides(req, res) {
     if (!Array.isArray(updatedOrders) || updatedOrders.length === 0) {
       return res.status(400).json({ message: 'Не удалось применить дату. Проверьте выбранные ячейки и попробуйте снова.' });
     }
-    addActivityLog({
-      action: 'order.manual-date.apply',
-      entityType: 'order',
-      entityId: normalizedSelections[0]?.orderId || '',
-      entityName: normalizedSelections.length === 1
-        ? (OrderStore.getOrderPrimaryName(updatedOrders[0]) || '')
-        : `Массовое изменение дат (${normalizedSelections.length} ячеек)`,
-      actor: getRequestActor(req, { label: 'Администратор' }),
-      message: `Ручные даты обновлены для ${normalizedSelections.length} ячеек таблицы.`,
-      details: {
-        columnKey,
-        selections: normalizedSelections.length,
-      },
-    });
+    const updatedOrdersById = new Map(
+      (Array.isArray(updatedOrders) ? updatedOrders : []).map((order) => [String(order?._id || '').trim(), order]),
+    );
+
+    for (const selection of normalizedSelections) {
+      const targetOrder = updatedOrdersById.get(selection.orderId) || OrderStore.findById(selection.orderId);
+      const targetItem = selection.itemId ? OrderStore.getOrderItem(targetOrder, selection.itemId) : null;
+      addActivityLog({
+        action: 'order.manual-date.apply',
+        entityType: selection.columnKey === 'duration' ? 'order' : 'orderItem',
+        entityId: selection.columnKey === 'duration' ? selection.orderId : selection.itemId,
+        entityName: targetItem?.name || OrderStore.getOrderPrimaryName(targetOrder) || '',
+        actor: requestActor,
+        message: `Ячейка "${selection.columnKey}" обновлена вручную.`,
+        details: {
+          orderId: selection.orderId,
+          itemId: selection.itemId,
+          columnKey: selection.columnKey,
+          date: payload.date || '',
+          startDate: payload.startDate || '',
+          endDate: payload.endDate || '',
+        },
+      });
+    }
 
     res.json({
       ok: true,

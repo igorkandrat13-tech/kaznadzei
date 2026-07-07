@@ -369,6 +369,13 @@ function formatDateDisplay(value) {
   return Number.isNaN(date.getTime()) ? normalized : date.toLocaleDateString();
 }
 
+function formatDateTimeDisplay(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? normalized : date.toLocaleString();
+}
+
 function formatManufacturingTime(startDate, endDate) {
   const normalizedStart = String(startDate || '').trim();
   if (!normalizedStart) return '—';
@@ -808,6 +815,10 @@ function OrdersWorkspace() {
   const [customerEditor, setCustomerEditor] = useState(null);
   const [customerDraft, setCustomerDraft] = useState(createEmptyCustomerDraft);
   const [customerSaving, setCustomerSaving] = useState(false);
+  const [cellLogsDialog, setCellLogsDialog] = useState(null);
+  const [cellLogs, setCellLogs] = useState([]);
+  const [cellLogsLoading, setCellLogsLoading] = useState(false);
+  const [cellLogsError, setCellLogsError] = useState('');
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
@@ -1096,6 +1107,10 @@ function OrdersWorkspace() {
     const uniqueColumnKeys = Array.from(new Set(selectedStageSelections.map((selection) => selection.columnKey)));
     return uniqueColumnKeys.length === 1 ? uniqueColumnKeys[0] : '';
   }, [selectedStageSelections]);
+  const selectedStageSingleSelection = useMemo(
+    () => (selectedStageSelections.length === 1 ? selectedStageSelections[0] : null),
+    [selectedStageSelections],
+  );
   const selectedStageCellKeysSignature = useMemo(
     () => selectedStageCellKeys.join('|'),
     [selectedStageCellKeys],
@@ -1334,6 +1349,57 @@ function OrdersWorkspace() {
     });
   }, [canEditManualColumn, isAdmin, manualStageSaving]);
 
+  const fetchCellLogs = useCallback(async (selection, { openModal = false } = {}) => {
+    if (!selection?.orderId || !selection?.columnKey) return;
+
+    if (openModal) {
+      const primaryColumnIndex = getPrimaryColumnIndexForManualStageColumn(selection.columnKey);
+      const header = getSecondaryHeaderForPrimaryColumn(primaryColumnIndex, secondaryHeaderSchema);
+      setCellLogsDialog({
+        ...selection,
+        columnLabel: String(header?.label || ORDER_PRIMARY_HEADERS[primaryColumnIndex] || selection.columnKey || '').trim(),
+      });
+    }
+
+    setCellLogsLoading(true);
+    setCellLogsError('');
+    try {
+      const params = new URLSearchParams({
+        limit: '200',
+        orderId: selection.orderId,
+        itemId: selection.itemId || '',
+        columnKey: selection.columnKey,
+      });
+      const res = await apiFetch(`/api/activity-logs?${params.toString()}`);
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось загрузить логи ячейки.');
+      }
+
+      const allowedActions = new Set([
+        'order.manual-stage.apply',
+        'order.manual-stage.clear',
+        'order.manual-stage.telegram',
+        'order.manual-stage.telegram.clear',
+        'order.manual-date.apply',
+      ]);
+      const nextLogs = (Array.isArray(data?.logs) ? data.logs : []).filter((entry) => (
+        allowedActions.has(String(entry?.action || '').trim())
+      ));
+      setCellLogs(nextLogs);
+    } catch (fetchError) {
+      setCellLogs([]);
+      setCellLogsError(fetchError.message || 'Не удалось загрузить логи ячейки.');
+    } finally {
+      setCellLogsLoading(false);
+    }
+  }, [secondaryHeaderSchema]);
+
+  const openCellLogsDialog = useCallback(() => {
+    if (!selectedStageSingleSelection) return;
+    fetchCellLogs(selectedStageSingleSelection, { openModal: true });
+  }, [fetchCellLogs, selectedStageSingleSelection]);
+
   const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
     if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0) return;
 
@@ -1547,12 +1613,73 @@ function OrdersWorkspace() {
     selectedStageSingleColumnKey,
   ]);
 
+  const getManualStageMarkMeta = useCallback((item, columnKey, { timestampOnly = false } = {}) => {
+    const manualMark = getItemManualStageMark(item, columnKey);
+    const manualClear = getItemManualStageClear(item, columnKey);
+    if (!manualMark || manualClear) return null;
+
+    const actor = String(manualMark.updatedBy || '').trim();
+    const timestamp = formatDateTimeDisplay(manualMark.updatedAt);
+    const text = timestampOnly
+      ? (timestamp || actor)
+      : [actor, timestamp].filter(Boolean).join(' · ');
+
+    if (!text) return null;
+    return { actor, timestamp, text };
+  }, []);
+
+  const renderManualStageCellContent = useCallback((item, columnKey, content, { timestampOnly = false } = {}) => {
+    const meta = getManualStageMarkMeta(item, columnKey, { timestampOnly });
+    if (!meta) return content;
+
+    return (
+      <div className="manual-stage-cell-stack">
+        <div className="manual-stage-cell-primary">{content}</div>
+        <div className="manual-stage-cell-meta">{meta.text}</div>
+      </div>
+    );
+  }, [getManualStageMarkMeta]);
+
+  const formatCellLogActionLabel = useCallback((entry) => {
+    switch (String(entry?.action || '').trim()) {
+      case 'order.manual-stage.apply':
+        return 'Закраска вручную';
+      case 'order.manual-stage.clear':
+        return 'Сброс вручную';
+      case 'order.manual-stage.telegram':
+        return 'Закраска из Telegram';
+      case 'order.manual-stage.telegram.clear':
+        return 'Сброс из Telegram';
+      case 'order.manual-date.apply':
+        return 'Изменение даты';
+      default:
+        return entry?.message || 'Действие';
+    }
+  }, []);
+
+  const formatCellLogDetails = useCallback((entry) => {
+    const details = entry?.details && typeof entry.details === 'object' ? entry.details : {};
+    const timestamp = entry?.createdAt ? formatDateTimeDisplay(entry.createdAt) : '';
+    const parts = [
+      entry?.actor?.label || '',
+      timestamp,
+    ];
+
+    if (details.date) {
+      parts.push(`Дата: ${formatDateDisplay(details.date)}`);
+    }
+    if (details.startDate || details.endDate) {
+      parts.push(`Период: ${formatDateDisplay(details.startDate)} - ${formatDateDisplay(details.endDate)}`);
+    }
+    if (details.legendKey) {
+      parts.push(`Этап: ${details.legendKey}`);
+    }
+    return parts.filter(Boolean).join(' • ');
+  }, []);
+
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
-    const actorName = !manualClear && manualMark?.updatedBy && columnKey !== 'carpenter'
-      ? String(manualMark.updatedBy).trim()
-      : '';
     const columnHeader = getSecondaryHeaderForPrimaryColumn(
       getPrimaryColumnIndexForManualStageColumn(columnKey),
       secondaryHeaderSchema,
@@ -1562,7 +1689,6 @@ function OrdersWorkspace() {
     const className = cn(
       baseClassName,
       manualMark ? 'manual-stage-cell-marked' : '',
-      actorName ? 'manual-stage-cell-actor-visible' : '',
       canSelectCell ? 'manual-stage-cell-selectable' : '',
       isSelected ? 'manual-stage-cell-selected' : '',
     );
@@ -1598,7 +1724,6 @@ function OrdersWorkspace() {
       style,
       onClick: canSelectCell ? (event) => handleManualStageCellClick(event, rowKey, columnKey) : undefined,
       'data-manual-stage-cell-key': buildManualStageCellKey(rowKey, columnKey),
-      'data-manual-stage-actor': actorName,
       title,
     };
   }, [canEditManualColumn, handleManualStageCellClick, secondaryHeaderSchema, selectedStageCellKeys]);
@@ -3216,16 +3341,25 @@ function OrdersWorkspace() {
                     const orderAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'order');
                     const paintAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'paint');
                     const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+                    const carpenterManualMark = getItemManualStageMark(item, 'carpenter');
+                    const carpenterManualClear = Boolean(getItemManualStageClear(item, 'carpenter'));
                     const latestCarpenterAutoAt = getLatestAutoHighlightAt(
                       carpenterAssignment?.scannedAt,
                       carpenterActiveStage?.startedAt,
                       workerStageForText?.startedAt,
                     );
                     const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
-                    const workerCellText = String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—';
-                    const workerCellTitle = carpenterAssignment?.employeeName
-                      ? 'Сотрудник взял изделие в работу по QR'
-                      : (workerStageForText?.stepName || activeStage?.stepName || '');
+                    const workerCellText = String(
+                      (!carpenterManualClear && carpenterManualMark?.updatedBy)
+                        || carpenterAssignment?.employeeName
+                        || workerStageForText?.employeeName
+                        || ''
+                    ).trim() || '—';
+                    const workerCellTitle = !carpenterManualClear && carpenterManualMark?.updatedAt
+                      ? `Отмечено: ${formatDateTimeDisplay(carpenterManualMark.updatedAt)}`
+                      : (carpenterAssignment?.employeeName
+                          ? 'Сотрудник взял изделие в работу по QR'
+                          : (workerStageForText?.stepName || activeStage?.stepName || ''));
                     const carpenterCellStyle = hasCarpenterAutoHighlight
                       ? {
                           background: columnStageMeta.carpenter.hex || '#C37C8E',
@@ -3387,6 +3521,178 @@ function OrdersWorkspace() {
                       `merged-order-cell merged-order-meta-cell order-filled-cell order-group-cell order-group-top order-group-bottom order-group-right${isHoveredOrder ? ' order-outline-cell order-outline-top order-outline-bottom order-outline-right' : ''}`,
                       durationMetaCellStyle,
                     );
+                    const orderNumberCellContent = (
+                      <div className="merged-order-number-content">
+                        <div className="xlsx-order-cell">
+                        {order?._id ? (
+                          <button
+                            type="button"
+                            className="order-link-button merged-order-number-link"
+                            onClick={() => setOrderPreview(order)}
+                            title="Открыть заказ в режиме чтения"
+                            aria-label={`Открыть заказ ${order.orderNumber || ''} в режиме чтения`}
+                          >
+                            {(isOrderInlineEditing ? orderInlineDraft?.orderNumber : order.orderNumber) || '—'}
+                          </button>
+                        ) : (
+                          <div className="merged-order-number-link">{(isOrderInlineEditing ? orderInlineDraft?.orderNumber : order.orderNumber) || '—'}</div>
+                        )}
+                        <button
+                          className={`btn btn-secondary btn-small order-actions-trigger ${hasOrderDrafts ? 'order-actions-trigger-attention' : ''}`}
+                          type="button"
+                          aria-label={`Действия над заказом ${order.orderNumber || ''}`}
+                          title={hasOrderDrafts ? 'Действия над заказом: есть быстрые правки' : 'Действия над заказом'}
+                          onClick={() => setOrderActionsOrder(order)}
+                        >
+                          &#8942;
+                        </button>
+                        </div>
+                      </div>
+                    );
+                    const customerCellContent = (
+                      <div className="merged-order-customer-content">
+                        {isOrderInlineEditing ? (
+                          <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} />
+                        ) : canManageCustomers && (order.customer || order.customerId) ? (
+                          <button
+                            type="button"
+                            className="order-primary-title-button merged-order-customer-button"
+                            onClick={() => openCustomerEditor({ context: 'order-cell', order })}
+                            title="Открыть карточку заказчика"
+                          >
+                            <span className="order-primary-title-button-text"><strong>{order.customer || 'Открыть карточку'}</strong></span>
+                          </button>
+                        ) : (
+                          <div className="order-primary-title-button merged-order-customer-button merged-order-customer-text"><span className="order-primary-title-button-text"><strong>{order.customer || '—'}</strong></span></div>
+                        )}
+                      </div>
+                    );
+                    const roomCellContent = isInlineEditing ? (
+                      <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} />
+                    ) : (
+                      <div className="room-cell-content">
+                        <div className="room-cell-text">{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</div>
+                      </div>
+                    );
+                    const roomNumberCellContent = isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—');
+                    const itemNumberCellContent = isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—');
+                    const quantityCellContent = isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (isPlaceholder ? '—' : (item.quantity || 1));
+                    const nameCellContent = isInlineEditing ? (
+                      <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
+                    ) : (
+                      <div className="order-primary-title">
+                        {item.itemId && !isPlaceholder ? (
+                          <button
+                            type="button"
+                            className="order-primary-title-button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openQrPreview(order, item);
+                            }}
+                            title="Открыть QR-код изделия"
+                            aria-label="Открыть QR-код изделия"
+                          >
+                            <span className="order-primary-title-button-text"><strong>{item.name || '—'}</strong></span>
+                            <span className="order-primary-title-button-badge" aria-hidden="true" />
+                          </button>
+                        ) : (
+                          <strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong>
+                        )}
+                      </div>
+                    );
+                    const orderCardCellContent = renderAttachmentCellControls({
+                      order,
+                      item,
+                      scope: 'order',
+                      attachments: itemAttachments,
+                      targetKey: orderAttachmentTargetKey,
+                      disabled: isPlaceholder,
+                      actionStyle: orderCardActionStyle,
+                    });
+                    const packageCellContent = (
+                      <div className="package-cell-content">
+                        <button
+                          type="button"
+                          className={cn(
+                            'package-cell-summary-badge',
+                            packageStats.pending > 0 && 'package-cell-summary-badge-attention',
+                          )}
+                          style={packageSummaryBadgeStyle}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openPackageEditor(order, item);
+                          }}
+                          disabled={isPlaceholder}
+                          title={packageStats.total > 0
+                            ? `Открыть и редактировать комплектацию: сделано ${packageStats.completed} из ${packageStats.total}`
+                            : 'Открыть и редактировать комплектацию'}
+                          aria-label="Открыть и редактировать комплектацию"
+                        >
+                          <span className="package-cell-summary-badge-value">
+                            {packageStats.completed}/{packageStats.total}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                    const notesCellContent = isInlineEditing ? (
+                      <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
+                    ) : (
+                      <>
+                        {commentPreview !== '—' ? (
+                          <div className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</div>
+                        ) : null}
+                        {item.notes || (commentPreview !== '—' ? null : '—')}
+                      </>
+                    );
+                    const deliveryDateCellContent = isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate);
+                    const carpenterCellContent = renderManualStageCellContent(item, 'carpenter', isPlaceholder ? '—' : workerCellText, { timestampOnly: true });
+                    const materialRequestCellContent = (
+                      <div className="package-cell-content">
+                        <button
+                          type="button"
+                          className={cn(
+                            'package-cell-summary-badge',
+                            'material-request-cell-summary-badge',
+                            materialRequestStats.pending > 0 && 'material-request-cell-summary-badge-attention',
+                          )}
+                          style={materialRequestSummaryBadgeStyle}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openMaterialRequestEditor(order, item);
+                          }}
+                          disabled={isPlaceholder}
+                          title={materialRequestStats.total > 0
+                            ? `Открыть и редактировать заявки на расходники: исполнено ${materialRequestStats.completed} из ${materialRequestStats.total}`
+                            : 'Открыть и редактировать заявки на расходники'}
+                          aria-label="Открыть и редактировать заявки на расходники"
+                        >
+                          <span className="package-cell-summary-badge-value">
+                            {materialRequestStats.completed}/{materialRequestStats.total}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                    const paintCellContent = renderAttachmentCellControls({
+                      order,
+                      item,
+                      scope: 'paint',
+                      attachments: paintAttachments,
+                      targetKey: paintAttachmentTargetKey,
+                      disabled: isPlaceholder,
+                      actionStyle: paintActionStyle,
+                    });
+                    const itemStartDateCellContent = renderManualStageCellContent(item, 'itemStartDate', formatDateDisplay(itemManufacturingMeta.startDate));
+                    const itemEndDateCellContent = renderManualStageCellContent(item, 'itemEndDate', formatDateDisplay(itemManufacturingMeta.endDate));
+                    const itemDurationCellContent = renderManualStageCellContent(item, 'itemDuration', itemDurationValue);
+                    const durationMetaCellContent = renderManualStageCellContent(
+                      item,
+                      'duration',
+                      <div className="merged-order-meta-content merged-order-meta-content-stacked">
+                        <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.startDate)}</span>
+                        <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.endDate)}</span>
+                        <span className="merged-order-meta-pill">{orderDurationValue}</span>
+                      </div>
+                    );
                     return (
                       <tr
                         key={key}
@@ -3398,32 +3704,7 @@ function OrdersWorkspace() {
                             rowSpan={orderRowSpan}
                             {...orderNumberCellProps}
                           >
-                            <div className="merged-order-number-content">
-                              <div className="xlsx-order-cell">
-                              {order?._id ? (
-                                <button
-                                  type="button"
-                                  className="order-link-button merged-order-number-link"
-                                  onClick={() => setOrderPreview(order)}
-                                  title="Открыть заказ в режиме чтения"
-                                  aria-label={`Открыть заказ ${order.orderNumber || ''} в режиме чтения`}
-                                >
-                                  {(isOrderInlineEditing ? orderInlineDraft?.orderNumber : order.orderNumber) || '—'}
-                                </button>
-                              ) : (
-                                <div className="merged-order-number-link">{(isOrderInlineEditing ? orderInlineDraft?.orderNumber : order.orderNumber) || '—'}</div>
-                              )}
-                              <button
-                                className={`btn btn-secondary btn-small order-actions-trigger ${hasOrderDrafts ? 'order-actions-trigger-attention' : ''}`}
-                                type="button"
-                                aria-label={`Действия над заказом ${order.orderNumber || ''}`}
-                                title={hasOrderDrafts ? 'Действия над заказом: есть быстрые правки' : 'Действия над заказом'}
-                                onClick={() => setOrderActionsOrder(order)}
-                              >
-                                &#8942;
-                              </button>
-                              </div>
-                            </div>
+                            {renderManualStageCellContent(item, 'orderNumber', orderNumberCellContent)}
                           </td>
                         ) : null}
                         {isFirstOrderRow ? (
@@ -3431,160 +3712,29 @@ function OrdersWorkspace() {
                             rowSpan={orderRowSpan}
                             {...customerCellProps}
                           >
-                            <div className="merged-order-customer-content">
-                              {isOrderInlineEditing ? (
-                                <input className="table-inline-input merged-order-customer-input" value={orderInlineDraft.customer} onChange={handleInlineChange(currentOrderDraftKeys[0], 'customer')} />
-                              ) : canManageCustomers && (order.customer || order.customerId) ? (
-                                <button
-                                  type="button"
-                                  className="order-primary-title-button merged-order-customer-button"
-                                  onClick={() => openCustomerEditor({ context: 'order-cell', order })}
-                                  title="Открыть карточку заказчика"
-                                >
-                                  <span className="order-primary-title-button-text"><strong>{order.customer || 'Открыть карточку'}</strong></span>
-                                </button>
-                              ) : (
-                                <div className="order-primary-title-button merged-order-customer-button merged-order-customer-text"><span className="order-primary-title-button-text"><strong>{order.customer || '—'}</strong></span></div>
-                              )}
-                            </div>
+                            {renderManualStageCellContent(item, 'customer', customerCellContent)}
                           </td>
                         ) : null}
-                        <td {...roomCellProps}>
-                          {isInlineEditing ? (
-                            <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} />
-                          ) : (
-                            <div className="room-cell-content">
-                              <div className="room-cell-text">{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</div>
-                            </div>
-                          )}
-                        </td>
-                        <td {...roomNumberCellProps}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—')}</td>
-                        <td {...itemNumberCellProps}>{isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.itemNumber} onChange={handleInlineChange(key, 'itemNumber')} /> : (item.itemNumber || '—')}</td>
-                        <td {...quantityCellProps}>{isInlineEditing ? <input type="number" min="1" className="table-inline-input table-inline-input-narrow" value={inlineDraft.quantity} onChange={handleInlineChange(key, 'quantity')} /> : (isPlaceholder ? '—' : (item.quantity || 1))}</td>
-                        <td {...nameCellProps}>
-                          {isInlineEditing ? (
-                            <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
-                          ) : (
-                            <div className="order-primary-title">
-                              {item.itemId && !isPlaceholder ? (
-                                <button
-                                  type="button"
-                                  className="order-primary-title-button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openQrPreview(order, item);
-                                  }}
-                                  title="Открыть QR-код изделия"
-                                  aria-label="Открыть QR-код изделия"
-                                >
-                                  <span className="order-primary-title-button-text"><strong>{item.name || '—'}</strong></span>
-                                  <span className="order-primary-title-button-badge" aria-hidden="true" />
-                                </button>
-                              ) : (
-                                <strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td {...orderCardCellProps}>
-                          {renderAttachmentCellControls({
-                            order,
-                            item,
-                            scope: 'order',
-                            attachments: itemAttachments,
-                            targetKey: orderAttachmentTargetKey,
-                            disabled: isPlaceholder,
-                            actionStyle: orderCardActionStyle,
-                          })}
-                        </td>
-                        <td {...packageCellProps}>
-                          <div className="package-cell-content">
-                            <button
-                              type="button"
-                              className={cn(
-                                'package-cell-summary-badge',
-                                packageStats.pending > 0 && 'package-cell-summary-badge-attention',
-                              )}
-                              style={packageSummaryBadgeStyle}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openPackageEditor(order, item);
-                              }}
-                              disabled={isPlaceholder}
-                              title={packageStats.total > 0
-                                ? `Открыть и редактировать комплектацию: сделано ${packageStats.completed} из ${packageStats.total}`
-                                : 'Открыть и редактировать комплектацию'}
-                              aria-label="Открыть и редактировать комплектацию"
-                            >
-                              <span className="package-cell-summary-badge-value">
-                                {packageStats.completed}/{packageStats.total}
-                              </span>
-                            </button>
-                          </div>
-                        </td>
-                        <td {...notesCellProps}>
-                          {isInlineEditing ? (
-                            <textarea className="table-inline-textarea" rows={3} value={inlineDraft.notes} onChange={handleInlineChange(key, 'notes')} />
-                          ) : (
-                            <>
-                              {commentPreview !== '—' ? (
-                                <div className="xlsx-order-cell-comment" title={commentPreview}>{commentPreview}</div>
-                              ) : null}
-                              {item.notes || (commentPreview !== '—' ? null : '—')}
-                            </>
-                          )}
-                        </td>
-                        <td {...deliveryDateCellProps}>{isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate)}</td>
+                        <td {...roomCellProps}>{renderManualStageCellContent(item, 'room', roomCellContent)}</td>
+                        <td {...roomNumberCellProps}>{renderManualStageCellContent(item, 'roomNumber', roomNumberCellContent)}</td>
+                        <td {...itemNumberCellProps}>{renderManualStageCellContent(item, 'itemNumber', itemNumberCellContent)}</td>
+                        <td {...quantityCellProps}>{renderManualStageCellContent(item, 'quantity', quantityCellContent)}</td>
+                        <td {...nameCellProps}>{renderManualStageCellContent(item, 'name', nameCellContent)}</td>
+                        <td {...orderCardCellProps}>{renderManualStageCellContent(item, 'orderCard', orderCardCellContent)}</td>
+                        <td {...packageCellProps}>{renderManualStageCellContent(item, 'packageName', packageCellContent)}</td>
+                        <td {...notesCellProps}>{renderManualStageCellContent(item, 'notes', notesCellContent)}</td>
+                        <td {...deliveryDateCellProps}>{renderManualStageCellContent(item, 'deliveryDate', deliveryDateCellContent)}</td>
                         <td {...carpenterCellProps} title={workerCellTitle}>
-                          {isPlaceholder ? '—' : workerCellText}
+                          {carpenterCellContent}
                         </td>
-                        <td {...materialRequestCellProps}>
-                          <div className="package-cell-content">
-                            <button
-                              type="button"
-                              className={cn(
-                                'package-cell-summary-badge',
-                                'material-request-cell-summary-badge',
-                                materialRequestStats.pending > 0 && 'material-request-cell-summary-badge-attention',
-                              )}
-                              style={materialRequestSummaryBadgeStyle}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openMaterialRequestEditor(order, item);
-                              }}
-                              disabled={isPlaceholder}
-                              title={materialRequestStats.total > 0
-                                ? `Открыть и редактировать заявки на расходники: исполнено ${materialRequestStats.completed} из ${materialRequestStats.total}`
-                                : 'Открыть и редактировать заявки на расходники'}
-                              aria-label="Открыть и редактировать заявки на расходники"
-                            >
-                              <span className="package-cell-summary-badge-value">
-                                {materialRequestStats.completed}/{materialRequestStats.total}
-                              </span>
-                            </button>
-                          </div>
-                        </td>
-                        <td {...paintCellProps}>
-                          {renderAttachmentCellControls({
-                            order,
-                            item,
-                            scope: 'paint',
-                            attachments: paintAttachments,
-                            targetKey: paintAttachmentTargetKey,
-                            disabled: isPlaceholder,
-                            actionStyle: paintActionStyle,
-                          })}
-                        </td>
-                        <td {...itemStartDateCellProps}>{formatDateDisplay(itemManufacturingMeta.startDate)}</td>
-                        <td {...itemEndDateCellProps}>{formatDateDisplay(itemManufacturingMeta.endDate)}</td>
-                        <td {...itemDurationCellProps}>{itemDurationValue}</td>
+                        <td {...materialRequestCellProps}>{renderManualStageCellContent(item, 'materialRequests', materialRequestCellContent)}</td>
+                        <td {...paintCellProps}>{renderManualStageCellContent(item, 'paint', paintCellContent)}</td>
+                        <td {...itemStartDateCellProps}>{itemStartDateCellContent}</td>
+                        <td {...itemEndDateCellProps}>{itemEndDateCellContent}</td>
+                        <td {...itemDurationCellProps}>{itemDurationCellContent}</td>
                         {isFirstOrderRow ? (
                           <td rowSpan={orderRowSpan} {...durationMetaCellProps}>
-                            <div className="merged-order-meta-content merged-order-meta-content-stacked">
-                              <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.startDate)}</span>
-                              <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.endDate)}</span>
-                              <span className="merged-order-meta-pill">{orderDurationValue}</span>
-                            </div>
+                            {durationMetaCellContent}
                           </td>
                         ) : null}
                       </tr>
@@ -3694,6 +3844,16 @@ function OrdersWorkspace() {
               variant="secondary"
               size="sm"
               className="manual-stage-toolbar-btn"
+              onClick={openCellLogsDialog}
+              disabled={manualStageSaving || !selectedStageSingleSelection}
+              title={selectedStageSingleSelection ? 'Открыть журнал действий по выбранной ячейке.' : 'Журнал доступен для одной выбранной ячейки.'}
+            >
+              Логи
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="manual-stage-toolbar-btn"
               onClick={clearSelectedStageCells}
               disabled={manualStageSaving}
             >
@@ -3701,6 +3861,53 @@ function OrdersWorkspace() {
             </Button>
           </div>
         </div>
+      ) : null}
+
+      {cellLogsDialog ? (
+        <Modal open={Boolean(cellLogsDialog)} onClose={() => setCellLogsDialog(null)} size="lg" className="order-form-modal">
+          <ModalHeader
+            title="Логи ячейки"
+            subtitle={`${cellLogsDialog.columnLabel || cellLogsDialog.columnKey || 'Ячейка'}${cellLogsDialog.orderNumber ? ` · заказ № ${cellLogsDialog.orderNumber}` : ''}${cellLogsDialog.itemName ? ` · ${cellLogsDialog.itemName}` : ''}`}
+            onClose={() => setCellLogsDialog(null)}
+          />
+
+          <div className="modal-actions modal-actions-between" style={{ marginBottom: 12 }}>
+            <div className="modal-actions-group">
+              <Button
+                variant="secondary"
+                onClick={() => fetchCellLogs(cellLogsDialog)}
+                disabled={cellLogsLoading}
+              >
+                {cellLogsLoading ? 'Обновление...' : 'Обновить'}
+              </Button>
+            </div>
+            <div className="text-small text-subtle">
+              Записей: {cellLogs.length}
+            </div>
+          </div>
+
+          {cellLogsError ? (
+            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+              {cellLogsError}
+            </div>
+          ) : null}
+
+          {cellLogs.length > 0 ? (
+            <div className="cell-log-list">
+              {cellLogs.map((entry) => (
+                <div key={entry._id || `${entry.createdAt}-${entry.action}`} className="cell-log-entry">
+                  <div className="cell-log-entry-title">{formatCellLogActionLabel(entry)}</div>
+                  <div className="cell-log-entry-meta">{formatCellLogDetails(entry)}</div>
+                  <div className="cell-log-entry-message">{entry?.message || 'Без описания'}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mobile-empty-state">
+              {cellLogsLoading ? 'Загружаю логи ячейки...' : 'Действий по этой ячейке пока нет.'}
+            </div>
+          )}
+        </Modal>
       ) : null}
 
       {showForm ? (

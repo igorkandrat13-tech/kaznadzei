@@ -4303,18 +4303,54 @@ body .attachment-preview-table td {
   box-shadow: inset 0 0 0 2px rgba(14, 22, 34, 0.5), inset 0 0 0 4px rgba(76, 208, 255, 0.9);
 }
 
-.unified-orders-table td.manual-stage-cell-actor-visible {
-  white-space: normal;
+.manual-stage-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
-.unified-orders-table td.manual-stage-cell-actor-visible::after {
-  content: attr(data-manual-stage-actor);
-  display: block;
-  margin-top: 3px;
+.manual-stage-cell-primary {
+  min-width: 0;
+}
+
+.manual-stage-cell-meta {
   font-size: 11px;
-  line-height: 1.2;
+  line-height: 1.25;
   font-weight: 600;
-  opacity: 0.92;
+  opacity: 0.88;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.cell-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.cell-log-entry {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.cell-log-entry-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cell-log-entry-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.cell-log-entry-message {
+  margin-top: 8px;
   white-space: normal;
   word-break: break-word;
 }
@@ -6597,8 +6633,12 @@ body .manual-stage-cell-marked.manual-stage-cell-selected {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.84), inset 0 0 0 4px rgba(41, 131, 210, 0.92);
 }
 
-body .unified-orders-table td.manual-stage-cell-actor-visible::after {
-  opacity: 0.84;
+body .manual-stage-cell-meta {
+  opacity: 0.82;
+}
+
+body .cell-log-entry {
+  background: rgba(148, 163, 184, 0.08);
 }
 
 body .unified-orders-table thead .sticky-col.sticky-col-2,

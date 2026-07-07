@@ -143,19 +143,19 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
     case 'deliveryDate':
       return 10;
     case 'carpenter':
-      return 11;
-    case 'materialRequests':
       return 12;
-    case 'paint':
+    case 'materialRequests':
       return 13;
-    case 'itemStartDate':
+    case 'paint':
       return 14;
-    case 'itemEndDate':
+    case 'itemStartDate':
       return 15;
-    case 'itemDuration':
+    case 'itemEndDate':
       return 16;
-    case 'duration':
+    case 'itemDuration':
       return 17;
+    case 'duration':
+      return 18;
     default:
       return -1;
   }
