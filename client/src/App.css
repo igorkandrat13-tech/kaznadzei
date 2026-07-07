@@ -4368,6 +4368,37 @@ body .attachment-preview-table td {
   font-variant-numeric: tabular-nums;
 }
 
+.unified-orders-table td.orders-cell-compact-manual-meta {
+  overflow: hidden;
+}
+
+.unified-orders-table td.orders-cell-compact-manual-meta .manual-stage-cell-stack {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.unified-orders-table td.orders-cell-compact-manual-meta .manual-stage-cell-primary {
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.unified-orders-table td.orders-cell-compact-manual-meta .manual-stage-cell-meta-compact-row {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.unified-orders-table td.orders-cell-compact-manual-meta .manual-stage-cell-meta-time {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .cell-log-list {
   display: flex;
   flex-direction: column;

@@ -3394,12 +3394,12 @@ function OrdersWorkspace() {
                     const roomNumberCellPropsBase = getManualStageCellProps(key, item, 'roomNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const roomNumberCellProps = {
                       ...roomNumberCellPropsBase,
-                      className: cn(roomNumberCellPropsBase.className, 'orders-cell-center'),
+                      className: cn(roomNumberCellPropsBase.className, 'orders-cell-center', 'orders-cell-compact-manual-meta'),
                     };
                     const itemNumberCellPropsBase = getManualStageCellProps(key, item, 'itemNumber', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const itemNumberCellProps = {
                       ...itemNumberCellPropsBase,
-                      className: cn(itemNumberCellPropsBase.className, 'orders-cell-center'),
+                      className: cn(itemNumberCellPropsBase.className, 'orders-cell-center', 'orders-cell-compact-manual-meta'),
                     };
                     const quantityCellPropsBase = getManualStageCellProps(key, item, 'quantity', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const quantityCellProps = {
