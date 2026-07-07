@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
-import { formatDateDisplay, formatDateTimeDisplay } from './dateTime';
+import { formatDateDisplay } from './dateTime';
 import {
   getItemManufacturingMeta,
   getOrderManufacturingMeta,
@@ -549,9 +549,6 @@ function Archive() {
   const getReadOnlyCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle) => {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
-    const actorName = !manualClear && manualMark?.updatedBy && columnKey !== 'carpenter'
-      ? String(manualMark.updatedBy).trim()
-      : '';
     const columnHeader = getManualStageSecondaryHeader(columnKey, secondaryHeaderSchema);
     const style = manualClear
       ? baseStyle
@@ -567,24 +564,13 @@ function Archive() {
         }
       : baseStyle;
     const title = manualMark
-      ? [
-          manualMark.legendKey || 'Ручная дата',
-          manualMark.updatedBy ? `Сотрудник: ${manualMark.updatedBy}` : '',
-          manualMark.updatedAt ? formatDateTimeDisplay(manualMark.updatedAt) : '',
-        ].filter(Boolean).join(' • ')
-      : (manualClear
-          ? [
-              'Сброшено',
-              manualClear.updatedBy ? `Сотрудник: ${manualClear.updatedBy}` : '',
-              manualClear.updatedAt ? formatDateTimeDisplay(manualClear.updatedAt) : '',
-            ].filter(Boolean).join(' • ')
-          : undefined);
+      ? (manualMark.legendKey || 'Ручная дата')
+      : (manualClear ? 'Сброшено' : undefined);
 
     return {
-      className: cn(baseClassName, actorName && 'manual-stage-cell-actor-visible'),
+      className: cn(baseClassName),
       style,
       'data-manual-stage-cell-key': `${rowKey}::${columnKey}`,
-      'data-manual-stage-actor': actorName,
       title,
     };
   }, [secondaryHeaderSchema]);
@@ -814,10 +800,8 @@ function Archive() {
                     workerStageForText?.startedAt,
                   );
                   const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
-                  const workerCellText = String(carpenterAssignment?.employeeName || workerStageForText?.employeeName || '').trim() || '—';
-                  const workerCellTitle = carpenterAssignment?.employeeName
-                    ? 'Сотрудник взял изделие в работу по QR'
-                    : (workerStageForText?.stepName || activeStage?.stepName || '');
+                  const workerCellText = '—';
+                  const workerCellTitle = workerStageForText?.stepName || activeStage?.stepName || '';
                   const carpenterCellStyle = hasCarpenterAutoHighlight
                     ? {
                         background: columnStageMeta.carpenter.hex || '#C37C8E',
@@ -1033,7 +1017,7 @@ function Archive() {
                         </>
                       </td>
                       <td {...deliveryDateCellProps}>{formatDateDisplay(item.deliveryDate)}</td>
-                      <td {...carpenterCellProps} title={latestCarpenterAutoAt ? `${workerCellTitle}${workerCellTitle ? ' • ' : ''}${formatDateTimeDisplay(latestCarpenterAutoAt)}` : workerCellTitle}>
+                      <td {...carpenterCellProps} title={workerCellTitle}>
                         {isPlaceholder ? '—' : workerCellText}
                       </td>
                       <td {...materialRequestCellProps}>

@@ -4148,7 +4148,7 @@ body .attachment-preview-table td {
   position: fixed;
   display: inline-flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: flex-start;
   z-index: var(--z-overlay-floating);
   margin-bottom: 0;
@@ -4160,10 +4160,10 @@ body .attachment-preview-table td {
   backdrop-filter: blur(10px);
 }
 
-.manual-stage-toolbar-floating .manual-stage-toolbar-summary,
 .manual-stage-toolbar-floating .manual-stage-toolbar-date-editor,
-.manual-stage-toolbar-floating .manual-stage-toolbar-actions {
-  width: fit-content;
+.manual-stage-toolbar-floating .manual-stage-toolbar-actions,
+.manual-stage-toolbar-floating .manual-stage-toolbar-logs {
+  width: 100%;
   max-width: 100%;
 }
 
@@ -4178,7 +4178,7 @@ body .attachment-preview-table td {
 
 .manual-stage-toolbar-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(104px, 1fr));
+  grid-template-columns: repeat(3, minmax(96px, 1fr));
   align-items: stretch;
   gap: 8px;
 }
@@ -4222,6 +4222,35 @@ body .attachment-preview-table td {
 .manual-stage-toolbar-btn-accent {
   border-color: rgba(126, 191, 255, 0.3);
   background: rgba(22, 42, 64, 0.96);
+}
+
+.manual-stage-toolbar-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(126, 191, 255, 0.18);
+}
+
+.manual-stage-toolbar-logs-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.manual-stage-toolbar-log-list {
+  max-height: min(34vh, 260px);
+}
+
+.manual-stage-toolbar-log-list .cell-log-entry {
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.manual-stage-toolbar-logs-empty {
+  font-size: 12px;
+  color: var(--text-soft);
 }
 
 .manual-stage-select-wrap {
@@ -6666,11 +6695,16 @@ body .manual-stage-toolbar-btn-accent {
   background: rgba(237, 245, 255, 0.98);
 }
 
-body .manual-stage-toolbar-summary {
-  color: #173857;
+body .manual-stage-toolbar-hint {
+  color: rgba(33, 65, 96, 0.82);
 }
 
-body .manual-stage-toolbar-hint {
+body .manual-stage-toolbar-logs {
+  border-top-color: rgba(111, 156, 203, 0.2);
+}
+
+body .manual-stage-toolbar-logs-title,
+body .manual-stage-toolbar-logs-empty {
   color: rgba(33, 65, 96, 0.82);
 }
 

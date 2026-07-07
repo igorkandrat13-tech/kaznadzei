@@ -805,7 +805,6 @@ function OrdersWorkspace() {
   const [customerEditor, setCustomerEditor] = useState(null);
   const [customerDraft, setCustomerDraft] = useState(createEmptyCustomerDraft);
   const [customerSaving, setCustomerSaving] = useState(false);
-  const [cellLogsDialog, setCellLogsDialog] = useState(null);
   const [cellLogs, setCellLogs] = useState([]);
   const [cellLogsLoading, setCellLogsLoading] = useState(false);
   const [cellLogsError, setCellLogsError] = useState('');
@@ -1088,11 +1087,6 @@ function OrdersWorkspace() {
       };
     })
     .filter(Boolean), [canEditManualColumn, rowsByKey, secondaryHeaderSchema, selectedStageCellKeys]);
-  const selectedStageSelectionsWithLegend = useMemo(
-    () => selectedStageSelections.filter((selection) => selection.autoLegendKey),
-    [selectedStageSelections],
-  );
-  const selectedStageSelectionSkippedCount = selectedStageSelections.length - selectedStageSelectionsWithLegend.length;
   const selectedStageSingleColumnKey = useMemo(() => {
     const uniqueColumnKeys = Array.from(new Set(selectedStageSelections.map((selection) => selection.columnKey)));
     return uniqueColumnKeys.length === 1 ? uniqueColumnKeys[0] : '';
@@ -1101,6 +1095,11 @@ function OrdersWorkspace() {
     () => (selectedStageSelections.length === 1 ? selectedStageSelections[0] : null),
     [selectedStageSelections],
   );
+  const selectedStageSingleSelectionLogKey = useMemo(() => (
+    selectedStageSingleSelection
+      ? `${selectedStageSingleSelection.orderId || ''}::${selectedStageSingleSelection.itemId || ''}::${selectedStageSingleSelection.columnKey || ''}`
+      : ''
+  ), [selectedStageSingleSelection]);
   const selectedStageCellKeysSignature = useMemo(
     () => selectedStageCellKeys.join('|'),
     [selectedStageCellKeys],
@@ -1339,17 +1338,8 @@ function OrdersWorkspace() {
     });
   }, [canEditManualColumn, isAdmin, manualStageSaving]);
 
-  const fetchCellLogs = useCallback(async (selection, { openModal = false } = {}) => {
+  const fetchCellLogs = useCallback(async (selection) => {
     if (!selection?.orderId || !selection?.columnKey) return;
-
-    if (openModal) {
-      const primaryColumnIndex = getPrimaryColumnIndexForManualStageColumn(selection.columnKey);
-      const header = getManualStageSecondaryHeader(selection.columnKey, secondaryHeaderSchema);
-      setCellLogsDialog({
-        ...selection,
-        columnLabel: String(header?.label || ORDER_PRIMARY_HEADERS[primaryColumnIndex] || selection.columnKey || '').trim(),
-      });
-    }
 
     setCellLogsLoading(true);
     setCellLogsError('');
@@ -1385,10 +1375,15 @@ function OrdersWorkspace() {
     }
   }, [secondaryHeaderSchema]);
 
-  const openCellLogsDialog = useCallback(() => {
-    if (!selectedStageSingleSelection) return;
-    fetchCellLogs(selectedStageSingleSelection, { openModal: true });
-  }, [fetchCellLogs, selectedStageSingleSelection]);
+  useEffect(() => {
+    if (!selectedStageSingleSelection) {
+      setCellLogs([]);
+      setCellLogsError('');
+      setCellLogsLoading(false);
+      return;
+    }
+    fetchCellLogs(selectedStageSingleSelection);
+  }, [fetchCellLogs, selectedStageSingleSelection, selectedStageSingleSelectionLogKey]);
 
   const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
     if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0) return;
@@ -1603,40 +1598,7 @@ function OrdersWorkspace() {
     selectedStageSingleColumnKey,
   ]);
 
-  const getManualStageMarkMeta = useCallback((item, columnKey, { timestampOnly = false, compactTimestamp = false } = {}) => {
-    const manualMark = getItemManualStageMark(item, columnKey);
-    const manualClear = getItemManualStageClear(item, columnKey);
-    if (!manualMark || manualClear) return null;
-
-    const actor = String(manualMark.updatedBy || '').trim();
-    const timestamp = formatDateTimeDisplay(manualMark.updatedAt);
-    const normalizedTimestamp = compactTimestamp ? timestamp.replace(', ', ' ') : timestamp;
-    const text = timestampOnly
-      ? (normalizedTimestamp || actor)
-      : [actor, normalizedTimestamp].filter(Boolean).join(' · ');
-
-    if (!text) return null;
-    return { actor, timestamp: normalizedTimestamp, text };
-  }, []);
-
-  const renderManualStageCellContent = useCallback((item, columnKey, content, { timestampOnly = false, compactTimestamp = false, nowrapMeta = false, compactSplitMeta = false } = {}) => {
-    const meta = getManualStageMarkMeta(item, columnKey, { timestampOnly, compactTimestamp });
-    if (!meta) return content;
-
-    return (
-      <div className="manual-stage-cell-stack">
-        <div className="manual-stage-cell-primary">{content}</div>
-        {compactSplitMeta ? (
-          <div className="manual-stage-cell-meta manual-stage-cell-meta-compact-row" title={[meta.actor, meta.timestamp].filter(Boolean).join(' | ')}>
-            <span className="manual-stage-cell-meta-actor">{meta.actor}</span>
-            <span className="manual-stage-cell-meta-time">{meta.timestamp}</span>
-          </div>
-        ) : (
-          <div className={cn('manual-stage-cell-meta', nowrapMeta && 'manual-stage-cell-meta-nowrap')}>{meta.text}</div>
-        )}
-      </div>
-    );
-  }, [getManualStageMarkMeta]);
+  const renderManualStageCellContent = useCallback((_item, _columnKey, content) => content, []);
 
   const formatCellLogActionLabel = useCallback((entry) => {
     switch (String(entry?.action || '').trim()) {
@@ -1729,18 +1691,8 @@ function OrdersWorkspace() {
         }
       : baseStyle;
     const title = manualMark
-      ? [
-          manualMark.legendKey || 'Ручная дата',
-          manualMark.updatedBy ? `Сотрудник: ${manualMark.updatedBy}` : '',
-          manualMark.updatedAt ? formatDateTimeDisplay(manualMark.updatedAt) : '',
-        ].filter(Boolean).join(' • ')
-      : (manualClear
-          ? [
-              'Сброшено',
-              manualClear.updatedBy ? `Сотрудник: ${manualClear.updatedBy}` : '',
-              manualClear.updatedAt ? formatDateTimeDisplay(manualClear.updatedAt) : '',
-            ].filter(Boolean).join(' • ')
-          : undefined);
+      ? (manualMark.legendKey || 'Ручная дата')
+      : (manualClear ? 'Сброшено' : undefined);
 
     return {
       className,
@@ -3372,17 +3324,8 @@ function OrdersWorkspace() {
                       workerStageForText?.startedAt,
                     );
                     const hasCarpenterAutoHighlight = Boolean(carpenterAssignment || workerStageForText);
-                    const workerCellText = String(
-                      (!carpenterManualClear && carpenterManualMark?.updatedBy)
-                        || carpenterAssignment?.employeeName
-                        || workerStageForText?.employeeName
-                        || ''
-                    ).trim() || '—';
-                    const workerCellTitle = !carpenterManualClear && carpenterManualMark?.updatedAt
-                      ? `Отмечено: ${formatDateTimeDisplay(carpenterManualMark.updatedAt)}`
-                      : (carpenterAssignment?.employeeName
-                          ? 'Сотрудник взял изделие в работу по QR'
-                          : (workerStageForText?.stepName || activeStage?.stepName || ''));
+                    const workerCellText = '—';
+                    const workerCellTitle = workerStageForText?.stepName || activeStage?.stepName || '';
                     const carpenterCellStyle = hasCarpenterAutoHighlight
                       ? {
                           background: columnStageMeta.carpenter.hex || '#C37C8E',
@@ -3789,15 +3732,6 @@ function OrdersWorkspace() {
             visibility: manualStageToolbarPosition ? 'visible' : 'hidden',
           }}
         >
-          <div className="manual-stage-toolbar-summary">
-            Выбрано: <strong>{selectedStageSelections.length}</strong>
-            {selectedStageSelectionsWithLegend.length > 0 ? (
-              <> • будет закрашено: <strong>{selectedStageSelectionsWithLegend.length}</strong></>
-            ) : null}
-            {selectedStageSelectionSkippedCount > 0 ? (
-              <> • без этапа: <strong>{selectedStageSelectionSkippedCount}</strong></>
-            ) : null}
-          </div>
           {canEditSelectedDates ? (
             <div className="manual-stage-toolbar-date-editor">
               {selectedStageSingleColumnKey === 'duration' ? (
@@ -3867,70 +3801,43 @@ function OrdersWorkspace() {
               variant="secondary"
               size="sm"
               className="manual-stage-toolbar-btn"
-              onClick={openCellLogsDialog}
-              disabled={manualStageSaving || !selectedStageSingleSelection}
-              title={selectedStageSingleSelection ? 'Открыть журнал действий по выбранной ячейке.' : 'Журнал доступен для одной выбранной ячейки.'}
-            >
-              Логи
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="manual-stage-toolbar-btn"
               onClick={clearSelectedStageCells}
               disabled={manualStageSaving}
             >
               Закрыть
             </Button>
           </div>
-        </div>
-      ) : null}
-
-      {cellLogsDialog ? (
-        <Modal open={Boolean(cellLogsDialog)} onClose={() => setCellLogsDialog(null)} size="lg" className="order-form-modal">
-          <ModalHeader
-            title="Логи ячейки"
-            subtitle={`${cellLogsDialog.columnLabel || cellLogsDialog.columnKey || 'Ячейка'}${cellLogsDialog.orderNumber ? ` · заказ № ${cellLogsDialog.orderNumber}` : ''}${cellLogsDialog.itemName ? ` · ${cellLogsDialog.itemName}` : ''}`}
-            onClose={() => setCellLogsDialog(null)}
-          />
-
-          <div className="modal-actions modal-actions-between" style={{ marginBottom: 12 }}>
-            <div className="modal-actions-group">
-              <Button
-                variant="secondary"
-                onClick={() => fetchCellLogs(cellLogsDialog)}
-                disabled={cellLogsLoading}
-              >
-                {cellLogsLoading ? 'Обновление...' : 'Обновить'}
-              </Button>
+          <div className="manual-stage-toolbar-logs">
+            <div className="manual-stage-toolbar-logs-title">
+              История действий
             </div>
-            <div className="text-small text-subtle">
-              Записей: {cellLogs.length}
-            </div>
-          </div>
-
-          {cellLogsError ? (
-            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
-              {cellLogsError}
-            </div>
-          ) : null}
-
-          {cellLogs.length > 0 ? (
-            <div className="cell-log-list">
-              {cellLogs.map((entry) => (
-                <div key={entry._id || `${entry.createdAt}-${entry.action}`} className="cell-log-entry">
-                  <div className="cell-log-entry-title">{formatCellLogActionLabel(entry)}</div>
-                  <div className="cell-log-entry-meta">{formatCellLogDetails(entry)}</div>
-                  <div className="cell-log-entry-message">{formatCellLogMessage(entry, cellLogsDialog?.columnLabel || '')}</div>
+            {selectedStageSingleSelection ? (
+              cellLogsError ? (
+                <div className="settings-alert settings-alert-error" style={{ marginBottom: 0 }}>
+                  {cellLogsError}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="mobile-empty-state">
-              {cellLogsLoading ? 'Загружаю логи ячейки...' : 'Действий по этой ячейке пока нет.'}
-            </div>
-          )}
-        </Modal>
+              ) : cellLogs.length > 0 ? (
+                <div className="cell-log-list manual-stage-toolbar-log-list">
+                  {cellLogs.map((entry) => (
+                    <div key={entry._id || `${entry.createdAt}-${entry.action}`} className="cell-log-entry">
+                      <div className="cell-log-entry-title">{formatCellLogActionLabel(entry)}</div>
+                      <div className="cell-log-entry-meta">{formatCellLogDetails(entry)}</div>
+                      <div className="cell-log-entry-message">{formatCellLogMessage(entry, selectedStageSingleSelection.columnLabel || '')}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="manual-stage-toolbar-logs-empty">
+                  {cellLogsLoading ? 'Загружаю логи ячейки...' : 'Действий по этой ячейке пока нет.'}
+                </div>
+              )
+            ) : (
+              <div className="manual-stage-toolbar-logs-empty">
+                Логи доступны при выборе одной ячейки.
+              </div>
+            )}
+          </div>
+        </div>
       ) : null}
 
       {showForm ? (
