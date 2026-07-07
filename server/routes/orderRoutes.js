@@ -175,6 +175,14 @@ function getStageLegendKeyForPrimaryColumn(columnIndex = -1, secondaryHeaders = 
 }
 
 function resolveLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders = []) {
+  if (normalizeOrderColumnKey(columnKey) === 'carpenter') {
+    const sandingHeader = (Array.isArray(secondaryHeaders) ? secondaryHeaders : []).find(
+      (cell) => String(cell?.label || '').trim() === 'Шлифуется'
+    );
+    if (sandingHeader?.legendKey) {
+      return String(sandingHeader.legendKey || '').trim();
+    }
+  }
   const primaryColumnIndex = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX[normalizeOrderColumnKey(columnKey)];
   if (!Number.isInteger(primaryColumnIndex)) return '';
   return getStageLegendKeyForPrimaryColumn(primaryColumnIndex, secondaryHeaders);

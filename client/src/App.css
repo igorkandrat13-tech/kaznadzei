@@ -1,4 +1,4 @@
-﻿* {
+* {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -4165,10 +4165,10 @@ body .attachment-preview-table td {
 }
 
 .manual-stage-toolbar-actions {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(104px, 1fr));
+  align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .manual-stage-toolbar-date-editor {
@@ -4202,7 +4202,8 @@ body .attachment-preview-table td {
 }
 
 .manual-stage-toolbar-btn {
-  min-width: 104px;
+  min-width: 0;
+  width: 100%;
   justify-content: center;
 }
 

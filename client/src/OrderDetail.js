@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { buildOrderStageLegendConfig } from './orderStageLegend';
+import { formatDateDisplay, formatDateTimeDisplay } from './dateTime';
 import { getOrderOverallStatus, getOrderPrimaryItem } from './orderSelectors';
 import { ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
 import { getOrderStatusMeta } from './statusMeta';
@@ -184,22 +185,6 @@ function getSecondaryHeaderTextColor(header = null) {
   if (!header) return '#000000';
   if (header.useTableBackground) return '#000000';
   return String(header.textHex || '').trim() || '#000000';
-}
-
-function formatDateValue(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return '—';
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) return normalized;
-  return parsed.toLocaleDateString();
-}
-
-function formatDateTimeValue(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return '';
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) return normalized;
-  return parsed.toLocaleString();
 }
 
 function OrderDetail() {
@@ -473,13 +458,16 @@ function OrderDetail() {
 
   const telegramStageOptions = useMemo(() => {
     const secondaryHeaders = orderStageLegendConfig.secondaryHeaders || [];
-    return ROLE_COLUMN_ACCESS_OPTIONS
+    const options = ROLE_COLUMN_ACCESS_OPTIONS
       .filter((column) => allowedColumns.includes(column.key) && column.key !== 'packageName')
       .map((column) => {
-        const header = getSecondaryHeaderForPrimaryColumn(
-          getPrimaryColumnIndexForManualStageColumn(column.key),
-          secondaryHeaders,
-        );
+        const preferredHeaderLabel = column.key === 'carpenter' ? 'Шлифуется' : '';
+        const header = preferredHeaderLabel
+          ? secondaryHeaders.find((item) => String(item?.label || '').trim() === preferredHeaderLabel)
+          : getSecondaryHeaderForPrimaryColumn(
+              getPrimaryColumnIndexForManualStageColumn(column.key),
+              secondaryHeaders,
+            );
         if (!header || !header.legendKey || header.useTableBackground) {
           return null;
         }
@@ -494,6 +482,15 @@ function OrderDetail() {
       })
       .filter(Boolean)
       .sort((left, right) => left.primaryColumnIndex - right.primaryColumnIndex);
+
+    const groupedOptions = new Map();
+    options.forEach((option) => {
+      const groupKey = `${option.label}::${option.legendKey}`;
+      if (!groupedOptions.has(groupKey)) {
+        groupedOptions.set(groupKey, option);
+      }
+    });
+    return Array.from(groupedOptions.values());
   }, [allowedColumns, orderStageLegendConfig.secondaryHeaders]);
 
   const materialRequestStats = useMemo(() => (
@@ -767,7 +764,7 @@ function OrderDetail() {
                             </div>
                             <div className="telegram-stage-card-subtitle">
                               {isMarked
-                                ? `Принято${stageMark?.updatedBy ? ` · ${stageMark.updatedBy}` : ''}${stageMark?.updatedAt ? ` · ${formatDateTimeValue(stageMark.updatedAt)}` : ''}`
+                                ? `Принято${stageMark?.updatedBy ? ` · ${stageMark.updatedBy}` : ''}${stageMark?.updatedAt ? ` · ${formatDateTimeDisplay(stageMark.updatedAt)}` : ''}`
                                 : 'Ожидает принятия'}
                             </div>
                           </div>
@@ -897,9 +894,9 @@ function OrderDetail() {
               <tr><td><strong>Комплектация</strong></td><td>{selectedItem?.packageName || '—'}</td></tr>
               <tr><td><strong>Заявки на расходники</strong></td><td>{materialRequestStats.total > 0 ? `${materialRequestStats.completed}/${materialRequestStats.total}` : '—'}</td></tr>
               <tr><td><strong>Примечания</strong></td><td>{selectedItem?.notes || primaryItem?.notes || '—'}</td></tr>
-              <tr><td><strong>Дата заказа</strong></td><td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</td></tr>
-              <tr><td><strong>Начало изготовления</strong></td><td>{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</td></tr>
-              <tr><td><strong>Окончание изготовления</strong></td><td>{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</td></tr>
+              <tr><td><strong>Дата заказа</strong></td><td>{formatDateDisplay(order.orderDate)}</td></tr>
+              <tr><td><strong>Начало изготовления</strong></td><td>{formatDateDisplay(order.startDate)}</td></tr>
+              <tr><td><strong>Окончание изготовления</strong></td><td>{formatDateDisplay(order.endDate)}</td></tr>
               <tr><td><strong>Время изготовления</strong></td><td>{calcDuration(order.startDate, order.endDate)}</td></tr>
               <tr><td><strong>Статус</strong></td><td><span className={statusMeta.className}>{statusMeta.label}</span></td></tr>
             </tbody>

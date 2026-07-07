@@ -4,6 +4,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
+import { formatDateDisplay, formatDateTimeDisplay } from './dateTime';
 import { useRoleConfig } from './RoleConfigContext';
 import {
   getItemManufacturingMeta,
@@ -139,9 +140,18 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
   }
 }
 
+function getManualStageSecondaryHeader(columnKey = '', secondaryHeaders = []) {
+  if (normalizeOrderColumnKey(columnKey) === 'carpenter') {
+    const sandingHeader = (Array.isArray(secondaryHeaders) ? secondaryHeaders : []).find(
+      (cell) => String(cell?.label || '').trim() === 'Шлифуется'
+    );
+    if (sandingHeader) return sandingHeader;
+  }
+  return getSecondaryHeaderForPrimaryColumn(getPrimaryColumnIndexForManualStageColumn(columnKey), secondaryHeaders);
+}
+
 function getLegendKeyForManualStageColumn(columnKey = '', secondaryHeaders = []) {
-  const primaryColumnIndex = getPrimaryColumnIndexForManualStageColumn(columnKey);
-  return getStageLegendKeyForPrimaryColumn(primaryColumnIndex, secondaryHeaders);
+  return String(getManualStageSecondaryHeader(columnKey, secondaryHeaders)?.legendKey || '').trim();
 }
 
 function getAttachmentKindLabel(attachment = {}) {
@@ -360,20 +370,6 @@ function getCommentPreview(comments = []) {
   return comments
     .map(comment => `${comment.role}: ${comment.text}`)
     .join(' | ');
-}
-
-function formatDateDisplay(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return '—';
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? normalized : date.toLocaleDateString();
-}
-
-function formatDateTimeDisplay(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return '';
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? normalized : date.toLocaleString();
 }
 
 function formatManufacturingTime(startDate, endDate) {
@@ -1354,7 +1350,7 @@ function OrdersWorkspace() {
 
     if (openModal) {
       const primaryColumnIndex = getPrimaryColumnIndexForManualStageColumn(selection.columnKey);
-      const header = getSecondaryHeaderForPrimaryColumn(primaryColumnIndex, secondaryHeaderSchema);
+      const header = getManualStageSecondaryHeader(selection.columnKey, secondaryHeaderSchema);
       setCellLogsDialog({
         ...selection,
         columnLabel: String(header?.label || ORDER_PRIMARY_HEADERS[primaryColumnIndex] || selection.columnKey || '').trim(),
@@ -1680,10 +1676,7 @@ function OrdersWorkspace() {
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
-    const columnHeader = getSecondaryHeaderForPrimaryColumn(
-      getPrimaryColumnIndexForManualStageColumn(columnKey),
-      secondaryHeaderSchema,
-    );
+    const columnHeader = getManualStageSecondaryHeader(columnKey, secondaryHeaderSchema);
     const isSelected = selectedStageCellKeys.includes(buildManualStageCellKey(rowKey, columnKey));
     const canSelectCell = !disabled && canEditManualColumn(columnKey);
     const className = cn(
@@ -1709,13 +1702,13 @@ function OrdersWorkspace() {
       ? [
           manualMark.legendKey || 'Ручная дата',
           manualMark.updatedBy ? `Сотрудник: ${manualMark.updatedBy}` : '',
-          manualMark.updatedAt ? new Date(manualMark.updatedAt).toLocaleString() : '',
+          manualMark.updatedAt ? formatDateTimeDisplay(manualMark.updatedAt) : '',
         ].filter(Boolean).join(' • ')
       : (manualClear
           ? [
               'Сброшено',
               manualClear.updatedBy ? `Сотрудник: ${manualClear.updatedBy}` : '',
-              manualClear.updatedAt ? new Date(manualClear.updatedAt).toLocaleString() : '',
+              manualClear.updatedAt ? formatDateTimeDisplay(manualClear.updatedAt) : '',
             ].filter(Boolean).join(' • ')
           : undefined);
 

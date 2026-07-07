@@ -15,6 +15,7 @@ import {
 import EmployeeModal from './admin/EmployeeModal';
 import StepModal from './admin/StepModal';
 import UpdatesOverview from './admin/UpdatesOverview';
+import { formatDateTimeDisplay } from './dateTime';
 import { useRoleConfig } from './RoleConfigContext';
 import { buildOrderStageLegendConfig } from './orderStageLegend';
 import { ROLE_COLUMN_ACCESS_OPTIONS, normalizeAllowedColumns } from './roleColumnAccess';
@@ -185,9 +186,19 @@ function Admin() {
       : getEntityAllowedColumns(entity, optionsByKey);
     if (allowedColumns.length === 0) return 'Нет доступных колонок';
     const resolvedColumnOptions = Array.isArray(columnOptions) ? columnOptions : Object.values(optionsByKey || {});
-    const labels = resolvedColumnOptions
-      .filter((column) => allowedColumns.includes(column.key))
-      .map((column) => column.label);
+    const uniqueOptions = [];
+    const seenKeys = new Set();
+    resolvedColumnOptions.forEach((column) => {
+      if (!column) return;
+      const equivalentKeys = Array.isArray(column.equivalentKeys) && column.equivalentKeys.length > 0
+        ? column.equivalentKeys
+        : [column.key];
+      if (!equivalentKeys.some((columnKey) => allowedColumns.includes(columnKey))) return;
+      if (seenKeys.has(column.key)) return;
+      seenKeys.add(column.key);
+      uniqueOptions.push(column);
+    });
+    const labels = uniqueOptions.map((column) => column.label);
     if (labels.length <= 3) return labels.join(', ');
     return `${labels.slice(0, 3).join(', ')} и еще ${labels.length - 3}`;
   };
@@ -219,17 +230,29 @@ function Admin() {
     });
   }, [orderStageLegendConfig]);
   const employeeColumnOptions = useMemo(() => {
-    return roleColumnOptions
+    const groupedOptions = new Map();
+    roleColumnOptions
       .filter((column) => (
         !EMPLOYEE_HIDDEN_COLUMN_KEYS.has(column.key)
         && column.legendKey
         && !column.useTableBackground
       ))
-      .map((column) => ({
-        ...column,
-        label: column.headerLabel || column.label,
-        description: '',
-      }));
+      .forEach((column) => {
+        const label = column.headerLabel || column.label;
+        const groupKey = `${label}::${column.legendKey}`;
+        const current = groupedOptions.get(groupKey);
+        if (!current) {
+          groupedOptions.set(groupKey, {
+            ...column,
+            label,
+            description: '',
+            equivalentKeys: [column.key],
+          });
+          return;
+        }
+        current.equivalentKeys = Array.from(new Set([...(current.equivalentKeys || []), column.key]));
+      });
+    return Array.from(groupedOptions.values());
   }, [roleColumnOptions]);
   const roleColumnOptionsByKey = useMemo(() => {
     return roleColumnOptions.reduce((acc, column) => {
@@ -239,6 +262,12 @@ function Admin() {
   }, [roleColumnOptions]);
   const employeeColumnOptionsByKey = useMemo(() => {
     return employeeColumnOptions.reduce((acc, column) => {
+      const keys = Array.isArray(column.equivalentKeys) && column.equivalentKeys.length > 0
+        ? column.equivalentKeys
+        : [column.key];
+      keys.forEach((key) => {
+        acc[key] = column;
+      });
       acc[column.key] = column;
       return acc;
     }, {});
@@ -250,14 +279,20 @@ function Admin() {
     if (allowedColumns.length === 0) {
       return <span className="text-subtle">Нет доступа</span>;
     }
+    const uniqueColumns = [];
+    const seenKeys = new Set();
+    allowedColumns.forEach((columnKey) => {
+      const column = optionsByKey[columnKey];
+      if (!column || seenKeys.has(column.key)) return;
+      seenKeys.add(column.key);
+      uniqueColumns.push(column);
+    });
     return (
       <div
         className={`role-allowed-columns-markers ${compact ? 'role-allowed-columns-markers-compact' : ''}`}
         title={getAllowedColumnsSummary(entity, { ownOnly, optionsByKey })}
       >
-        {allowedColumns.map((columnKey) => {
-          const column = optionsByKey[columnKey];
-          if (!column) return null;
+        {uniqueColumns.map((column) => {
           return (
             <span
               key={column.key}
@@ -593,7 +628,7 @@ function Admin() {
   };
 
   const formatActivityLogEntry = (entry) => {
-    const timestamp = entry?.createdAt ? new Date(entry.createdAt).toLocaleString() : 'Без времени';
+    const timestamp = entry?.createdAt ? formatDateTimeDisplay(entry.createdAt) : 'Без времени';
     const actor = entry?.actor?.label || 'Система';
     const message = entry?.message || entry?.action || 'Событие';
     const details = entry?.details && typeof entry.details === 'object'
@@ -838,7 +873,7 @@ function Admin() {
   };
 
   const formatTelegramLogEntry = (entry) => {
-    const timestamp = entry?.createdAt ? new Date(entry.createdAt).toLocaleString() : 'Без времени';
+    const timestamp = entry?.createdAt ? formatDateTimeDisplay(entry.createdAt) : 'Без времени';
     const scope = entry?.scope || 'telegram';
     const event = entry?.event || 'event';
     const details = entry?.details && typeof entry.details === 'object'
@@ -1673,7 +1708,7 @@ function Admin() {
                       <td>{renderAllowedColumnsMarkers(employee, { compact: true, ownOnly: true, optionsByKey: employeeColumnOptionsByKey })}</td>
                       <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
                       <td>{getEmployeeTelegramSummary(employee)}</td>
-                      <td>{employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</td>
+                      <td>{employee.telegramAuthorizedAt ? formatDateTimeDisplay(employee.telegramAuthorizedAt) : '—'}</td>
                       <td>{employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</td>
                       <td>
                         <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => openEditEmployeeModal(employee)}>✎</button>
@@ -1696,7 +1731,7 @@ function Admin() {
                   <div className="mobile-settings-card-meta">
                     <div><strong>Статус TG:</strong> {employee.telegramUserId ? 'Привязан' : 'Не привязан'}</div>
                     <div><strong>Пользователь TG:</strong> {employee.telegramUserId ? employee.telegramUsername || 'без username' : '—'}</div>
-                    <div><strong>Авторизован:</strong> {employee.telegramAuthorizedAt ? new Date(employee.telegramAuthorizedAt).toLocaleString() : '—'}</div>
+                    <div><strong>Авторизован:</strong> {employee.telegramAuthorizedAt ? formatDateTimeDisplay(employee.telegramAuthorizedAt) : '—'}</div>
                     <div><strong>PIN:</strong> {employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</div>
                   </div>
                   <div className="mobile-settings-card-note">

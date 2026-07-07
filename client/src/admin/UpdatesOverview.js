@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { HelpTooltip, SectionHeader, SettingsHint } from '../adminUI';
+import { formatDateTimeDisplay } from '../dateTime';
 import { Button } from '../ui';
 
 const INSTALL_PROGRESS_STAGES = [
@@ -290,8 +291,8 @@ function UpdatesOverview({
           </div>
           {installJob.startedAt ? (
             <div className="settings-hint" style={{ marginBottom: 8 }}>
-              Запущено: {new Date(installJob.startedAt).toLocaleString()}
-              {installJob.finishedAt ? ` · Завершено: ${new Date(installJob.finishedAt).toLocaleString()}` : ''}
+              Запущено: {formatDateTimeDisplay(installJob.startedAt)}
+              {installJob.finishedAt ? ` · Завершено: ${formatDateTimeDisplay(installJob.finishedAt)}` : ''}
             </div>
           ) : null}
           {Array.isArray(installJob.logs) && installJob.logs.length > 0 ? (

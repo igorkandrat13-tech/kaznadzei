@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
+import { formatDateDisplay, formatDateTimeDisplay } from './dateTime';
 import {
   getItemManufacturingMeta,
   getOrderManufacturingMeta,
@@ -114,6 +115,16 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
   }
 }
 
+function getManualStageSecondaryHeader(columnKey = '', secondaryHeaders = []) {
+  if (String(columnKey || '').trim() === 'carpenter') {
+    const sandingHeader = (Array.isArray(secondaryHeaders) ? secondaryHeaders : []).find(
+      (cell) => String(cell?.label || '').trim() === 'Шлифуется'
+    );
+    if (sandingHeader) return sandingHeader;
+  }
+  return getSecondaryHeaderForPrimaryColumn(getPrimaryColumnIndexForManualStageColumn(columnKey), secondaryHeaders);
+}
+
 function createPackageItemId() {
   return `package-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -170,13 +181,6 @@ function getCommentPreview(comments = []) {
   return comments
     .map(comment => `${comment.role}: ${comment.text}`)
     .join(' | ');
-}
-
-function formatDateDisplay(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return '—';
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? normalized : date.toLocaleDateString();
 }
 
 function formatManufacturingTime(startDate, endDate) {
@@ -554,10 +558,7 @@ function Archive() {
     const actorName = !manualClear && manualMark?.updatedBy && columnKey !== 'carpenter'
       ? String(manualMark.updatedBy).trim()
       : '';
-    const columnHeader = getSecondaryHeaderForPrimaryColumn(
-      getPrimaryColumnIndexForManualStageColumn(columnKey),
-      secondaryHeaderSchema,
-    );
+    const columnHeader = getManualStageSecondaryHeader(columnKey, secondaryHeaderSchema);
     const style = manualClear
       ? baseStyle
       : manualMark
@@ -575,13 +576,13 @@ function Archive() {
       ? [
           manualMark.legendKey || 'Ручная дата',
           manualMark.updatedBy ? `Сотрудник: ${manualMark.updatedBy}` : '',
-          manualMark.updatedAt ? new Date(manualMark.updatedAt).toLocaleString() : '',
+          manualMark.updatedAt ? formatDateTimeDisplay(manualMark.updatedAt) : '',
         ].filter(Boolean).join(' • ')
       : (manualClear
           ? [
               'Сброшено',
               manualClear.updatedBy ? `Сотрудник: ${manualClear.updatedBy}` : '',
-              manualClear.updatedAt ? new Date(manualClear.updatedAt).toLocaleString() : '',
+              manualClear.updatedAt ? formatDateTimeDisplay(manualClear.updatedAt) : '',
             ].filter(Boolean).join(' • ')
           : undefined);
 
@@ -1038,7 +1039,7 @@ function Archive() {
                         </>
                       </td>
                       <td {...deliveryDateCellProps}>{formatDateDisplay(item.deliveryDate)}</td>
-                      <td {...carpenterCellProps} title={latestCarpenterAutoAt ? `${workerCellTitle}${workerCellTitle ? ' • ' : ''}${new Date(latestCarpenterAutoAt).toLocaleString()}` : workerCellTitle}>
+                      <td {...carpenterCellProps} title={latestCarpenterAutoAt ? `${workerCellTitle}${workerCellTitle ? ' • ' : ''}${formatDateTimeDisplay(latestCarpenterAutoAt)}` : workerCellTitle}>
                         {isPlaceholder ? '—' : workerCellText}
                       </td>
                       <td {...materialRequestCellProps}>
@@ -1102,15 +1103,15 @@ function Archive() {
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Дата заказа</div>
-                    <div className="mobile-order-card-value">{order.orderDate ? new Date(order.orderDate).toLocaleDateString() : '—'}</div>
+                    <div className="mobile-order-card-value">{formatDateDisplay(order.orderDate)}</div>
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Начало</div>
-                    <div className="mobile-order-card-value">{order.startDate ? new Date(order.startDate).toLocaleDateString() : '—'}</div>
+                    <div className="mobile-order-card-value">{formatDateDisplay(order.startDate)}</div>
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Окончание</div>
-                    <div className="mobile-order-card-value">{order.endDate ? new Date(order.endDate).toLocaleDateString() : '—'}</div>
+                    <div className="mobile-order-card-value">{formatDateDisplay(order.endDate)}</div>
                   </div>
                   <div className="mobile-order-card-field">
                     <div className="mobile-order-card-label">Время</div>

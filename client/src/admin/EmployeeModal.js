@@ -118,7 +118,11 @@ function EmployeeModal({
         <label>Колонки, за которые отвечает сотрудник</label>
         <div className="role-columns-picker">
           {decoratedColumnOptions.map((column) => {
-            const checked = Array.isArray(employeeForm?.allowedColumns) && employeeForm.allowedColumns.includes(column.key);
+            const equivalentKeys = Array.isArray(column.equivalentKeys) && column.equivalentKeys.length > 0
+              ? column.equivalentKeys
+              : [column.key];
+            const checked = Array.isArray(employeeForm?.allowedColumns)
+              && equivalentKeys.some((key) => employeeForm.allowedColumns.includes(key));
             return (
               <label
                 key={column.key}
@@ -136,11 +140,17 @@ function EmployeeModal({
                   disabled={saving}
                   onChange={(event) => {
                     const currentColumns = Array.isArray(employeeForm?.allowedColumns) ? employeeForm.allowedColumns : [];
+                    const nextColumns = new Set(currentColumns);
+                    equivalentKeys.forEach((key) => {
+                      if (event.target.checked) {
+                        nextColumns.add(key);
+                      } else {
+                        nextColumns.delete(key);
+                      }
+                    });
                     setEmployeeForm({
                       ...employeeForm,
-                      allowedColumns: event.target.checked
-                        ? [...currentColumns, column.key]
-                        : currentColumns.filter((value) => value !== column.key),
+                      allowedColumns: Array.from(nextColumns),
                     });
                   }}
                 />
