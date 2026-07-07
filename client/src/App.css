@@ -4156,6 +4156,8 @@ body .attachment-preview-table td {
   width: fit-content;
   min-width: 0;
   max-width: min(420px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
   box-shadow: 0 18px 38px rgba(2, 8, 16, 0.28);
   backdrop-filter: blur(10px);
 }

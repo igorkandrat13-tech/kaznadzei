@@ -1275,8 +1275,8 @@ function OrdersWorkspace() {
         bottom: rects[0].bottom,
       });
 
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.visualViewport?.width || window.innerWidth;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
       const margin = 12;
       const toolbarRect = manualStageToolbarRef.current?.getBoundingClientRect();
       const fallbackToolbarWidth = Math.min(420, Math.max(320, viewportWidth - (margin * 2)));
@@ -1288,9 +1288,11 @@ function OrdersWorkspace() {
         Math.max(margin, viewportWidth - toolbarWidth - margin),
       );
       const fitsBelow = bounds.bottom + margin + toolbarHeight <= viewportHeight - margin;
-      const top = fitsBelow
+      const preferredTop = fitsBelow
         ? bounds.bottom + margin
         : Math.max(margin, bounds.top - toolbarHeight - margin);
+      const maxTop = Math.max(margin, viewportHeight - toolbarHeight - margin);
+      const top = Math.min(Math.max(margin, preferredTop), maxTop);
 
       setManualStageToolbarPosition({
         left: clampedLeft,
@@ -1301,16 +1303,30 @@ function OrdersWorkspace() {
     updateToolbarPosition();
 
     const bodyNode = bodyScrollRef.current;
+    const visualViewport = window.visualViewport || null;
+    const toolbarNode = manualStageToolbarRef.current;
+    const resizeObserver = typeof ResizeObserver !== 'undefined' && toolbarNode
+      ? new ResizeObserver(() => {
+          updateToolbarPosition();
+        })
+      : null;
+
+    resizeObserver?.observe(toolbarNode);
     window.addEventListener('resize', updateToolbarPosition);
     window.addEventListener('scroll', updateToolbarPosition, true);
+    visualViewport?.addEventListener('resize', updateToolbarPosition);
+    visualViewport?.addEventListener('scroll', updateToolbarPosition);
     bodyNode?.addEventListener('scroll', updateToolbarPosition);
 
     return () => {
+      resizeObserver?.disconnect();
       window.removeEventListener('resize', updateToolbarPosition);
       window.removeEventListener('scroll', updateToolbarPosition, true);
+      visualViewport?.removeEventListener('resize', updateToolbarPosition);
+      visualViewport?.removeEventListener('scroll', updateToolbarPosition);
       bodyNode?.removeEventListener('scroll', updateToolbarPosition);
     };
-  }, [isAdmin, selectedStageSelections.length, selectedStageCellKeys]);
+  }, [cellLogs.length, cellLogsError, cellLogsLoading, isAdmin, selectedStageSelections.length, selectedStageCellKeys]);
 
   const syncHorizontalScroll = useCallback((source, target) => {
     if (!source || !target) return;
