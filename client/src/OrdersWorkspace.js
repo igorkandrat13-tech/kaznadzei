@@ -1603,29 +1603,30 @@ function OrdersWorkspace() {
     selectedStageSingleColumnKey,
   ]);
 
-  const getManualStageMarkMeta = useCallback((item, columnKey, { timestampOnly = false } = {}) => {
+  const getManualStageMarkMeta = useCallback((item, columnKey, { timestampOnly = false, compactTimestamp = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
     if (!manualMark || manualClear) return null;
 
     const actor = String(manualMark.updatedBy || '').trim();
     const timestamp = formatDateTimeDisplay(manualMark.updatedAt);
+    const normalizedTimestamp = compactTimestamp ? timestamp.replace(', ', ' ') : timestamp;
     const text = timestampOnly
-      ? (timestamp || actor)
-      : [actor, timestamp].filter(Boolean).join(' · ');
+      ? (normalizedTimestamp || actor)
+      : [actor, normalizedTimestamp].filter(Boolean).join(' · ');
 
     if (!text) return null;
-    return { actor, timestamp, text };
+    return { actor, timestamp: normalizedTimestamp, text };
   }, []);
 
-  const renderManualStageCellContent = useCallback((item, columnKey, content, { timestampOnly = false } = {}) => {
-    const meta = getManualStageMarkMeta(item, columnKey, { timestampOnly });
+  const renderManualStageCellContent = useCallback((item, columnKey, content, { timestampOnly = false, compactTimestamp = false, nowrapMeta = false } = {}) => {
+    const meta = getManualStageMarkMeta(item, columnKey, { timestampOnly, compactTimestamp });
     if (!meta) return content;
 
     return (
       <div className="manual-stage-cell-stack">
         <div className="manual-stage-cell-primary">{content}</div>
-        <div className="manual-stage-cell-meta">{meta.text}</div>
+        <div className={cn('manual-stage-cell-meta', nowrapMeta && 'manual-stage-cell-meta-nowrap')}>{meta.text}</div>
       </div>
     );
   }, [getManualStageMarkMeta]);
@@ -3731,8 +3732,8 @@ function OrdersWorkspace() {
                           </td>
                         ) : null}
                         <td {...roomCellProps}>{renderManualStageCellContent(item, 'room', roomCellContent)}</td>
-                        <td {...roomNumberCellProps}>{renderManualStageCellContent(item, 'roomNumber', roomNumberCellContent)}</td>
-                        <td {...itemNumberCellProps}>{renderManualStageCellContent(item, 'itemNumber', itemNumberCellContent)}</td>
+                        <td {...roomNumberCellProps}>{renderManualStageCellContent(item, 'roomNumber', roomNumberCellContent, { timestampOnly: true, compactTimestamp: true, nowrapMeta: true })}</td>
+                        <td {...itemNumberCellProps}>{renderManualStageCellContent(item, 'itemNumber', itemNumberCellContent, { timestampOnly: true, compactTimestamp: true, nowrapMeta: true })}</td>
                         <td {...quantityCellProps}>{renderManualStageCellContent(item, 'quantity', quantityCellContent)}</td>
                         <td {...nameCellProps}>{renderManualStageCellContent(item, 'name', nameCellContent)}</td>
                         <td {...orderCardCellProps}>{renderManualStageCellContent(item, 'orderCard', orderCardCellContent)}</td>

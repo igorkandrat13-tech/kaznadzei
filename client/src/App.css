@@ -4336,6 +4336,12 @@ body .attachment-preview-table td {
   word-break: break-word;
 }
 
+.manual-stage-cell-meta-nowrap {
+  white-space: nowrap;
+  word-break: normal;
+  font-size: 10px;
+}
+
 .cell-log-list {
   display: flex;
   flex-direction: column;
