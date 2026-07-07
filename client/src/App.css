@@ -4342,6 +4342,32 @@ body .attachment-preview-table td {
   font-size: 10px;
 }
 
+.manual-stage-cell-meta-compact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  word-break: normal;
+  font-size: clamp(8px, 0.35vw + 6px, 10px);
+}
+
+.manual-stage-cell-meta-actor {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.manual-stage-cell-meta-time {
+  flex: 0 0 auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .cell-log-list {
   display: flex;
   flex-direction: column;

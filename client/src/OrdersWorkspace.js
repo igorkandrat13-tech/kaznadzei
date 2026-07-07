@@ -1619,14 +1619,21 @@ function OrdersWorkspace() {
     return { actor, timestamp: normalizedTimestamp, text };
   }, []);
 
-  const renderManualStageCellContent = useCallback((item, columnKey, content, { timestampOnly = false, compactTimestamp = false, nowrapMeta = false } = {}) => {
+  const renderManualStageCellContent = useCallback((item, columnKey, content, { timestampOnly = false, compactTimestamp = false, nowrapMeta = false, compactSplitMeta = false } = {}) => {
     const meta = getManualStageMarkMeta(item, columnKey, { timestampOnly, compactTimestamp });
     if (!meta) return content;
 
     return (
       <div className="manual-stage-cell-stack">
         <div className="manual-stage-cell-primary">{content}</div>
-        <div className={cn('manual-stage-cell-meta', nowrapMeta && 'manual-stage-cell-meta-nowrap')}>{meta.text}</div>
+        {compactSplitMeta ? (
+          <div className="manual-stage-cell-meta manual-stage-cell-meta-compact-row" title={[meta.actor, meta.timestamp].filter(Boolean).join(' | ')}>
+            <span className="manual-stage-cell-meta-actor">{meta.actor}</span>
+            <span className="manual-stage-cell-meta-time">{meta.timestamp}</span>
+          </div>
+        ) : (
+          <div className={cn('manual-stage-cell-meta', nowrapMeta && 'manual-stage-cell-meta-nowrap')}>{meta.text}</div>
+        )}
       </div>
     );
   }, [getManualStageMarkMeta]);
@@ -3732,8 +3739,8 @@ function OrdersWorkspace() {
                           </td>
                         ) : null}
                         <td {...roomCellProps}>{renderManualStageCellContent(item, 'room', roomCellContent)}</td>
-                        <td {...roomNumberCellProps}>{renderManualStageCellContent(item, 'roomNumber', roomNumberCellContent, { timestampOnly: true, compactTimestamp: true, nowrapMeta: true })}</td>
-                        <td {...itemNumberCellProps}>{renderManualStageCellContent(item, 'itemNumber', itemNumberCellContent, { timestampOnly: true, compactTimestamp: true, nowrapMeta: true })}</td>
+                        <td {...roomNumberCellProps}>{renderManualStageCellContent(item, 'roomNumber', roomNumberCellContent, { compactTimestamp: true, compactSplitMeta: true })}</td>
+                        <td {...itemNumberCellProps}>{renderManualStageCellContent(item, 'itemNumber', itemNumberCellContent, { compactTimestamp: true, compactSplitMeta: true })}</td>
                         <td {...quantityCellProps}>{renderManualStageCellContent(item, 'quantity', quantityCellContent)}</td>
                         <td {...nameCellProps}>{renderManualStageCellContent(item, 'name', nameCellContent)}</td>
                         <td {...orderCardCellProps}>{renderManualStageCellContent(item, 'orderCard', orderCardCellContent)}</td>
