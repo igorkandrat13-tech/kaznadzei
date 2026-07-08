@@ -212,6 +212,7 @@ function OrderDetail() {
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
+  const materialRequestInputRef = useRef(null);
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
@@ -241,6 +242,26 @@ function OrderDetail() {
 
   const getActiveTelegramSessionToken = useCallback(() => {
     return telegramSessionTokenRef.current || getTelegramEmployeeSessionToken();
+  }, []);
+
+  const keepMaterialRequestInputVisible = useCallback(({ behavior = 'smooth' } = {}) => {
+    const input = materialRequestInputRef.current;
+    if (!input || document.activeElement !== input) return;
+
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const topPadding = 16;
+    const bottomPadding = 20;
+    const rect = input.getBoundingClientRect();
+
+    if (rect.top >= topPadding && rect.bottom <= viewportHeight - bottomPadding) {
+      return;
+    }
+
+    input.scrollIntoView({
+      behavior,
+      block: 'nearest',
+      inline: 'nearest',
+    });
   }, []);
 
   const fetchOrder = useCallback(async ({ showLoader = false } = {}) => {
@@ -430,6 +451,42 @@ function OrderDetail() {
       document.removeEventListener('visibilitychange', refreshOrder);
     };
   }, [fetchOrder, telegramMode]);
+
+  useEffect(() => {
+    const input = materialRequestInputRef.current;
+    const visualViewport = window.visualViewport || null;
+    if (!input || !visualViewport) return undefined;
+
+    let focusTimeoutId = 0;
+    let settleTimeoutId = 0;
+
+    const handleFocus = () => {
+      window.clearTimeout(focusTimeoutId);
+      window.clearTimeout(settleTimeoutId);
+      focusTimeoutId = window.setTimeout(() => {
+        keepMaterialRequestInputVisible({ behavior: 'auto' });
+      }, 60);
+      settleTimeoutId = window.setTimeout(() => {
+        keepMaterialRequestInputVisible();
+      }, 280);
+    };
+
+    const handleViewportChange = () => {
+      keepMaterialRequestInputVisible({ behavior: 'auto' });
+    };
+
+    input.addEventListener('focus', handleFocus);
+    visualViewport.addEventListener('resize', handleViewportChange);
+    visualViewport.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      window.clearTimeout(focusTimeoutId);
+      window.clearTimeout(settleTimeoutId);
+      input.removeEventListener('focus', handleFocus);
+      visualViewport.removeEventListener('resize', handleViewportChange);
+      visualViewport.removeEventListener('scroll', handleViewportChange);
+    };
+  }, [keepMaterialRequestInputVisible]);
 
   const calcDuration = (start, end) => {
     if (!start || !end) return '—';
@@ -1038,14 +1095,16 @@ function OrderDetail() {
                     Важные заявки: добавлено {materialRequestStats.total}
                   </div>
 
-                  <div className="telegram-package-input-row">
+                  <div className="telegram-package-input-row telegram-material-request-input-row">
                     <input
+                      ref={materialRequestInputRef}
                       type="text"
                       value={materialRequestDraft}
                       onChange={(event) => {
                         setMaterialRequestDraft(event.target.value);
                         setMaterialRequestError('');
                       }}
+                      onFocus={() => keepMaterialRequestInputVisible({ behavior: 'auto' })}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                           event.preventDefault();

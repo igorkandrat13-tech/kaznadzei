@@ -3333,6 +3333,10 @@ function OrdersWorkspace() {
                     const itemAttachments = getItemAttachments(item, 'order');
                     const paintAttachments = getItemAttachments(item, 'paint');
                     const packageStats = getPackageStats(item.packageItems, item.packageName);
+                    const packageManualMark = getItemManualStageMark(item, 'packageName');
+                    const packageManualClear = Boolean(getItemManualStageClear(item, 'packageName'));
+                    const packageStageHeader = getManualStageSecondaryHeader('packageName', secondaryHeaderSchema);
+                    const hasPackageStageMark = Boolean(packageManualMark && !packageManualClear);
                     const materialRequestStats = getMaterialRequestStats(item.materialRequestItems, item.materialRequests);
                     const orderAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'order');
                     const paintAttachmentTargetKey = getAttachmentTargetKey(order._id, item.itemId, 'paint');
@@ -3425,10 +3429,15 @@ function OrdersWorkspace() {
                           color: columnStageMeta.package.textHex,
                         }
                       : undefined;
-                    const packageSummaryBadgeStyle = {
-                      background: columnStageMeta.package.hex || '#99E5FF',
-                      color: columnStageMeta.package.textHex,
-                    };
+                    const packageSummaryBadgeStyle = hasPackageStageMark
+                      ? {
+                          background: getSecondaryHeaderBackground(packageStageHeader),
+                          color: getSecondaryHeaderTextColor(packageStageHeader),
+                        }
+                      : {
+                          background: columnStageMeta.package.hex || '#99E5FF',
+                          color: columnStageMeta.package.textHex,
+                        };
                     const packageCellPropsBase = getManualStageCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle, { disabled: isInlineEditing });
                     const packageCellProps = {
                       ...packageCellPropsBase,
@@ -3608,7 +3617,7 @@ function OrdersWorkspace() {
                           type="button"
                           className={cn(
                             'package-cell-summary-badge',
-                            packageStats.pending > 0 && 'package-cell-summary-badge-attention',
+                            packageStats.pending > 0 && !hasPackageStageMark && 'package-cell-summary-badge-attention',
                           )}
                           style={packageSummaryBadgeStyle}
                           onClick={(event) => {

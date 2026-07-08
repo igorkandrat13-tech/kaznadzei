@@ -874,16 +874,25 @@ function Archive() {
                     background: columnStageMeta.paint.hex || '#BDA6D5',
                     color: columnStageMeta.paint.textHex,
                   };
+                  const packageManualMark = getItemManualStageMark(item, 'packageName');
+                  const packageManualClear = Boolean(getItemManualStageClear(item, 'packageName'));
+                  const packageStageHeader = getManualStageSecondaryHeader('packageName', secondaryHeaderSchema);
+                  const hasPackageStageMark = Boolean(packageManualMark && !packageManualClear);
                   const packageCellStyle = packageStats.total > 0 && packageStats.pending === 0
                     ? {
                         background: columnStageMeta.package.hex || '#99E5FF',
                         color: columnStageMeta.package.textHex,
                       }
                     : undefined;
-                  const packageSummaryBadgeStyle = {
-                    background: columnStageMeta.package.hex || '#99E5FF',
-                    color: columnStageMeta.package.textHex,
-                  };
+                  const packageSummaryBadgeStyle = hasPackageStageMark
+                    ? {
+                        background: getSecondaryHeaderBackground(packageStageHeader),
+                        color: getSecondaryHeaderTextColor(packageStageHeader),
+                      }
+                    : {
+                        background: columnStageMeta.package.hex || '#99E5FF',
+                        color: columnStageMeta.package.textHex,
+                      };
                   const packageCellPropsBase = getReadOnlyCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle);
                   const packageCellProps = {
                     ...packageCellPropsBase,
@@ -1003,7 +1012,7 @@ function Archive() {
                           <span
                             className={cn(
                               'package-cell-summary-badge',
-                              packageStats.pending > 0 && 'package-cell-summary-badge-attention',
+                              packageStats.pending > 0 && !hasPackageStageMark && 'package-cell-summary-badge-attention',
                             )}
                             style={packageSummaryBadgeStyle}
                             title={packageStats.total > 0

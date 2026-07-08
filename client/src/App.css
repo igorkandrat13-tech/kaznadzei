@@ -4219,6 +4219,12 @@ body .attachment-preview-table td {
   min-width: 0;
   width: 100%;
   justify-content: center;
+  min-height: 42px;
+  padding: 10px 12px;
+  font-size: clamp(14px, 0.2vw + 13.5px, 16px);
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 .manual-stage-toolbar-btn-accent {
@@ -6235,10 +6241,20 @@ body .role-allowed-column-marker {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   margin-bottom: 12px;
+  align-items: stretch;
 }
 
 .telegram-package-input-row input {
   min-width: 0;
+  min-height: 46px;
+  padding: 0 14px;
+  font-size: 16px;
+  line-height: 1.25;
+  scroll-margin-block: 20px;
+}
+
+.telegram-material-request-input-row {
+  grid-template-columns: minmax(0, 1.4fr) auto;
 }
 
 .telegram-package-list {
@@ -7977,6 +7993,9 @@ body .home-auth-status-pending {
     gap: 8px;
   }
   .telegram-package-input-row {
+    grid-template-columns: 1fr;
+  }
+  .telegram-material-request-input-row {
     grid-template-columns: 1fr;
   }
   .telegram-package-item {
