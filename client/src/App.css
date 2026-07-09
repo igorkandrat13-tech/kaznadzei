@@ -2066,6 +2066,8 @@ body .order-primary-title-button-badge {
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .archive-order-number-stack {
@@ -2077,6 +2079,10 @@ body .order-primary-title-button-badge {
 }
 
 .archive-restore-trigger {
+  min-width: 92px;
+}
+
+.archive-delete-trigger {
   min-width: 92px;
 }
 

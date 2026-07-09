@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const SettingsStore = require('../stores/settingsStore');
 
 const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const SETTINGS_PIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const UNSAFE_ADMIN_TOKENS = new Set(['change-me']);
 
 function encodeBase64Url(value) {
@@ -72,12 +73,7 @@ function getAuthSessionSecret() {
   return String(config.authSessionSecret || '').trim();
 }
 
-function createAppSessionToken(role) {
-  const normalizedRole = String(role || '').trim();
-  const payload = {
-    role: normalizedRole,
-    exp: Date.now() + SESSION_TTL_MS,
-  };
+function signPayload(payload) {
   const payloadPart = encodeBase64Url(JSON.stringify(payload));
   const signaturePart = crypto
     .createHmac('sha256', getAuthSessionSecret())
@@ -86,7 +82,7 @@ function createAppSessionToken(role) {
   return `${payloadPart}.${signaturePart}`;
 }
 
-function verifyAppSessionToken(sessionToken) {
+function verifySignedPayload(sessionToken) {
   const normalizedToken = String(sessionToken || '').trim();
   if (!normalizedToken) {
     throw new Error('Не передана сессия авторизации.');
@@ -115,6 +111,21 @@ function verifyAppSessionToken(sessionToken) {
     throw new Error('Не удалось разобрать сессию авторизации.');
   }
 
+  return payload;
+}
+
+function createAppSessionToken(role) {
+  const normalizedRole = String(role || '').trim();
+  return signPayload({
+    role: normalizedRole,
+    exp: Date.now() + SESSION_TTL_MS,
+    tokenType: 'app-session',
+  });
+}
+
+function verifyAppSessionToken(sessionToken) {
+  const payload = verifySignedPayload(sessionToken);
+
   if (!payload?.role) {
     throw new Error('Сессия авторизации неполная.');
   }
@@ -124,6 +135,45 @@ function verifyAppSessionToken(sessionToken) {
   }
 
   return payload;
+}
+
+function createSettingsPinSessionToken(role = 'admin') {
+  return signPayload({
+    role: String(role || 'admin').trim() || 'admin',
+    exp: Date.now() + SETTINGS_PIN_SESSION_TTL_MS,
+    tokenType: 'settings-pin',
+  });
+}
+
+function verifySettingsPinSessionToken(sessionToken) {
+  const payload = verifySignedPayload(sessionToken);
+
+  if (payload?.tokenType !== 'settings-pin') {
+    throw new Error('Некорректная сессия доступа к настройкам.');
+  }
+  if (!payload?.role || payload.role !== 'admin') {
+    throw new Error('Недостаточно прав для доступа к настройкам.');
+  }
+  if (Number(payload.exp || 0) < Date.now()) {
+    throw new Error('Сессия доступа к настройкам истекла. Введите PIN-код снова.');
+  }
+
+  return payload;
+}
+
+function verifySettingsPin(pinCode) {
+  const config = SettingsStore.getAuthConfig();
+  const normalizedPin = normalizePassword(pinCode);
+  if (!normalizedPin) {
+    throw new Error('Введите PIN-код для доступа к настройкам.');
+  }
+  if (!config.settingsPinHash) {
+    return { configured: false, verified: true };
+  }
+  if (!verifyPassword(normalizedPin, config.settingsPinHash)) {
+    throw new Error('Неверный PIN-код настроек.');
+  }
+  return { configured: true, verified: true };
 }
 
 function canAccessRole(actualRole, requiredRole) {
@@ -171,6 +221,7 @@ function getPublicAuthConfig() {
   return {
     adminPasswordConfigured: Boolean(config.adminPasswordHash),
     adminBootstrapAvailable: Boolean(!config.adminPasswordHash && getBootstrapAdminPassword()),
+    settingsPinConfigured: Boolean(config.settingsPinHash),
   };
 }
 
@@ -178,8 +229,11 @@ module.exports = {
   authenticateRolePassword,
   canAccessRole,
   createAppSessionToken,
+  createSettingsPinSessionToken,
   getPublicAuthConfig,
   getBootstrapAdminPassword,
   hashPassword,
   verifyAppSessionToken,
+  verifySettingsPin,
+  verifySettingsPinSessionToken,
 };

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { clearSettingsPinSessionToken, setSettingsPinSessionToken } from './appAuth';
 import ConfirmDialog from './ConfirmDialog';
 import {
   HelpTooltip,
@@ -111,6 +112,13 @@ function Admin() {
   const [modalErrorMessage, setModalErrorMessage] = useState('');
   const [savingAppSettings, setSavingAppSettings] = useState(false);
   const [savingUpdateSettings, setSavingUpdateSettings] = useState(false);
+  const [settingsPinStatus, setSettingsPinStatus] = useState({
+    loading: true,
+    configured: false,
+    accessGranted: false,
+  });
+  const [settingsPinValue, setSettingsPinValue] = useState('');
+  const [verifyingSettingsPin, setVerifyingSettingsPin] = useState(false);
 
   const [editStep, setEditStep] = useState(null);
   const [editEmployee, setEditEmployee] = useState(null);
@@ -156,6 +164,7 @@ function Admin() {
   const hasModalWindowOpen = Boolean(
     employeeModalMode || stepModalMode || showLegendColorModal || stageManagerRoleKey || showTelegramLogs || showActivityLogs || confirmAction,
   );
+  const hasSettingsAccess = !settingsPinStatus.loading && (!settingsPinStatus.configured || settingsPinStatus.accessGranted);
   const setEmployeeForm = (nextValue) => {
     if (employeeModalMode === 'edit') {
       setEditEmployee(nextValue);
@@ -332,9 +341,37 @@ function Admin() {
   }, [hasModalWindowOpen, settingsError]);
 
   useEffect(() => {
+    const fetchSettingsPinStatus = async () => {
+      try {
+        const res = await apiFetch('/api/auth/settings-pin/status');
+        const data = await parseJsonSafely(res);
+        if (!res.ok) {
+          throw new Error(data?.message || 'Не удалось проверить доступ к настройкам.');
+        }
+        setSettingsPinStatus({
+          loading: false,
+          configured: Boolean(data?.settingsPinConfigured),
+          accessGranted: Boolean(data?.accessGranted),
+        });
+      } catch (error) {
+        clearSettingsPinSessionToken();
+        setSettingsPinStatus({
+          loading: false,
+          configured: true,
+          accessGranted: false,
+        });
+        setSettingsError(error.message || 'Не удалось проверить доступ к настройкам.');
+      }
+    };
+
+    fetchSettingsPinStatus();
+  }, []);
+
+  useEffect(() => {
+    if (!hasSettingsAccess) return;
     fetchAppSettings().catch(error => setSettingsError(error.message || 'Не удалось загрузить настройки.'));
     fetchEmployees().catch(error => setSettingsError(error.message || 'Не удалось загрузить сотрудников.'));
-  }, []);
+  }, [hasSettingsAccess]);
 
   useEffect(() => {
     if (!roleTabs.length) {
@@ -354,12 +391,16 @@ function Admin() {
   }, [activeRole, requestedSettingsTab]);
 
   useEffect(() => {
+    if (!hasSettingsAccess) return;
     fetchSteps();
     fetchOrderStageLegendConfig().catch(error => setSettingsError(error.message || 'Не удалось загрузить легенду этапов.'));
     fetchUpdateStatus();
-  }, []);
+  }, [hasSettingsAccess]);
 
   useEffect(() => {
+    if (!hasSettingsAccess) {
+      return undefined;
+    }
     if (!installingUpdates) {
       return undefined;
     }
@@ -371,9 +412,12 @@ function Admin() {
     pollInstallStatus();
     const intervalId = window.setInterval(pollInstallStatus, 3000);
     return () => window.clearInterval(intervalId);
-  }, [installingUpdates]);
+  }, [hasSettingsAccess, installingUpdates]);
 
   useEffect(() => {
+    if (!hasSettingsAccess) {
+      return undefined;
+    }
     const refreshOverview = () => {
       fetchSteps();
     };
@@ -392,7 +436,7 @@ function Admin() {
       window.removeEventListener('focus', refreshOverview);
       document.removeEventListener('visibilitychange', handleVisibilityRefresh);
     };
-  }, []);
+  }, [hasSettingsAccess]);
 
   const fetchSteps = async () => {
     const res = await apiFetch('/api/processSteps');
@@ -432,6 +476,45 @@ function Admin() {
       throw new Error(data?.message || 'Не удалось загрузить сотрудников.');
     }
     setEmployees(Array.isArray(data) ? data : []);
+  };
+
+  const verifySettingsPinAccess = async () => {
+    const pinCode = String(settingsPinValue || '').trim();
+    if (!pinCode) {
+      setSettingsError('Введите PIN-код для доступа к настройкам.');
+      return;
+    }
+
+    setVerifyingSettingsPin(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/auth/settings-pin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinCode }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setSettingsError(data?.message || 'Не удалось подтвердить PIN-код доступа к настройкам.');
+        return;
+      }
+
+      if (data?.settingsPinToken) {
+        setSettingsPinSessionToken(data.settingsPinToken);
+      }
+      setSettingsPinStatus({
+        loading: false,
+        configured: Boolean(data?.settingsPinConfigured),
+        accessGranted: true,
+      });
+      setSettingsPinValue('');
+      setSettingsSuccess(data?.message || 'Доступ к настройкам подтвержден.');
+    } catch (error) {
+      setSettingsError(error.message || 'Не удалось подтвердить PIN-код доступа к настройкам.');
+    } finally {
+      setVerifyingSettingsPin(false);
+    }
   };
 
   const fetchUpdateStatus = async () => {
@@ -1472,6 +1555,55 @@ function Admin() {
     </>
   );
 
+  if (settingsPinStatus.loading) {
+    return (
+      <div>
+        <SettingsHeader title="⚙️ Настройки — Проверка доступа" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />
+        <div className="card">
+          <p>Проверяю доступ к разделу настроек...</p>
+          <SettingsFeedback error={settingsError} success={settingsSuccess} />
+        </div>
+      </div>
+    );
+  }
+
+  if (settingsPinStatus.configured && !settingsPinStatus.accessGranted) {
+    return (
+      <div>
+        <SettingsHeader title="⚙️ Настройки — PIN-доступ" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />
+        <div className="card" style={{ maxWidth: 560 }}>
+          <p>Для входа в раздел настроек введите PIN-код доступа.</p>
+          <SettingsFeedback error={settingsError} success={settingsSuccess} />
+          <div className="form-group">
+            <label>PIN-код настроек</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              value={settingsPinValue}
+              onChange={(event) => {
+                setSettingsPinValue(event.target.value.replace(/[^\d]/g, ''));
+                setSettingsError('');
+              }}
+              placeholder="Введите PIN-код"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  verifySettingsPinAccess();
+                }
+              }}
+            />
+          </div>
+          <div className="modal-actions">
+            <Button onClick={() => navigate('/orders')}>Назад</Button>
+            <Button variant="success" onClick={verifySettingsPinAccess} disabled={verifyingSettingsPin}>
+              {verifyingSettingsPin ? 'Проверка...' : 'Войти в настройки'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (activeRole === 'general') {
     return (
       <div>
@@ -1560,7 +1692,6 @@ function Admin() {
               </div>
             )}
 
-            <AdminTokenControls />
           </div>
 
           {showTelegramLogs && (
@@ -1674,6 +1805,7 @@ function Admin() {
             onSaveUpdateSettings={saveUpdateSettings}
             savingUpdateSettings={savingUpdateSettings}
           />
+          <AdminTokenControls />
       </div>
     );
   }

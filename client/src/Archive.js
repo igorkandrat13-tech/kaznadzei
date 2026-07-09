@@ -329,7 +329,9 @@ function Archive() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [confirmRestore, setConfirmRestore] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [restoringOrder, setRestoringOrder] = useState(false);
+  const [deletingOrder, setDeletingOrder] = useState(false);
   const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
   const [hoveredOrderId, setHoveredOrderId] = useState('');
   const [lastRefreshedAt, setLastRefreshedAt] = useState('');
@@ -638,6 +640,33 @@ function Archive() {
       fetchOrders();
     } finally {
       setRestoringOrder(false);
+    }
+  };
+
+  const requestDelete = (order) => {
+    setError('');
+    setConfirmDelete({
+      id: order._id,
+      orderNumber: order.orderNumber || '',
+      name: getOrderPrimaryName(order) || '',
+      customer: order.customer || '',
+    });
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete?.id || deletingOrder) return;
+    setDeletingOrder(true);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${confirmDelete.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось удалить заказ из архива.'));
+        return;
+      }
+      setConfirmDelete(null);
+      fetchOrders();
+    } finally {
+      setDeletingOrder(false);
     }
   };
 
@@ -964,9 +993,18 @@ function Archive() {
                                 size="sm"
                                 className="archive-restore-trigger"
                                 onClick={() => requestRestore(order)}
-                                disabled={restoringOrder}
+                                disabled={restoringOrder || deletingOrder}
                               >
                                 Вернуть
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                className="archive-delete-trigger"
+                                onClick={() => requestDelete(order)}
+                                disabled={restoringOrder || deletingOrder}
+                              >
+                                Удалить
                               </Button>
                             </div>
                           </div>
@@ -1114,9 +1152,18 @@ function Archive() {
                     size="sm"
                     className="archive-order-action-btn"
                     onClick={() => requestRestore(order)}
-                    disabled={restoringOrder}
+                    disabled={restoringOrder || deletingOrder}
                   >
                     Вернуть в работу
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className="archive-order-action-btn"
+                    onClick={() => requestDelete(order)}
+                    disabled={restoringOrder || deletingOrder}
+                  >
+                    Удалить из архива
                   </Button>
                 </div>
               </div>
@@ -1139,6 +1186,16 @@ function Archive() {
         onCancel={() => !restoringOrder && setConfirmRestore(null)}
         loading={restoringOrder}
         variant="primary"
+      />
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="Удалить заказ из архива?"
+        message={confirmDelete ? `Заказ № ${confirmDelete.orderNumber || '—'} будет удален безвозвратно.\nОсновное изделие: ${confirmDelete.name || '—'}\nЗаказчик: ${confirmDelete.customer || '—'}` : ''}
+        confirmLabel="Удалить заказ"
+        onConfirm={handleDelete}
+        onCancel={() => !deletingOrder && setConfirmDelete(null)}
+        loading={deletingOrder}
+        variant="danger"
       />
     </div>
   );

@@ -11,6 +11,7 @@ function getDefaultSettings() {
     updateBranch: (process.env.UPDATE_BRANCH || '').trim() || 'main',
     updateRepositoryUrl: (process.env.UPDATE_REPOSITORY_URL || process.env.GIT_REMOTE_URL || '').trim(),
     adminPasswordHash: '',
+    settingsPinHash: '',
     authSessionSecret: (process.env.APP_AUTH_SECRET || '').trim() || crypto.randomBytes(32).toString('hex'),
     roleLabels: getDefaultRoleLabels(),
     roles: getDefaultRoles(),
@@ -28,6 +29,7 @@ function normalizeSettings(source = {}) {
     updateBranch: source.updateBranch ?? defaults.updateBranch,
     updateRepositoryUrl: source.updateRepositoryUrl ?? defaults.updateRepositoryUrl,
     adminPasswordHash: source.adminPasswordHash ?? defaults.adminPasswordHash,
+    settingsPinHash: source.settingsPinHash ?? defaults.settingsPinHash,
     authSessionSecret: source.authSessionSecret ?? defaults.authSessionSecret,
     roleLabels: roles.reduce((acc, role) => {
       acc[role.key] = role.label;
@@ -68,6 +70,7 @@ const SettingsStore = {
     const settings = this.getWithSecrets();
     return {
       adminPasswordHash: settings.adminPasswordHash || '',
+      settingsPinHash: settings.settingsPinHash || '',
       authSessionSecret: settings.authSessionSecret || '',
     };
   },

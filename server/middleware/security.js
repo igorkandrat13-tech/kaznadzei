@@ -1,7 +1,7 @@
 const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const UNSAFE_ADMIN_TOKENS = new Set(['change-me']);
 const SettingsStore = require('../stores/settingsStore');
-const { canAccessRole, verifyAppSessionToken } = require('../services/appAuth');
+const { canAccessRole, verifyAppSessionToken, verifySettingsPinSessionToken } = require('../services/appAuth');
 
 function getConfiguredAdminToken() {
   const token = (process.env.ADMIN_TOKEN || '').trim();
@@ -25,6 +25,10 @@ function getRequestSessionToken(req) {
     return bearer.slice(7).trim();
   }
   return '';
+}
+
+function getRequestSettingsPinToken(req) {
+  return String(req.get('x-settings-pin-token') || '').trim();
 }
 
 function getClientIp(req) {
@@ -89,6 +93,21 @@ function requireAdminAccess(options = {}) {
     if (error) {
       return res.status(error.status).json(error.body);
     }
+
+    if (options.requireSettingsPin) {
+      const authConfig = SettingsStore.getAuthConfig();
+      if (authConfig.settingsPinHash) {
+        try {
+          const settingsPinSession = verifySettingsPinSessionToken(getRequestSettingsPinToken(req));
+          req.settingsPinAuth = settingsPinSession;
+        } catch (settingsPinError) {
+          return res.status(403).json({
+            message: options.invalidSettingsPinMessage || settingsPinError.message || 'Требуется PIN-код для доступа к настройкам.',
+            settingsPinRequired: true,
+          });
+        }
+      }
+    }
     next();
   };
 }
@@ -131,6 +150,7 @@ module.exports = {
   buildSecurityHeaders,
   checkAdminAccess,
   getConfiguredAdminToken,
+  getRequestSettingsPinToken,
   isSelfUpdateEnabled,
   requireAdminAccess,
   requireManagerAccess,
