@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AdminTokenControls from './AdminTokenControls';
-import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import { clearSettingsPinSessionToken, setSettingsPinSessionToken } from './appAuth';
 import ConfirmDialog from './ConfirmDialog';
 import { useGlobalErrorEffect } from './globalErrors';
@@ -121,6 +121,7 @@ function Admin() {
   const [settingsPinValue, setSettingsPinValue] = useState('');
   const [verifyingSettingsPin, setVerifyingSettingsPin] = useState(false);
   useGlobalErrorEffect(settingsError, 'Ошибка в настройках.');
+  useGlobalErrorEffect(updateError, 'Ошибка обновления.');
 
   const [editStep, setEditStep] = useState(null);
   const [editEmployee, setEditEmployee] = useState(null);
@@ -362,7 +363,7 @@ function Admin() {
           configured: true,
           accessGranted: false,
         });
-        setSettingsError(error.message || 'Не удалось проверить доступ к настройкам.');
+        setSettingsError(toUserErrorMessage(error, 'Не удалось проверить доступ к настройкам.'));
       }
     };
 
@@ -371,8 +372,8 @@ function Admin() {
 
   useEffect(() => {
     if (!hasSettingsAccess) return;
-    fetchAppSettings().catch(error => setSettingsError(error.message || 'Не удалось загрузить настройки.'));
-    fetchEmployees().catch(error => setSettingsError(error.message || 'Не удалось загрузить сотрудников.'));
+    fetchAppSettings().catch(error => setSettingsError(toUserErrorMessage(error, 'Не удалось загрузить настройки.')));
+    fetchEmployees().catch(error => setSettingsError(toUserErrorMessage(error, 'Не удалось загрузить сотрудников.')));
   }, [hasSettingsAccess]);
 
   useEffect(() => {
@@ -395,7 +396,7 @@ function Admin() {
   useEffect(() => {
     if (!hasSettingsAccess) return;
     fetchSteps();
-    fetchOrderStageLegendConfig().catch(error => setSettingsError(error.message || 'Не удалось загрузить легенду этапов.'));
+    fetchOrderStageLegendConfig().catch(error => setSettingsError(toUserErrorMessage(error, 'Не удалось загрузить легенду этапов.')));
     fetchUpdateStatus();
   }, [hasSettingsAccess]);
 
@@ -498,7 +499,7 @@ function Admin() {
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        setSettingsError(data?.message || 'Не удалось подтвердить PIN-код доступа к настройкам.');
+        setSettingsError(toUserErrorMessage(data?.message, 'Не удалось подтвердить PIN-код доступа к настройкам.'));
         return;
       }
 
@@ -513,7 +514,7 @@ function Admin() {
       setSettingsPinValue('');
       setSettingsSuccess(data?.message || 'Доступ к настройкам подтвержден.');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось подтвердить PIN-код доступа к настройкам.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось подтвердить PIN-код доступа к настройкам.'));
     } finally {
       setVerifyingSettingsPin(false);
     }
@@ -531,7 +532,7 @@ function Admin() {
       setInstallingUpdates(Boolean(data?.installInProgress));
       setUpdateMessage(data?.message || '');
     } catch (error) {
-      setUpdateError(error.message || 'Не удалось проверить обновления');
+      setUpdateError(toUserErrorMessage(error, 'Не удалось проверить обновления.'));
     } finally {
       setCheckingUpdates(false);
     }
@@ -567,7 +568,7 @@ function Admin() {
       }
 
       if (nextJob.status === 'failed') {
-        setUpdateError(nextJob.details || nextJob.message || 'Не удалось установить обновления');
+        setUpdateError(toUserErrorMessage(nextJob.details || nextJob.message, 'Не удалось установить обновления.'));
         if (nextJob.statusAfter) {
           setUpdateStatus(nextJob.statusAfter);
         } else if (!inProgress) {
@@ -577,7 +578,7 @@ function Admin() {
       return { nextJob, inProgress };
     } catch (error) {
       if (!silent) {
-        setUpdateError(error.message || 'Не удалось получить статус установки обновлений');
+        setUpdateError(toUserErrorMessage(error, 'Не удалось получить статус установки обновлений.'));
       }
       return { nextJob: null, inProgress: false };
     }
@@ -610,7 +611,7 @@ function Admin() {
       setInstallingUpdates(Boolean(data?.installJob?.status === 'running' || res.status === 202));
       setUpdateMessage(data?.message || 'Установка обновлений запущена');
     } catch (error) {
-      const errorText = error.message || 'Не удалось установить обновления';
+      const errorText = toUserErrorMessage(error, 'Не удалось установить обновления.');
       if (errorText.includes('504 Gateway Time-out')) {
         const installState = await fetchInstallJobStatus({ silent: true });
         if (installState?.inProgress) {
@@ -633,7 +634,7 @@ function Admin() {
       setUpdateMessage(data?.message || 'Команда перезапуска отправлена');
       fetchUpdateStatus();
     } catch (error) {
-      setUpdateError(error.message || 'Не удалось перезапустить сервис');
+      setUpdateError(toUserErrorMessage(error, 'Не удалось перезапустить сервис.'));
     } finally {
       setRestartingService(false);
     }
@@ -649,7 +650,7 @@ function Admin() {
       setServiceDetails(data);
       setUpdateMessage(`Получены статус и логи сервиса ${data?.serviceName || ''}`.trim());
     } catch (error) {
-      setUpdateError(error.message || 'Не удалось получить статус и логи сервиса');
+      setUpdateError(toUserErrorMessage(error, 'Не удалось получить статус и логи сервиса.'));
     } finally {
       setLoadingServiceDetails(false);
     }
@@ -680,7 +681,7 @@ function Admin() {
       setUpdateMessage('Настройки обновления сохранены.');
       await fetchUpdateStatus();
     } catch (error) {
-      setUpdateError(error.message || 'Не удалось сохранить настройки обновления');
+      setUpdateError(toUserErrorMessage(error, 'Не удалось сохранить настройки обновления.'));
     } finally {
       setSavingUpdateSettings(false);
     }
@@ -735,7 +736,7 @@ function Admin() {
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        setSettingsError(data?.message || 'Не удалось сохранить настройки.');
+        setSettingsError(toUserErrorMessage(data?.message, 'Не удалось сохранить настройки.'));
         return;
       }
       setAppSettings({
@@ -750,7 +751,7 @@ function Admin() {
       setSettingsSuccess('Настройки сохранены.');
       await fetchUpdateStatus();
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось сохранить настройки.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось сохранить настройки.'));
     } finally {
       setSavingAppSettings(false);
     }
@@ -770,7 +771,7 @@ function Admin() {
       setSettingsSuccess(`Бот ${data?.bot?.firstName || ''} @${data?.bot?.username || ''} успешно проверен.`.trim());
     } catch (error) {
       setTelegramCheckResult(null);
-      setSettingsError(error.message || 'Не удалось проверить Telegram-бота.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось проверить Telegram-бота.'));
     } finally {
       setCheckingTelegramBot(false);
     }
@@ -789,7 +790,7 @@ function Admin() {
       setTelegramCheckResult(data);
       setSettingsSuccess(data?.message || 'Webhook Telegram-бота установлен.');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось установить webhook Telegram-бота.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось установить webhook Telegram-бота.'));
     } finally {
       setSettingTelegramWebhook(false);
     }
@@ -810,7 +811,7 @@ function Admin() {
         setShowTelegramLogs(true);
       }
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось загрузить логи ТГ бота.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось загрузить логи ТГ бота.'));
       if (openModal) {
         setShowTelegramLogs(true);
       }
@@ -834,7 +835,7 @@ function Admin() {
       setSettingsSuccess(data?.message || 'Логи ТГ бота очищены.');
       return true;
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось очистить логи ТГ бота.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось очистить логи ТГ бота.'));
       return false;
     } finally {
       setClearingTelegramLogs(false);
@@ -856,7 +857,7 @@ function Admin() {
         setShowActivityLogs(true);
       }
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось загрузить журнал действий.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось загрузить журнал действий.'));
       if (openModal) {
         setShowActivityLogs(true);
       }
@@ -880,7 +881,7 @@ function Admin() {
       setSettingsSuccess(data?.message || 'Журнал действий очищен.');
       return true;
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось очистить журнал действий.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось очистить журнал действий.'));
       return false;
     } finally {
       setClearingActivityLogs(false);
@@ -911,7 +912,7 @@ function Admin() {
       window.URL.revokeObjectURL(url);
       setSettingsSuccess('Резервная копия экспортирована.');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось экспортировать резервную копию.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось экспортировать резервную копию.'));
     } finally {
       setExportingBackup(false);
     }
@@ -951,7 +952,7 @@ function Admin() {
       ]);
       setSettingsSuccess(data?.message || 'Резервная копия импортирована.');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось импортировать резервную копию.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось импортировать резервную копию.'));
     } finally {
       setImportingBackup(false);
     }
@@ -1159,7 +1160,7 @@ function Admin() {
       await fetchEmployees();
       setSettingsSuccess('Сотрудник добавлен.');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось добавить сотрудника.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось добавить сотрудника.'));
     } finally {
       setSavingEmployee(false);
     }
@@ -1189,7 +1190,7 @@ function Admin() {
       await fetchEmployees();
       setSettingsSuccess('Данные сотрудника обновлены.');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось обновить сотрудника.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось обновить сотрудника.'));
     } finally {
       setSavingEmployee(false);
     }
@@ -1202,7 +1203,7 @@ function Admin() {
       const res = await apiFetch(`/api/employees/${id}`, { method: 'DELETE' });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        setSettingsError(data?.message || 'Не удалось удалить сотрудника.');
+        setSettingsError(toUserErrorMessage(data?.message, 'Не удалось удалить сотрудника.'));
         return false;
       }
       if (editEmployee?._id === id) {
@@ -1212,7 +1213,7 @@ function Admin() {
       setSettingsSuccess(data?.warning || data?.message || 'Сотрудник удален.');
       return true;
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось удалить сотрудника.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось удалить сотрудника.'));
       return false;
     }
   };
@@ -1238,7 +1239,7 @@ function Admin() {
       await fetchSteps();
       setSettingsSuccess('Этап добавлен.');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось добавить этап.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось добавить этап.'));
     } finally {
       setSavingStep(false);
     }
@@ -1264,7 +1265,7 @@ function Admin() {
       await fetchSteps();
       setSettingsSuccess('Этап обновлен.');
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось обновить этап.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось обновить этап.'));
     } finally {
       setSavingStep(false);
     }
@@ -1283,7 +1284,7 @@ function Admin() {
       setSettingsSuccess('Этап удален.');
       return true;
     } catch (error) {
-      setSettingsError(error.message || 'Не удалось удалить этап.');
+      setSettingsError(toUserErrorMessage(error, 'Не удалось удалить этап.'));
       return false;
     }
   };

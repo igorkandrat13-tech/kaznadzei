@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
-import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { useGlobalErrorEffect } from './globalErrors';
 import { Button, Modal, ModalHeader } from './ui';
@@ -107,7 +107,7 @@ function CustomersPage() {
     } catch (fetchError) {
       setCustomers([]);
       setOrders([]);
-      setError(fetchError.message || 'Не удалось загрузить список заказчиков.');
+      setError(toUserErrorMessage(fetchError, 'Не удалось загрузить список заказчиков.'));
     } finally {
       setLoading(false);
     }

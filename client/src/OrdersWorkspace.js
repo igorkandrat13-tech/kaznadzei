@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
-import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { showGlobalError, useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
@@ -779,6 +779,7 @@ function OrdersWorkspace() {
   const [archivingOrder, setArchivingOrder] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState({});
   useGlobalErrorEffect(error, 'Ошибка при работе с заказами.');
+  useGlobalErrorEffect(customerLoadError, 'Ошибка загрузки заказчиков.');
   const [inlineSavingKey, setInlineSavingKey] = useState('');
   const [manualStageSaving, setManualStageSaving] = useState(false);
   const [selectedStageCellKeys, setSelectedStageCellKeys] = useState([]);
@@ -810,6 +811,7 @@ function OrdersWorkspace() {
   const [cellLogs, setCellLogs] = useState([]);
   const [cellLogsLoading, setCellLogsLoading] = useState(false);
   const [cellLogsError, setCellLogsError] = useState('');
+  useGlobalErrorEffect(cellLogsError, 'Ошибка загрузки истории ячейки.');
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
@@ -836,7 +838,7 @@ function OrdersWorkspace() {
       setOrders(Array.isArray(data) ? data : []);
       setLastRefreshedAt(new Date().toISOString());
     } catch (fetchError) {
-      setError(fetchError.message || 'Не удалось загрузить заказы.');
+      setError(toUserErrorMessage(fetchError, 'Не удалось загрузить заказы.'));
     } finally {
       if (showLoader) {
         setLoading(false);
@@ -1387,7 +1389,7 @@ function OrdersWorkspace() {
       setCellLogs(nextLogs);
     } catch (fetchError) {
       setCellLogs([]);
-      setCellLogsError(fetchError.message || 'Не удалось загрузить логи ячейки.');
+      setCellLogsError(toUserErrorMessage(fetchError, 'Не удалось загрузить логи ячейки.'));
     } finally {
       setCellLogsLoading(false);
     }
@@ -2727,7 +2729,7 @@ function OrdersWorkspace() {
 
       await handleDownloadAttachment(orderId, itemId, attachment, attachmentScope);
     } catch (openError) {
-      setError(openError.message || 'Не удалось открыть вложение.');
+      setError(toUserErrorMessage(openError, 'Не удалось открыть вложение.'));
     } finally {
       setAttachmentOpeningKey('');
     }

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
+import { useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig } from './orderStageLegend';
 import { formatDateDisplay, formatDateTimeDisplay } from './dateTime';
 import { getOrderOverallStatus, getOrderPrimaryItem } from './orderSelectors';
@@ -213,6 +214,12 @@ function OrderDetail() {
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
+  useGlobalErrorEffect(sessionError, 'Ошибка определения профиля в Telegram.');
+  useGlobalErrorEffect(scanActivationError, 'Ошибка принятия изделия в работу.');
+  useGlobalErrorEffect(stageError, 'Ошибка отметки этапа.');
+  useGlobalErrorEffect(packageError, 'Ошибка комплектации.');
+  useGlobalErrorEffect(materialRequestError, 'Ошибка заявок на расходники.');
+  useGlobalErrorEffect(telegramActionError, 'Ошибка действия в Telegram.');
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
@@ -357,7 +364,7 @@ function OrderDetail() {
       })
       .catch(error => {
         setTelegramEmployee(null);
-        setSessionError(error.message || 'Не удалось определить ваш профиль.');
+        setSessionError(toUserErrorMessage(error, 'Не удалось определить ваш профиль.'));
       })
       .finally(() => setSessionLoading(false));
   }, [getActiveTelegramSessionToken, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
@@ -601,7 +608,7 @@ function OrderDetail() {
     };
 
     activateItem().catch(error => {
-      setScanActivationError(error.message || 'Не удалось отметить изделие как взятое в работу.');
+      setScanActivationError(toUserErrorMessage(error, 'Не удалось отметить изделие как взятое в работу.'));
     });
   }, [
     fetchOrder,
@@ -648,7 +655,7 @@ function OrderDetail() {
       }
       await fetchOrder();
     } catch (error) {
-      setStageError(error.message || (clear ? 'Не удалось отменить принятие этапа.' : 'Не удалось отметить этап.'));
+      setStageError(toUserErrorMessage(error, clear ? 'Не удалось отменить принятие этапа.' : 'Не удалось отметить этап.'));
     } finally {
       setStageActionKey('');
     }
