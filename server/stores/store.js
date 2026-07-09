@@ -14,6 +14,8 @@ function normalizeDb(source = {}) {
     settings: source.settings && typeof source.settings === 'object' ? source.settings : {},
     employees: Array.isArray(source.employees) ? source.employees : [],
     activityLogs: Array.isArray(source.activityLogs) ? source.activityLogs : [],
+    customerTelegramAccesses: Array.isArray(source.customerTelegramAccesses) ? source.customerTelegramAccesses : [],
+    customerTelegramLogs: Array.isArray(source.customerTelegramLogs) ? source.customerTelegramLogs : [],
   };
 }
 

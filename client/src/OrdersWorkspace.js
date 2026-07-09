@@ -557,9 +557,38 @@ function compareOrderNumbersAsc(leftOrder = {}, rightOrder = {}) {
   });
 }
 
+function compareNaturalTextAsc(leftValue = '', rightValue = '') {
+  const left = String(leftValue || '').trim();
+  const right = String(rightValue || '').trim();
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return left.localeCompare(right, 'ru', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+}
+
+function compareOrderItemsByRoomNumberAsc(leftItem = {}, rightItem = {}) {
+  const roomNumberDiff = compareNaturalTextAsc(leftItem?.roomNumber, rightItem?.roomNumber);
+  if (roomNumberDiff !== 0) return roomNumberDiff;
+
+  const roomDiff = compareNaturalTextAsc(leftItem?.room, rightItem?.room);
+  if (roomDiff !== 0) return roomDiff;
+
+  const itemNumberDiff = compareNaturalTextAsc(leftItem?.itemNumber, rightItem?.itemNumber);
+  if (itemNumberDiff !== 0) return itemNumberDiff;
+
+  return compareNaturalTextAsc(leftItem?.name, rightItem?.name);
+}
+
+function sortOrderItemsByRoomNumber(items = []) {
+  return (Array.isArray(items) ? items : []).slice().sort(compareOrderItemsByRoomNumberAsc);
+}
+
 function getOrderRoomOptions(order = {}) {
   const roomMap = new Map();
-  for (const item of (order.items || [])) {
+  for (const item of sortOrderItemsByRoomNumber(order.items || [])) {
     const key = buildRoomGroupKey(item.room, item.roomNumber);
     if (!key || roomMap.has(key)) continue;
     const room = String(item.room || '').trim();
@@ -597,7 +626,7 @@ function createEditRoomEditorState(order = {}) {
 }
 
 function buildOrderItemsPayload(items = []) {
-  return items.map((item, index) => ({
+  return sortOrderItemsByRoomNumber(items).map((item, index) => ({
     ...(item.itemId ? { itemId: item.itemId } : {}),
     itemNumber: String(item.itemNumber || index + 1).trim() || String(index + 1),
     productNumber: String(item.productNumber || '').trim(),
@@ -685,7 +714,7 @@ function createEmptyOrderForm() {
 
 function mapOrderToForm(order) {
   const items = Array.isArray(order?.items) && order.items.length > 0
-    ? order.items.map((item, index) => ({
+    ? sortOrderItemsByRoomNumber(order.items).map((item, index) => ({
         itemId: item.itemId || '',
         clientKey: item.itemId || `edit-item-${index}`,
         itemNumber: item.itemNumber || String(index + 1),
@@ -993,7 +1022,7 @@ function OrdersWorkspace() {
     const query = search.trim().toLowerCase();
     const sortedOrders = [...activeOrders].sort(compareOrderNumbersAsc);
     return sortedOrders.flatMap(order => {
-      const items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
+      const items = Array.isArray(order.items) && order.items.length > 0 ? sortOrderItemsByRoomNumber(order.items) : [];
       const sourceRows = items.length > 0 ? items : [{
         itemId: '',
         itemNumber: '',
@@ -4487,7 +4516,7 @@ function OrdersWorkspace() {
               <div className="modal-title" style={{ fontSize: 16 }}>Изделия заказа</div>
             </div>
 
-            {(Array.isArray(orderPreview.items) && orderPreview.items.length > 0) ? orderPreview.items.map((item, index) => {
+            {(Array.isArray(orderPreview.items) && orderPreview.items.length > 0) ? sortOrderItemsByRoomNumber(orderPreview.items).map((item, index) => {
               const orderAttachments = getItemAttachments(item, 'order');
               const paintAttachments = getItemAttachments(item, 'paint');
               const packageItems = normalizePackageItems(item.packageItems, item.packageName);

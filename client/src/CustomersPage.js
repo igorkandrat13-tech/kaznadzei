@@ -61,6 +61,48 @@ function getCustomerApiMessage({ status = 0, message = '', fallback = 'Не уд
   return normalizedMessage || fallback;
 }
 
+async function copyTextToClipboard(text) {
+  const normalizedText = String(text || '').trim();
+  if (!normalizedText) {
+    throw new Error('Нет текста для копирования.');
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(normalizedText);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = normalizedText;
+  textarea.setAttribute('readonly', 'readonly');
+  textarea.style.position = 'fixed';
+  textarea.style.top = '-9999px';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error('Не удалось скопировать ссылку в буфер обмена.');
+  }
+}
+
+function getTelegramAccessLabel(access = null) {
+  if (!access?.hasAccess) {
+    return 'PIN еще не создан';
+  }
+
+  return [
+    access.pinLast4 ? `PIN: ••••${access.pinLast4}` : 'PIN создан',
+    access.telegramLinkedAt ? 'Telegram привязан' : 'Telegram еще не привязан',
+    Number.isFinite(Number(access.logCount)) ? `логов: ${access.logCount}` : '',
+  ].filter(Boolean).join(' · ');
+}
+
+function normalizeComparableCustomerName(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
 function CustomersPage() {
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -73,6 +115,24 @@ function CustomersPage() {
   const [customerSaving, setCustomerSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deletingCustomerId, setDeletingCustomerId] = useState('');
+  const [telegramAccessModal, setTelegramAccessModal] = useState({
+    open: false,
+    customer: null,
+    items: [],
+    loading: false,
+    error: '',
+  });
+  const [telegramCredentials, setTelegramCredentials] = useState(null);
+  const [telegramLogsModal, setTelegramLogsModal] = useState({
+    open: false,
+    customer: null,
+    order: null,
+    access: null,
+    logs: [],
+    loading: false,
+    error: '',
+  });
+  const [telegramActionLoadingKey, setTelegramActionLoadingKey] = useState('');
   const authRole = getAppAuthRole();
   const canDeleteCustomers = canAccessRole('admin', authRole);
   useGlobalErrorEffect(error, 'Ошибка при работе с заказчиками.');
@@ -132,6 +192,44 @@ function CustomersPage() {
     return acc;
   }, {}), [orders]);
 
+  const ordersByCustomerId = useMemo(() => {
+    const nextMap = {};
+    const uniqueCustomerNameMap = customers.reduce((acc, customer) => {
+      const normalizedName = normalizeComparableCustomerName(customer?.fullName);
+      if (!normalizedName) return acc;
+      acc[normalizedName] = (acc[normalizedName] || 0) + 1;
+      return acc;
+    }, {});
+
+    for (const order of orders) {
+      const linkedCustomerId = String(order?.customerId || '').trim();
+      if (linkedCustomerId) {
+        if (!nextMap[linkedCustomerId]) {
+          nextMap[linkedCustomerId] = [];
+        }
+        nextMap[linkedCustomerId].push(order);
+        continue;
+      }
+
+      const normalizedCustomerName = normalizeComparableCustomerName(order?.customer);
+      if (!normalizedCustomerName || uniqueCustomerNameMap[normalizedCustomerName] !== 1) {
+        continue;
+      }
+
+      const matchedCustomer = customers.find((customer) => (
+        normalizeComparableCustomerName(customer?.fullName) === normalizedCustomerName
+      ));
+      if (!matchedCustomer?._id) continue;
+
+      if (!nextMap[matchedCustomer._id]) {
+        nextMap[matchedCustomer._id] = [];
+      }
+      nextMap[matchedCustomer._id].push(order);
+    }
+
+    return nextMap;
+  }, [customers, orders]);
+
   const filteredCustomers = useMemo(() => {
     const normalizedSearch = String(search || '').trim().toLowerCase();
     if (!normalizedSearch) return customers;
@@ -147,6 +245,64 @@ function CustomersPage() {
       ].join(' ').toLowerCase().includes(normalizedSearch)
     ));
   }, [customers, search]);
+
+  const fetchCustomerTelegramAccess = useCallback(async (customerId) => {
+    const res = await apiFetch(`/api/customers/${customerId}/telegram-access`);
+    const data = await parseJsonSafely(res);
+    if (!res.ok) {
+      throw new Error(getCustomerApiMessage({
+        status: res.status,
+        message: data?.message || data?.details || '',
+        fallback: 'Не удалось загрузить Telegram-доступ заказчика.',
+      }));
+    }
+    return Array.isArray(data?.items) ? data.items : [];
+  }, []);
+
+  const openTelegramAccessModal = useCallback(async (customer) => {
+    if (!customer?._id) return;
+    setTelegramAccessModal({
+      open: true,
+      customer,
+      items: [],
+      loading: true,
+      error: '',
+    });
+    try {
+      const items = await fetchCustomerTelegramAccess(customer._id);
+      setTelegramAccessModal({
+        open: true,
+        customer,
+        items,
+        loading: false,
+        error: '',
+      });
+    } catch (modalError) {
+      setTelegramAccessModal({
+        open: true,
+        customer,
+        items: [],
+        loading: false,
+        error: toUserErrorMessage(modalError, 'Не удалось загрузить Telegram-доступ заказчика.'),
+      });
+    }
+  }, [fetchCustomerTelegramAccess]);
+
+  const refreshTelegramAccessModal = useCallback(async (customer) => {
+    if (!customer?._id) return [];
+    const items = await fetchCustomerTelegramAccess(customer._id);
+    setTelegramAccessModal((current) => (
+      current.open && current.customer?._id === customer._id
+        ? {
+            ...current,
+            items,
+            loading: false,
+            error: '',
+          }
+        : current
+    ));
+    return items;
+  }, [fetchCustomerTelegramAccess]);
 
   const openCreateEditor = () => {
     setSuccessMessage('');
@@ -257,6 +413,162 @@ function CustomersPage() {
     }
   };
 
+  const loadTelegramLogs = useCallback(async (customer, order) => {
+    if (!customer?._id || !order?._id) return;
+    setTelegramLogsModal({
+      open: true,
+      customer,
+      order,
+      access: null,
+      logs: [],
+      loading: true,
+      error: '',
+    });
+    try {
+      const res = await apiFetch(`/api/customers/${customer._id}/telegram-access/${order._id}/logs`);
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(getCustomerApiMessage({
+          status: res.status,
+          message: data?.message || data?.details || '',
+          fallback: 'Не удалось загрузить журнал Telegram-сообщений.',
+        }));
+      }
+
+      setTelegramLogsModal({
+        open: true,
+        customer,
+        order,
+        access: data?.access || null,
+        logs: Array.isArray(data?.logs) ? data.logs : [],
+        loading: false,
+        error: '',
+      });
+    } catch (logsError) {
+      setTelegramLogsModal({
+        open: true,
+        customer,
+        order,
+        access: null,
+        logs: [],
+        loading: false,
+        error: toUserErrorMessage(logsError, 'Не удалось загрузить журнал Telegram-сообщений.'),
+      });
+    }
+  }, []);
+
+  const runTelegramAction = useCallback(async ({ customer, order, access, action }) => {
+    if (!customer?._id || !order?._id || !action) return;
+    const actionKey = `${action}:${order._id}`;
+    setTelegramActionLoadingKey(actionKey);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      if (action === 'logs') {
+        await loadTelegramLogs(customer, order);
+        return;
+      }
+
+      const hasAccess = Boolean(access?.hasAccess);
+      const requestPath = hasAccess
+        ? `/api/customers/${customer._id}/telegram-access/${order._id}/share`
+        : `/api/customers/${customer._id}/telegram-access/${order._id}/regenerate`;
+      const requestOptions = hasAccess ? undefined : { method: 'POST' };
+      const res = await apiFetch(requestPath, requestOptions);
+      const data = await parseJsonSafely(res);
+
+      if (!res.ok) {
+        throw new Error(getCustomerApiMessage({
+          status: res.status,
+          message: data?.message || data?.details || '',
+          fallback: 'Не удалось выполнить действие с Telegram-доступом заказчика.',
+        }));
+      }
+
+      if (action === 'share') {
+        await copyTextToClipboard(data?.deepLinkUrl || '');
+        setSuccessMessage(hasAccess
+          ? `Ссылка на заказ "${order.orderNumber || order._id}" скопирована.`
+          : `Ссылка скопирована, новый PIN для заказа "${order.orderNumber || order._id}" создан.`);
+      }
+
+      if (action === 'issue' || action === 'qr' || (!hasAccess && action === 'share')) {
+        setTelegramCredentials({
+          customer,
+          order,
+          access: data?.access || null,
+          pinCode: data?.pinCode || '',
+          deepLinkUrl: data?.deepLinkUrl || '',
+          qrDataUrl: data?.qrDataUrl || '',
+          botUsername: data?.botUsername || '',
+        });
+        if (action === 'issue') {
+          setSuccessMessage(`Новый PIN для заказа "${order.orderNumber || order._id}" создан.`);
+        }
+      }
+
+      await refreshTelegramAccessModal(customer).catch(() => []);
+    } catch (telegramError) {
+      setError(toUserErrorMessage(telegramError, 'Не удалось выполнить действие с Telegram-доступом.'));
+    } finally {
+      setTelegramActionLoadingKey('');
+    }
+  }, [loadTelegramLogs, refreshTelegramAccessModal]);
+
+  const handleCustomerTelegramAction = useCallback(async (customer, action) => {
+    const customerOrders = ordersByCustomerId[customer?._id] || [];
+    if (customerOrders.length === 0) {
+      setError('У этого заказчика пока нет заказов, для которых можно выдать Telegram-доступ.');
+      return;
+    }
+
+    if (customerOrders.length > 1) {
+      await openTelegramAccessModal(customer);
+      return;
+    }
+
+    try {
+      const [accessItem] = await fetchCustomerTelegramAccess(customer._id);
+      await runTelegramAction({
+        customer,
+        order: customerOrders[0],
+        access: accessItem?.access || null,
+        action,
+      });
+    } catch (telegramError) {
+      setError(toUserErrorMessage(telegramError, 'Не удалось выполнить действие с Telegram-доступом.'));
+    }
+  }, [fetchCustomerTelegramAccess, openTelegramAccessModal, ordersByCustomerId, runTelegramAction]);
+
+  const closeTelegramAccessModal = () => {
+    if (telegramActionLoadingKey) return;
+    setTelegramAccessModal({
+      open: false,
+      customer: null,
+      items: [],
+      loading: false,
+      error: '',
+    });
+  };
+
+  const closeTelegramCredentials = () => {
+    setTelegramCredentials(null);
+  };
+
+  const closeTelegramLogsModal = () => {
+    if (telegramLogsModal.loading) return;
+    setTelegramLogsModal({
+      open: false,
+      customer: null,
+      order: null,
+      access: null,
+      logs: [],
+      loading: false,
+      error: '',
+    });
+  };
+
   return (
     <div>
       <div className="card section-spaced">
@@ -318,6 +630,8 @@ function CustomersPage() {
 
         {!loading && filteredCustomers.map((customer) => {
           const stats = customerOrderStats[customer._id] || { total: 0, active: 0, archived: 0 };
+          const customerOrders = ordersByCustomerId[customer._id] || [];
+          const telegramButtonsDisabled = customerOrders.length === 0;
           return (
             <div key={customer._id} className="mobile-order-card customer-card">
               <div className="mobile-order-card-header">
@@ -362,6 +676,24 @@ function CustomersPage() {
                 <div className="mobile-order-card-value customer-card-note-value">{customer.notes || '—'}</div>
               </div>
 
+              <div className="customer-card-note customer-card-telegram">
+                <div className="mobile-order-card-label">Telegram-доступ к заказу</div>
+                <div className="mobile-order-card-value customer-card-note-value">
+                  {telegramButtonsDisabled
+                    ? 'Сначала привяжите к заказчику хотя бы один заказ.'
+                    : (customerOrders.length === 1
+                        ? 'Можно сразу выдать PIN, скопировать ссылку, показать QR или открыть логи.'
+                        : 'У заказчика несколько заказов. После нажатия выберите нужный заказ.' )}
+                </div>
+              </div>
+
+              <div className="customer-card-actions customer-card-actions-telegram">
+                <Button disabled={telegramButtonsDisabled} onClick={() => handleCustomerTelegramAction(customer, 'issue')}>Создать PIN</Button>
+                <Button variant="secondary" disabled={telegramButtonsDisabled} onClick={() => handleCustomerTelegramAction(customer, 'share')}>Ссылка</Button>
+                <Button variant="secondary" disabled={telegramButtonsDisabled} onClick={() => handleCustomerTelegramAction(customer, 'qr')}>QR</Button>
+                <Button variant="secondary" disabled={telegramButtonsDisabled} onClick={() => handleCustomerTelegramAction(customer, 'logs')}>Логи</Button>
+              </div>
+
               <div className="customer-card-actions">
                 <Button variant="secondary" onClick={() => openEditEditor(customer)}>Редактировать</Button>
                 {canDeleteCustomers ? (
@@ -372,6 +704,215 @@ function CustomersPage() {
           );
         })}
       </div>
+
+      <Modal
+        open={telegramAccessModal.open}
+        onClose={closeTelegramAccessModal}
+        closeDisabled={Boolean(telegramActionLoadingKey)}
+        size="lg"
+        className="order-form-modal"
+      >
+        <ModalHeader
+          title="Telegram-доступ заказчика"
+          subtitle={telegramAccessModal.customer
+            ? `Выберите заказ для ${telegramAccessModal.customer.fullName || 'заказчика'}.`
+            : 'Выберите заказ.'}
+          onClose={closeTelegramAccessModal}
+          closeDisabled={Boolean(telegramActionLoadingKey)}
+        />
+
+        {telegramAccessModal.error ? (
+          <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+            {telegramAccessModal.error}
+          </div>
+        ) : null}
+
+        {telegramAccessModal.loading ? (
+          <div className="empty-cell">Загружаю Telegram-доступы по заказам...</div>
+        ) : null}
+
+        {!telegramAccessModal.loading && telegramAccessModal.items.length === 0 ? (
+          <div className="empty-cell">Для этого заказчика пока нет связанных заказов.</div>
+        ) : null}
+
+        {!telegramAccessModal.loading && telegramAccessModal.items.length > 0 ? (
+          <div className="customer-telegram-order-list">
+            {telegramAccessModal.items.map((item) => {
+              const buttonPrefix = item.orderId || item.orderNumber || 'order';
+              const order = orders.find((entry) => entry._id === item.orderId) || {
+                _id: item.orderId,
+                orderNumber: item.orderNumber,
+                archivedAt: item.archivedAt,
+              };
+              return (
+                <div key={item.orderId} className="customer-telegram-order-card">
+                  <div className="customer-telegram-order-head">
+                    <div>
+                      <div className="mobile-order-card-title">
+                        {item.orderNumber || 'Без номера'}{item.orderName ? ` · ${item.orderName}` : ''}
+                      </div>
+                      <div className="mobile-order-card-subtitle">
+                        {item.archivedAt ? 'Архивный заказ' : 'Активный заказ'} · {getTelegramAccessLabel(item.access)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="customer-card-actions customer-card-actions-telegram">
+                    <Button
+                      disabled={telegramActionLoadingKey === `issue:${buttonPrefix}`}
+                      onClick={() => runTelegramAction({
+                        customer: telegramAccessModal.customer,
+                        order,
+                        access: item.access,
+                        action: 'issue',
+                      })}
+                    >
+                      {telegramActionLoadingKey === `issue:${buttonPrefix}` ? 'Создание...' : 'Создать PIN'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={telegramActionLoadingKey === `share:${buttonPrefix}`}
+                      onClick={() => runTelegramAction({
+                        customer: telegramAccessModal.customer,
+                        order,
+                        access: item.access,
+                        action: 'share',
+                      })}
+                    >
+                      {telegramActionLoadingKey === `share:${buttonPrefix}` ? 'Копирование...' : 'Ссылка'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={telegramActionLoadingKey === `qr:${buttonPrefix}`}
+                      onClick={() => runTelegramAction({
+                        customer: telegramAccessModal.customer,
+                        order,
+                        access: item.access,
+                        action: 'qr',
+                      })}
+                    >
+                      {telegramActionLoadingKey === `qr:${buttonPrefix}` ? 'Загрузка...' : 'QR'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={telegramActionLoadingKey === `logs:${buttonPrefix}`}
+                      onClick={() => runTelegramAction({
+                        customer: telegramAccessModal.customer,
+                        order,
+                        access: item.access,
+                        action: 'logs',
+                      })}
+                    >
+                      {telegramActionLoadingKey === `logs:${buttonPrefix}` ? 'Загрузка...' : 'Логи'}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(telegramCredentials)} onClose={closeTelegramCredentials} size="lg" className="order-form-modal">
+        <ModalHeader
+          title="Telegram-доступ готов"
+          subtitle={telegramCredentials
+            ? `${telegramCredentials.customer?.fullName || 'Заказчик'} · ${telegramCredentials.order?.orderNumber || 'Без номера'}`
+            : 'Данные для заказчика'}
+          onClose={closeTelegramCredentials}
+        />
+
+        {telegramCredentials?.pinCode ? (
+          <div className="settings-alert settings-alert-success" style={{ marginBottom: 12 }}>
+            Новый PIN: <strong>{telegramCredentials.pinCode}</strong>
+          </div>
+        ) : null}
+
+        <div className="customer-telegram-share-grid">
+          <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+            <label>Ссылка в Telegram-бота</label>
+            <textarea readOnly rows={3} value={telegramCredentials?.deepLinkUrl || ''} />
+          </div>
+          <div className="customer-telegram-qr-preview">
+            {telegramCredentials?.qrDataUrl ? (
+              <img src={telegramCredentials.qrDataUrl} alt="QR-код доступа к заказу" className="customer-telegram-qr-image" />
+            ) : (
+              <div className="empty-cell">QR-код недоступен.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <Button onClick={closeTelegramCredentials}>Закрыть</Button>
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              try {
+                await copyTextToClipboard(telegramCredentials?.deepLinkUrl || '');
+                setSuccessMessage('Ссылка на Telegram-бота скопирована.');
+              } catch (copyError) {
+                setError(toUserErrorMessage(copyError, 'Не удалось скопировать ссылку.'));
+              }
+            }}
+          >
+            Скопировать ссылку
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={telegramLogsModal.open}
+        onClose={closeTelegramLogsModal}
+        closeDisabled={telegramLogsModal.loading}
+        size="lg"
+        className="order-form-modal"
+      >
+        <ModalHeader
+          title="Логи Telegram"
+          subtitle={telegramLogsModal.order
+            ? `${telegramLogsModal.customer?.fullName || 'Заказчик'} · ${telegramLogsModal.order.orderNumber || 'Без номера'}`
+            : 'Журнал отправок заказчику'}
+          onClose={closeTelegramLogsModal}
+          closeDisabled={telegramLogsModal.loading}
+        />
+
+        {telegramLogsModal.error ? (
+          <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+            {telegramLogsModal.error}
+          </div>
+        ) : null}
+
+        {telegramLogsModal.access ? (
+          <div className="settings-alert settings-alert-success" style={{ marginBottom: 12 }}>
+            {getTelegramAccessLabel(telegramLogsModal.access)}
+          </div>
+        ) : null}
+
+        {telegramLogsModal.loading ? (
+          <div className="empty-cell">Загружаю журнал отправок...</div>
+        ) : null}
+
+        {!telegramLogsModal.loading && telegramLogsModal.logs.length === 0 ? (
+          <div className="empty-cell">Отправок по этому заказу пока нет.</div>
+        ) : null}
+
+        {!telegramLogsModal.loading && telegramLogsModal.logs.length > 0 ? (
+          <div className="customer-telegram-log-list">
+            {telegramLogsModal.logs.map((log) => (
+              <div key={log._id} className="customer-telegram-log-card">
+                <div className="customer-telegram-log-meta">
+                  <strong>{log.status === 'sent' ? 'Отправлено' : log.status === 'failed' ? 'Ошибка' : 'Пропущено'}</strong>
+                  <span>{log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</span>
+                  <span>{log.type || 'message'}</span>
+                </div>
+                <div className="customer-telegram-log-text">{log.text || '—'}</div>
+                {log.errorMessage ? (
+                  <div className="customer-telegram-log-error">{log.errorMessage}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal open={editorOpen} onClose={closeEditor} closeDisabled={customerSaving} size="lg" className="order-form-modal">
         <ModalHeader

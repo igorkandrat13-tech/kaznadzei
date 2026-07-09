@@ -116,6 +116,35 @@ function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
   }
 }
 
+function compareNaturalTextAsc(leftValue = '', rightValue = '') {
+  const left = String(leftValue || '').trim();
+  const right = String(rightValue || '').trim();
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return left.localeCompare(right, 'ru', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+}
+
+function compareOrderItemsByRoomNumberAsc(leftItem = {}, rightItem = {}) {
+  const roomNumberDiff = compareNaturalTextAsc(leftItem?.roomNumber, rightItem?.roomNumber);
+  if (roomNumberDiff !== 0) return roomNumberDiff;
+
+  const roomDiff = compareNaturalTextAsc(leftItem?.room, rightItem?.room);
+  if (roomDiff !== 0) return roomDiff;
+
+  const itemNumberDiff = compareNaturalTextAsc(leftItem?.itemNumber, rightItem?.itemNumber);
+  if (itemNumberDiff !== 0) return itemNumberDiff;
+
+  return compareNaturalTextAsc(leftItem?.name, rightItem?.name);
+}
+
+function sortOrderItemsByRoomNumber(items = []) {
+  return (Array.isArray(items) ? items : []).slice().sort(compareOrderItemsByRoomNumberAsc);
+}
+
 function getManualStageSecondaryHeader(columnKey = '', secondaryHeaders = []) {
   return getSecondaryHeaderForPrimaryColumn(getPrimaryColumnIndexForManualStageColumn(columnKey), secondaryHeaders);
 }
@@ -469,7 +498,7 @@ function Archive() {
   const rows = useMemo(() => {
     const sortedOrders = [...filteredOrders].sort(compareOrderNumbersAsc);
     return sortedOrders.flatMap((order) => {
-      const items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
+      const items = Array.isArray(order.items) && order.items.length > 0 ? sortOrderItemsByRoomNumber(order.items) : [];
       const sourceRows = items.length > 0 ? items : [{
         itemId: '',
         itemNumber: '',

@@ -1,6 +1,7 @@
 const express = require('express');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
+const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
 const { requireAdminAccess } = require('../middleware/security');
 const { getBotInfo, getWebhookInfo, setWebhook, setChatMenuButton, sendMessage } = require('../services/telegramService');
 const {
@@ -13,6 +14,13 @@ const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
 } = require('../services/telegramWebAppAuth');
+const {
+  extractCustomerAccessTokenFromStartText,
+  getCustomerAlreadyLinkedText,
+  getCustomerPinPromptText,
+  getCustomerSubscriptionReadyText,
+  sendCustomerTelegramMessage,
+} = require('../services/customerTelegramService');
 const { getRoleDefinitions, getRoleLabel } = require('../config/roles');
 
 const router = express.Router();
@@ -175,6 +183,26 @@ async function processTelegramMessage(token, message) {
 
   if (!chatId || !from) return;
 
+  const touchedCustomerAccesses = CustomerTelegramAccessStore.touchLinkedByTelegramContext({
+    chatId,
+    telegramUserId: from.id,
+    username: from.username ? `@${String(from.username).replace(/^@+/, '')}` : '',
+    firstName: from.first_name || '',
+    lastName: from.last_name || '',
+  });
+  const linkedCustomerAccesses = (() => {
+    const items = [
+      ...touchedCustomerAccesses,
+      ...CustomerTelegramAccessStore.findLinkedByTelegramUserId(from.id),
+      ...CustomerTelegramAccessStore.findLinkedByTelegramChatId(chatId),
+    ];
+    const uniqueById = new Map();
+    for (const item of items) {
+      if (!item?._id) continue;
+      uniqueById.set(item._id, item);
+    }
+    return Array.from(uniqueById.values());
+  })();
   const existingEmployee = EmployeeStore.findByTelegramUserId(from.id);
   if (existingEmployee) {
     await syncTelegramMenuButton(token, chatId);
@@ -193,6 +221,7 @@ async function processTelegramMessage(token, message) {
   if (!text) return;
 
   if (text.startsWith('/start')) {
+    const customerAccessToken = extractCustomerAccessTokenFromStartText(text);
     if (existingEmployee) {
       await sendAuthorizedMessage(
         token,
@@ -200,6 +229,50 @@ async function processTelegramMessage(token, message) {
         `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку меню "📷 Сканер QR".`,
         existingEmployee
       );
+      return;
+    }
+    if (customerAccessToken) {
+      const access = CustomerTelegramAccessStore.findByAccessToken(customerAccessToken);
+      if (!access) {
+        await sendGuestMessage(token, chatId, 'Ссылка на отслеживание заказа устарела. Запросите новую ссылку или QR-код у менеджера.');
+        return;
+      }
+
+      if (String(access.telegramUserId || '').trim() === String(from.id)) {
+        await sendCustomerTelegramMessage({
+          access,
+          chatId,
+          telegramUserId: from.id,
+          type: 'customer.start.already-linked',
+          text: getCustomerSubscriptionReadyText(access),
+          meta: { event: 'already-linked' },
+        });
+        return;
+      }
+
+      const pendingAccess = CustomerTelegramAccessStore.beginTelegramLink(access._id, {
+        chatId,
+        telegramUserId: from.id,
+      }) || access;
+      await sendCustomerTelegramMessage({
+        access: pendingAccess,
+        chatId,
+        telegramUserId: from.id,
+        type: 'customer.start.pin-request',
+        text: getCustomerPinPromptText(pendingAccess),
+        meta: { event: 'pin-request' },
+      });
+      return;
+    }
+    if (linkedCustomerAccesses.length > 0) {
+      await sendCustomerTelegramMessage({
+        access: linkedCustomerAccesses[0],
+        chatId,
+        telegramUserId: from.id,
+        type: 'customer.start.summary',
+        text: getCustomerAlreadyLinkedText(linkedCustomerAccesses),
+        meta: { event: 'linked-summary' },
+      });
       return;
     }
     await sendGuestMessage(token, chatId, 'Здравствуйте! Для первичной авторизации отправьте PIN-код, который выдал администратор.');
@@ -213,6 +286,53 @@ async function processTelegramMessage(token, message) {
       `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку меню "📷 Сканер QR".`,
       existingEmployee
     );
+    return;
+  }
+
+  const pendingCustomerAccess = CustomerTelegramAccessStore.findPendingByTelegramContext({
+    chatId,
+    telegramUserId: from.id,
+  });
+  if (pendingCustomerAccess) {
+    if (!CustomerTelegramAccessStore.verifyPinCode(pendingCustomerAccess._id, text)) {
+      await sendCustomerTelegramMessage({
+        access: pendingCustomerAccess,
+        chatId,
+        telegramUserId: from.id,
+        type: 'customer.pin.invalid',
+        text: 'PIN-код для этого заказа не подошел. Проверьте его и отправьте еще раз.',
+        meta: { event: 'pin-invalid' },
+      });
+      return;
+    }
+
+    const linkedAccess = CustomerTelegramAccessStore.linkTelegramUser(pendingCustomerAccess._id, {
+      telegramUserId: from.id,
+      chatId,
+      username: from.username ? `@${String(from.username).replace(/^@+/, '')}` : '',
+      firstName: from.first_name || '',
+      lastName: from.last_name || '',
+    });
+    await sendCustomerTelegramMessage({
+      access: linkedAccess,
+      chatId,
+      telegramUserId: from.id,
+      type: 'customer.pin.success',
+      text: getCustomerSubscriptionReadyText(linkedAccess),
+      meta: { event: 'pin-success' },
+    });
+    return;
+  }
+
+  if (linkedCustomerAccesses.length > 0) {
+    await sendCustomerTelegramMessage({
+      access: linkedCustomerAccesses[0],
+      chatId,
+      telegramUserId: from.id,
+      type: 'customer.linked.info',
+      text: getCustomerAlreadyLinkedText(linkedCustomerAccesses),
+      meta: { event: 'linked-info' },
+    });
     return;
   }
 

@@ -7,6 +7,7 @@ const OrderStore = require('../stores/orderStore');
 const RoleStore = require('../stores/roleStore');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
+const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
 const { requireAdminAccess, requireManagerAccess, requireWriteAccess } = require('../middleware/security');
 const {
   normalizeDate,
@@ -18,6 +19,12 @@ const {
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { notifyOrderCreated } = require('../services/orderNotifications');
+const {
+  notifyCustomerOrderArchived,
+  notifyCustomerOrderCreated,
+  notifyCustomerOrderRestored,
+  notifyCustomerOrderStatusText,
+} = require('../services/customerTelegramService');
 const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
@@ -208,6 +215,53 @@ function getManualStageLegendLabel(columnKey = '', settings = {}) {
   const stages = Array.isArray(settings?.orderStageLegendConfig?.stages) ? settings.orderStageLegendConfig.stages : [];
   const stage = stages.find((item) => String(item?.key || '').trim() === legendKey);
   return String(stage?.label || getManualStageCellLabel(columnKey, settings) || columnKey || '').trim();
+}
+
+function getOrderStatusSummary(order = {}) {
+  if (String(order?.archivedAt || '').trim()) {
+    return 'в архиве';
+  }
+  const overallStatus = String(OrderStore.getOrderOverallStatus(order) || '').trim();
+  if (overallStatus === 'completed') return 'завершен';
+  if (overallStatus === 'in_progress') return 'в работе';
+  return 'ожидает запуска';
+}
+
+function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], settings = {}, { clear = false, source = 'manager' } = {}) {
+  const groupedSelections = new Map();
+  for (const selection of Array.isArray(selections) ? selections : []) {
+    const orderId = String(selection?.orderId || '').trim();
+    if (!orderId) continue;
+    if (!groupedSelections.has(orderId)) {
+      groupedSelections.set(orderId, []);
+    }
+    groupedSelections.get(orderId).push(selection);
+  }
+
+  return (Array.isArray(updatedOrders) ? updatedOrders : [])
+    .map((order) => {
+      const orderSelections = groupedSelections.get(String(order?._id || '').trim()) || [];
+      if (orderSelections.length === 0) return null;
+
+      const lines = orderSelections.map((selection) => {
+        const item = OrderStore.getOrderItem(order, selection.itemId);
+        const itemLabel = String(item?.name || '').trim() || `Изделие ${selection.itemId}`;
+        const columnLabel = getManualStageCellLabel(selection.columnKey, settings);
+        return `${clear ? 'Снят' : 'Отмечен'} этап "${columnLabel}" по изделию "${itemLabel}".`;
+      });
+
+      return {
+        order,
+        text: [
+          'Статус заказа обновлен.',
+          `Заказ: ${order.orderNumber || 'не указан'}${OrderStore.getOrderPrimaryName(order) ? ` · ${OrderStore.getOrderPrimaryName(order)}` : ''}`,
+          ...lines,
+          `Текущий статус заказа: ${getOrderStatusSummary(order)}.`,
+          `Источник обновления: ${source === 'telegram' ? 'Telegram' : 'админка'}.`,
+        ].join('\n'),
+      };
+    })
+    .filter(Boolean);
 }
 
 function getActorAllowedManualColumns(actor = {}) {
@@ -593,6 +647,17 @@ function handleManualStageMarks(req, res) {
       });
     }
 
+    const customerMessages = buildCustomerStageUpdateMessages(updatedOrders, normalizedSelections, settings, {
+      clear: !isApplyAction,
+      source: 'manager',
+    });
+    Promise.allSettled(
+      customerMessages.map(({ order, text }) => notifyCustomerOrderStatusText(order, text, {
+        type: isApplyAction ? 'order.stage.apply' : 'order.stage.clear',
+        meta: { source: 'manager' },
+      }))
+    ).catch(() => {});
+
     res.json({
       ok: true,
       updatedOrders,
@@ -959,6 +1024,17 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
         clear: context.clear,
       },
     });
+
+    const customerMessages = buildCustomerStageUpdateMessages([updatedOrder], selections, settings, {
+      clear: context.clear,
+      source: 'telegram',
+    });
+    Promise.allSettled(
+      customerMessages.map(({ order, text }) => notifyCustomerOrderStatusText(order, text, {
+        type: context.clear ? 'order.stage.telegram.clear' : 'order.stage.telegram.apply',
+        meta: { source: 'telegram' },
+      }))
+    ).catch(() => {});
 
     res.json({
       ok: true,
@@ -1389,11 +1465,23 @@ router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
 
 router.post('/orders', requireManagerAccess(), (req, res) => {
   try {
-    const { orderNumber, customer, name, quantity, material, notes, orderDate, startDate, endDate } = sanitizeOrderInput(req.body || {});
+    const {
+      orderNumber,
+      customer,
+      customerId,
+      name,
+      quantity,
+      material,
+      notes,
+      orderDate,
+      startDate,
+      endDate,
+    } = sanitizeOrderInput(req.body || {});
     const items = sanitizeOrderItemsPayload(req.body?.items) || [];
     const order = OrderStore.create({
       orderNumber,
       customer,
+      customerId,
       orderDate: orderDate || new Date().toISOString().split('T')[0],
       startDate,
       endDate,
@@ -1413,6 +1501,7 @@ router.post('/orders', requireManagerAccess(), (req, res) => {
       },
     });
     notifyOrderCreated(order).catch(() => {});
+    notifyCustomerOrderCreated(order).catch(() => {});
     res.status(201).json(order);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
@@ -1425,10 +1514,14 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
     const items = sanitizeOrderItemsPayload(req.body?.items);
     const previousOrder = OrderStore.findById(req.params.id);
     if (!previousOrder) return res.status(404).json({ message: 'Order not found' });
+    const previousCustomerId = String(previousOrder.customerId || '').trim();
     const nextOrder = OrderStore.update(req.params.id, {
       ...updates,
       ...(items ? { items } : {}),
     });
+    if (updates.customerId !== undefined && previousCustomerId !== String(nextOrder?.customerId || '').trim()) {
+      CustomerTelegramAccessStore.revokeByOrderId(req.params.id);
+    }
     addActivityLog({
       action: 'order.update',
       entityType: 'order',
@@ -1475,6 +1568,7 @@ router.post('/orders/:id/archive', requireManagerAccess(), (req, res) => {
         archivedAt: archiveResult.order?.archivedAt || '',
       },
     });
+    notifyCustomerOrderArchived(archiveResult.order).catch(() => {});
 
     res.json({
       ok: true,
@@ -1510,6 +1604,7 @@ router.post('/orders/:id/restore', requireManagerAccess(), (req, res) => {
         orderNumber: restoreResult.order?.orderNumber || '',
       },
     });
+    notifyCustomerOrderRestored(restoreResult.order).catch(() => {});
 
     res.json({
       ok: true,
@@ -1772,6 +1867,7 @@ router.delete('/orders/:id', requireManagerAccess(), (req, res) => {
     }
     data.orders.splice(idx, 1);
     db.save();
+    CustomerTelegramAccessStore.revokeByOrderId(req.params.id);
     addActivityLog({
       action: 'order.delete',
       entityType: 'order',

@@ -73,6 +73,35 @@ function getStageEmployeeName(stage = {}) {
   return getEmployeeDisplayName(EmployeeStore.findById(employeeId));
 }
 
+function compareNaturalTextAsc(leftValue = '', rightValue = '') {
+  const left = String(leftValue || '').trim();
+  const right = String(rightValue || '').trim();
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return left.localeCompare(right, 'ru', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+}
+
+function compareOrderItemsByRoomNumberAsc(leftItem = {}, rightItem = {}) {
+  const roomNumberDiff = compareNaturalTextAsc(leftItem?.roomNumber, rightItem?.roomNumber);
+  if (roomNumberDiff !== 0) return roomNumberDiff;
+
+  const roomDiff = compareNaturalTextAsc(leftItem?.room, rightItem?.room);
+  if (roomDiff !== 0) return roomDiff;
+
+  const itemNumberDiff = compareNaturalTextAsc(leftItem?.itemNumber, rightItem?.itemNumber);
+  if (itemNumberDiff !== 0) return itemNumberDiff;
+
+  return compareNaturalTextAsc(leftItem?.name, rightItem?.name);
+}
+
+function sortOrderItemsByRoomNumber(items = []) {
+  return (Array.isArray(items) ? items : []).slice().sort(compareOrderItemsByRoomNumberAsc);
+}
+
 function normalizeWorkerAssignments(source = {}) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
 
@@ -982,10 +1011,10 @@ const OrderStore = {
             stages: data.stages,
           }]
         : []);
-    const items = sourceItems.map((item, index) => buildOrderItem(item, {
+    const items = sortOrderItemsByRoomNumber(sourceItems.map((item, index) => buildOrderItem(item, {
       defaultItemNumber: getDefaultItemNumber(index),
       index,
-    }));
+    })));
     const order = {
       _id: id(),
       orderNumber: data.orderNumber || '',
@@ -1148,7 +1177,7 @@ const OrderStore = {
 
     if (Array.isArray(updates.items)) {
       const currentItems = Array.isArray(order.items) ? order.items : [];
-      order.items = updates.items.map((item, index) => {
+      order.items = sortOrderItemsByRoomNumber(updates.items.map((item, index) => {
         const currentItem = currentItems.find(existingItem => existingItem.itemId === String(item?.itemId || '').trim())
           || currentItems[index]
           || {};
@@ -1185,7 +1214,7 @@ const OrderStore = {
           defaultItemNumber: getDefaultItemNumber(index),
           index,
         });
-      });
+      }));
     } else {
       const primaryItem = getOrderItem(order);
       if (primaryItem) {
