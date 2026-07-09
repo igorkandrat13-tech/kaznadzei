@@ -45,19 +45,6 @@ const seedColors = [
   { name: 'Вишня', hex: '#8B3A3A' },
 ];
 
-const products = [
-  { name: 'Комод "Классика"', customer: 'Иванов А.С.', quantity: 2, material: 'Массив дуба', stageProgress: 4 },
-  { name: 'Шкаф "Модерн"', customer: 'Петрова Е.В.', quantity: 1, material: 'ЛДСП', stageProgress: 6 },
-  { name: 'Стол "Лофт"', customer: 'ООО "МебельПро"', quantity: 5, material: 'Металл + стекло', stageProgress: 9 },
-  { name: 'Стул "Венский"', customer: 'Кафе "Уют"', quantity: 12, material: 'Бук', stageProgress: 2 },
-  { name: 'Кровать "Барокко"', customer: 'Сидоров К.М.', quantity: 1, material: 'Массив сосны', stageProgress: 3 },
-  { name: 'Тумба "Минимал"', customer: 'ИП "Интерьер"', quantity: 3, material: 'ЛДСП + МДФ', stageProgress: 7 },
-  { name: 'Диван "Комфорт"', customer: 'Козлова А.И.', quantity: 1, material: 'ДСП + фанера', stageProgress: 5 },
-  { name: 'Стол "Сканди"', customer: 'Ресторан "Норд"', quantity: 8, material: 'Массив берёзы', stageProgress: 1 },
-  { name: 'Полка "Эко"', customer: 'Магазин "Декор"', quantity: 20, material: 'Фанера', stageProgress: 8 },
-  { name: 'Кресло "Классик"', customer: 'Тихонов Д.П.', quantity: 2, material: 'Массив дуба', stageProgress: 4 },
-];
-
 function buildFallbackOrderNumber(order, index) {
   const numericPart = String(index + 1).padStart(4, '0');
   const datePart = String(order?.orderDate || order?.createdAt || '').slice(0, 10).replace(/-/g, '');
@@ -90,6 +77,10 @@ function buildDemoStages(progress = 0) {
 }
 
 function seedDemoMultiItemOrders() {
+  if (String(process.env.ENABLE_DEMO_ORDER_SEED || '').trim().toLowerCase() !== 'true') {
+    return;
+  }
+
   const existingOrderNumbers = new Set(OrderStore.findAll().map(order => String(order.orderNumber || '').trim()));
   const demoOrders = [
     {
@@ -189,39 +180,6 @@ function seed() {
     ColorStore.insertMany(seedColors);
     console.log('Colors seeded');
   }
-  if (OrderStore.count() > 0) return;
-  const steps = ProcessStepStore.findAll().sort((a, b) => a.order - b.order);
-  for (const [index, p] of products.entries()) {
-    const completedCount = Math.min(p.stageProgress, steps.length);
-    const base = new Date();
-    base.setDate(base.getDate() - Math.floor(Math.random() * 80) - 10);
-    const orderDate = new Date(base);
-    const startDate = new Date(base);
-    startDate.setDate(startDate.getDate() + Math.floor(Math.random() * 10) + 3);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + Math.floor(Math.random() * 30) + 10);
-    OrderStore.create({
-      orderNumber: `ORD-${String(index + 1).padStart(4, '0')}`,
-      name: p.name,
-      customer: p.customer || '',
-      quantity: p.quantity || 1,
-      material: p.material || '',
-      notes: '',
-      orderDate: orderDate.toISOString().split('T')[0],
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
-      comments: [],
-      stages: steps.map((s, i) => ({
-        stepId: s._id,
-        stepName: s.stepName,
-        role: s.role,
-        status: i < completedCount ? 'completed' : i === completedCount ? 'in_progress' : 'pending',
-        completedAt: i < completedCount ? new Date().toISOString() : null,
-      })),
-      overallStatus: completedCount >= steps.length ? 'completed' : 'in_progress',
-    });
-  }
-  console.log(`${products.length} test orders seeded`);
 }
 
 seed();
