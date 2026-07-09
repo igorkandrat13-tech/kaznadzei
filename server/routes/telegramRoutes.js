@@ -129,7 +129,7 @@ async function sendGuestMessage(token, chatId, text) {
   await sendMessage(token, chatId, text, { reply_markup: getUnauthorizedReplyMarkup() });
 }
 
-async function refreshAuthorizedEmployeeAccess(token) {
+async function refreshAuthorizedEmployeeAccess(token, { notifyEmployees = false } = {}) {
   const employees = EmployeeStore.findAll().filter(employee =>
     String(employee.telegramUserId || '').trim()
     && String(employee.telegramChatId || '').trim()
@@ -140,12 +140,16 @@ async function refreshAuthorizedEmployeeAccess(token) {
 
   for (const employee of employees) {
     try {
-      await sendAuthorizedMessage(
-        token,
-        employee.telegramChatId,
-        `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку меню "📷 Сканер QR".`,
-        employee
-      );
+      if (notifyEmployees) {
+        await sendAuthorizedMessage(
+          token,
+          employee.telegramChatId,
+          `Обновили доступ к сканеру QR-кодов.\nСотрудник: ${employee.fullName}\nРоль: ${getEmployeeRoleLabel(employee.role)}\nИспользуйте кнопку меню "📷 Сканер QR".`,
+          employee
+        );
+      } else {
+        await syncTelegramMenuButton(token, employee.telegramChatId);
+      }
       refreshedCount += 1;
     } catch (error) {
       errors.push({
@@ -251,7 +255,7 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
       getWebhookInfo(token).catch(() => null),
     ]);
     await syncTelegramMenuButton(token);
-    const refreshResult = await refreshAuthorizedEmployeeAccess(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token, { notifyEmployees: false });
 
     res.json({
       ok: true,
@@ -287,7 +291,7 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
     const webhookUrl = getRecommendedWebhookUrl();
     await setWebhook(token, webhookUrl);
     await syncTelegramMenuButton(token);
-    const refreshResult = await refreshAuthorizedEmployeeAccess(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token, { notifyEmployees: false });
     const [bot, webhook] = await Promise.all([
       getBotInfo(token),
       getWebhookInfo(token),

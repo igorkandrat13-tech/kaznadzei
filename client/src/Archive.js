@@ -849,7 +849,7 @@ function Archive() {
                     regularOrderClass,
                     itemStartDateCellStyle,
                   );
-                  const itemEndDateCellStyle = itemManufacturingMeta.endDate
+                  const itemEndDateCellStyle = itemManufacturingMeta.isCompleted
                     ? {
                         background: columnStageMeta.itemEnd.hex || '#C37C8E',
                         color: columnStageMeta.itemEnd.textHex,
@@ -925,7 +925,7 @@ function Archive() {
                   const itemDurationValue = itemManufacturingMeta.endDate
                     ? formatManufacturingTime(itemManufacturingMeta.startDate, itemManufacturingMeta.endDate)
                     : '—';
-                  const hasItemManufacturingDuration = itemDurationValue !== '—';
+                  const hasItemManufacturingDuration = itemManufacturingMeta.isCompleted;
                   const itemDurationCellStyle = hasItemManufacturingDuration
                     ? {
                         background: columnStageMeta.itemDuration.hex || '#C37C8E',
@@ -947,7 +947,7 @@ function Archive() {
                   const orderDurationValue = orderManufacturingMeta.endDate
                     ? formatManufacturingTime(orderManufacturingMeta.startDate, orderManufacturingMeta.endDate)
                     : '—';
-                  const hasManufacturingDuration = Boolean(orderManufacturingMeta.startDate || orderManufacturingMeta.endDate || orderDurationValue !== '—');
+                  const hasManufacturingDuration = Boolean(orderManufacturingMeta.isCompleted);
                   const durationMetaCellStyle = hasManufacturingDuration
                     ? {
                         background: columnStageMeta.duration.hex || '#F4C2A4',
