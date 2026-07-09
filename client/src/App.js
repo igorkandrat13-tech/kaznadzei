@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import Admin from './Admin';
 import Archive from './Archive';
+import CustomersPage from './CustomersPage';
 import OrderDetail from './OrderDetail';
 import RoleWorkspacePage from './RoleWorkspacePage';
 import OrdersWorkspace from './OrdersWorkspace';
@@ -208,6 +209,7 @@ function AppLayout() {
                                 <nav className="App-header-nav App-header-nav-primary">
                                     {canAccessOrders && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
                                     {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
+                                    {canAccessOrders && <Link to="/customers" onClick={() => setMobileMenuOpen(false)}>Заказчики</Link>}
                                     {canAccessRole('admin', authRole) && <Link to="/settings?tab=employees" onClick={() => setMobileMenuOpen(false)}>Сотрудники</Link>}
                                     {canAccessRole('admin', authRole) && <Link to="/settings?tab=colors" onClick={() => setMobileMenuOpen(false)}>Этапы производства</Link>}
                                     {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
@@ -231,6 +233,7 @@ function AppLayout() {
                     <Route path='/orders' element={<ProtectedRoute requiredRole='manager'><OrdersWorkspace /></ProtectedRoute>} />
                     <Route path='/manager' element={<Navigate to='/orders' replace />} />
                     <Route path='/archive' element={<ProtectedRoute requiredRole='manager'><Archive /></ProtectedRoute>} />
+                    <Route path='/customers' element={<ProtectedRoute requiredRole='manager'><CustomersPage /></ProtectedRoute>} />
                     <Route path='/order/:id/item/:itemId' element={<OrderDetail />} />
                     <Route path='/order/:id' element={<OrderDetail />} />
                     <Route path='/role/:roleKey' element={<ProtectedRoute requiredRole='manager'><RoleWorkspacePage /></ProtectedRoute>} />

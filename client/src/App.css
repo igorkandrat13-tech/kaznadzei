@@ -514,6 +514,76 @@ table tr:hover td {
   margin-top: 16px;
 }
 
+.customer-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 320px));
+  gap: 16px;
+  margin-top: 16px;
+  align-items: stretch;
+  justify-content: start;
+}
+
+.customer-card-list > .customer-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  align-self: stretch;
+  margin-top: 0;
+  width: 100%;
+}
+
+.customer-card-list > .customer-card + .customer-card {
+  margin-top: 0;
+}
+
+.customer-card .mobile-order-card-header,
+.customer-card .mobile-order-card-grid,
+.customer-card .mobile-order-card-note {
+  width: 100%;
+}
+
+.customer-card-note {
+  display: flex;
+  flex-direction: column;
+}
+
+.customer-card-note-value {
+  overflow: auto;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  padding-right: 4px;
+}
+
+.customer-card-note-address .customer-card-note-value {
+  max-height: 96px;
+}
+
+.customer-card-note-notes .customer-card-note-value {
+  max-height: 128px;
+}
+
+.customer-card .mobile-order-card-note:last-of-type {
+  flex: 1 1 auto;
+}
+
+.customer-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.customer-card-actions .btn {
+  flex: 1 1 160px;
+}
+
+@media (max-width: 767px) {
+  .customer-card-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .mobile-order-card {
   padding: 14px;
   border-radius: 14px;
