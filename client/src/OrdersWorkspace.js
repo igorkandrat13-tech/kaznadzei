@@ -3397,12 +3397,7 @@ function OrdersWorkspace() {
                       itemStartDateCellStyle,
                       { disabled: isInlineEditing },
                     );
-                    const itemEndDateCellStyle = itemManufacturingMeta.isCompleted
-                      ? {
-                          background: columnStageMeta.itemEnd.hex || '#C37C8E',
-                          color: columnStageMeta.itemEnd.textHex,
-                        }
-                      : undefined;
+                    const itemEndDateCellStyle = undefined;
                     const itemEndDateCellPropsBase = getManualStageCellProps(
                       key,
                       item,
@@ -3486,13 +3481,8 @@ function OrdersWorkspace() {
                     const itemDurationValue = itemManufacturingMeta.endDate
                       ? formatManufacturingTime(itemManufacturingMeta.startDate, itemManufacturingMeta.endDate)
                       : '—';
-                    const hasItemManufacturingDuration = itemManufacturingMeta.isCompleted;
-                    const itemDurationCellStyle = hasItemManufacturingDuration
-                      ? {
-                          background: columnStageMeta.itemDuration.hex || '#C37C8E',
-                          color: columnStageMeta.itemDuration.textHex,
-                        }
-                      : undefined;
+                    const hasItemManufacturingDuration = false;
+                    const itemDurationCellStyle = undefined;
                     const itemDurationCellPropsBase = getManualStageCellProps(
                       key,
                       item,

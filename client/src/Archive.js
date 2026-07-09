@@ -849,12 +849,7 @@ function Archive() {
                     regularOrderClass,
                     itemStartDateCellStyle,
                   );
-                  const itemEndDateCellStyle = itemManufacturingMeta.isCompleted
-                    ? {
-                        background: columnStageMeta.itemEnd.hex || '#C37C8E',
-                        color: columnStageMeta.itemEnd.textHex,
-                      }
-                    : undefined;
+                  const itemEndDateCellStyle = undefined;
                   const itemEndDateCellPropsBase = getReadOnlyCellProps(
                     key,
                     item,
@@ -925,13 +920,8 @@ function Archive() {
                   const itemDurationValue = itemManufacturingMeta.endDate
                     ? formatManufacturingTime(itemManufacturingMeta.startDate, itemManufacturingMeta.endDate)
                     : '—';
-                  const hasItemManufacturingDuration = itemManufacturingMeta.isCompleted;
-                  const itemDurationCellStyle = hasItemManufacturingDuration
-                    ? {
-                        background: columnStageMeta.itemDuration.hex || '#C37C8E',
-                        color: columnStageMeta.itemDuration.textHex,
-                      }
-                    : undefined;
+                  const hasItemManufacturingDuration = false;
+                  const itemDurationCellStyle = undefined;
                   const itemDurationCellPropsBase = getReadOnlyCellProps(
                     key,
                     item,
