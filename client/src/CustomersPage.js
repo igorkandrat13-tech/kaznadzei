@@ -122,7 +122,7 @@ function CustomersPage() {
     loading: false,
     error: '',
   });
-  const [telegramAccessDetails, setTelegramAccessDetails] = useState({});
+  const [telegramCredentials, setTelegramCredentials] = useState(null);
   const [telegramLogsModal, setTelegramLogsModal] = useState({
     open: false,
     customer: null,
@@ -261,7 +261,6 @@ function CustomersPage() {
 
   const openTelegramAccessModal = useCallback(async (customer) => {
     if (!customer?._id) return;
-    setTelegramAccessDetails({});
     setTelegramAccessModal({
       open: true,
       customer,
@@ -471,12 +470,9 @@ function CustomersPage() {
         return;
       }
 
-      const hasAccess = Boolean(access?.hasAccess);
-      const requestPath = hasAccess
-        ? `/api/customers/${customer._id}/telegram-access/${order._id}/share`
-        : `/api/customers/${customer._id}/telegram-access/${order._id}/regenerate`;
-      const requestOptions = hasAccess ? undefined : { method: 'POST' };
-      const res = await apiFetch(requestPath, requestOptions);
+      const res = await apiFetch(`/api/customers/${customer._id}/telegram-access/${order._id}/regenerate`, {
+        method: 'POST',
+      });
       const data = await parseJsonSafely(res);
 
       if (!res.ok) {
@@ -487,30 +483,17 @@ function CustomersPage() {
         }));
       }
 
-      if (action === 'issue' || action === 'share' || action === 'qr') {
-        setTelegramAccessDetails((current) => ({
-          ...current,
-          [order._id]: {
-            customer,
-            order,
-            access: data?.access || null,
-            pinCode: data?.pinCode || '',
-            deepLinkUrl: data?.deepLinkUrl || '',
-            qrDataUrl: data?.qrDataUrl || '',
-            botUsername: data?.botUsername || '',
-          },
-        }));
-        if (action === 'issue') {
-          setSuccessMessage(`Новый PIN для заказа "${order.orderNumber || order._id}" создан.`);
-        } else if (action === 'share') {
-          setSuccessMessage(hasAccess
-            ? `Ссылка для заказа "${order.orderNumber || order._id}" обновлена.`
-            : `Ссылка и новый PIN для заказа "${order.orderNumber || order._id}" подготовлены.`);
-        } else if (action === 'qr') {
-          setSuccessMessage(hasAccess
-            ? `QR-код для заказа "${order.orderNumber || order._id}" обновлён.`
-            : `QR-код и новый PIN для заказа "${order.orderNumber || order._id}" подготовлены.`);
-        }
+      if (action === 'issue') {
+        setTelegramCredentials({
+          customer,
+          order,
+          access: data?.access || null,
+          pinCode: data?.pinCode || '',
+          deepLinkUrl: data?.deepLinkUrl || '',
+          qrDataUrl: data?.qrDataUrl || '',
+          botUsername: data?.botUsername || '',
+        });
+        setSuccessMessage(`Доступ для заказа "${order.orderNumber || order._id}" создан.`);
       }
 
       await refreshTelegramAccessModal(customer).catch(() => []);
@@ -523,7 +506,6 @@ function CustomersPage() {
 
   const closeTelegramAccessModal = () => {
     if (telegramActionLoadingKey) return;
-    setTelegramAccessDetails({});
     setTelegramAccessModal({
       open: false,
       customer: null,
@@ -531,6 +513,10 @@ function CustomersPage() {
       loading: false,
       error: '',
     });
+  };
+
+  const closeTelegramCredentials = () => {
+    setTelegramCredentials(null);
   };
 
   const closeTelegramLogsModal = () => {
@@ -659,8 +645,8 @@ function CustomersPage() {
                   {telegramButtonsDisabled
                     ? 'Сначала привяжите к заказчику хотя бы один заказ.'
                     : (customerOrders.length === 1
-                        ? 'Откройте доступ к заказу: внутри модалки можно создать PIN, получить ссылку и QR-код.'
-                        : 'У заказчика несколько заказов. Откройте модалку и выберите нужный заказ для выдачи доступа.' )}
+                        ? 'Откройте доступ к заказу и создайте клиенту PIN, ссылку и QR-код.'
+                        : 'У заказчика несколько заказов. Откройте модалку и выберите нужный заказ для создания доступа.' )}
                 </div>
               </div>
 
@@ -689,7 +675,7 @@ function CustomersPage() {
         <ModalHeader
           title="Доступ заказчика"
           subtitle={telegramAccessModal.customer
-            ? `Выберите заказ для ${telegramAccessModal.customer.fullName || 'заказчика'} и выполните нужное действие без закрытия окна.`
+            ? `Выберите заказ для ${telegramAccessModal.customer.fullName || 'заказчика'} и создайте доступ.`
             : 'Выберите заказ.'}
           onClose={closeTelegramAccessModal}
           closeDisabled={Boolean(telegramActionLoadingKey)}
@@ -740,31 +726,7 @@ function CustomersPage() {
                         action: 'issue',
                       })}
                     >
-                      {telegramActionLoadingKey === `issue:${buttonPrefix}` ? 'Создание...' : 'Создать PIN'}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={telegramActionLoadingKey === `share:${buttonPrefix}`}
-                      onClick={() => runTelegramAction({
-                        customer: telegramAccessModal.customer,
-                        order,
-                        access: item.access,
-                        action: 'share',
-                      })}
-                    >
-                      {telegramActionLoadingKey === `share:${buttonPrefix}` ? 'Копирование...' : 'Ссылка'}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={telegramActionLoadingKey === `qr:${buttonPrefix}`}
-                      onClick={() => runTelegramAction({
-                        customer: telegramAccessModal.customer,
-                        order,
-                        access: item.access,
-                        action: 'qr',
-                      })}
-                    >
-                      {telegramActionLoadingKey === `qr:${buttonPrefix}` ? 'Загрузка...' : 'QR'}
+                      {telegramActionLoadingKey === `issue:${buttonPrefix}` ? 'Создание...' : 'Создать доступ'}
                     </Button>
                     <Button
                       variant="secondary"
@@ -779,54 +741,65 @@ function CustomersPage() {
                       {telegramActionLoadingKey === `logs:${buttonPrefix}` ? 'Загрузка...' : 'Логи'}
                     </Button>
                   </div>
-                  {telegramAccessDetails[item.orderId]?.pinCode || telegramAccessDetails[item.orderId]?.deepLinkUrl || telegramAccessDetails[item.orderId]?.qrDataUrl ? (
-                    <div className="customer-telegram-result">
-                      {telegramAccessDetails[item.orderId]?.pinCode ? (
-                        <div className="settings-alert settings-alert-success" style={{ marginBottom: 12 }}>
-                          Новый PIN: <strong>{telegramAccessDetails[item.orderId].pinCode}</strong>
-                        </div>
-                      ) : null}
-                      {telegramAccessDetails[item.orderId]?.deepLinkUrl ? (
-                        <div className="customer-telegram-share-grid">
-                          <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
-                            <label>Ссылка в Telegram-бота</label>
-                            <textarea readOnly rows={3} value={telegramAccessDetails[item.orderId].deepLinkUrl} />
-                          </div>
-                          <div className="customer-card-actions customer-telegram-inline-actions">
-                            <Button
-                              variant="secondary"
-                              onClick={async () => {
-                                try {
-                                  await copyTextToClipboard(telegramAccessDetails[item.orderId]?.deepLinkUrl || '');
-                                  setSuccessMessage(`Ссылка для заказа "${item.orderNumber || item.orderId}" скопирована.`);
-                                } catch (copyError) {
-                                  setError(toUserErrorMessage(copyError, 'Не удалось скопировать ссылку.'));
-                                }
-                              }}
-                            >
-                              Скопировать ссылку
-                            </Button>
-                          </div>
-                          <div className="customer-telegram-qr-preview">
-                            {telegramAccessDetails[item.orderId]?.qrDataUrl ? (
-                              <img
-                                src={telegramAccessDetails[item.orderId].qrDataUrl}
-                                alt="QR-код доступа к заказу"
-                                className="customer-telegram-qr-image"
-                              />
-                            ) : (
-                              <div className="empty-cell">QR-код недоступен.</div>
-                            )}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(telegramCredentials)}
+        onClose={closeTelegramCredentials}
+        size="lg"
+        className="order-form-modal customer-access-modal"
+      >
+        <ModalHeader
+          title="Доступ создан"
+          subtitle={telegramCredentials
+            ? `${telegramCredentials.customer?.fullName || 'Заказчик'} · ${telegramCredentials.order?.orderNumber || 'Без номера'}`
+            : 'Данные доступа'}
+          onClose={closeTelegramCredentials}
+        />
+
+        {telegramCredentials?.pinCode ? (
+          <div className="settings-alert settings-alert-success" style={{ marginBottom: 12 }}>
+            Новый PIN: <strong>{telegramCredentials.pinCode}</strong>
+          </div>
+        ) : null}
+
+        <div className="customer-telegram-share-grid">
+          <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+            <label>Ссылка в Telegram-бота</label>
+            <textarea readOnly rows={3} value={telegramCredentials?.deepLinkUrl || ''} />
+          </div>
+          <div className="customer-card-actions customer-telegram-inline-actions">
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  await copyTextToClipboard(telegramCredentials?.deepLinkUrl || '');
+                  setSuccessMessage('Ссылка на Telegram-бота скопирована.');
+                } catch (copyError) {
+                  setError(toUserErrorMessage(copyError, 'Не удалось скопировать ссылку.'));
+                }
+              }}
+            >
+              Скопировать ссылку
+            </Button>
+          </div>
+          <div className="customer-telegram-qr-preview">
+            {telegramCredentials?.qrDataUrl ? (
+              <img
+                src={telegramCredentials.qrDataUrl}
+                alt="QR-код доступа к заказу"
+                className="customer-telegram-qr-image"
+              />
+            ) : (
+              <div className="empty-cell">QR-код недоступен.</div>
+            )}
+          </div>
+        </div>
       </Modal>
 
       <Modal
