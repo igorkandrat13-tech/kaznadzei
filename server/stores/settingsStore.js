@@ -53,17 +53,27 @@ function toPublicSettings(source = {}) {
   };
 }
 
+function getPersistedNormalizedSettings(db) {
+  const currentSettings = db.settings || {};
+  const nextSettings = normalizeSettings(currentSettings);
+  if (JSON.stringify(currentSettings) !== JSON.stringify(nextSettings)) {
+    db.settings = nextSettings;
+    save();
+    return normalizeSettings(db.settings || {});
+  }
+  db.settings = nextSettings;
+  return nextSettings;
+}
+
 const SettingsStore = {
   get() {
     const db = load();
-    db.settings = normalizeSettings(db.settings || {});
-    return toPublicSettings(db.settings);
+    return toPublicSettings(getPersistedNormalizedSettings(db));
   },
 
   getWithSecrets() {
     const db = load();
-    db.settings = normalizeSettings(db.settings || {});
-    return { ...db.settings };
+    return { ...getPersistedNormalizedSettings(db) };
   },
 
   getAuthConfig() {
