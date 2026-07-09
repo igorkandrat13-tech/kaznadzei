@@ -20,6 +20,7 @@ const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { notifyOrderCreated } = require('../services/orderNotifications');
 const {
+  buildCustomerOrderItemsStatusLines,
   notifyCustomerOrderArchived,
   notifyCustomerOrderCreated,
   notifyCustomerOrderRestored,
@@ -257,6 +258,7 @@ function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], s
           `Заказ: ${order.orderNumber || 'не указан'}${OrderStore.getOrderPrimaryName(order) ? ` · ${OrderStore.getOrderPrimaryName(order)}` : ''}`,
           ...lines,
           `Текущий статус заказа: ${getOrderStatusSummary(order)}.`,
+          ...buildCustomerOrderItemsStatusLines(order),
           `Источник обновления: ${source === 'telegram' ? 'Telegram' : 'админка'}.`,
         ].join('\n'),
       };

@@ -32,6 +32,62 @@ function getReadableOrderStatus(order = {}) {
   return 'ожидает запуска';
 }
 
+function getReadableItemStatus(item = {}) {
+  const overallStatus = String(
+    item?.overallStatus
+      || OrderStore.calculateItemOverallStatus(
+        Array.isArray(item?.stages) ? item.stages : [],
+        item?.manualStageMarks || {}
+      )
+      || ''
+  ).trim();
+  if (overallStatus === 'completed') return 'завершено';
+  if (overallStatus === 'in_progress') return 'в работе';
+  return 'ожидает запуска';
+}
+
+function getItemCurrentStageLabel(item = {}) {
+  const stages = Array.isArray(item?.stages) ? item.stages : [];
+  const activeStage = stages.find((stage) => stage?.status === 'in_progress');
+  if (String(activeStage?.stepName || '').trim()) {
+    return String(activeStage.stepName).trim();
+  }
+  if (getReadableItemStatus(item) === 'завершено') {
+    const completedStage = [...stages].reverse().find((stage) => stage?.status === 'completed');
+    return String(completedStage?.stepName || '').trim() || 'Завершено';
+  }
+  return '';
+}
+
+function getOrderItemDisplayName(item = {}, index = 0) {
+  const itemNumber = String(item?.itemNumber || index + 1).trim();
+  const itemName = String(item?.name || '').trim() || `Изделие ${itemNumber}`;
+  const roomNumber = String(item?.roomNumber || '').trim();
+  const roomName = String(item?.room || '').trim();
+  const roomLabel = roomNumber
+    ? `пом. ${roomNumber}${roomName ? ` (${roomName})` : ''}`
+    : roomName;
+  return [itemNumber ? `${itemNumber}.` : '', itemName, roomLabel ? `- ${roomLabel}` : '']
+    .filter(Boolean)
+    .join(' ');
+}
+
+function buildCustomerOrderItemsStatusLines(order = {}, { title = '' } = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  if (items.length === 0) return [];
+
+  const lines = items.map((item, index) => {
+    const itemStatus = getReadableItemStatus(item);
+    const currentStageLabel = getItemCurrentStageLabel(item);
+    return `- ${getOrderItemDisplayName(item, index)}: ${itemStatus}${currentStageLabel ? `, этап "${currentStageLabel}"` : ''}.`;
+  });
+
+  return [
+    title || (items.length > 1 ? 'Статусы изделий:' : 'Статус изделия:'),
+    ...lines,
+  ];
+}
+
 function getOrderDisplayName(order = {}) {
   return [
     String(order.orderNumber || '').trim(),
@@ -82,6 +138,7 @@ function getCustomerPinPromptText(access = {}) {
     `Здравствуйте, ${getCustomerDisplayName(customer)}.`,
     'Чтобы подключить уведомления по заказу, отправьте PIN-код доступа.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+    ...buildCustomerOrderItemsStatusLines(order),
   ].join('\n');
 }
 
@@ -91,6 +148,7 @@ function getCustomerSubscriptionReadyText(access = {}) {
     `Подписка активирована для ${getCustomerDisplayName(customer)}.`,
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `Текущий статус: ${getReadableOrderStatus(order)}`,
+    ...buildCustomerOrderItemsStatusLines(order),
     'Дальше сюда будут приходить изменения по заказу.',
   ].join('\n');
 }
@@ -254,6 +312,7 @@ async function notifyCustomerOrderCreated(order = {}) {
     'Для вашего заказа подготовлен Telegram-доступ.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `Статус: ${getReadableOrderStatus(order)}`,
+    ...buildCustomerOrderItemsStatusLines(order),
     'После привязки чата сюда будут приходить обновления.',
   ].join('\n');
 
@@ -280,6 +339,7 @@ async function notifyCustomerOrderArchived(order = {}) {
   const text = [
     'Заказ переведен в архив.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+    ...buildCustomerOrderItemsStatusLines(order),
     'Если это было сделано раньше времени, свяжитесь с менеджером.',
   ].join('\n');
   return notifyCustomerOrderStatusText(order, text, {
@@ -293,6 +353,7 @@ async function notifyCustomerOrderRestored(order = {}) {
     'Заказ снова возвращен в работу.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `Текущий статус: ${getReadableOrderStatus(order)}`,
+    ...buildCustomerOrderItemsStatusLines(order),
   ].join('\n');
   return notifyCustomerOrderStatusText(order, text, {
     type: 'order.restored',
@@ -312,6 +373,7 @@ function extractCustomerAccessTokenFromStartText(text = '') {
 
 module.exports = {
   buildCustomerSharePayload,
+  buildCustomerOrderItemsStatusLines,
   CUSTOMER_START_PREFIX,
   extractCustomerAccessTokenFromStartText,
   getCustomerAlreadyLinkedText,
