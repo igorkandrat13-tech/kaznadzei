@@ -4134,14 +4134,6 @@ function OrdersWorkspace() {
 
                 <div className="responsive-form-grid">
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>№ изделия в заказе</label>
-                    <input value={item.itemNumber || 'Автоматически при сохранении'} readOnly />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>№ изделия</label>
-                    <input value={item.productNumber} onChange={handleRoomEditorItemFieldChange(index, 'productNumber')} placeholder="Артикул или код" />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Наименование *</label>
                     <input value={item.name} onChange={handleRoomEditorItemFieldChange(index, 'name')} placeholder="Например: Шкаф, стол, тумба" />
                   </div>
