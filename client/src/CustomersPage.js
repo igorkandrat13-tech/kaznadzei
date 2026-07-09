@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
+import { useGlobalErrorEffect } from './globalErrors';
 import { Button, Modal, ModalHeader } from './ui';
 
 function createEmptyCustomerDraft(name = '') {
@@ -74,6 +75,7 @@ function CustomersPage() {
   const [deletingCustomerId, setDeletingCustomerId] = useState('');
   const authRole = getAppAuthRole();
   const canDeleteCustomers = canAccessRole('admin', authRole);
+  useGlobalErrorEffect(error, 'Ошибка при работе с заказчиками.');
 
   const fetchPageData = useCallback(async () => {
     setLoading(true);

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { apiFetch, parseJsonSafely } from './api';
+import { apiFetch, parseJsonSafely, toUserErrorMessage } from './api';
 import { canAccessRole, clearAppAuthSession, getAppAuthRole, setAppAuthSession, subscribeToAppAuth } from './appAuth';
+import { useGlobalErrorEffect } from './globalErrors';
 
 function Home() {
     const navigate = useNavigate();
@@ -20,6 +21,7 @@ function Home() {
         adminPassword: '',
     });
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
+    useGlobalErrorEffect(authError, 'Ошибка доступа к системе.');
 
     useEffect(() => {
         apiFetch('/api/auth/config')
@@ -96,7 +98,7 @@ function Home() {
             });
             const data = await parseJsonSafely(res);
             if (!res.ok) {
-                setAuthError(data?.message || 'Не удалось сохранить пароли доступа.');
+                setAuthError(toUserErrorMessage(data?.message, 'Не удалось сохранить пароль администратора.'));
                 return;
             }
 
@@ -116,7 +118,7 @@ function Home() {
             setAuthSuccess(data?.message || 'Пароль администратора сохранен.');
             navigate('/orders');
         } catch (error) {
-            setAuthError(error.message || 'Не удалось сохранить пароль администратора.');
+            setAuthError(toUserErrorMessage(error, 'Не удалось сохранить пароль администратора.'));
         } finally {
             setSetupLoading(false);
         }
@@ -140,7 +142,7 @@ function Home() {
             });
             const data = await parseJsonSafely(res);
             if (!res.ok) {
-                setAuthError(data?.message || 'Не удалось выполнить вход.');
+                setAuthError(toUserErrorMessage(data?.message, 'Не удалось выполнить вход.'));
                 return;
             }
 
@@ -152,7 +154,7 @@ function Home() {
             setAuthSuccess('Вход администратора выполнен.');
             navigate('/orders');
         } catch (error) {
-            setAuthError(error.message || 'Не удалось выполнить вход.');
+            setAuthError(toUserErrorMessage(error, 'Не удалось выполнить вход.'));
         } finally {
             setAuthLoading(false);
         }

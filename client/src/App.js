@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes, Link, Navigate, useLocation } f
 import Admin from './Admin';
 import Archive from './Archive';
 import CustomersPage from './CustomersPage';
+import GlobalNoticeLayer from './GlobalNoticeLayer';
 import OrderDetail from './OrderDetail';
 import RoleWorkspacePage from './RoleWorkspacePage';
 import OrdersWorkspace from './OrdersWorkspace';
@@ -15,6 +16,7 @@ import {
 } from './telegramWebApp';
 import { apiFetch } from './api';
 import { canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
+import { showGlobalError } from './globalErrors';
 import { RoleConfigProvider } from './RoleConfigContext';
 import './App.css';
 
@@ -99,6 +101,25 @@ function AppLayout() {
         document.documentElement.style.colorScheme = 'light';
         document.body.dataset.theme = 'light';
         window.localStorage.removeItem('kaznadzei.theme');
+    }, []);
+
+    useEffect(() => {
+        const handleWindowError = (event) => {
+            const message = event?.error || event?.message || 'Произошла ошибка интерфейса.';
+            showGlobalError(message, 'Произошла ошибка интерфейса.');
+        };
+
+        const handleUnhandledRejection = (event) => {
+            showGlobalError(event?.reason, 'Необработанная ошибка при выполнении действия.');
+        };
+
+        window.addEventListener('error', handleWindowError);
+        window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+        return () => {
+            window.removeEventListener('error', handleWindowError);
+            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+        };
     }, []);
 
     useEffect(() => {
@@ -245,6 +266,7 @@ function AppLayout() {
                     <Route path='/' element={<Home />} />
                 </Routes>
             </div>
+            <GlobalNoticeLayer />
         </>
     );
 }

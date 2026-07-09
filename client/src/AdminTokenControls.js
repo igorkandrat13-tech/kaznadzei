@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { apiFetch, parseJsonSafely } from './api';
+import { apiFetch, parseJsonSafely, toUserErrorMessage } from './api';
 import { clearSettingsPinSessionToken, setSettingsPinSessionToken } from './appAuth';
+import { useGlobalErrorEffect } from './globalErrors';
 
 function AdminTokenControls() {
   const [form, setForm] = useState({
@@ -16,6 +17,7 @@ function AdminTokenControls() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
+  useGlobalErrorEffect(error, 'Не удалось изменить параметры доступа к настройкам.');
 
   const fetchConfig = async () => {
     const res = await apiFetch('/api/auth/config');
@@ -57,7 +59,7 @@ function AdminTokenControls() {
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        setError(data?.message || 'Не удалось сохранить пароли доступа.');
+        setError(toUserErrorMessage(data?.message, 'Не удалось сохранить пароль администратора.'));
         return;
       }
       setConfig({
@@ -68,7 +70,7 @@ function AdminTokenControls() {
       setForm({ adminPassword: '' });
       setMessage(data?.message || 'Пароль администратора сохранен.');
     } catch (requestError) {
-      setError(requestError.message || 'Не удалось сохранить пароль администратора.');
+      setError(toUserErrorMessage(requestError, 'Не удалось сохранить пароль администратора.'));
     } finally {
       setSaving(false);
     }
@@ -95,7 +97,7 @@ function AdminTokenControls() {
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        setError(data?.message || 'Не удалось сохранить PIN-код доступа к настройкам.');
+        setError(toUserErrorMessage(data?.message, 'Не удалось сохранить PIN-код доступа к настройкам.'));
         return;
       }
 
@@ -112,7 +114,7 @@ function AdminTokenControls() {
       }
       setMessage(data?.message || 'PIN-код доступа к настройкам сохранен.');
     } catch (requestError) {
-      setError(requestError.message || 'Не удалось сохранить PIN-код доступа к настройкам.');
+      setError(toUserErrorMessage(requestError, 'Не удалось сохранить PIN-код доступа к настройкам.'));
     } finally {
       setSavingPin(false);
     }

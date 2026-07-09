@@ -4,6 +4,7 @@ import AdminTokenControls from './AdminTokenControls';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { clearSettingsPinSessionToken, setSettingsPinSessionToken } from './appAuth';
 import ConfirmDialog from './ConfirmDialog';
+import { useGlobalErrorEffect } from './globalErrors';
 import {
   HelpTooltip,
   SettingsActions,
@@ -119,6 +120,7 @@ function Admin() {
   });
   const [settingsPinValue, setSettingsPinValue] = useState('');
   const [verifyingSettingsPin, setVerifyingSettingsPin] = useState(false);
+  useGlobalErrorEffect(settingsError, 'Ошибка в настройках.');
 
   const [editStep, setEditStep] = useState(null);
   const [editEmployee, setEditEmployee] = useState(null);

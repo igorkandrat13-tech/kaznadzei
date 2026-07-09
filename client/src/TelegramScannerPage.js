@@ -15,6 +15,7 @@ import {
   persistTelegramUnsafeUser,
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
+import { useGlobalErrorEffect } from './globalErrors';
 
 function isRecoverableTelegramSessionMessage(message) {
   const normalized = String(message || '').toLowerCase();
@@ -37,6 +38,7 @@ function TelegramScannerPage() {
   const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
   const [openingScanner, setOpeningScanner] = useState(false);
+  useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
     markTelegramWebAppSession();

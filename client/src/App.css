@@ -93,6 +93,7 @@
   --z-header: 1300;
   --z-header-menu: 1310;
   --z-modal: 2000;
+  --z-global-notice: 2600;
 }
 
 body {
@@ -5034,6 +5035,56 @@ body .attachment-preview-table td {
   background: rgba(20, 66, 53, 0.92);
   color: #aaf1d8;
   border: 1px solid rgba(100, 230, 194, 0.16);
+}
+
+.global-notice-layer {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: var(--z-global-notice);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(460px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.global-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(56, 17, 24, 0.98), rgba(32, 10, 15, 0.96));
+  border: 1px solid rgba(255, 131, 131, 0.34);
+  box-shadow: 0 16px 36px rgba(2, 8, 16, 0.46);
+  color: #ffe7e7;
+  pointer-events: auto;
+}
+
+.global-notice-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.global-notice-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: #ffffff;
+}
+
+.global-notice-message {
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.global-notice-close {
+  min-width: 36px;
+  padding: 6px 8px;
+  align-self: flex-start;
 }
 
 .settings-actions {

@@ -1,4 +1,5 @@
 import { getAppAuthToken, getSettingsPinSessionToken } from './appAuth';
+import { normalizeErrorMessage } from './globalErrors';
 
 const ADMIN_TOKEN_KEY = 'kaznadzei_admin_token';
 
@@ -65,5 +66,12 @@ export async function parseJsonSafely(response) {
 
 export async function getErrorMessage(response, fallbackMessage) {
   const data = await parseJsonSafely(response);
-  return data?.details || data?.message || fallbackMessage;
+  return normalizeErrorMessage(
+    data?.details || data?.message || response?.statusText || '',
+    fallbackMessage
+  );
+}
+
+export function toUserErrorMessage(error, fallbackMessage) {
+  return normalizeErrorMessage(error, fallbackMessage);
 }

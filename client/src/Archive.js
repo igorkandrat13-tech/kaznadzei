@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
+import { useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
 import { formatDateDisplay } from './dateTime';
 import {
@@ -338,6 +339,7 @@ function Archive() {
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const syncingScrollRef = useRef(false);
+  useGlobalErrorEffect(error, 'Ошибка в архиве заказов.');
 
   const fetchOrders = useCallback(() => {
     setError('');

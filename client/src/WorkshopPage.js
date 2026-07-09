@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import ConfirmDialog from './ConfirmDialog';
+import { useGlobalErrorEffect } from './globalErrors';
 import { getOrderComments, getOrderOverallStatus, getOrderPrimaryName } from './orderSelectors';
 import useEscapeKey from './useEscapeKey';
 
@@ -25,6 +26,7 @@ function WorkshopPage({
   const [confirmDeleteComment, setConfirmDeleteComment] = useState(false);
   const [deletingComment, setDeletingComment] = useState(false);
   const [savingComment, setSavingComment] = useState(false);
+  useGlobalErrorEffect(error, 'Ошибка на рабочем экране.');
 
   const fetchOrders = async () => {
     const res = await apiFetch('/api/orders');

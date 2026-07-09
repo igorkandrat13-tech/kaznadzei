@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
+import { showGlobalError, useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
 import { formatDateDisplay, formatDateTimeDisplay } from './dateTime';
 import { useRoleConfig } from './RoleConfigContext';
@@ -777,6 +778,7 @@ function OrdersWorkspace() {
   const [confirmArchive, setConfirmArchive] = useState(null);
   const [archivingOrder, setArchivingOrder] = useState(false);
   const [inlineDrafts, setInlineDrafts] = useState({});
+  useGlobalErrorEffect(error, 'Ошибка при работе с заказами.');
   const [inlineSavingKey, setInlineSavingKey] = useState('');
   const [manualStageSaving, setManualStageSaving] = useState(false);
   const [selectedStageCellKeys, setSelectedStageCellKeys] = useState([]);
@@ -1782,7 +1784,7 @@ function OrdersWorkspace() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (downloadError) {
-      window.alert(downloadError.message || 'Не удалось скачать QR-код.');
+      showGlobalError(downloadError, 'Не удалось скачать QR-код.');
     } finally {
       setDownloadingKey('');
     }
