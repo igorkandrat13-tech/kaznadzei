@@ -8,8 +8,12 @@ const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { sanitizeCustomerInput } = require('../utils/validators');
 const {
   ensureCustomerOrderAccess,
+  getCustomerAccessClosedText,
+  getCustomerKeyboardReplyMarkup,
   getCustomerOrderShare,
+  getCustomerRemoveKeyboardReplyMarkup,
   issueCustomerOrderAccess,
+  sendCustomerTelegramMessage,
 } = require('../services/customerTelegramService');
 
 const router = express.Router();
@@ -194,7 +198,7 @@ router.post('/customers/:id/telegram-access/:orderId/issue', requireManagerAcces
   }
 });
 
-router.post('/customers/:id/telegram-access/:orderId/revoke', requireManagerAccess(), (req, res) => {
+router.post('/customers/:id/telegram-access/:orderId/revoke', requireManagerAccess(), async (req, res) => {
   const customer = CustomerStore.findById(req.params.id);
   if (!customer) {
     return res.status(404).json({ message: 'Заказчик не найден.' });
@@ -208,9 +212,49 @@ router.post('/customers/:id/telegram-access/:orderId/revoke', requireManagerAcce
     return res.status(400).json({ message: 'Этот заказ не привязан к выбранному заказчику.' });
   }
 
+  const accessBeforeRevoke = CustomerTelegramAccessStore.findByCustomerAndOrder(
+    req.params.id,
+    req.params.orderId,
+    { includeRevoked: true }
+  );
   const revokedCount = CustomerTelegramAccessStore.revokeByCustomerAndOrder(req.params.id, req.params.orderId);
   if (!revokedCount) {
     return res.status(400).json({ message: 'Активный Telegram-доступ для этого заказа не найден.' });
+  }
+
+  const linkedByUser = accessBeforeRevoke?.telegramUserId
+    ? CustomerTelegramAccessStore.findLinkedByTelegramUserId(accessBeforeRevoke.telegramUserId)
+    : [];
+  const linkedByChat = accessBeforeRevoke?.telegramChatId
+    ? CustomerTelegramAccessStore.findLinkedByTelegramChatId(accessBeforeRevoke.telegramChatId)
+    : [];
+  const remainingActiveAccesses = Array.from(
+    new Map(
+      [...linkedByUser, ...linkedByChat]
+        .filter((access) => String(access?._id || '').trim() !== String(accessBeforeRevoke?._id || '').trim())
+        .map((access) => [access._id, access])
+    ).values()
+  );
+
+  if (accessBeforeRevoke?.telegramChatId || accessBeforeRevoke?.pendingLinkChatId) {
+    await sendCustomerTelegramMessage({
+      access: accessBeforeRevoke,
+      chatId: accessBeforeRevoke.telegramChatId || accessBeforeRevoke.pendingLinkChatId || '',
+      telegramUserId: accessBeforeRevoke.telegramUserId || accessBeforeRevoke.pendingLinkTelegramUserId || '',
+      type: 'customer.access.revoked',
+      text: getCustomerAccessClosedText(order, {
+        hasOtherAccesses: remainingActiveAccesses.length > 0,
+      }),
+      meta: {
+        event: 'access-revoked',
+        orderNumber: order.orderNumber || '',
+      },
+      extra: {
+        reply_markup: remainingActiveAccesses.length > 0
+          ? getCustomerKeyboardReplyMarkup()
+          : getCustomerRemoveKeyboardReplyMarkup(),
+      },
+    }).catch(() => null);
   }
 
   addActivityLog({

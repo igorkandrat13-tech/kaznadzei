@@ -221,6 +221,12 @@ function getCustomerKeyboardReplyMarkup() {
   };
 }
 
+function getCustomerRemoveKeyboardReplyMarkup() {
+  return {
+    remove_keyboard: true,
+  };
+}
+
 function getCustomerFullOrderText(access = {}) {
   const { order } = getCustomerAccessContext(access);
   return [
@@ -229,6 +235,16 @@ function getCustomerFullOrderText(access = {}) {
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
     ...buildCustomerOrderItemsStatusLines(order),
+  ].filter(Boolean).join('\n');
+}
+
+function getCustomerAccessClosedText(order = {}, { hasOtherAccesses = false } = {}) {
+  return [
+    '🔒 Доступ к заказу закрыт.',
+    `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+    hasOtherAccesses
+      ? 'Уведомления по другим вашим заказам остаются активными.'
+      : 'Уведомления по этому чату отключены.',
   ].filter(Boolean).join('\n');
 }
 
@@ -485,6 +501,8 @@ function extractCustomerAccessTokenFromStartText(text = '') {
 module.exports = {
   buildCustomerSharePayload,
   getCustomerKeyboardReplyMarkup,
+  getCustomerRemoveKeyboardReplyMarkup,
+  getCustomerAccessClosedText,
   getCustomerFullOrderText,
   getCustomerOrderChangedItemsText,
   getCustomerOrderUpdateItemText,

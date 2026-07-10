@@ -110,6 +110,13 @@ function getUnauthorizedReplyMarkup() {
   };
 }
 
+function isCustomerFullOrderRequest(text = '') {
+  const normalizedText = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return normalizedText === 'весь заказ'
+    || normalizedText === 'весьзаказ'
+    || normalizedText === 'заказ целиком';
+}
+
 async function clearTelegramMenuButton(token, chatId) {
   await setChatMenuButton(token, { type: 'default' }).catch(() => null);
   if (chatId) {
@@ -330,7 +337,7 @@ async function processTelegramMessage(token, message) {
   }
 
   if (linkedCustomerAccesses.length > 0) {
-    if (text === 'Весь заказ') {
+    if (isCustomerFullOrderRequest(text)) {
       for (const access of linkedCustomerAccesses) {
         await sendCustomerTelegramMessage({
           access,
