@@ -22,6 +22,7 @@ function normalizeAccessRecord(record = {}) {
     customerId: String(record.customerId || '').trim(),
     orderId: String(record.orderId || '').trim(),
     accessToken: String(record.accessToken || '').trim(),
+    pinCode: String(record.pinCode || '').trim(),
     pinHash: String(record.pinHash || '').trim(),
     pinLast4: String(record.pinLast4 || '').trim(),
     status: normalizeAccessStatus(record.status),
@@ -138,6 +139,74 @@ const CustomerTelegramAccessStore = {
     ));
   },
 
+  ensureAccess({
+    customerId,
+    orderId,
+    createAccessToken,
+    createPinCode,
+    rotateCredentials = false,
+  } = {}) {
+    const normalizedCustomerId = String(customerId || '').trim();
+    const normalizedOrderId = String(orderId || '').trim();
+    if (!normalizedCustomerId || !normalizedOrderId || typeof createAccessToken !== 'function' || typeof createPinCode !== 'function') {
+      throw new Error('Недостаточно данных для подготовки Telegram-доступа заказчику.');
+    }
+
+    const db = load();
+    const accesses = ensureCollection(db);
+    const now = new Date().toISOString();
+    let access = accesses.find((item) => String(item?.orderId || '').trim() === normalizedOrderId) || null;
+
+    if (!access) {
+      access = normalizeAccessRecord({
+        _id: id(),
+        customerId: normalizedCustomerId,
+        orderId: normalizedOrderId,
+        createdAt: now,
+      });
+      accesses.push(access);
+    }
+
+    const currentStatus = normalizeAccessStatus(access.status);
+    const hasReusableCredentials = Boolean(
+      String(access.accessToken || '').trim()
+      && String(access.pinHash || '').trim()
+      && String(access.pinCode || '').trim()
+    );
+    const needsNewCredentials = rotateCredentials || currentStatus !== 'active' || !hasReusableCredentials;
+
+    access.customerId = normalizedCustomerId;
+    access.orderId = normalizedOrderId;
+    access.status = 'active';
+    access.revokedAt = '';
+    access.updatedAt = now;
+
+    if (needsNewCredentials) {
+      const nextAccessToken = String(createAccessToken() || '').trim();
+      const nextPinCode = String(createPinCode() || '').trim();
+      if (!nextAccessToken || !nextPinCode) {
+        throw new Error('Не удалось подготовить токен или PIN для Telegram-доступа.');
+      }
+      access.accessToken = nextAccessToken;
+      access.pinCode = nextPinCode;
+      access.pinHash = hashPassword(nextPinCode);
+      access.pinLast4 = nextPinCode.slice(-4);
+      access.lastIssuedAt = now;
+      clearPendingLink(access);
+    } else {
+      access.pinCode = String(access.pinCode || '').trim();
+      access.pinLast4 = String(access.pinLast4 || '').trim() || access.pinCode.slice(-4);
+      access.lastIssuedAt = String(access.lastIssuedAt || access.createdAt || now).trim();
+    }
+
+    save();
+    return {
+      access: normalizeAccessRecord(access),
+      pinCode: String(access.pinCode || '').trim(),
+      createdNewCredentials: needsNewCredentials,
+    };
+  },
+
   issueAccess({ customerId, orderId, accessToken, pinCode }) {
     const normalizedCustomerId = String(customerId || '').trim();
     const normalizedOrderId = String(orderId || '').trim();
@@ -165,6 +234,7 @@ const CustomerTelegramAccessStore = {
     access.customerId = normalizedCustomerId;
     access.orderId = normalizedOrderId;
     access.accessToken = normalizedAccessToken;
+    access.pinCode = normalizedPinCode;
     access.pinHash = hashPassword(normalizedPinCode);
     access.pinLast4 = normalizedPinCode.slice(-4);
     access.status = 'active';

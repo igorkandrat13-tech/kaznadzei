@@ -103,6 +103,47 @@ function normalizeComparableCustomerName(value = '') {
   return String(value || '').trim().toLowerCase();
 }
 
+function getReadableOrderStatusLabel(status = '') {
+  if (status === 'completed') return 'Завершен';
+  if (status === 'in_progress') return 'В работе';
+  if (status === 'archived') return 'В архиве';
+  return 'Ожидает запуска';
+}
+
+function getReadableItemStatusLabel(status = '') {
+  if (status === 'completed') return 'Готово';
+  if (status === 'in_progress') return 'В работе';
+  return 'Ожидает';
+}
+
+function getOrderAccessItemsSummary(item = {}, order = null) {
+  if (Array.isArray(item?.orderItems) && item.orderItems.length > 0) {
+    return item.orderItems;
+  }
+  return Array.isArray(order?.items)
+    ? order.items.map((entry, index) => ({
+        itemId: entry?.itemId || '',
+        itemNumber: String(entry?.itemNumber || index + 1).trim() || String(index + 1),
+        name: String(entry?.name || '').trim() || `Изделие ${index + 1}`,
+        room: String(entry?.room || '').trim(),
+        roomNumber: String(entry?.roomNumber || '').trim(),
+        status: String(entry?.overallStatus || '').trim() || 'pending',
+        currentStage: Array.isArray(entry?.stages)
+          ? (entry.stages.find((stage) => stage?.status === 'in_progress')?.stepName
+            || [...entry.stages].reverse().find((stage) => stage?.status === 'completed')?.stepName
+            || '')
+          : '',
+      }))
+    : [];
+}
+
+function getAccessItemTitle(item = {}, order = null) {
+  const itemCount = Number(item?.itemCount) || (Array.isArray(order?.items) ? order.items.length : 0);
+  return [item?.orderNumber || order?.orderNumber || 'Без номера', itemCount > 0 ? `${itemCount} изд.` : '']
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function CustomersPage() {
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -470,7 +511,7 @@ function CustomersPage() {
         return;
       }
 
-      const res = await apiFetch(`/api/customers/${customer._id}/telegram-access/${order._id}/regenerate`, {
+      const res = await apiFetch(`/api/customers/${customer._id}/telegram-access/${order._id}/issue`, {
         method: 'POST',
       });
       const data = await parseJsonSafely(res);
@@ -492,8 +533,13 @@ function CustomersPage() {
           deepLinkUrl: data?.deepLinkUrl || '',
           qrDataUrl: data?.qrDataUrl || '',
           botUsername: data?.botUsername || '',
+          createdNewCredentials: Boolean(data?.createdNewCredentials),
         });
-        setSuccessMessage(`Доступ для заказа "${order.orderNumber || order._id}" создан.`);
+        setSuccessMessage(
+          data?.createdNewCredentials
+            ? `Доступ для заказа "${order.orderNumber || order._id}" создан.`
+            : `Открыт существующий доступ для заказа "${order.orderNumber || order._id}".`
+        );
       }
 
       await refreshTelegramAccessModal(customer).catch(() => []);
@@ -645,8 +691,8 @@ function CustomersPage() {
                   {telegramButtonsDisabled
                     ? 'Сначала привяжите к заказчику хотя бы один заказ.'
                     : (customerOrders.length === 1
-                        ? 'Откройте доступ к заказу и создайте клиенту PIN, ссылку и QR-код.'
-                        : 'У заказчика несколько заказов. Откройте модалку и выберите нужный заказ для создания доступа.' )}
+                        ? 'Откройте доступ к заказу: внутри будет PIN, ссылка и QR-код для всего заказа.'
+                        : 'У заказчика несколько заказов. Откройте модалку и выберите нужный заказ целиком.' )}
                 </div>
               </div>
 
@@ -675,7 +721,7 @@ function CustomersPage() {
         <ModalHeader
           title="Доступ заказчика"
           subtitle={telegramAccessModal.customer
-            ? `Выберите заказ для ${telegramAccessModal.customer.fullName || 'заказчика'} и создайте доступ.`
+            ? `Выберите заказ для ${telegramAccessModal.customer.fullName || 'заказчика'} и откройте доступ ко всему заказу.`
             : 'Выберите заказ.'}
           onClose={closeTelegramAccessModal}
           closeDisabled={Boolean(telegramActionLoadingKey)}
@@ -703,19 +749,37 @@ function CustomersPage() {
                 _id: item.orderId,
                 orderNumber: item.orderNumber,
                 archivedAt: item.archivedAt,
+                items: item.orderItems || [],
               };
+              const orderItems = getOrderAccessItemsSummary(item, order);
               return (
                 <div key={item.orderId} className="customer-telegram-order-card">
                   <div className="customer-telegram-order-head">
                     <div>
                       <div className="mobile-order-card-title">
-                        {item.orderNumber || 'Без номера'}{item.orderName ? ` · ${item.orderName}` : ''}
+                        {getAccessItemTitle(item, order)}
                       </div>
                       <div className="mobile-order-card-subtitle">
-                        {item.archivedAt ? 'Архивный заказ' : 'Активный заказ'} · {getTelegramAccessLabel(item.access)}
+                        {getReadableOrderStatusLabel(item.status)} · {getTelegramAccessLabel(item.access)}
                       </div>
                     </div>
                   </div>
+                  {orderItems.length > 0 ? (
+                    <div className="customer-telegram-order-items">
+                      {orderItems.map((orderItem) => (
+                        <div key={`${item.orderId}:${orderItem.itemId || orderItem.itemNumber}`} className="customer-telegram-order-item-row">
+                          <div className="customer-telegram-order-item-name">
+                            {orderItem.itemNumber ? `${orderItem.itemNumber}. ` : ''}{orderItem.name}
+                            {orderItem.roomNumber ? ` · пом. ${orderItem.roomNumber}` : (orderItem.room ? ` · ${orderItem.room}` : '')}
+                          </div>
+                          <div className="customer-telegram-order-item-meta">
+                            {getReadableItemStatusLabel(orderItem.status)}
+                            {orderItem.currentStage ? ` · ${orderItem.currentStage}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="customer-card-actions customer-card-actions-telegram">
                     <Button
                       disabled={telegramActionLoadingKey === `issue:${buttonPrefix}`}
@@ -726,7 +790,9 @@ function CustomersPage() {
                         action: 'issue',
                       })}
                     >
-                      {telegramActionLoadingKey === `issue:${buttonPrefix}` ? 'Создание...' : 'Создать доступ'}
+                      {telegramActionLoadingKey === `issue:${buttonPrefix}`
+                        ? 'Открытие...'
+                        : (item.access?.hasAccess ? 'Открыть доступ' : 'Создать доступ')}
                     </Button>
                     <Button
                       variant="secondary"
@@ -755,7 +821,7 @@ function CustomersPage() {
         className="order-form-modal customer-access-modal"
       >
         <ModalHeader
-          title="Доступ создан"
+          title="Доступ к заказу"
           subtitle={telegramCredentials
             ? `${telegramCredentials.customer?.fullName || 'Заказчик'} · ${telegramCredentials.order?.orderNumber || 'Без номера'}`
             : 'Данные доступа'}
@@ -764,9 +830,13 @@ function CustomersPage() {
 
         {telegramCredentials?.pinCode ? (
           <div className="settings-alert settings-alert-success" style={{ marginBottom: 12 }}>
-            Новый PIN: <strong>{telegramCredentials.pinCode}</strong>
+            {telegramCredentials?.createdNewCredentials ? 'PIN доступа: ' : 'Текущий PIN доступа: '}<strong>{telegramCredentials.pinCode}</strong>
           </div>
         ) : null}
+
+        <div className="customer-telegram-access-note">
+          Заказчик вводит этот PIN один раз при первой привязке Telegram к заказу.
+        </div>
 
         <div className="customer-telegram-share-grid">
           <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>

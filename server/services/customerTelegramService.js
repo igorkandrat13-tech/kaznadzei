@@ -32,6 +32,20 @@ function getReadableOrderStatus(order = {}) {
   return 'ожидает запуска';
 }
 
+function getStatusEmoji(status = '') {
+  const normalizedStatus = String(status || '').trim();
+  if (normalizedStatus === 'completed' || normalizedStatus === 'завершено' || normalizedStatus === 'завершен') {
+    return '✅';
+  }
+  if (normalizedStatus === 'in_progress' || normalizedStatus === 'в работе') {
+    return '🟡';
+  }
+  if (normalizedStatus === 'archived' || normalizedStatus === 'в архиве') {
+    return '📦';
+  }
+  return '⏳';
+}
+
 function getReadableItemStatus(item = {}) {
   const overallStatus = String(
     item?.overallStatus
@@ -44,6 +58,10 @@ function getReadableItemStatus(item = {}) {
   if (overallStatus === 'completed') return 'завершено';
   if (overallStatus === 'in_progress') return 'в работе';
   return 'ожидает запуска';
+}
+
+function getOrderItemCount(order = {}) {
+  return Array.isArray(order?.items) ? order.items.length : 0;
 }
 
 function getItemCurrentStageLabel(item = {}) {
@@ -79,19 +97,43 @@ function buildCustomerOrderItemsStatusLines(order = {}, { title = '' } = {}) {
   const lines = items.map((item, index) => {
     const itemStatus = getReadableItemStatus(item);
     const currentStageLabel = getItemCurrentStageLabel(item);
-    return `- ${getOrderItemDisplayName(item, index)}: ${itemStatus}${currentStageLabel ? `, этап "${currentStageLabel}"` : ''}.`;
+    return `${getStatusEmoji(itemStatus)} ${getOrderItemDisplayName(item, index)}${currentStageLabel ? ` · ${currentStageLabel}` : ` · ${itemStatus}`}`;
   });
 
   return [
-    title || (items.length > 1 ? 'Статусы изделий:' : 'Статус изделия:'),
+    title || (items.length > 1 ? '📋 Изделия:' : '📋 Изделие:'),
     ...lines,
   ];
 }
 
+function buildCustomerOrderProgressSummary(order = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  if (items.length === 0) return '';
+
+  const counts = items.reduce((acc, item) => {
+    const itemStatus = getReadableItemStatus(item);
+    if (itemStatus === 'завершено') {
+      acc.completed += 1;
+    } else if (itemStatus === 'в работе') {
+      acc.inProgress += 1;
+    } else {
+      acc.pending += 1;
+    }
+    return acc;
+  }, {
+    completed: 0,
+    inProgress: 0,
+    pending: 0,
+  });
+
+  return `📦 Изделий: ${items.length} · ✅ ${counts.completed} · 🟡 ${counts.inProgress} · ⏳ ${counts.pending}`;
+}
+
 function getOrderDisplayName(order = {}) {
+  const itemCount = getOrderItemCount(order);
   return [
     String(order.orderNumber || '').trim(),
-    String(OrderStore.getOrderPrimaryName(order) || '').trim(),
+    itemCount > 0 ? `${itemCount} изд.` : '',
   ].filter(Boolean).join(' · ');
 }
 
@@ -135,22 +177,23 @@ async function buildCustomerSharePayload(access = {}) {
 function getCustomerPinPromptText(access = {}) {
   const { customer, order } = getCustomerAccessContext(access);
   return [
-    `Здравствуйте, ${getCustomerDisplayName(customer)}.`,
-    'Чтобы подключить уведомления по заказу, отправьте PIN-код доступа.',
+    `🔐 ${getCustomerDisplayName(customer)}, введите PIN для заказа.`,
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+    buildCustomerOrderProgressSummary(order),
     ...buildCustomerOrderItemsStatusLines(order),
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function getCustomerSubscriptionReadyText(access = {}) {
   const { customer, order } = getCustomerAccessContext(access);
   return [
-    `Подписка активирована для ${getCustomerDisplayName(customer)}.`,
+    `✅ ${getCustomerDisplayName(customer)}, доступ подключен.`,
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `Текущий статус: ${getReadableOrderStatus(order)}`,
+    `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
+    buildCustomerOrderProgressSummary(order),
     ...buildCustomerOrderItemsStatusLines(order),
-    'Дальше сюда будут приходить изменения по заказу.',
-  ].join('\n');
+    'Дальше сюда будут приходить обновления по всем изделиям заказа.',
+  ].filter(Boolean).join('\n');
 }
 
 function getCustomerAlreadyLinkedText(accesses = []) {
@@ -163,12 +206,12 @@ function getCustomerAlreadyLinkedText(accesses = []) {
     .filter(Boolean);
 
   if (lines.length === 0) {
-    return 'У вас уже подключены уведомления по заказу.';
+    return '✅ Уведомления по заказу уже подключены.';
   }
 
   return [
-    'У вас уже подключены уведомления по следующим заказам:',
-    ...lines.map((line) => `- ${line}`),
+    '✅ Уведомления уже подключены:',
+    ...lines.map((line) => `• ${line}`),
   ].join('\n');
 }
 
@@ -257,7 +300,7 @@ async function sendCustomerTelegramMessage({
   }
 }
 
-async function issueCustomerOrderAccess({ customerId, orderId } = {}) {
+function resolveCustomerOrderAccessContext({ customerId, orderId } = {}) {
   const normalizedCustomerId = String(customerId || '').trim();
   const normalizedOrderId = String(orderId || '').trim();
   if (!normalizedCustomerId || !normalizedOrderId) {
@@ -277,20 +320,35 @@ async function issueCustomerOrderAccess({ customerId, orderId } = {}) {
     throw new Error('Этот заказ не привязан к выбранному заказчику.');
   }
 
-  const pinCode = createPinCode();
-  const access = CustomerTelegramAccessStore.issueAccess({
+  return {
+    customer,
+    order,
     customerId: normalizedCustomerId,
     orderId: normalizedOrderId,
-    accessToken: createAccessToken(),
-    pinCode,
+  };
+}
+
+async function ensureCustomerOrderAccess({ customerId, orderId, rotateCredentials = false } = {}) {
+  const context = resolveCustomerOrderAccessContext({ customerId, orderId });
+  const prepared = CustomerTelegramAccessStore.ensureAccess({
+    customerId: context.customerId,
+    orderId: context.orderId,
+    createAccessToken,
+    createPinCode,
+    rotateCredentials,
   });
-  const share = await buildCustomerSharePayload(access);
+  const share = await buildCustomerSharePayload(prepared.access);
 
   return {
-    access,
-    pinCode,
+    access: prepared.access,
+    pinCode: prepared.pinCode,
+    createdNewCredentials: prepared.createdNewCredentials,
     ...share,
   };
+}
+
+async function issueCustomerOrderAccess({ customerId, orderId } = {}) {
+  return ensureCustomerOrderAccess({ customerId, orderId, rotateCredentials: true });
 }
 
 async function getCustomerOrderShare(orderId) {
@@ -309,12 +367,13 @@ async function notifyCustomerOrderCreated(order = {}) {
   if (!access) return null;
 
   const text = [
-    'Для вашего заказа подготовлен Telegram-доступ.',
+    '🔗 Доступ к заказу готов.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `Статус: ${getReadableOrderStatus(order)}`,
+    `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
+    buildCustomerOrderProgressSummary(order),
     ...buildCustomerOrderItemsStatusLines(order),
     'После привязки чата сюда будут приходить обновления.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   return sendCustomerTelegramMessage({
     access,
@@ -337,11 +396,11 @@ async function notifyCustomerOrderStatusText(order = {}, text = '', { type = 'or
 
 async function notifyCustomerOrderArchived(order = {}) {
   const text = [
-    'Заказ переведен в архив.',
+    '📦 Заказ переведен в архив.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+    buildCustomerOrderProgressSummary(order),
     ...buildCustomerOrderItemsStatusLines(order),
-    'Если это было сделано раньше времени, свяжитесь с менеджером.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   return notifyCustomerOrderStatusText(order, text, {
     type: 'order.archived',
     meta: { orderNumber: order.orderNumber || '' },
@@ -350,11 +409,12 @@ async function notifyCustomerOrderArchived(order = {}) {
 
 async function notifyCustomerOrderRestored(order = {}) {
   const text = [
-    'Заказ снова возвращен в работу.',
+    '↩️ Заказ снова в работе.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `Текущий статус: ${getReadableOrderStatus(order)}`,
+    `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
+    buildCustomerOrderProgressSummary(order),
     ...buildCustomerOrderItemsStatusLines(order),
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   return notifyCustomerOrderStatusText(order, text, {
     type: 'order.restored',
     meta: { orderNumber: order.orderNumber || '' },
@@ -374,6 +434,8 @@ function extractCustomerAccessTokenFromStartText(text = '') {
 module.exports = {
   buildCustomerSharePayload,
   buildCustomerOrderItemsStatusLines,
+  buildCustomerOrderProgressSummary,
+  ensureCustomerOrderAccess,
   CUSTOMER_START_PREFIX,
   extractCustomerAccessTokenFromStartText,
   getCustomerAlreadyLinkedText,

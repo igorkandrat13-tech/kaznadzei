@@ -21,6 +21,7 @@ const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { notifyOrderCreated } = require('../services/orderNotifications');
 const {
   buildCustomerOrderItemsStatusLines,
+  buildCustomerOrderProgressSummary,
   notifyCustomerOrderArchived,
   notifyCustomerOrderCreated,
   notifyCustomerOrderRestored,
@@ -248,19 +249,18 @@ function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], s
         const item = OrderStore.getOrderItem(order, selection.itemId);
         const itemLabel = String(item?.name || '').trim() || `Изделие ${selection.itemId}`;
         const columnLabel = getManualStageCellLabel(selection.columnKey, settings);
-        return `${clear ? 'Снят' : 'Отмечен'} этап "${columnLabel}" по изделию "${itemLabel}".`;
+        return `${clear ? '↩️' : '✅'} ${itemLabel} · ${columnLabel}`;
       });
 
       return {
         order,
         text: [
-          'Статус заказа обновлен.',
-          `Заказ: ${order.orderNumber || 'не указан'}${OrderStore.getOrderPrimaryName(order) ? ` · ${OrderStore.getOrderPrimaryName(order)}` : ''}`,
+          '🛠 Обновление по заказу',
+          `Заказ: ${order.orderNumber || 'не указан'}`,
+          buildCustomerOrderProgressSummary(order),
           ...lines,
-          `Текущий статус заказа: ${getOrderStatusSummary(order)}.`,
           ...buildCustomerOrderItemsStatusLines(order),
-          `Источник обновления: ${source === 'telegram' ? 'Telegram' : 'админка'}.`,
-        ].join('\n'),
+          ].filter(Boolean).join('\n'),
       };
     })
     .filter(Boolean);

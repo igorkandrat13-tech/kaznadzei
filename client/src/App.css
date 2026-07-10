@@ -613,6 +613,33 @@ table tr:hover td {
   margin-bottom: 10px;
 }
 
+.customer-telegram-order-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.customer-telegram-order-item-row {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(226, 238, 249, 0.75);
+  border: 1px solid rgba(111, 156, 203, 0.16);
+}
+
+.customer-telegram-order-item-name {
+  color: #183b63;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.customer-telegram-order-item-meta {
+  margin-top: 4px;
+  color: rgba(61, 91, 121, 0.84);
+  font-size: 13px;
+  word-break: break-word;
+}
+
 .customer-telegram-result {
   margin-top: 12px;
   padding-top: 12px;
@@ -645,6 +672,15 @@ table tr:hover td {
 .customer-telegram-inline-actions {
   margin-top: 0;
   padding-top: 0;
+}
+
+.customer-telegram-access-note {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(226, 238, 249, 0.72);
+  border: 1px solid rgba(111, 156, 203, 0.16);
+  color: #35597f;
 }
 
 .customer-telegram-log-meta {

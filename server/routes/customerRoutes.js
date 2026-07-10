@@ -7,6 +7,7 @@ const { requireManagerAccess, requireAdminAccess } = require('../middleware/secu
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { sanitizeCustomerInput } = require('../utils/validators');
 const {
+  ensureCustomerOrderAccess,
   getCustomerOrderShare,
   issueCustomerOrderAccess,
 } = require('../services/customerTelegramService');
@@ -45,6 +46,44 @@ function mapAccessSummary(access = null) {
   };
 }
 
+function getReadableOrderStatus(order = {}) {
+  const status = String(OrderStore.getOrderOverallStatus(order) || '').trim();
+  if (String(order?.archivedAt || '').trim()) return 'archived';
+  if (status === 'completed') return 'completed';
+  if (status === 'in_progress') return 'in_progress';
+  return 'pending';
+}
+
+function getItemCurrentStageLabel(item = {}) {
+  const stages = Array.isArray(item?.stages) ? item.stages : [];
+  const activeStage = stages.find((stage) => stage?.status === 'in_progress');
+  if (String(activeStage?.stepName || '').trim()) {
+    return String(activeStage.stepName).trim();
+  }
+  const completedStage = [...stages].reverse().find((stage) => stage?.status === 'completed');
+  return String(completedStage?.stepName || '').trim();
+}
+
+function mapOrderItems(order = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  return items.map((item, index) => ({
+    itemId: item?.itemId || '',
+    itemNumber: String(item?.itemNumber || index + 1).trim() || String(index + 1),
+    name: String(item?.name || '').trim() || `Изделие ${index + 1}`,
+    room: String(item?.room || '').trim(),
+    roomNumber: String(item?.roomNumber || '').trim(),
+    status: String(
+      item?.overallStatus
+        || OrderStore.calculateItemOverallStatus(
+          Array.isArray(item?.stages) ? item.stages : [],
+          item?.manualStageMarks || {}
+        )
+        || ''
+    ).trim() || 'pending',
+    currentStage: getItemCurrentStageLabel(item),
+  }));
+}
+
 router.get('/customers', requireManagerAccess(), (req, res) => {
   res.json(CustomerStore.findAll());
 });
@@ -61,10 +100,12 @@ router.get('/customers/:id/telegram-access', requireManagerAccess(), (req, res) 
     return {
       orderId: order._id,
       orderNumber: order.orderNumber || '',
-      orderName: OrderStore.getOrderPrimaryName(order) || '',
+      orderName: '',
       archivedAt: order.archivedAt || '',
       updatedAt: order.updatedAt || order.createdAt || '',
-      status: OrderStore.getOrderOverallStatus(order) || 'pending',
+      status: getReadableOrderStatus(order),
+      itemCount: Array.isArray(order.items) ? order.items.length : 0,
+      orderItems: mapOrderItems(order),
       access: mapAccessSummary(access),
     };
   });
@@ -111,6 +152,45 @@ router.post('/customers/:id/telegram-access/:orderId/regenerate', requireManager
     });
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message || 'Не удалось выпустить Telegram-доступ.' });
+  }
+});
+
+router.post('/customers/:id/telegram-access/:orderId/issue', requireManagerAccess(), async (req, res) => {
+  try {
+    const payload = await ensureCustomerOrderAccess({
+      customerId: req.params.id,
+      orderId: req.params.orderId,
+    });
+    const order = OrderStore.findById(req.params.orderId);
+
+    addActivityLog({
+      action: 'customer.telegram-access.ensure',
+      entityType: 'order',
+      entityId: req.params.orderId,
+      entityName: order?.orderNumber || '',
+      actor: getRequestActor(req),
+      message: payload.createdNewCredentials
+        ? 'Для заказчика создан Telegram-доступ.'
+        : 'Открыт существующий Telegram-доступ заказчика.',
+      details: {
+        customerId: req.params.id,
+        accessId: payload.access._id,
+        pinLast4: payload.access.pinLast4 || '',
+        createdNewCredentials: payload.createdNewCredentials,
+      },
+    });
+
+    res.json({
+      ok: true,
+      access: mapAccessSummary(payload.access),
+      pinCode: payload.pinCode,
+      deepLinkUrl: payload.deepLinkUrl,
+      qrDataUrl: payload.qrDataUrl,
+      botUsername: payload.botUsername,
+      createdNewCredentials: payload.createdNewCredentials,
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось подготовить Telegram-доступ.' });
   }
 });
 
