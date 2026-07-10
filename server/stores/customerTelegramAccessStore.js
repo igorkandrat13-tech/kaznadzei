@@ -395,6 +395,33 @@ const CustomerTelegramAccessStore = {
     }
     return revokedCount;
   },
+
+  revokeByCustomerAndOrder(customerId, orderId) {
+    const normalizedCustomerId = String(customerId || '').trim();
+    const normalizedOrderId = String(orderId || '').trim();
+    if (!normalizedCustomerId || !normalizedOrderId) return 0;
+
+    const db = load();
+    const accesses = ensureCollection(db);
+    const now = new Date().toISOString();
+    let revokedCount = 0;
+
+    for (const access of accesses) {
+      if (String(access.customerId || '').trim() !== normalizedCustomerId) continue;
+      if (String(access.orderId || '').trim() !== normalizedOrderId) continue;
+      if (normalizeAccessStatus(access.status) === 'revoked') continue;
+      access.status = 'revoked';
+      access.revokedAt = now;
+      access.updatedAt = now;
+      clearPendingLink(access);
+      revokedCount += 1;
+    }
+
+    if (revokedCount > 0) {
+      save();
+    }
+    return revokedCount;
+  },
 };
 
 module.exports = CustomerTelegramAccessStore;

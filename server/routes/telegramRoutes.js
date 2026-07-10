@@ -17,6 +17,8 @@ const {
 const {
   extractCustomerAccessTokenFromStartText,
   getCustomerAlreadyLinkedText,
+  getCustomerFullOrderText,
+  getCustomerKeyboardReplyMarkup,
   getCustomerPinPromptText,
   getCustomerSubscriptionReadyText,
   sendCustomerTelegramMessage,
@@ -246,6 +248,7 @@ async function processTelegramMessage(token, message) {
           type: 'customer.start.already-linked',
           text: getCustomerSubscriptionReadyText(access),
           meta: { event: 'already-linked' },
+        extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
         });
         return;
       }
@@ -272,6 +275,7 @@ async function processTelegramMessage(token, message) {
         type: 'customer.start.summary',
         text: getCustomerAlreadyLinkedText(linkedCustomerAccesses),
         meta: { event: 'linked-summary' },
+        extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
       });
       return;
     }
@@ -320,11 +324,27 @@ async function processTelegramMessage(token, message) {
       type: 'customer.pin.success',
       text: getCustomerSubscriptionReadyText(linkedAccess),
       meta: { event: 'pin-success' },
+      extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
     });
     return;
   }
 
   if (linkedCustomerAccesses.length > 0) {
+    if (text === 'Весь заказ') {
+      for (const access of linkedCustomerAccesses) {
+        await sendCustomerTelegramMessage({
+          access,
+          chatId,
+          telegramUserId: from.id,
+          type: 'customer.order.full',
+          text: getCustomerFullOrderText(access),
+          meta: { event: 'full-order' },
+          extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
+        });
+      }
+      return;
+    }
+
     await sendCustomerTelegramMessage({
       access: linkedCustomerAccesses[0],
       chatId,
@@ -332,6 +352,7 @@ async function processTelegramMessage(token, message) {
       type: 'customer.linked.info',
       text: getCustomerAlreadyLinkedText(linkedCustomerAccesses),
       meta: { event: 'linked-info' },
+      extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
     });
     return;
   }

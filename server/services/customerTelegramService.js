@@ -180,7 +180,6 @@ function getCustomerPinPromptText(access = {}) {
     `🔐 ${getCustomerDisplayName(customer)}, введите PIN для заказа.`,
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     buildCustomerOrderProgressSummary(order),
-    ...buildCustomerOrderItemsStatusLines(order),
   ].filter(Boolean).join('\n');
 }
 
@@ -191,8 +190,7 @@ function getCustomerSubscriptionReadyText(access = {}) {
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
-    ...buildCustomerOrderItemsStatusLines(order),
-    'Дальше обновления по заказу будут приходить сюда.',
+    'Для полного списка изделий нажмите "Весь заказ".',
   ].filter(Boolean).join('\n');
 }
 
@@ -212,7 +210,59 @@ function getCustomerAlreadyLinkedText(accesses = []) {
   return [
     '✅ Уведомления уже подключены:',
     ...lines.map((line) => `• ${line}`),
+    'Для полного списка изделий нажмите "Весь заказ".',
   ].join('\n');
+}
+
+function getCustomerKeyboardReplyMarkup() {
+  return {
+    keyboard: [[{ text: 'Весь заказ' }]],
+    resize_keyboard: true,
+  };
+}
+
+function getCustomerFullOrderText(access = {}) {
+  const { order } = getCustomerAccessContext(access);
+  return [
+    `📋 Весь заказ`,
+    `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+    `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
+    buildCustomerOrderProgressSummary(order),
+    ...buildCustomerOrderItemsStatusLines(order),
+  ].filter(Boolean).join('\n');
+}
+
+function getCustomerOrderUpdateItemText(order = {}, item = {}, stageLabel = '', { clear = false } = {}) {
+  const itemStatus = getReadableItemStatus(item);
+  return [
+    '🛠 Обновление по заказу',
+    `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+    `${clear ? '↩️' : '✅'} ${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}`,
+    `${getStatusEmoji(itemStatus)} Статус изделия: ${itemStatus}`,
+    'Для полного списка изделий нажмите "Весь заказ".',
+  ].filter(Boolean).join('\n');
+}
+
+function getCustomerOrderChangedItemsText(order = {}, changedItems = [], { clear = false } = {}) {
+  const normalizedItems = (Array.isArray(changedItems) ? changedItems : [])
+    .filter((entry) => entry?.item);
+  if (normalizedItems.length === 0) {
+    return [
+      '🛠 Обновление по заказу',
+      `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+      'Для полного списка изделий нажмите "Весь заказ".',
+    ].filter(Boolean).join('\n');
+  }
+
+  return [
+    '🛠 Обновление по заказу',
+    `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
+    ...normalizedItems.map(({ item, stageLabel }) => {
+      const itemStatus = getReadableItemStatus(item);
+      return `${clear ? '↩️' : '✅'} ${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}\n${getStatusEmoji(itemStatus)} Статус изделия: ${itemStatus}`;
+    }),
+    'Для полного списка изделий нажмите "Весь заказ".',
+  ].filter(Boolean).join('\n');
 }
 
 async function sendCustomerTelegramMessage({
@@ -222,6 +272,7 @@ async function sendCustomerTelegramMessage({
   text = '',
   type = 'message',
   meta = {},
+  extra = {},
 } = {}) {
   const normalizedText = String(text || '').trim();
   if (!normalizedText) {
@@ -270,7 +321,7 @@ async function sendCustomerTelegramMessage({
   }
 
   try {
-    await sendMessage(token, effectiveChatId, normalizedText);
+    await sendMessage(token, effectiveChatId, normalizedText, extra);
     const logEntry = CustomerTelegramLogStore.add({
       customerId: normalizedAccess.customerId,
       orderId: normalizedAccess.orderId,
@@ -371,7 +422,6 @@ async function notifyCustomerOrderCreated(order = {}) {
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
-    ...buildCustomerOrderItemsStatusLines(order),
     'После привязки чата обновления придут сюда.',
   ].filter(Boolean).join('\n');
 
@@ -391,6 +441,7 @@ async function notifyCustomerOrderStatusText(order = {}, text = '', { type = 'or
     text,
     type,
     meta,
+    extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
   });
 }
 
@@ -399,7 +450,7 @@ async function notifyCustomerOrderArchived(order = {}) {
     '📦 Заказ переведен в архив.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     buildCustomerOrderProgressSummary(order),
-    ...buildCustomerOrderItemsStatusLines(order),
+    'Для полного списка изделий нажмите "Весь заказ".',
   ].filter(Boolean).join('\n');
   return notifyCustomerOrderStatusText(order, text, {
     type: 'order.archived',
@@ -413,7 +464,7 @@ async function notifyCustomerOrderRestored(order = {}) {
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
-    ...buildCustomerOrderItemsStatusLines(order),
+    'Для полного списка изделий нажмите "Весь заказ".',
   ].filter(Boolean).join('\n');
   return notifyCustomerOrderStatusText(order, text, {
     type: 'order.restored',
@@ -433,6 +484,10 @@ function extractCustomerAccessTokenFromStartText(text = '') {
 
 module.exports = {
   buildCustomerSharePayload,
+  getCustomerKeyboardReplyMarkup,
+  getCustomerFullOrderText,
+  getCustomerOrderChangedItemsText,
+  getCustomerOrderUpdateItemText,
   buildCustomerOrderItemsStatusLines,
   buildCustomerOrderProgressSummary,
   ensureCustomerOrderAccess,

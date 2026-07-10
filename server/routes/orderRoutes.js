@@ -20,8 +20,8 @@ const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { notifyOrderCreated } = require('../services/orderNotifications');
 const {
-  buildCustomerOrderItemsStatusLines,
-  buildCustomerOrderProgressSummary,
+  getCustomerOrderChangedItemsText,
+  getCustomerOrderUpdateItemText,
   notifyCustomerOrderArchived,
   notifyCustomerOrderCreated,
   notifyCustomerOrderRestored,
@@ -244,23 +244,23 @@ function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], s
     .map((order) => {
       const orderSelections = groupedSelections.get(String(order?._id || '').trim()) || [];
       if (orderSelections.length === 0) return null;
-
-      const lines = orderSelections.map((selection) => {
-        const item = OrderStore.getOrderItem(order, selection.itemId);
-        const itemLabel = String(item?.name || '').trim() || `Изделие ${selection.itemId}`;
-        const columnLabel = getManualStageCellLabel(selection.columnKey, settings);
-        return `${clear ? '↩️' : '✅'} ${itemLabel} · ${columnLabel}`;
-      });
+      const changedItems = orderSelections
+        .map((selection) => {
+          const item = OrderStore.getOrderItem(order, selection.itemId);
+          if (!item) return null;
+          return {
+            item,
+            stageLabel: getManualStageCellLabel(selection.columnKey, settings),
+          };
+        })
+        .filter(Boolean);
+      if (changedItems.length === 0) return null;
 
       return {
         order,
-        text: [
-          '🛠 Обновление по заказу',
-          `Заказ: ${order.orderNumber || 'не указан'}`,
-          buildCustomerOrderProgressSummary(order),
-          ...lines,
-          ...buildCustomerOrderItemsStatusLines(order),
-          ].filter(Boolean).join('\n'),
+        text: changedItems.length === 1
+          ? getCustomerOrderUpdateItemText(order, changedItems[0].item, changedItems[0].stageLabel, { clear })
+          : getCustomerOrderChangedItemsText(order, changedItems, { clear }),
       };
     })
     .filter(Boolean);

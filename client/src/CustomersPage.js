@@ -175,6 +175,7 @@ function CustomersPage() {
   const [customerSaving, setCustomerSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deletingCustomerId, setDeletingCustomerId] = useState('');
+  const [confirmTelegramAccessClose, setConfirmTelegramAccessClose] = useState(null);
   const [telegramAccessModal, setTelegramAccessModal] = useState({
     open: false,
     customer: null,
@@ -532,7 +533,9 @@ function CustomersPage() {
 
       const endpoint = action === 'rotate'
         ? `/api/customers/${customer._id}/telegram-access/${order._id}/regenerate`
-        : `/api/customers/${customer._id}/telegram-access/${order._id}/issue`;
+        : action === 'revoke'
+          ? `/api/customers/${customer._id}/telegram-access/${order._id}/revoke`
+          : `/api/customers/${customer._id}/telegram-access/${order._id}/issue`;
 
       const res = await apiFetch(endpoint, {
         method: 'POST',
@@ -565,6 +568,14 @@ function CustomersPage() {
                 ? `Доступ для заказа "${order.orderNumber || order._id}" создан.`
                 : `Открыт существующий доступ для заказа "${order.orderNumber || order._id}".`)
         );
+      }
+
+      if (action === 'revoke') {
+        setTelegramCredentials((current) => (
+          current?.order?._id === order._id ? null : current
+        ));
+        setConfirmTelegramAccessClose(null);
+        setSuccessMessage(`Доступ для заказа "${order.orderNumber || order._id}" закрыт.`);
       }
 
       await refreshTelegramAccessModal(customer).catch(() => []);
@@ -600,6 +611,20 @@ function CustomersPage() {
       logs: [],
       loading: false,
       error: '',
+    });
+  };
+
+  const requestTelegramAccessClose = (payload) => {
+    setConfirmTelegramAccessClose(payload || null);
+  };
+
+  const handleConfirmTelegramAccessClose = async () => {
+    if (!confirmTelegramAccessClose?.customer || !confirmTelegramAccessClose?.order) return;
+    await runTelegramAction({
+      customer: confirmTelegramAccessClose.customer,
+      order: confirmTelegramAccessClose.order,
+      access: confirmTelegramAccessClose.access,
+      action: 'revoke',
     });
   };
 
@@ -835,20 +860,6 @@ function CustomersPage() {
                     >
                       {telegramActionLoadingKey === `logs:${buttonPrefix}` ? 'Загрузка...' : 'Логи'}
                     </Button>
-                    {item.access?.hasAccess ? (
-                      <Button
-                        variant="secondary"
-                        disabled={telegramActionLoadingKey === `rotate:${buttonPrefix}`}
-                        onClick={() => runTelegramAction({
-                          customer: telegramAccessModal.customer,
-                          order,
-                          access: item.access,
-                          action: 'rotate',
-                        })}
-                      >
-                        {telegramActionLoadingKey === `rotate:${buttonPrefix}` ? 'Перевыпуск...' : 'Перевыпустить PIN'}
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
               );
@@ -918,6 +929,19 @@ function CustomersPage() {
                 })}
               >
                 {telegramActionLoadingKey === `rotate:${telegramCredentials.order._id}` ? 'Перевыпуск...' : 'Перевыпустить PIN'}
+              </Button>
+            ) : null}
+            {telegramCredentials?.access?.hasAccess ? (
+              <Button
+                variant="danger"
+                disabled={telegramActionLoadingKey === `revoke:${telegramCredentials.order?._id || ''}`}
+                onClick={() => requestTelegramAccessClose({
+                  customer: telegramCredentials.customer,
+                  order: telegramCredentials.order,
+                  access: telegramCredentials.access,
+                })}
+              >
+                Закрыть доступ
               </Button>
             ) : null}
           </div>
@@ -1067,6 +1091,18 @@ function CustomersPage() {
         onConfirm={handleDeleteCustomer}
         onCancel={() => !deletingCustomerId && setConfirmDelete(null)}
         loading={Boolean(deletingCustomerId)}
+        variant="danger"
+      />
+      <ConfirmDialog
+        open={Boolean(confirmTelegramAccessClose)}
+        title="Закрыть доступ заказчика?"
+        message={confirmTelegramAccessClose
+          ? `Заказчик перестанет получать уведомления по заказу "${confirmTelegramAccessClose.order?.orderNumber || 'Без номера'}" в Telegram. Действие потребует повторного создания доступа.`
+          : ''}
+        confirmLabel="Закрыть доступ"
+        onConfirm={handleConfirmTelegramAccessClose}
+        onCancel={() => !telegramActionLoadingKey && setConfirmTelegramAccessClose(null)}
+        loading={Boolean(telegramActionLoadingKey && confirmTelegramAccessClose)}
         variant="danger"
       />
     </div>

@@ -194,6 +194,41 @@ router.post('/customers/:id/telegram-access/:orderId/issue', requireManagerAcces
   }
 });
 
+router.post('/customers/:id/telegram-access/:orderId/revoke', requireManagerAccess(), (req, res) => {
+  const customer = CustomerStore.findById(req.params.id);
+  if (!customer) {
+    return res.status(404).json({ message: 'Заказчик не найден.' });
+  }
+
+  const order = OrderStore.findById(req.params.orderId);
+  if (!order) {
+    return res.status(404).json({ message: 'Заказ не найден.' });
+  }
+  if (!CustomerStore.isOrderLinked(req.params.id, order)) {
+    return res.status(400).json({ message: 'Этот заказ не привязан к выбранному заказчику.' });
+  }
+
+  const revokedCount = CustomerTelegramAccessStore.revokeByCustomerAndOrder(req.params.id, req.params.orderId);
+  if (!revokedCount) {
+    return res.status(400).json({ message: 'Активный Telegram-доступ для этого заказа не найден.' });
+  }
+
+  addActivityLog({
+    action: 'customer.telegram-access.revoke',
+    entityType: 'order',
+    entityId: req.params.orderId,
+    entityName: order?.orderNumber || '',
+    actor: getRequestActor(req),
+    message: 'Telegram-доступ заказчика закрыт.',
+    details: {
+      customerId: req.params.id,
+      orderId: req.params.orderId,
+    },
+  });
+
+  return res.json({ ok: true });
+});
+
 router.get('/customers/:id/telegram-access/:orderId/share', requireManagerAccess(), async (req, res) => {
   try {
     const customer = CustomerStore.findById(req.params.id);
