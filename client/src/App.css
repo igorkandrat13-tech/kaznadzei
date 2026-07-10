@@ -610,7 +610,40 @@ table tr:hover td {
 }
 
 .customer-telegram-order-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 10px;
+}
+
+.customer-telegram-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.customer-telegram-status-success {
+  background: rgba(65, 153, 106, 0.14);
+  color: #247147;
+  border: 1px solid rgba(65, 153, 106, 0.22);
+}
+
+.customer-telegram-status-warning {
+  background: rgba(201, 142, 42, 0.14);
+  color: #8b5a09;
+  border: 1px solid rgba(201, 142, 42, 0.22);
+}
+
+.customer-telegram-status-idle {
+  background: rgba(89, 114, 145, 0.12);
+  color: #4f6786;
+  border: 1px solid rgba(89, 114, 145, 0.18);
 }
 
 .customer-telegram-order-items {
@@ -737,6 +770,10 @@ table tr:hover td {
 @media (max-width: 767px) {
   .customer-card-list {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .customer-telegram-order-head {
+    flex-direction: column;
   }
 }
 

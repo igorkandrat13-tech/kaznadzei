@@ -99,6 +99,25 @@ function getTelegramAccessLabel(access = null) {
   ].filter(Boolean).join(' · ');
 }
 
+function getTelegramAccessStatusMeta(access = null) {
+  if (!access?.hasAccess) {
+    return {
+      label: 'Доступ не создан',
+      tone: 'idle',
+    };
+  }
+  if (access.telegramLinkedAt) {
+    return {
+      label: 'Telegram подключен',
+      tone: 'success',
+    };
+  }
+  return {
+    label: 'Ожидает привязки',
+    tone: 'warning',
+  };
+}
+
 function normalizeComparableCustomerName(value = '') {
   return String(value || '').trim().toLowerCase();
 }
@@ -511,7 +530,11 @@ function CustomersPage() {
         return;
       }
 
-      const res = await apiFetch(`/api/customers/${customer._id}/telegram-access/${order._id}/issue`, {
+      const endpoint = action === 'rotate'
+        ? `/api/customers/${customer._id}/telegram-access/${order._id}/regenerate`
+        : `/api/customers/${customer._id}/telegram-access/${order._id}/issue`;
+
+      const res = await apiFetch(endpoint, {
         method: 'POST',
       });
       const data = await parseJsonSafely(res);
@@ -524,7 +547,7 @@ function CustomersPage() {
         }));
       }
 
-      if (action === 'issue') {
+      if (action === 'issue' || action === 'rotate') {
         setTelegramCredentials({
           customer,
           order,
@@ -533,12 +556,14 @@ function CustomersPage() {
           deepLinkUrl: data?.deepLinkUrl || '',
           qrDataUrl: data?.qrDataUrl || '',
           botUsername: data?.botUsername || '',
-          createdNewCredentials: Boolean(data?.createdNewCredentials),
+          createdNewCredentials: Boolean(data?.createdNewCredentials || action === 'rotate'),
         });
         setSuccessMessage(
-          data?.createdNewCredentials
-            ? `Доступ для заказа "${order.orderNumber || order._id}" создан.`
-            : `Открыт существующий доступ для заказа "${order.orderNumber || order._id}".`
+          action === 'rotate'
+            ? `PIN для заказа "${order.orderNumber || order._id}" перевыпущен.`
+            : (data?.createdNewCredentials
+                ? `Доступ для заказа "${order.orderNumber || order._id}" создан.`
+                : `Открыт существующий доступ для заказа "${order.orderNumber || order._id}".`)
         );
       }
 
@@ -752,6 +777,7 @@ function CustomersPage() {
                 items: item.orderItems || [],
               };
               const orderItems = getOrderAccessItemsSummary(item, order);
+              const accessStatus = getTelegramAccessStatusMeta(item.access);
               return (
                 <div key={item.orderId} className="customer-telegram-order-card">
                   <div className="customer-telegram-order-head">
@@ -762,6 +788,9 @@ function CustomersPage() {
                       <div className="mobile-order-card-subtitle">
                         {getReadableOrderStatusLabel(item.status)} · {getTelegramAccessLabel(item.access)}
                       </div>
+                    </div>
+                    <div className={`customer-telegram-status-badge customer-telegram-status-${accessStatus.tone}`}>
+                      {accessStatus.label}
                     </div>
                   </div>
                   {orderItems.length > 0 ? (
@@ -806,6 +835,20 @@ function CustomersPage() {
                     >
                       {telegramActionLoadingKey === `logs:${buttonPrefix}` ? 'Загрузка...' : 'Логи'}
                     </Button>
+                    {item.access?.hasAccess ? (
+                      <Button
+                        variant="secondary"
+                        disabled={telegramActionLoadingKey === `rotate:${buttonPrefix}`}
+                        onClick={() => runTelegramAction({
+                          customer: telegramAccessModal.customer,
+                          order,
+                          access: item.access,
+                          action: 'rotate',
+                        })}
+                      >
+                        {telegramActionLoadingKey === `rotate:${buttonPrefix}` ? 'Перевыпуск...' : 'Перевыпустить PIN'}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -827,6 +870,12 @@ function CustomersPage() {
             : 'Данные доступа'}
           onClose={closeTelegramCredentials}
         />
+
+        {telegramCredentials ? (
+          <div className={`customer-telegram-status-badge customer-telegram-status-${getTelegramAccessStatusMeta(telegramCredentials.access).tone}`} style={{ marginBottom: 12 }}>
+            {getTelegramAccessStatusMeta(telegramCredentials.access).label}
+          </div>
+        ) : null}
 
         {telegramCredentials?.pinCode ? (
           <div className="settings-alert settings-alert-success" style={{ marginBottom: 12 }}>
@@ -857,6 +906,20 @@ function CustomersPage() {
             >
               Скопировать ссылку
             </Button>
+            {telegramCredentials?.order?._id ? (
+              <Button
+                variant="secondary"
+                disabled={telegramActionLoadingKey === `rotate:${telegramCredentials.order._id}`}
+                onClick={() => runTelegramAction({
+                  customer: telegramCredentials.customer,
+                  order: telegramCredentials.order,
+                  access: telegramCredentials.access,
+                  action: 'rotate',
+                })}
+              >
+                {telegramActionLoadingKey === `rotate:${telegramCredentials.order._id}` ? 'Перевыпуск...' : 'Перевыпустить PIN'}
+              </Button>
+            ) : null}
           </div>
           <div className="customer-telegram-qr-preview">
             {telegramCredentials?.qrDataUrl ? (

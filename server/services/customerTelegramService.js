@@ -192,7 +192,7 @@ function getCustomerSubscriptionReadyText(access = {}) {
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
     ...buildCustomerOrderItemsStatusLines(order),
-    'Дальше сюда будут приходить обновления по всем изделиям заказа.',
+    'Дальше обновления по заказу будут приходить сюда.',
   ].filter(Boolean).join('\n');
 }
 
@@ -372,7 +372,7 @@ async function notifyCustomerOrderCreated(order = {}) {
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
     ...buildCustomerOrderItemsStatusLines(order),
-    'После привязки чата сюда будут приходить обновления.',
+    'После привязки чата обновления придут сюда.',
   ].filter(Boolean).join('\n');
 
   return sendCustomerTelegramMessage({
