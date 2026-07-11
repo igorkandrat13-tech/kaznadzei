@@ -19,8 +19,6 @@ const {
   getCustomerAlreadyLinkedText,
   getCustomerFullOrderText,
   getCustomerKeyboardReplyMarkup,
-  getCustomerPinReplyMarkup,
-  getCustomerPinPromptText,
   getCustomerSubscriptionReadyText,
   sendCustomerTelegramMessage,
 } = require('../services/customerTelegramService');
@@ -127,10 +125,6 @@ function isCustomerFullOrderRequest(text = '') {
 
 function normalizeTelegramPinInput(value = '') {
   return String(value || '').replace(/[^\d]/g, '').trim();
-}
-
-function isTelegramPinInput(value = '') {
-  return /^\d{6}$/.test(String(value || '').trim());
 }
 
 async function clearTelegramMenuButton(token, chatId) {
@@ -266,36 +260,25 @@ async function processTelegramMessage(token, message) {
         await sendGuestMessage(token, chatId, 'Ссылка на отслеживание заказа устарела. Запросите новую ссылку или QR-код у менеджера.');
         return;
       }
-
-      if (String(access.telegramUserId || '').trim() === String(from.id)) {
-        await sendCustomerTelegramMessage({
-          access,
-          chatId,
-          telegramUserId: from.id,
-          type: 'customer.start.already-linked',
-          text: getCustomerSubscriptionReadyText(access),
-          meta: { event: 'already-linked' },
-        extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
-        });
-        return;
-      }
-
-      const pendingAccess = CustomerTelegramAccessStore.beginTelegramLink(access._id, {
-        chatId,
+      const linkedAccess = CustomerTelegramAccessStore.linkTelegramUser(access._id, {
         telegramUserId: from.id,
+        chatId,
+        username: from.username ? `@${String(from.username).replace(/^@+/, '')}` : '',
+        firstName: from.first_name || '',
+        lastName: from.last_name || '',
       }) || access;
       await sendCustomerTelegramMessage({
-        access: pendingAccess,
+        access: linkedAccess,
         chatId,
         telegramUserId: from.id,
-        type: 'customer.start.pin-request',
-        text: getCustomerPinPromptText(pendingAccess),
-        meta: { event: 'pin-request' },
-        extra: { reply_markup: getCustomerPinReplyMarkup() },
+        type: 'customer.start.linked',
+        text: getCustomerSubscriptionReadyText(linkedAccess),
+        meta: { event: 'linked-by-token' },
+        extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
       });
-      logCustomerTelegramDebug('start.pin-request-sent', {
-        accessId: pendingAccess?._id || '',
-        orderId: pendingAccess?.orderId || '',
+      logCustomerTelegramDebug('start.linked-by-token', {
+        accessId: linkedAccess?._id || access._id || '',
+        orderId: linkedAccess?.orderId || access.orderId || '',
         chatId: String(chatId),
         telegramUserId: String(from.id || ''),
       });
@@ -313,7 +296,7 @@ async function processTelegramMessage(token, message) {
       });
       return;
     }
-    await sendGuestMessage(token, chatId, 'Здравствуйте! Для первичной авторизации отправьте PIN-код, который выдал администратор.');
+    await sendGuestMessage(token, chatId, 'Здравствуйте! Для доступа к заказу используйте личную ссылку или QR-код от менеджера. Сотрудники могут войти по PIN-коду.');
     return;
   }
 
@@ -326,12 +309,6 @@ async function processTelegramMessage(token, message) {
     );
     return;
   }
-
-  const pendingCustomerAccessCandidates = CustomerTelegramAccessStore.findPendingCandidatesByTelegramContext({
-    chatId,
-    telegramUserId: from.id,
-  });
-  const hasPinInput = isTelegramPinInput(normalizedPinInput);
 
   if (linkedCustomerAccesses.length > 0 && isCustomerFullOrderRequest(text)) {
     logCustomerTelegramDebug('full-order.request', {
@@ -359,96 +336,6 @@ async function processTelegramMessage(token, message) {
     return;
   }
 
-  if (hasPinInput) {
-    const pendingCustomerAccessByPin = CustomerTelegramAccessStore.findPendingByTelegramContextAndPinCode({
-      chatId,
-      telegramUserId: from.id,
-      pinCode: normalizedPinInput,
-    });
-    if (pendingCustomerAccessByPin) {
-    if (!CustomerTelegramAccessStore.verifyPinCode(pendingCustomerAccessByPin._id, normalizedPinInput)) {
-      logCustomerTelegramDebug('pin.invalid', {
-        accessId: pendingCustomerAccessByPin._id,
-        orderId: pendingCustomerAccessByPin.orderId,
-        chatId: String(chatId),
-        telegramUserId: String(from.id || ''),
-      });
-      await sendCustomerTelegramMessage({
-        access: pendingCustomerAccessByPin,
-        chatId,
-        telegramUserId: from.id,
-        type: 'customer.pin.invalid',
-        text: 'PIN-код для этого заказа не подошел. Проверьте его и отправьте еще раз.',
-        meta: { event: 'pin-invalid' },
-        extra: { reply_markup: getCustomerPinReplyMarkup() },
-      });
-      return;
-    }
-
-    const linkedAccess = CustomerTelegramAccessStore.linkTelegramUser(pendingCustomerAccessByPin._id, {
-      telegramUserId: from.id,
-      chatId,
-      username: from.username ? `@${String(from.username).replace(/^@+/, '')}` : '',
-      firstName: from.first_name || '',
-      lastName: from.last_name || '',
-    });
-    if (!linkedAccess) {
-      logCustomerTelegramDebug('pin.link-failed', {
-        accessId: pendingCustomerAccessByPin._id,
-        orderId: pendingCustomerAccessByPin.orderId,
-        chatId: String(chatId),
-        telegramUserId: String(from.id || ''),
-      });
-      await sendCustomerTelegramMessage({
-        access: pendingCustomerAccessByPin,
-        chatId,
-        telegramUserId: from.id,
-        type: 'customer.pin.link-failed',
-        text: 'Не удалось завершить привязку к заказу. Повторите переход по ссылке или QR-коду и введите PIN еще раз.',
-        meta: { event: 'pin-link-failed' },
-        extra: { reply_markup: getCustomerPinReplyMarkup() },
-      });
-      return;
-    }
-    logCustomerTelegramDebug('pin.accepted', {
-      accessId: linkedAccess._id,
-      orderId: linkedAccess.orderId,
-      chatId: String(chatId),
-      telegramUserId: String(from.id || ''),
-      linked: true,
-    });
-    await sendCustomerTelegramMessage({
-      access: linkedAccess,
-      chatId,
-      telegramUserId: from.id,
-      type: 'customer.pin.success',
-      text: getCustomerSubscriptionReadyText(linkedAccess),
-      meta: { event: 'pin-success' },
-      extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
-    });
-    return;
-  }
-    if (pendingCustomerAccessCandidates.length > 0) {
-      logCustomerTelegramDebug('pin.invalid-fallback', {
-        accessId: pendingCustomerAccessCandidates[0]?._id || '',
-        orderId: pendingCustomerAccessCandidates[0]?.orderId || '',
-        chatId: String(chatId),
-        telegramUserId: String(from.id || ''),
-        candidates: pendingCustomerAccessCandidates.length,
-      });
-      await sendCustomerTelegramMessage({
-        access: pendingCustomerAccessCandidates[0],
-        chatId,
-        telegramUserId: from.id,
-        type: 'customer.pin.invalid',
-        text: 'PIN-код для этого заказа не подошел. Проверьте его и отправьте еще раз.',
-        meta: { event: 'pin-invalid-fallback' },
-        extra: { reply_markup: getCustomerPinReplyMarkup() },
-      });
-      return;
-    }
-  }
-
   if (linkedCustomerAccesses.length > 0) {
     await sendCustomerTelegramMessage({
       access: linkedCustomerAccesses[0],
@@ -462,22 +349,9 @@ async function processTelegramMessage(token, message) {
     return;
   }
 
-  if (pendingCustomerAccessCandidates.length > 0) {
-    await sendCustomerTelegramMessage({
-      access: pendingCustomerAccessCandidates[0],
-      chatId,
-      telegramUserId: from.id,
-      type: 'customer.pin.required',
-      text: 'Для доступа к заказу сначала отправьте PIN-код из 6 цифр.',
-      meta: { event: 'pin-required' },
-      extra: { reply_markup: getCustomerPinReplyMarkup() },
-    });
-    return;
-  }
-
   const employee = EmployeeStore.findByPinCode(normalizedPinInput);
   if (!employee) {
-    await sendGuestMessage(token, chatId, 'PIN-код не найден. Проверьте его и попробуйте снова.');
+    await sendGuestMessage(token, chatId, 'Доступ к заказу выдается только по личной ссылке или QR-коду от менеджера. Сотрудники могут войти по PIN-коду.');
     return;
   }
 

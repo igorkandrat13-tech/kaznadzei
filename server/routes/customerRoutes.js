@@ -43,8 +43,8 @@ function mapAccessSummary(access = null) {
   return {
     hasAccess: true,
     accessId: access._id,
-    pinCode: access.pinCode || '',
-    pinLast4: access.pinLast4 || '',
+    pinCode: '',
+    pinLast4: '',
     lastIssuedAt: access.lastIssuedAt || '',
     pendingLinkIssuedAt: access.pendingLinkIssuedAt || '',
     telegramLinkedAt: access.telegramLinkedAt || '',
@@ -142,18 +142,16 @@ router.post('/customers/:id/telegram-access/:orderId/regenerate', requireManager
       entityId: req.params.orderId,
       entityName: OrderStore.getOrderPrimaryName(order) || '',
       actor: getRequestActor(req),
-      message: 'Для заказчика выпущен новый Telegram PIN-доступ.',
+      message: 'Для заказчика выпущена новая Telegram-ссылка доступа.',
       details: {
         customerId: req.params.id,
         accessId: payload.access._id,
-        pinLast4: payload.access.pinLast4 || '',
       },
     });
 
     res.json({
       ok: true,
       access: mapAccessSummary(payload.access),
-      pinCode: payload.pinCode,
       deepLinkUrl: payload.deepLinkUrl,
       qrDataUrl: payload.qrDataUrl,
       botUsername: payload.botUsername,
@@ -183,7 +181,6 @@ router.post('/customers/:id/telegram-access/:orderId/issue', requireManagerAcces
       details: {
         customerId: req.params.id,
         accessId: payload.access._id,
-        pinLast4: payload.access.pinLast4 || '',
         createdNewCredentials: payload.createdNewCredentials,
       },
     });
@@ -191,7 +188,6 @@ router.post('/customers/:id/telegram-access/:orderId/issue', requireManagerAcces
     res.json({
       ok: true,
       access: mapAccessSummary(payload.access),
-      pinCode: payload.pinCode,
       deepLinkUrl: payload.deepLinkUrl,
       qrDataUrl: payload.qrDataUrl,
       botUsername: payload.botUsername,

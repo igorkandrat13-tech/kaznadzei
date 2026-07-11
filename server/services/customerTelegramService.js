@@ -18,10 +18,6 @@ function createAccessToken() {
   return crypto.randomBytes(16).toString('hex');
 }
 
-function createPinCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
 function getReadableOrderStatus(order = {}) {
   if (String(order.archivedAt || '').trim()) {
     return 'в архиве';
@@ -175,27 +171,11 @@ async function buildCustomerSharePayload(access = {}) {
   };
 }
 
-function getCustomerPinPromptText(access = {}) {
-  const { customer, order } = getCustomerAccessContext(access);
-  return [
-    `🔐 ${getCustomerDisplayName(customer)}, отправьте PIN для заказа.`,
-    `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    buildCustomerOrderProgressSummary(order),
-    'Отправьте PIN отдельным сообщением.',
-  ].filter(Boolean).join('\n');
-}
-
-function getCustomerPinReplyMarkup() {
-  return {
-    remove_keyboard: true,
-  };
-}
-
 function getCustomerSubscriptionReadyText(access = {}) {
   const { customer, order } = getCustomerAccessContext(access);
   return [
-    '✅ PIN-код принят.',
-    `${getCustomerDisplayName(customer)}, доступ подключен.`,
+    '✅ Доступ к заказу подключен.',
+    `${getCustomerDisplayName(customer)}, отслеживание включено.`,
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
@@ -461,14 +441,12 @@ async function ensureCustomerOrderAccess({ customerId, orderId, rotateCredential
     customerId: context.customerId,
     orderId: context.orderId,
     createAccessToken,
-    createPinCode,
     rotateCredentials,
   });
   const share = await buildCustomerSharePayload(prepared.access);
 
   return {
     access: prepared.access,
-    pinCode: prepared.pinCode,
     createdNewCredentials: prepared.createdNewCredentials,
     ...share,
   };
@@ -498,7 +476,7 @@ async function notifyCustomerOrderCreated(order = {}) {
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
-    'После привязки чата обновления придут сюда.',
+    'После перехода по ссылке или QR-коду обновления придут сюда.',
   ].filter(Boolean).join('\n');
 
   return sendCustomerTelegramMessage({
@@ -561,7 +539,6 @@ function extractCustomerAccessTokenFromStartText(text = '') {
 module.exports = {
   buildCustomerSharePayload,
   getCustomerKeyboardReplyMarkup,
-  getCustomerPinReplyMarkup,
   getCustomerRemoveKeyboardReplyMarkup,
   getCustomerAccessClosedText,
   getCustomerFullOrderText,
@@ -573,7 +550,6 @@ module.exports = {
   CUSTOMER_START_PREFIX,
   extractCustomerAccessTokenFromStartText,
   getCustomerAlreadyLinkedText,
-  getCustomerPinPromptText,
   getCustomerSubscriptionReadyText,
   getCustomerOrderShare,
   issueCustomerOrderAccess,

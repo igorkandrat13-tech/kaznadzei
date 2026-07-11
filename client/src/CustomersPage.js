@@ -90,14 +90,13 @@ async function copyTextToClipboard(text) {
 
 function getTelegramAccessLabel(access = null) {
   if (!access?.hasAccess) {
-    return 'PIN еще не создан';
+    return 'Ссылка еще не создана';
   }
 
   return [
-    access.pinCode ? `PIN: ${access.pinCode}` : (access.pinLast4 ? `PIN: ${access.pinLast4}` : 'PIN создан'),
     access.telegramLinkedAt
       ? 'Telegram привязан'
-      : (access.pendingLinkIssuedAt ? 'ждет ввода PIN' : 'ждет перехода по ссылке'),
+      : 'ждет перехода по ссылке',
     Number.isFinite(Number(access.logCount)) ? `логов: ${access.logCount}` : '',
   ].filter(Boolean).join(' · ');
 }
@@ -115,14 +114,8 @@ function getTelegramAccessStatusMeta(access = null) {
       tone: 'success',
     };
   }
-  if (access.pendingLinkIssuedAt) {
-    return {
-      label: 'Ожидает ввода PIN',
-      tone: 'warning',
-    };
-  }
   return {
-    label: 'PIN выдан',
+    label: 'Ожидает перехода по ссылке',
     tone: 'warning',
   };
 }
@@ -564,7 +557,6 @@ function CustomersPage() {
           customer,
           order,
           access: data?.access || null,
-          pinCode: data?.pinCode || '',
           deepLinkUrl: data?.deepLinkUrl || '',
           qrDataUrl: data?.qrDataUrl || '',
           botUsername: data?.botUsername || '',
@@ -572,7 +564,7 @@ function CustomersPage() {
         });
         setSuccessMessage(
           action === 'rotate'
-            ? `PIN для заказа "${order.orderNumber || order._id}" перевыпущен.`
+            ? `Ссылка для заказа "${order.orderNumber || order._id}" перевыпущена.`
             : (data?.createdNewCredentials
                 ? `Доступ для заказа "${order.orderNumber || order._id}" создан.`
                 : `Открыт существующий доступ для заказа "${order.orderNumber || order._id}".`)
@@ -750,7 +742,7 @@ function CustomersPage() {
                   {telegramButtonsDisabled
                     ? 'Сначала привяжите к заказчику хотя бы один заказ.'
                     : (customerOrders.length === 1
-                        ? 'Откройте доступ к заказу: внутри будет PIN, ссылка и QR-код для всего заказа.'
+                        ? 'Откройте доступ к заказу: внутри будет ссылка и QR-код для всего заказа.'
                         : 'У заказчика несколько заказов. Откройте модалку и выберите нужный заказ целиком.' )}
                 </div>
               </div>
@@ -780,7 +772,7 @@ function CustomersPage() {
         <ModalHeader
           title="Доступ заказчика"
           subtitle={telegramAccessModal.customer
-            ? `Выберите заказ для ${telegramAccessModal.customer.fullName || 'заказчика'} и откройте доступ ко всему заказу.`
+            ? `Выберите заказ для ${telegramAccessModal.customer.fullName || 'заказчика'} и откройте доступ по ссылке или QR-коду.`
             : 'Выберите заказ.'}
           onClose={closeTelegramAccessModal}
           closeDisabled={Boolean(telegramActionLoadingKey)}
@@ -897,14 +889,8 @@ function CustomersPage() {
           </div>
         ) : null}
 
-        {telegramCredentials?.pinCode ? (
-          <div className="settings-alert settings-alert-success" style={{ marginBottom: 12 }}>
-            {telegramCredentials?.createdNewCredentials ? 'PIN доступа: ' : 'Текущий PIN доступа: '}<strong>{telegramCredentials.pinCode}</strong>
-          </div>
-        ) : null}
-
         <div className="customer-telegram-access-note">
-          Заказчик вводит этот PIN один раз при первой привязке Telegram к заказу.
+          Заказчик получает доступ сразу после перехода по ссылке или QR-коду.
         </div>
 
         <div className="customer-telegram-share-grid">
@@ -937,7 +923,7 @@ function CustomersPage() {
                   action: 'rotate',
                 })}
               >
-                {telegramActionLoadingKey === `rotate:${telegramCredentials.order._id}` ? 'Перевыпуск...' : 'Перевыпустить PIN'}
+                {telegramActionLoadingKey === `rotate:${telegramCredentials.order._id}` ? 'Перевыпуск...' : 'Перевыпустить ссылку'}
               </Button>
             ) : null}
             {telegramCredentials?.access?.hasAccess ? (

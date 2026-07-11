@@ -178,12 +178,11 @@ const CustomerTelegramAccessStore = {
     customerId,
     orderId,
     createAccessToken,
-    createPinCode,
     rotateCredentials = false,
   } = {}) {
     const normalizedCustomerId = String(customerId || '').trim();
     const normalizedOrderId = String(orderId || '').trim();
-    if (!normalizedCustomerId || !normalizedOrderId || typeof createAccessToken !== 'function' || typeof createPinCode !== 'function') {
+    if (!normalizedCustomerId || !normalizedOrderId || typeof createAccessToken !== 'function') {
       throw new Error('Недостаточно данных для подготовки Telegram-доступа заказчику.');
     }
 
@@ -205,8 +204,6 @@ const CustomerTelegramAccessStore = {
     const currentStatus = normalizeAccessStatus(access.status);
     const hasReusableCredentials = Boolean(
       String(access.accessToken || '').trim()
-      && String(access.pinHash || '').trim()
-      && String(access.pinCode || '').trim()
     );
     const needsNewCredentials = rotateCredentials || currentStatus !== 'active' || !hasReusableCredentials;
 
@@ -218,29 +215,29 @@ const CustomerTelegramAccessStore = {
 
     if (needsNewCredentials) {
       const nextAccessToken = String(createAccessToken() || '').trim();
-      const nextPinCode = String(createPinCode() || '').trim();
-      if (!nextAccessToken || !nextPinCode) {
-        throw new Error('Не удалось подготовить токен или PIN для Telegram-доступа.');
+      if (!nextAccessToken) {
+        throw new Error('Не удалось подготовить ссылку для Telegram-доступа.');
       }
       access.accessToken = nextAccessToken;
-      access.pinCode = nextPinCode;
-      access.pinHash = hashPassword(nextPinCode);
-      access.pinLast4 = nextPinCode.slice(-4);
+      access.pinCode = '';
+      access.pinHash = '';
+      access.pinLast4 = '';
       access.lastIssuedAt = now;
       clearPendingLink(access);
       if (rotateCredentials || currentStatus !== 'active') {
         clearLinkedTelegram(access);
       }
     } else {
-      access.pinCode = String(access.pinCode || '').trim();
-      access.pinLast4 = String(access.pinLast4 || '').trim() || access.pinCode.slice(-4);
+      access.pinCode = '';
+      access.pinHash = '';
+      access.pinLast4 = '';
       access.lastIssuedAt = String(access.lastIssuedAt || access.createdAt || now).trim();
     }
 
     save();
     return {
       access: normalizeAccessRecord(access),
-      pinCode: String(access.pinCode || '').trim(),
+      pinCode: '',
       createdNewCredentials: needsNewCredentials,
     };
   },
