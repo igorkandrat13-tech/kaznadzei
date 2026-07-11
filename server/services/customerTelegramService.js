@@ -178,17 +178,16 @@ async function buildCustomerSharePayload(access = {}) {
 function getCustomerPinPromptText(access = {}) {
   const { customer, order } = getCustomerAccessContext(access);
   return [
-    `🔐 ${getCustomerDisplayName(customer)}, введите PIN для заказа.`,
+    `🔐 ${getCustomerDisplayName(customer)}, отправьте PIN для заказа.`,
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     buildCustomerOrderProgressSummary(order),
+    'Отправьте PIN отдельным сообщением.',
   ].filter(Boolean).join('\n');
 }
 
 function getCustomerPinReplyMarkup() {
   return {
-    force_reply: true,
-    input_field_placeholder: 'Введите 6-значный PIN',
-    selective: false,
+    remove_keyboard: true,
   };
 }
 

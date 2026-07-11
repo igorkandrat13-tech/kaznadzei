@@ -1580,7 +1580,7 @@ function Admin() {
           <div className="form-group">
             <label>PIN-код настроек</label>
             <input
-              type="text"
+              type="password"
               inputMode="numeric"
               autoComplete="one-time-code"
               value={settingsPinValue}

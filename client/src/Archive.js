@@ -1015,7 +1015,7 @@ function Archive() {
                               <Button
                                 variant="success"
                                 size="sm"
-                                className="archive-order-action-btn archive-restore-trigger"
+                                className="archive-order-action-btn order-card-action-btn archive-restore-trigger"
                                 onClick={() => requestRestore(order)}
                                 disabled={restoringOrder || deletingOrder}
                               >
@@ -1024,7 +1024,7 @@ function Archive() {
                               <Button
                                 variant="danger"
                                 size="sm"
-                                className="archive-order-action-btn archive-delete-trigger"
+                                className="archive-order-action-btn order-card-action-btn archive-delete-trigger"
                                 onClick={() => requestDelete(order)}
                                 disabled={restoringOrder || deletingOrder}
                               >
@@ -1174,7 +1174,7 @@ function Archive() {
                   <Button
                     variant="success"
                     size="sm"
-                    className="archive-order-action-btn"
+                    className="archive-order-action-btn order-card-action-btn"
                     onClick={() => requestRestore(order)}
                     disabled={restoringOrder || deletingOrder}
                   >
@@ -1183,7 +1183,7 @@ function Archive() {
                   <Button
                     variant="danger"
                     size="sm"
-                    className="archive-order-action-btn"
+                    className="archive-order-action-btn order-card-action-btn"
                     onClick={() => requestDelete(order)}
                     disabled={restoringOrder || deletingOrder}
                   >

@@ -125,6 +125,10 @@ function isCustomerFullOrderRequest(text = '') {
     || normalizedText.includes('заказ целиком');
 }
 
+function normalizeTelegramPinInput(value = '') {
+  return String(value || '').replace(/[^\d]/g, '').trim();
+}
+
 async function clearTelegramMenuButton(token, chatId) {
   await setChatMenuButton(token, { type: 'default' }).catch(() => null);
   if (chatId) {
@@ -186,6 +190,7 @@ async function refreshAuthorizedEmployeeAccess(token) {
 
 async function processTelegramMessage(token, message) {
   const text = typeof message?.text === 'string' ? message.text.trim() : '';
+  const normalizedPinInput = normalizeTelegramPinInput(text);
   const chatId = message?.chat?.id;
   const from = message?.from;
 
@@ -329,10 +334,10 @@ async function processTelegramMessage(token, message) {
   const pendingCustomerAccessByPin = pendingCustomerAccess || CustomerTelegramAccessStore.findPendingByTelegramContextAndPinCode({
     chatId,
     telegramUserId: from.id,
-    pinCode: text,
+    pinCode: normalizedPinInput,
   });
   if (pendingCustomerAccessByPin) {
-    if (!CustomerTelegramAccessStore.verifyPinCode(pendingCustomerAccessByPin._id, text)) {
+    if (!CustomerTelegramAccessStore.verifyPinCode(pendingCustomerAccessByPin._id, normalizedPinInput)) {
       logCustomerTelegramDebug('pin.invalid', {
         accessId: pendingCustomerAccessByPin._id,
         orderId: pendingCustomerAccessByPin.orderId,
@@ -358,12 +363,30 @@ async function processTelegramMessage(token, message) {
       firstName: from.first_name || '',
       lastName: from.last_name || '',
     });
+    if (!linkedAccess) {
+      logCustomerTelegramDebug('pin.link-failed', {
+        accessId: pendingCustomerAccessByPin._id,
+        orderId: pendingCustomerAccessByPin.orderId,
+        chatId: String(chatId),
+        telegramUserId: String(from.id || ''),
+      });
+      await sendCustomerTelegramMessage({
+        access: pendingCustomerAccessByPin,
+        chatId,
+        telegramUserId: from.id,
+        type: 'customer.pin.link-failed',
+        text: 'Не удалось завершить привязку к заказу. Повторите переход по ссылке или QR-коду и введите PIN еще раз.',
+        meta: { event: 'pin-link-failed' },
+        extra: { reply_markup: getCustomerPinReplyMarkup() },
+      });
+      return;
+    }
     logCustomerTelegramDebug('pin.accepted', {
-      accessId: linkedAccess?._id || pendingCustomerAccessByPin._id,
-      orderId: linkedAccess?.orderId || pendingCustomerAccessByPin.orderId,
+      accessId: linkedAccess._id,
+      orderId: linkedAccess.orderId,
       chatId: String(chatId),
       telegramUserId: String(from.id || ''),
-      linked: Boolean(linkedAccess),
+      linked: true,
     });
     await sendCustomerTelegramMessage({
       access: linkedAccess,
@@ -435,7 +458,7 @@ async function processTelegramMessage(token, message) {
     return;
   }
 
-  const employee = EmployeeStore.findByPinCode(text);
+  const employee = EmployeeStore.findByPinCode(normalizedPinInput);
   if (!employee) {
     await sendGuestMessage(token, chatId, 'PIN-код не найден. Проверьте его и попробуйте снова.');
     return;
