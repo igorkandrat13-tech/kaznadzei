@@ -72,6 +72,16 @@ function clearPendingLink(access) {
   access.pendingLinkIssuedAt = '';
 }
 
+function clearLinkedTelegram(access) {
+  access.telegramUserId = '';
+  access.telegramChatId = '';
+  access.telegramUsername = '';
+  access.telegramFirstName = '';
+  access.telegramLastName = '';
+  access.telegramLinkedAt = '';
+  access.telegramLastSeenAt = '';
+}
+
 function findMatchingAccess(accesses = [], matcher) {
   return accesses
     .map(normalizeAccessRecord)
@@ -139,6 +149,29 @@ const CustomerTelegramAccessStore = {
     ));
   },
 
+  findPendingCandidatesByTelegramContext({ chatId, telegramUserId } = {}) {
+    const normalizedChatId = String(chatId || '').trim();
+    const normalizedTelegramUserId = String(telegramUserId || '').trim();
+    if (!normalizedChatId && !normalizedTelegramUserId) return [];
+    return this.findAll().filter((access) => {
+      if (!isPendingLinkActive(access)) return false;
+      const matchesChat = normalizedChatId && access.pendingLinkChatId === normalizedChatId;
+      const matchesUser = normalizedTelegramUserId && access.pendingLinkTelegramUserId === normalizedTelegramUserId;
+      return Boolean(matchesChat || matchesUser);
+    });
+  },
+
+  findPendingByTelegramContextAndPinCode({ chatId, telegramUserId, pinCode } = {}) {
+    const normalizedPinCode = String(pinCode || '').trim();
+    if (!normalizedPinCode) return null;
+    const candidates = this.findPendingCandidatesByTelegramContext({ chatId, telegramUserId });
+    const matches = candidates.filter((access) => verifyPassword(normalizedPinCode, access.pinHash));
+    if (matches.length !== 1) {
+      return null;
+    }
+    return matches[0];
+  },
+
   ensureAccess({
     customerId,
     orderId,
@@ -193,6 +226,9 @@ const CustomerTelegramAccessStore = {
       access.pinLast4 = nextPinCode.slice(-4);
       access.lastIssuedAt = now;
       clearPendingLink(access);
+      if (rotateCredentials || currentStatus !== 'active') {
+        clearLinkedTelegram(access);
+      }
     } else {
       access.pinCode = String(access.pinCode || '').trim();
       access.pinLast4 = String(access.pinLast4 || '').trim() || access.pinCode.slice(-4);
@@ -242,6 +278,7 @@ const CustomerTelegramAccessStore = {
     access.updatedAt = now;
     access.lastIssuedAt = now;
     clearPendingLink(access);
+    clearLinkedTelegram(access);
 
     save();
     return normalizeAccessRecord(access);

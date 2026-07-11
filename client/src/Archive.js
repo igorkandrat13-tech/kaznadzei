@@ -4,7 +4,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
-import { formatDateDisplay } from './dateTime';
+import { formatDateDisplay, formatTimeDisplay } from './dateTime';
 import {
   getItemManufacturingMeta,
   getOrderManufacturingMeta,
@@ -1204,7 +1204,7 @@ function Archive() {
         </div>
 
         <div className="filters-summary" style={{ marginTop: 12 }}>
-          Обновлено: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : '—'}
+          Обновлено: {lastRefreshedAt ? formatTimeDisplay(lastRefreshedAt) : '—'}
         </div>
       </div>
 

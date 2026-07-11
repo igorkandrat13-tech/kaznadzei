@@ -1580,8 +1580,9 @@ function Admin() {
           <div className="form-group">
             <label>PIN-код настроек</label>
             <input
-              type="password"
+              type="text"
               inputMode="numeric"
+              autoComplete="one-time-code"
               value={settingsPinValue}
               onChange={(event) => {
                 setSettingsPinValue(event.target.value.replace(/[^\d]/g, ''));

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
+import { formatDateTimeDisplay } from './dateTime';
 import { useGlobalErrorEffect } from './globalErrors';
 import { Button, Modal, ModalHeader } from './ui';
 
@@ -720,7 +721,7 @@ function CustomersPage() {
                 <div className="mobile-order-card-field">
                   <div className="mobile-order-card-label">Обновлено</div>
                   <div className="mobile-order-card-value">
-                    {customer.updatedAt ? new Date(customer.updatedAt).toLocaleString() : '—'}
+                    {customer.updatedAt ? formatDateTimeDisplay(customer.updatedAt) : '—'}
                   </div>
                 </div>
               </div>
@@ -1001,7 +1002,7 @@ function CustomersPage() {
               <div key={log._id} className="customer-telegram-log-card">
                 <div className="customer-telegram-log-meta">
                   <strong>{log.status === 'sent' ? 'Отправлено' : log.status === 'failed' ? 'Ошибка' : 'Пропущено'}</strong>
-                  <span>{log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</span>
+                  <span>{log.createdAt ? formatDateTimeDisplay(log.createdAt) : '—'}</span>
                   <span>{log.type || 'message'}</span>
                 </div>
                 <div className="customer-telegram-log-text">{log.text || '—'}</div>

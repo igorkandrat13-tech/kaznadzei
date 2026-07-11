@@ -5,7 +5,7 @@ import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from '
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { showGlobalError, useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
-import { formatDateDisplay, formatDateTimeDisplay } from './dateTime';
+import { formatDateDisplay, formatDateTimeDisplay, formatTimeDisplay } from './dateTime';
 import { useRoleConfig } from './RoleConfigContext';
 import {
   getItemManufacturingMeta,
@@ -3777,7 +3777,7 @@ function OrdersWorkspace() {
         )}
 
         <div className="filters-summary" style={{ marginTop: 12 }}>
-          Обновлено: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : '—'}
+          Обновлено: {lastRefreshedAt ? formatTimeDisplay(lastRefreshedAt) : '—'}
         </div>
       </div>
 

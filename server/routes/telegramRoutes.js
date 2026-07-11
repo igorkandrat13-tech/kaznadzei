@@ -295,10 +295,19 @@ async function processTelegramMessage(token, message) {
     chatId,
     telegramUserId: from.id,
   });
-  if (pendingCustomerAccess) {
-    if (!CustomerTelegramAccessStore.verifyPinCode(pendingCustomerAccess._id, text)) {
+  const pendingCustomerAccessCandidates = CustomerTelegramAccessStore.findPendingCandidatesByTelegramContext({
+    chatId,
+    telegramUserId: from.id,
+  });
+  const pendingCustomerAccessByPin = pendingCustomerAccess || CustomerTelegramAccessStore.findPendingByTelegramContextAndPinCode({
+    chatId,
+    telegramUserId: from.id,
+    pinCode: text,
+  });
+  if (pendingCustomerAccessByPin) {
+    if (!CustomerTelegramAccessStore.verifyPinCode(pendingCustomerAccessByPin._id, text)) {
       await sendCustomerTelegramMessage({
-        access: pendingCustomerAccess,
+        access: pendingCustomerAccessByPin,
         chatId,
         telegramUserId: from.id,
         type: 'customer.pin.invalid',
@@ -308,7 +317,7 @@ async function processTelegramMessage(token, message) {
       return;
     }
 
-    const linkedAccess = CustomerTelegramAccessStore.linkTelegramUser(pendingCustomerAccess._id, {
+    const linkedAccess = CustomerTelegramAccessStore.linkTelegramUser(pendingCustomerAccessByPin._id, {
       telegramUserId: from.id,
       chatId,
       username: from.username ? `@${String(from.username).replace(/^@+/, '')}` : '',
@@ -323,6 +332,17 @@ async function processTelegramMessage(token, message) {
       text: getCustomerSubscriptionReadyText(linkedAccess),
       meta: { event: 'pin-success' },
       extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
+    });
+    return;
+  }
+  if (pendingCustomerAccessCandidates.length > 0) {
+    await sendCustomerTelegramMessage({
+      access: pendingCustomerAccessCandidates[0],
+      chatId,
+      telegramUserId: from.id,
+      type: 'customer.pin.invalid',
+      text: 'PIN-код для этого заказа не подошел. Проверьте его и отправьте еще раз.',
+      meta: { event: 'pin-invalid-fallback' },
     });
     return;
   }
