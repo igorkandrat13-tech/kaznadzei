@@ -166,10 +166,12 @@ const CustomerTelegramAccessStore = {
     if (!normalizedPinCode) return null;
     const candidates = this.findPendingCandidatesByTelegramContext({ chatId, telegramUserId });
     const matches = candidates.filter((access) => verifyPassword(normalizedPinCode, access.pinHash));
-    if (matches.length !== 1) {
+    if (matches.length === 0) {
       return null;
     }
-    return matches[0];
+    return matches.sort((left, right) => (
+      Date.parse(String(right.pendingLinkIssuedAt || right.updatedAt || right.lastIssuedAt || right.createdAt || '')) - Date.parse(String(left.pendingLinkIssuedAt || left.updatedAt || left.lastIssuedAt || left.createdAt || ''))
+    ))[0];
   },
 
   ensureAccess({
