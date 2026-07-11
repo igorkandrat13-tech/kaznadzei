@@ -186,7 +186,8 @@ function getCustomerPinPromptText(access = {}) {
 function getCustomerSubscriptionReadyText(access = {}) {
   const { customer, order } = getCustomerAccessContext(access);
   return [
-    `✅ ${getCustomerDisplayName(customer)}, доступ подключен.`,
+    '✅ PIN-код принят.',
+    `${getCustomerDisplayName(customer)}, доступ подключен.`,
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),

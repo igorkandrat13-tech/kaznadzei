@@ -114,7 +114,9 @@ function isCustomerFullOrderRequest(text = '') {
   const normalizedText = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
   return normalizedText === 'весь заказ'
     || normalizedText === 'весьзаказ'
-    || normalizedText === 'заказ целиком';
+    || normalizedText === 'заказ целиком'
+    || normalizedText.includes('весь заказ')
+    || normalizedText.includes('заказ целиком');
 }
 
 async function clearTelegramMenuButton(token, chatId) {

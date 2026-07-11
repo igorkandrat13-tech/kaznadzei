@@ -95,7 +95,9 @@ function getTelegramAccessLabel(access = null) {
 
   return [
     access.pinLast4 ? `PIN: ••••${access.pinLast4}` : 'PIN создан',
-    access.telegramLinkedAt ? 'Telegram привязан' : 'Telegram еще не привязан',
+    access.telegramLinkedAt
+      ? 'Telegram привязан'
+      : (access.pendingLinkIssuedAt ? 'ждет ввода PIN' : 'ждет перехода по ссылке'),
     Number.isFinite(Number(access.logCount)) ? `логов: ${access.logCount}` : '',
   ].filter(Boolean).join(' · ');
 }
@@ -113,8 +115,14 @@ function getTelegramAccessStatusMeta(access = null) {
       tone: 'success',
     };
   }
+  if (access.pendingLinkIssuedAt) {
+    return {
+      label: 'Ожидает ввода PIN',
+      tone: 'warning',
+    };
+  }
   return {
-    label: 'Ожидает привязки',
+    label: 'PIN выдан',
     tone: 'warning',
   };
 }
@@ -965,7 +973,7 @@ function CustomersPage() {
         onClose={closeTelegramLogsModal}
         closeDisabled={telegramLogsModal.loading}
         size="lg"
-        className="order-form-modal"
+        className="order-form-modal customer-access-modal customer-telegram-logs-modal"
       >
         <ModalHeader
           title="Логи Telegram"
