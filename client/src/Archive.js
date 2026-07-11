@@ -430,13 +430,6 @@ function Archive() {
     };
   }, [secondaryHeaderSchema]);
 
-  const legendColorMap = useMemo(() => {
-    return stageLegend.reduce((acc, item) => {
-      acc[item.key] = item.defaultHex || '#FFFFFF';
-      return acc;
-    }, {});
-  }, [stageLegend]);
-
   const secondaryHeaderCells = useMemo(() => {
     let startIndex = 0;
     return secondaryHeaderSchema.map((item) => {
@@ -1022,7 +1015,7 @@ function Archive() {
                               <Button
                                 variant="success"
                                 size="sm"
-                                className="archive-restore-trigger"
+                                className="archive-order-action-btn archive-restore-trigger"
                                 onClick={() => requestRestore(order)}
                                 disabled={restoringOrder || deletingOrder}
                               >
@@ -1031,7 +1024,7 @@ function Archive() {
                               <Button
                                 variant="danger"
                                 size="sm"
-                                className="archive-delete-trigger"
+                                className="archive-order-action-btn archive-delete-trigger"
                                 onClick={() => requestDelete(order)}
                                 disabled={restoringOrder || deletingOrder}
                               >

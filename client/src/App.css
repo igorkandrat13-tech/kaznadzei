@@ -2252,8 +2252,19 @@ body .order-primary-title-button-badge {
   min-width: 210px;
 }
 
-.archive-order-action-btn {
+.archive-order-action-btn,
+.archive-order-action-btn.btn {
+  min-height: 34px;
   white-space: nowrap;
+  border-radius: 10px;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgba(2, 8, 16, 0.14);
+}
+
+.archive-order-action-btn:hover:not(:disabled),
+.archive-order-action-btn:focus-visible,
+.archive-order-action-btn.btn:hover:not(:disabled) {
+  box-shadow: 0 14px 28px rgba(2, 8, 16, 0.18);
 }
 
 .archive-mobile-actions {
@@ -2268,16 +2279,18 @@ body .order-primary-title-button-badge {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
+  min-width: 118px;
 }
 
-.archive-restore-trigger {
-  min-width: 92px;
-}
-
+.archive-restore-trigger,
 .archive-delete-trigger {
-  min-width: 92px;
+  min-width: 112px;
+}
+
+.archive-mobile-actions .archive-order-action-btn {
+  flex: 1 1 190px;
 }
 
 .archive-table .order-role-progress-row {

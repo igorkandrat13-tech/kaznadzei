@@ -982,13 +982,6 @@ function OrdersWorkspace() {
     };
   }, [secondaryHeaderSchema]);
 
-  const legendColorMap = useMemo(() => {
-    return stageLegend.reduce((acc, item) => {
-      acc[item.key] = item.defaultHex || '#FFFFFF';
-      return acc;
-    }, {});
-  }, [stageLegend]);
-
   const secondaryHeaderCells = useMemo(() => {
     let startIndex = 0;
     return secondaryHeaderSchema.map((item) => {

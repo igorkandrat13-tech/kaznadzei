@@ -243,47 +243,6 @@ const CustomerTelegramAccessStore = {
     };
   },
 
-  issueAccess({ customerId, orderId, accessToken, pinCode }) {
-    const normalizedCustomerId = String(customerId || '').trim();
-    const normalizedOrderId = String(orderId || '').trim();
-    const normalizedAccessToken = String(accessToken || '').trim();
-    const normalizedPinCode = String(pinCode || '').trim();
-    if (!normalizedCustomerId || !normalizedOrderId || !normalizedAccessToken || !normalizedPinCode) {
-      throw new Error('Недостаточно данных для выдачи Telegram-доступа заказчику.');
-    }
-
-    const db = load();
-    const accesses = ensureCollection(db);
-    const now = new Date().toISOString();
-    let access = accesses.find((item) => String(item?.orderId || '').trim() === normalizedOrderId) || null;
-
-    if (!access) {
-      access = normalizeAccessRecord({
-        _id: id(),
-        customerId: normalizedCustomerId,
-        orderId: normalizedOrderId,
-        createdAt: now,
-      });
-      accesses.push(access);
-    }
-
-    access.customerId = normalizedCustomerId;
-    access.orderId = normalizedOrderId;
-    access.accessToken = normalizedAccessToken;
-    access.pinCode = normalizedPinCode;
-    access.pinHash = hashPassword(normalizedPinCode);
-    access.pinLast4 = normalizedPinCode.slice(-4);
-    access.status = 'active';
-    access.revokedAt = '';
-    access.updatedAt = now;
-    access.lastIssuedAt = now;
-    clearPendingLink(access);
-    clearLinkedTelegram(access);
-
-    save();
-    return normalizeAccessRecord(access);
-  },
-
   beginTelegramLink(accessId, telegramData = {}) {
     const normalizedAccessId = String(accessId || '').trim();
     const normalizedChatId = String(telegramData.chatId || '').trim();
