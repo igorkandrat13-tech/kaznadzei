@@ -28,6 +28,7 @@ function mapAccessSummary(access = null) {
     return {
       hasAccess: false,
       accessId: '',
+      pinCode: '',
       pinLast4: '',
       lastIssuedAt: '',
       pendingLinkIssuedAt: '',
@@ -42,6 +43,7 @@ function mapAccessSummary(access = null) {
   return {
     hasAccess: true,
     accessId: access._id,
+    pinCode: access.pinCode || '',
     pinLast4: access.pinLast4 || '',
     lastIssuedAt: access.lastIssuedAt || '',
     pendingLinkIssuedAt: access.pendingLinkIssuedAt || '',

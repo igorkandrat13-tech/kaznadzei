@@ -94,7 +94,7 @@ function getTelegramAccessLabel(access = null) {
   }
 
   return [
-    access.pinLast4 ? `PIN: ••••${access.pinLast4}` : 'PIN создан',
+    access.pinCode ? `PIN: ${access.pinCode}` : (access.pinLast4 ? `PIN: ${access.pinLast4}` : 'PIN создан'),
     access.telegramLinkedAt
       ? 'Telegram привязан'
       : (access.pendingLinkIssuedAt ? 'ждет ввода PIN' : 'ждет перехода по ссылке'),

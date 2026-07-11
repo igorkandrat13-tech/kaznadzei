@@ -19,6 +19,7 @@ const {
   getCustomerAlreadyLinkedText,
   getCustomerFullOrderText,
   getCustomerKeyboardReplyMarkup,
+  getCustomerPinReplyMarkup,
   getCustomerPinPromptText,
   getCustomerSubscriptionReadyText,
   sendCustomerTelegramMessage,
@@ -87,6 +88,11 @@ function getTelegramPayloadDebug(payload = {}) {
 function logTelegramWebAppDebug(event, details = {}) {
   addTelegramDiagnosticLog('telegram-webapp', event, details);
   console.log(`[telegram-webapp] ${event}`, JSON.stringify(details));
+}
+
+function logCustomerTelegramDebug(event, details = {}) {
+  addTelegramDiagnosticLog('customer-telegram', event, details);
+  console.log(`[customer-telegram] ${event}`, JSON.stringify(details));
 }
 
 function getAuthorizedMessageReplyMarkup() {
@@ -184,6 +190,12 @@ async function processTelegramMessage(token, message) {
   const from = message?.from;
 
   if (!chatId || !from) return;
+  logCustomerTelegramDebug('message.received', {
+    chatId: String(chatId),
+    telegramUserId: String(from.id || ''),
+    text,
+    hasText: Boolean(text),
+  });
 
   const touchedCustomerAccesses = CustomerTelegramAccessStore.touchLinkedByTelegramContext({
     chatId,
@@ -235,6 +247,12 @@ async function processTelegramMessage(token, message) {
     }
     if (customerAccessToken) {
       const access = CustomerTelegramAccessStore.findByAccessToken(customerAccessToken);
+      logCustomerTelegramDebug('start.customer-token', {
+        chatId: String(chatId),
+        telegramUserId: String(from.id || ''),
+        tokenFound: Boolean(access),
+        accessTokenTail: customerAccessToken ? `...${customerAccessToken.slice(-6)}` : '',
+      });
       if (!access) {
         await sendGuestMessage(token, chatId, 'Ссылка на отслеживание заказа устарела. Запросите новую ссылку или QR-код у менеджера.');
         return;
@@ -264,6 +282,13 @@ async function processTelegramMessage(token, message) {
         type: 'customer.start.pin-request',
         text: getCustomerPinPromptText(pendingAccess),
         meta: { event: 'pin-request' },
+        extra: { reply_markup: getCustomerPinReplyMarkup() },
+      });
+      logCustomerTelegramDebug('start.pin-request-sent', {
+        accessId: pendingAccess?._id || '',
+        orderId: pendingAccess?.orderId || '',
+        chatId: String(chatId),
+        telegramUserId: String(from.id || ''),
       });
       return;
     }
@@ -308,6 +333,12 @@ async function processTelegramMessage(token, message) {
   });
   if (pendingCustomerAccessByPin) {
     if (!CustomerTelegramAccessStore.verifyPinCode(pendingCustomerAccessByPin._id, text)) {
+      logCustomerTelegramDebug('pin.invalid', {
+        accessId: pendingCustomerAccessByPin._id,
+        orderId: pendingCustomerAccessByPin.orderId,
+        chatId: String(chatId),
+        telegramUserId: String(from.id || ''),
+      });
       await sendCustomerTelegramMessage({
         access: pendingCustomerAccessByPin,
         chatId,
@@ -315,6 +346,7 @@ async function processTelegramMessage(token, message) {
         type: 'customer.pin.invalid',
         text: 'PIN-код для этого заказа не подошел. Проверьте его и отправьте еще раз.',
         meta: { event: 'pin-invalid' },
+        extra: { reply_markup: getCustomerPinReplyMarkup() },
       });
       return;
     }
@@ -325,6 +357,13 @@ async function processTelegramMessage(token, message) {
       username: from.username ? `@${String(from.username).replace(/^@+/, '')}` : '',
       firstName: from.first_name || '',
       lastName: from.last_name || '',
+    });
+    logCustomerTelegramDebug('pin.accepted', {
+      accessId: linkedAccess?._id || pendingCustomerAccessByPin._id,
+      orderId: linkedAccess?.orderId || pendingCustomerAccessByPin.orderId,
+      chatId: String(chatId),
+      telegramUserId: String(from.id || ''),
+      linked: Boolean(linkedAccess),
     });
     await sendCustomerTelegramMessage({
       access: linkedAccess,
@@ -338,6 +377,13 @@ async function processTelegramMessage(token, message) {
     return;
   }
   if (pendingCustomerAccessCandidates.length > 0) {
+    logCustomerTelegramDebug('pin.invalid-fallback', {
+      accessId: pendingCustomerAccessCandidates[0]?._id || '',
+      orderId: pendingCustomerAccessCandidates[0]?.orderId || '',
+      chatId: String(chatId),
+      telegramUserId: String(from.id || ''),
+      candidates: pendingCustomerAccessCandidates.length,
+    });
     await sendCustomerTelegramMessage({
       access: pendingCustomerAccessCandidates[0],
       chatId,
@@ -345,12 +391,19 @@ async function processTelegramMessage(token, message) {
       type: 'customer.pin.invalid',
       text: 'PIN-код для этого заказа не подошел. Проверьте его и отправьте еще раз.',
       meta: { event: 'pin-invalid-fallback' },
+      extra: { reply_markup: getCustomerPinReplyMarkup() },
     });
     return;
   }
 
   if (linkedCustomerAccesses.length > 0) {
     if (isCustomerFullOrderRequest(text)) {
+      logCustomerTelegramDebug('full-order.request', {
+        chatId: String(chatId),
+        telegramUserId: String(from.id || ''),
+        accessCount: linkedCustomerAccesses.length,
+        text,
+      });
       for (const access of linkedCustomerAccesses) {
         await sendCustomerTelegramMessage({
           access,
@@ -362,6 +415,11 @@ async function processTelegramMessage(token, message) {
           extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
         });
       }
+      logCustomerTelegramDebug('full-order.sent', {
+        chatId: String(chatId),
+        telegramUserId: String(from.id || ''),
+        accessCount: linkedCustomerAccesses.length,
+      });
       return;
     }
 

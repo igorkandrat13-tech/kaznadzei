@@ -6,6 +6,7 @@ const CustomerStore = require('../stores/customerStore');
 const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
 const CustomerTelegramLogStore = require('../stores/customerTelegramLogStore');
 const { getBotInfo, sendMessage } = require('./telegramService');
+const { addTelegramDiagnosticLog } = require('./telegramDiagnostics');
 
 const CUSTOMER_START_PREFIX = 'customer_';
 
@@ -183,6 +184,14 @@ function getCustomerPinPromptText(access = {}) {
   ].filter(Boolean).join('\n');
 }
 
+function getCustomerPinReplyMarkup() {
+  return {
+    force_reply: true,
+    input_field_placeholder: 'Введите 6-значный PIN',
+    selective: false,
+  };
+}
+
 function getCustomerSubscriptionReadyText(access = {}) {
   const { customer, order } = getCustomerAccessContext(access);
   return [
@@ -302,10 +311,24 @@ async function sendCustomerTelegramMessage({
   const token = getConfiguredBotToken();
 
   if (!normalizedAccess) {
+    addTelegramDiagnosticLog('customer-telegram', 'send.skipped', {
+      reason: 'ACCESS_NOT_FOUND',
+      type,
+      chatId: effectiveChatId,
+      telegramUserId: effectiveTelegramUserId,
+    });
     return { ok: false, skipped: true, reason: 'ACCESS_NOT_FOUND' };
   }
 
   if (!token) {
+    addTelegramDiagnosticLog('customer-telegram', 'send.skipped', {
+      reason: 'BOT_TOKEN_NOT_CONFIGURED',
+      accessId: normalizedAccess._id,
+      orderId: normalizedAccess.orderId,
+      type,
+      chatId: effectiveChatId,
+      telegramUserId: effectiveTelegramUserId,
+    });
     const logEntry = CustomerTelegramLogStore.add({
       customerId: normalizedAccess.customerId,
       orderId: normalizedAccess.orderId,
@@ -322,6 +345,14 @@ async function sendCustomerTelegramMessage({
   }
 
   if (!effectiveChatId) {
+    addTelegramDiagnosticLog('customer-telegram', 'send.skipped', {
+      reason: 'CHAT_NOT_LINKED',
+      accessId: normalizedAccess._id,
+      orderId: normalizedAccess.orderId,
+      type,
+      chatId: effectiveChatId,
+      telegramUserId: effectiveTelegramUserId,
+    });
     const logEntry = CustomerTelegramLogStore.add({
       customerId: normalizedAccess.customerId,
       orderId: normalizedAccess.orderId,
@@ -338,7 +369,28 @@ async function sendCustomerTelegramMessage({
   }
 
   try {
+    addTelegramDiagnosticLog('customer-telegram', 'send.request', {
+      accessId: normalizedAccess._id,
+      orderId: normalizedAccess.orderId,
+      type,
+      chatId: effectiveChatId,
+      telegramUserId: effectiveTelegramUserId,
+      replyMarkupKind: extra?.reply_markup?.force_reply
+        ? 'force_reply'
+        : extra?.reply_markup?.keyboard
+          ? 'keyboard'
+          : extra?.reply_markup?.remove_keyboard
+            ? 'remove_keyboard'
+            : '',
+    });
     await sendMessage(token, effectiveChatId, normalizedText, extra);
+    addTelegramDiagnosticLog('customer-telegram', 'send.success', {
+      accessId: normalizedAccess._id,
+      orderId: normalizedAccess.orderId,
+      type,
+      chatId: effectiveChatId,
+      telegramUserId: effectiveTelegramUserId,
+    });
     const logEntry = CustomerTelegramLogStore.add({
       customerId: normalizedAccess.customerId,
       orderId: normalizedAccess.orderId,
@@ -352,6 +404,14 @@ async function sendCustomerTelegramMessage({
     });
     return { ok: true, logEntry };
   } catch (error) {
+    addTelegramDiagnosticLog('customer-telegram', 'send.failed', {
+      accessId: normalizedAccess._id,
+      orderId: normalizedAccess.orderId,
+      type,
+      chatId: effectiveChatId,
+      telegramUserId: effectiveTelegramUserId,
+      message: error.message || 'Не удалось отправить сообщение в Telegram.',
+    });
     const logEntry = CustomerTelegramLogStore.add({
       customerId: normalizedAccess.customerId,
       orderId: normalizedAccess.orderId,
@@ -502,6 +562,7 @@ function extractCustomerAccessTokenFromStartText(text = '') {
 module.exports = {
   buildCustomerSharePayload,
   getCustomerKeyboardReplyMarkup,
+  getCustomerPinReplyMarkup,
   getCustomerRemoveKeyboardReplyMarkup,
   getCustomerAccessClosedText,
   getCustomerFullOrderText,
