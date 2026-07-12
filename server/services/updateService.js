@@ -32,8 +32,13 @@ function isNpmCiLockSyncError(errorText = '') {
     );
 }
 
+function normalizeSystemdServiceName(serviceName = '') {
+  const normalized = String(serviceName || '').trim() || 'kaznadzei';
+  return normalized.includes('.') ? normalized : `${normalized}.service`;
+}
+
 function getConfiguredServiceName() {
-  return (process.env.SYSTEMD_SERVICE_NAME || 'kaznadzei').trim();
+  return normalizeSystemdServiceName(process.env.SYSTEMD_SERVICE_NAME || 'kaznadzei');
 }
 
 function getConfiguredUpdateBranch() {
