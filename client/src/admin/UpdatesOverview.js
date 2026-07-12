@@ -109,6 +109,13 @@ function getLatestInstallLogLine(logs) {
   return '';
 }
 
+function getInstallToneLabel(status) {
+  if (status === 'completed') return 'Готово';
+  if (status === 'failed') return 'Требует внимания';
+  if (status === 'running') return 'В процессе';
+  return 'Ожидание';
+}
+
 function UpdatesOverview({
   updateStatus,
   installJob,
@@ -116,15 +123,10 @@ function UpdatesOverview({
   updateError,
   checkingUpdates,
   installingUpdates,
-  restartingService,
-  loadingServiceDetails,
-  serviceDetails,
   appSettings,
   onSettingsChange,
   onRefresh,
   onInstall,
-  onRestartService,
-  onShowServiceDetails,
   onSaveUpdateSettings,
   savingUpdateSettings,
 }) {
@@ -170,73 +172,39 @@ function UpdatesOverview({
             >
               {installingUpdates ? 'Установка...' : 'Установить обновления'}
             </Button>
-            <Button
-              onClick={onRestartService}
-              disabled={restartingService || checkingUpdates || !updateStatus?.systemctlAvailable}
-            >
-              {restartingService ? 'Перезапуск...' : 'Перезапустить сервис'}
-            </Button>
-            <Button
-              onClick={onShowServiceDetails}
-              disabled={loadingServiceDetails || checkingUpdates || !updateStatus?.systemctlAvailable}
-            >
-              {loadingServiceDetails ? 'Загрузка...' : 'Статус и логи'}
-            </Button>
           </>
         }
       />
-      <div className="responsive-form-grid" style={{ marginBottom: 12 }}>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Ветка обновлений
-            <HelpTooltip text="Для текущего публичного репозитория GitHub используйте main." />
-          </label>
-          <input
-            value={appSettings?.updateBranch || ''}
-            onChange={e => onSettingsChange(current => ({ ...current, updateBranch: e.target.value }))}
-            placeholder="main"
-            disabled={savingUpdateSettings}
-          />
-        </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Git репозиторий для обновлений
-            <HelpTooltip text="Для текущего публичного GitHub используйте HTTPS URL. Для приватного репозитория позже можно перейти на SSH URL с deploy key." />
-          </label>
-          <input
-            value={appSettings?.updateRepositoryUrl || ''}
-            onChange={e => onSettingsChange(current => ({ ...current, updateRepositoryUrl: e.target.value }))}
-            placeholder="https://github.com/igorkandrat13-tech/kaznadzei.git"
-            disabled={savingUpdateSettings}
-          />
-        </div>
-      </div>
-      <div className="settings-actions" style={{ marginBottom: 8 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="checkbox"
-            checked={Boolean(appSettings?.selfUpdateEnabled)}
-            onChange={e => onSettingsChange(current => ({ ...current, selfUpdateEnabled: e.target.checked }))}
-            disabled={savingUpdateSettings}
-          />
-          Разрешить self-update из интерфейса
-        </label>
-        <Button variant="success" onClick={onSaveUpdateSettings} disabled={savingUpdateSettings}>
-          {savingUpdateSettings ? 'Сохранение...' : 'Сохранить настройки обновления'}
-        </Button>
-      </div>
       {updateMessage && <div className="settings-alert settings-alert-success">{updateMessage}</div>}
       {updateError && <div className="settings-alert settings-alert-error" style={{ whiteSpace: 'pre-wrap' }}>{updateError}</div>}
       {installJob ? (
-        <div className="card" style={{ marginBottom: 12, background: '#f8fafc' }}>
+        <div className="card update-install-card" style={{ marginBottom: 12, background: '#f8fafc' }}>
           <div className="service-details-title">
             Установка обновлений: {installJob.status === 'running' ? 'выполняется' : installJob.status === 'completed' ? 'завершена' : 'ошибка'}
           </div>
           {installProgress ? (
             <div className={`update-install-statusbar update-install-statusbar-${installProgress.tone}`}>
-              <div className="update-install-statusbar-meta">
-                <span className="update-install-statusbar-label">Этап: {installProgress.label}</span>
+              <div className="update-install-statusbar-backdrop" aria-hidden="true">
+                <span className="update-install-statusbar-backdrop-orb update-install-statusbar-backdrop-orb-primary" />
+                <span className="update-install-statusbar-backdrop-orb update-install-statusbar-backdrop-orb-secondary" />
+              </div>
+              <div className="update-install-statusbar-header">
+                <div className="update-install-statusbar-title-block">
+                  <span className="update-install-statusbar-kicker">Статус установки</span>
+                  <div className="update-install-statusbar-meta">
+                    <span className="update-install-statusbar-label">Этап: {installProgress.label}</span>
+                    <span className={`update-install-statusbar-tone update-install-statusbar-tone-${installProgress.tone}`}>
+                      {getInstallToneLabel(installJob.status)}
+                    </span>
+                  </div>
+                </div>
                 <span className="update-install-statusbar-percent">{installProgress.percent}%</span>
+              </div>
+              <div className="update-install-statusbar-meta">
+                <span className="update-install-statusbar-track-label">Прогресс установки</span>
+                <span className="update-install-statusbar-track-value">
+                  {installJob.status === 'running' ? 'идет обновление данных' : 'финальное состояние зафиксировано'}
+                </span>
               </div>
               <div className="update-install-statusbar-live-row">
                 {installHeartbeatState ? (
@@ -257,10 +225,14 @@ function UpdatesOverview({
                 ) : null}
               </div>
               <div className="update-install-statusbar-track" aria-hidden="true">
+                <span className="update-install-statusbar-track-glow" />
+                <span className="update-install-statusbar-track-scanline" />
                 <div
                   className="update-install-statusbar-fill"
                   style={{ width: `${installProgress.percent}%` }}
-                />
+                >
+                  <span className="update-install-statusbar-fill-shimmer" />
+                </div>
               </div>
               <div className="update-install-statusbar-stages">
                 {INSTALL_PROGRESS_STAGES.map((stage) => {
@@ -302,13 +274,53 @@ function UpdatesOverview({
           ) : null}
         </div>
       ) : null}
+      <div className="card update-settings-card" style={{ marginBottom: 12 }}>
+        <div className="service-details-title">Источник обновлений</div>
+        <div className="responsive-form-grid" style={{ marginBottom: 12 }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Ветка обновлений
+              <HelpTooltip text="Для текущего публичного репозитория GitHub используйте main." />
+            </label>
+            <input
+              value={appSettings?.updateBranch || ''}
+              onChange={e => onSettingsChange(current => ({ ...current, updateBranch: e.target.value }))}
+              placeholder="main"
+              disabled={savingUpdateSettings}
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Git репозиторий для обновлений
+              <HelpTooltip text="Для текущего публичного GitHub используйте HTTPS URL. Для приватного репозитория позже можно перейти на SSH URL с deploy key." />
+            </label>
+            <input
+              value={appSettings?.updateRepositoryUrl || ''}
+              onChange={e => onSettingsChange(current => ({ ...current, updateRepositoryUrl: e.target.value }))}
+              placeholder="https://github.com/igorkandrat13-tech/kaznadzei.git"
+              disabled={savingUpdateSettings}
+            />
+          </div>
+        </div>
+        <div className="settings-actions" style={{ marginBottom: 0 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(appSettings?.selfUpdateEnabled)}
+              onChange={e => onSettingsChange(current => ({ ...current, selfUpdateEnabled: e.target.checked }))}
+              disabled={savingUpdateSettings}
+            />
+            Разрешить self-update из интерфейса
+          </label>
+          <Button variant="success" onClick={onSaveUpdateSettings} disabled={savingUpdateSettings}>
+            {savingUpdateSettings ? 'Сохранение...' : 'Сохранить настройки обновления'}
+          </Button>
+        </div>
+      </div>
       {updateStatus?.enabled ? (
         <>
           <div className="overview-stats-grid mt-16">
             <div className="overview-stat-card"><strong>Git:</strong> {updateStatus?.gitAvailable ? (updateStatus.gitVersion || 'установлен') : 'не найден'}</div>
-            <div className="overview-stat-card"><strong>systemd:</strong> {updateStatus?.systemctlAvailable ? 'доступен' : 'недоступен'}</div>
-            <div className="overview-stat-card"><strong>Сервис:</strong> {updateStatus?.serviceName || '—'}</div>
-            <div className="overview-stat-card"><strong>Статус сервиса:</strong> {updateStatus?.serviceActiveState || 'не определен'}</div>
             <div className="overview-stat-card"><strong>Репозиторий:</strong> {updateStatus?.isRepo ? 'инициализирован' : 'не инициализирован'}</div>
             <div className="overview-stat-card"><strong>Remote origin:</strong> {updateStatus?.remoteUrl || 'не настроен'}</div>
             <div className="overview-stat-card"><strong>Ветка:</strong> {updateStatus?.branch || '—'}</div>
@@ -339,41 +351,6 @@ function UpdatesOverview({
             <SettingsHint>
               Подключите удаленный репозиторий командой <strong>git remote add origin &lt;URL_РЕПОЗИТОРИЯ&gt;</strong>.
             </SettingsHint>
-          )}
-          {updateStatus && !updateStatus.systemctlAvailable && (
-            <SettingsHint>
-              Перезапуск из интерфейса доступен только на Linux-сервере с <strong>systemd</strong>.
-            </SettingsHint>
-          )}
-          {updateStatus && updateStatus.systemctlAvailable && (
-            <SettingsHint>
-              Для работы кнопки перезапуска процессу приложения нужны права на <strong>systemctl restart {updateStatus.serviceName || 'kaznadzei'}</strong>. Обычно это настраивается через <strong>sudoers</strong> с режимом <strong>NOPASSWD</strong>.
-            </SettingsHint>
-          )}
-          {serviceDetails && (
-            <div className="service-details-grid mt-16">
-              <div>
-                <div className="service-details-title">
-                  Статус сервиса {serviceDetails.serviceName}
-                </div>
-                <pre className="service-details-console service-details-console-status">
-                  {serviceDetails.statusText}
-                </pre>
-              </div>
-              <div>
-                <div className="service-details-title">
-                  Последние логи
-                </div>
-                <pre className="service-details-console service-details-console-logs">
-                  {serviceDetails.logsText}
-                </pre>
-              </div>
-              {(serviceDetails.statusError || serviceDetails.logsError) && (
-                <SettingsHint>
-                  {serviceDetails.statusError || serviceDetails.logsError}
-                </SettingsHint>
-              )}
-            </div>
           )}
         </>
       ) : (

@@ -4,19 +4,12 @@ const {
   appendInstallJobLog,
   createInstallJob,
   finishInstallJob,
-  getConfiguredServiceName,
   getErrorText,
   getInstallJobSnapshot,
-  getRestartSudoersHint,
   getStoredInstallJob,
   getUpdateStatus,
-  hasSystemctl,
   isInstallInProgress,
-  requiresInteractiveSudo,
   spawnDetachedInstallWorker,
-  tryJournalctlDetailed,
-  tryRestartServiceDetailed,
-  trySystemctlDetailed,
 } = require('../services/updateService');
 
 const router = express.Router();
@@ -30,10 +23,6 @@ router.get('/updates/status', requireAdminAccess(), async (req, res) => {
       enabled: false,
       gitAvailable: false,
       gitVersion: null,
-      systemctlAvailable: Boolean(await hasSystemctl()),
-      serviceName: getConfiguredServiceName(),
-      serviceActiveState: null,
-      restartSupported: false,
       isRepo: false,
       hasRemote: false,
       upstreamConfigured: false,
@@ -110,73 +99,6 @@ router.post('/updates/install', requireAdminAccess(), async (req, res) => {
       details: getErrorText(error),
     });
   }
-});
-
-router.post('/updates/restart-service', requireAdminAccess(), async (req, res) => {
-  const systemctlVersion = await hasSystemctl();
-  if (!systemctlVersion) {
-    return res.status(400).json({
-      message: 'Перезапуск сервиса поддерживается только на Linux-сервере с systemd.',
-    });
-  }
-
-  const serviceName = getConfiguredServiceName();
-  if (!serviceName) {
-    return res.status(400).json({
-      message: 'Не задано имя systemd-сервиса. Укажите SYSTEMD_SERVICE_NAME в .env.',
-    });
-  }
-
-  const restartResult = await tryRestartServiceDetailed(serviceName);
-  if (!restartResult.ok) {
-    const sudoHint = requiresInteractiveSudo(restartResult.errorText) ? `\n\n${getRestartSudoersHint(serviceName)}` : '';
-    return res.status(500).json({
-      message: 'Не удалось запустить перезапуск сервиса.',
-      details: `${restartResult.errorText || 'Проверьте права на выполнение sudo systemctl restart.'}${sudoHint}`,
-    });
-  }
-
-  res.json({
-    ok: true,
-    message: `Команда перезапуска отправлена для сервиса ${serviceName}.`,
-    serviceName,
-  });
-});
-
-router.get('/updates/service-details', requireAdminAccess(), async (req, res) => {
-  const systemctlVersion = await hasSystemctl();
-  if (!systemctlVersion) {
-    return res.status(400).json({
-      message: 'Просмотр статуса сервиса поддерживается только на Linux-сервере с systemd.',
-    });
-  }
-
-  const serviceName = getConfiguredServiceName();
-  if (!serviceName) {
-    return res.status(400).json({
-      message: 'Не задано имя systemd-сервиса. Укажите SYSTEMD_SERVICE_NAME в .env.',
-    });
-  }
-
-  const statusResult = await trySystemctlDetailed(['status', serviceName, '--no-pager', '-l']);
-  const logsResult = await tryJournalctlDetailed(['-u', serviceName, '-n', '80', '--no-pager', '-o', 'short-iso']);
-
-  if (!statusResult.ok && !logsResult.ok) {
-    const combinedErrorText = [statusResult.errorText, logsResult.errorText].filter(Boolean).join('\n\n');
-    return res.status(500).json({
-      message: 'Не удалось получить статус и логи сервиса.',
-      details: combinedErrorText || 'Проверьте права процесса на выполнение systemctl и journalctl.',
-    });
-  }
-
-  res.json({
-    ok: true,
-    serviceName,
-    statusText: statusResult.stdout || statusResult.stderr || 'Статус сервиса не получен.',
-    logsText: logsResult.stdout || logsResult.stderr || 'Логи сервиса не получены.',
-    statusError: statusResult.ok ? '' : statusResult.errorText,
-    logsError: logsResult.ok ? '' : logsResult.errorText,
-  });
 });
 
 module.exports = router;

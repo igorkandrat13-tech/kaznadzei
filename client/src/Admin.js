@@ -73,9 +73,6 @@ function Admin() {
   const [updateError, setUpdateError] = useState('');
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdates, setInstallingUpdates] = useState(false);
-  const [restartingService, setRestartingService] = useState(false);
-  const [loadingServiceDetails, setLoadingServiceDetails] = useState(false);
-  const [serviceDetails, setServiceDetails] = useState(null);
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [appSettings, setAppSettings] = useState({
@@ -621,38 +618,6 @@ function Admin() {
       }
       setUpdateError(errorText);
       setInstallingUpdates(false);
-    }
-  };
-
-  const restartService = async () => {
-    setRestartingService(true);
-    setUpdateError('');
-    try {
-      const res = await apiFetch('/api/updates/restart-service', { method: 'POST' });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось перезапустить сервис');
-      setUpdateMessage(data?.message || 'Команда перезапуска отправлена');
-      fetchUpdateStatus();
-    } catch (error) {
-      setUpdateError(toUserErrorMessage(error, 'Не удалось перезапустить сервис.'));
-    } finally {
-      setRestartingService(false);
-    }
-  };
-
-  const fetchServiceDetails = async () => {
-    setLoadingServiceDetails(true);
-    setUpdateError('');
-    try {
-      const res = await apiFetch('/api/updates/service-details');
-      const data = await parseJsonSafely(res);
-      if (!res.ok) throw new Error(data?.details || data?.message || 'Не удалось получить статус и логи сервиса');
-      setServiceDetails(data);
-      setUpdateMessage(`Получены статус и логи сервиса ${data?.serviceName || ''}`.trim());
-    } catch (error) {
-      setUpdateError(toUserErrorMessage(error, 'Не удалось получить статус и логи сервиса.'));
-    } finally {
-      setLoadingServiceDetails(false);
     }
   };
 
@@ -1797,15 +1762,10 @@ function Admin() {
             updateError={updateError}
             checkingUpdates={checkingUpdates}
             installingUpdates={installingUpdates}
-            restartingService={restartingService}
-            loadingServiceDetails={loadingServiceDetails}
-            serviceDetails={serviceDetails}
             appSettings={appSettings}
             onSettingsChange={setAppSettings}
             onRefresh={fetchUpdateStatus}
             onInstall={installUpdates}
-            onRestartService={restartService}
-            onShowServiceDetails={fetchServiceDetails}
             onSaveUpdateSettings={saveUpdateSettings}
             savingUpdateSettings={savingUpdateSettings}
           />

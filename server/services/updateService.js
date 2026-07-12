@@ -32,15 +32,6 @@ function isNpmCiLockSyncError(errorText = '') {
     );
 }
 
-function normalizeSystemdServiceName(serviceName = '') {
-  const normalized = String(serviceName || '').trim() || 'kaznadzei';
-  return normalized.includes('.') ? normalized : `${normalized}.service`;
-}
-
-function getConfiguredServiceName() {
-  return normalizeSystemdServiceName(process.env.SYSTEMD_SERVICE_NAME || 'kaznadzei');
-}
-
 function getConfiguredUpdateBranch() {
   return SettingsStore.get().updateBranch || process.env.UPDATE_BRANCH || 'main';
 }
@@ -102,48 +93,8 @@ function getNpmCommand() {
   return getExecutable(['/usr/bin/npm', '/usr/local/bin/npm', 'npm']);
 }
 
-function getSystemctlCommand() {
-  if (process.platform === 'win32') {
-    return null;
-  }
-  return getExecutable(['/usr/bin/systemctl', '/bin/systemctl', 'systemctl']);
-}
-
-function getJournalctlCommand() {
-  if (process.platform === 'win32') {
-    return null;
-  }
-  return getExecutable(['/usr/bin/journalctl', '/bin/journalctl', 'journalctl']);
-}
-
-function getSudoCommand() {
-  if (process.platform === 'win32') {
-    return null;
-  }
-  return getExecutable(['/usr/bin/sudo', '/bin/sudo', 'sudo']);
-}
-
 function getErrorText(error) {
   return [error.message, error.stdout, error.stderr].filter(Boolean).join('\n').trim();
-}
-
-function requiresInteractiveSudo(errorText) {
-  const text = String(errorText || '').toLowerCase();
-  return text.includes('interactive authentication is required')
-    || text.includes('a password is required')
-    || text.includes('sudo:')
-    || text.includes('sudo-rs:');
-}
-
-function getRestartSudoersHint(serviceName) {
-  const sudoUser = process.env.SUDO_USER || process.env.USER || 'www-data';
-  const safeServiceName = serviceName || 'kaznadzei';
-  return [
-    'Для кнопки перезапуска настройте sudoers только на одну команду.',
-    'Откройте sudoers командой: sudo visudo',
-    'Добавьте строку:',
-    `${sudoUser} ALL=(root) NOPASSWD: /usr/bin/systemctl restart --no-block ${safeServiceName}`,
-  ].join('\n');
 }
 
 function readInstallJob() {
@@ -291,114 +242,6 @@ async function hasGit() {
   }
 }
 
-async function hasSystemctl() {
-  const command = getSystemctlCommand();
-  if (!command) {
-    return null;
-  }
-  try {
-    const result = await runFile(command, ['--version']);
-    return result.stdout || 'systemctl available';
-  } catch {
-    return null;
-  }
-}
-
-async function trySystemctl(args) {
-  const systemctlCommand = getSystemctlCommand();
-  if (!systemctlCommand) {
-    return null;
-  }
-
-  try {
-    return await runFile(systemctlCommand, args);
-  } catch {
-    return null;
-  }
-}
-
-async function trySystemctlDetailed(args) {
-  const systemctlCommand = getSystemctlCommand();
-  if (!systemctlCommand) {
-    return {
-      ok: false,
-      stdout: '',
-      stderr: '',
-      errorText: 'systemctl недоступен на этой платформе.',
-    };
-  }
-
-  try {
-    const result = await runFile(systemctlCommand, args);
-    return { ok: true, ...result };
-  } catch (error) {
-    return {
-      ok: false,
-      stdout: error.stdout || '',
-      stderr: error.stderr || '',
-      errorText: getErrorText(error),
-    };
-  }
-}
-
-async function tryRestartServiceDetailed(serviceName) {
-  const systemctlCommand = getSystemctlCommand();
-  if (!systemctlCommand) {
-    return {
-      ok: false,
-      stdout: '',
-      stderr: '',
-      errorText: 'systemctl недоступен на этой платформе.',
-    };
-  }
-
-  const sudoCommand = getSudoCommand();
-  if (!sudoCommand) {
-    return {
-      ok: false,
-      stdout: '',
-      stderr: '',
-      errorText: 'sudo недоступен на этой платформе.',
-    };
-  }
-
-  try {
-    const result = await runFile(sudoCommand, ['-n', systemctlCommand, 'restart', '--no-block', String(serviceName || '').trim()]);
-    return { ok: true, ...result };
-  } catch (error) {
-    return {
-      ok: false,
-      stdout: error.stdout || '',
-      stderr: error.stderr || '',
-      errorText: getErrorText(error),
-    };
-  }
-}
-
-async function tryJournalctlDetailed(args) {
-  const journalctlCommand = getJournalctlCommand();
-  if (!journalctlCommand) {
-    return {
-      ok: false,
-      stdout: '',
-      stderr: '',
-      errorText: 'journalctl недоступен на этой платформе.',
-    };
-  }
-
-  try {
-    const result = await runFile(journalctlCommand, args);
-    return { ok: true, ...result };
-  } catch (error) {
-    return {
-      ok: false,
-      stdout: error.stdout || '',
-      stderr: error.stderr || '',
-      errorText: getErrorText(error),
-    };
-  }
-}
-
 async function tryGit(args, cwd) {
   try {
     return await runFile(getGitCommand(), args, cwd);
@@ -541,10 +384,6 @@ async function getUpdateStatus() {
     enabled: true,
     gitAvailable: Boolean(gitVersion),
     gitVersion,
-    systemctlAvailable: Boolean(await hasSystemctl()),
-    serviceName: getConfiguredServiceName(),
-    serviceActiveState: null,
-    restartSupported: false,
     isRepo: fs.existsSync(path.join(PROJECT_ROOT, '.git')),
     hasRemote: false,
     upstreamConfigured: false,
@@ -580,14 +419,6 @@ async function getUpdateStatus() {
 
   const commitResult = await tryGit(['rev-parse', 'HEAD']);
   status.currentCommit = commitResult?.stdout || null;
-
-  if (status.systemctlAvailable && status.serviceName) {
-    const serviceStateResult = await trySystemctl(['is-active', status.serviceName]);
-    if (serviceStateResult?.stdout) {
-      status.serviceActiveState = serviceStateResult.stdout;
-      status.restartSupported = ['active', 'activating', 'reloading'].includes(serviceStateResult.stdout);
-    }
-  }
 
   const remoteSetup = await ensureGitRemoteConfigured();
   status.remoteUrl = remoteSetup.remoteUrl || null;
@@ -777,18 +608,11 @@ module.exports = {
   createInstallJob,
   appendInstallJobLog,
   finishInstallJob,
-  getConfiguredServiceName,
   getErrorText,
   getInstallJobSnapshot,
   getStoredInstallJob,
-  getRestartSudoersHint,
   getUpdateStatus,
-  hasSystemctl,
   isInstallInProgress,
-  requiresInteractiveSudo,
   runInstallJob,
   spawnDetachedInstallWorker,
-  tryJournalctlDetailed,
-  tryRestartServiceDetailed,
-  trySystemctlDetailed,
 };

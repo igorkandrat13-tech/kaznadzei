@@ -5495,11 +5495,6 @@ body .attachment-preview-table td {
   color: var(--text-main);
 }
 
-.service-details-grid {
-  display: grid;
-  gap: 12px;
-}
-
 .service-details-title {
   font-weight: 700;
   margin-bottom: 6px;
@@ -5531,11 +5526,87 @@ body .attachment-preview-table td {
 }
 
 .update-install-statusbar {
+  position: relative;
+  overflow: hidden;
   margin-bottom: 12px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(9, 19, 33, 0.72);
+  padding: 18px;
+  border-radius: 20px;
+  display: grid;
+  gap: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(76, 176, 255, 0.16), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(85, 214, 194, 0.12), transparent 32%),
+    linear-gradient(180deg, rgba(9, 19, 33, 0.94), rgba(8, 16, 29, 0.96));
   border: 1px solid rgba(135, 186, 247, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 18px 38px rgba(7, 18, 30, 0.22);
+}
+
+.update-install-card {
+  border: 1px solid rgba(120, 169, 214, 0.16);
+  box-shadow: 0 16px 34px rgba(19, 42, 68, 0.08);
+}
+
+.update-settings-card {
+  border: 1px solid rgba(120, 169, 214, 0.12);
+  box-shadow: 0 12px 28px rgba(19, 42, 68, 0.06);
+}
+
+.update-install-statusbar > * {
+  position: relative;
+  z-index: 1;
+}
+
+.update-install-statusbar-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.update-install-statusbar-backdrop-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(10px);
+  opacity: 0.7;
+}
+
+.update-install-statusbar-backdrop-orb-primary {
+  top: -18px;
+  right: 10%;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(72, 179, 255, 0.26), rgba(72, 179, 255, 0));
+  animation: updateOrbFloat 6.5s ease-in-out infinite;
+}
+
+.update-install-statusbar-backdrop-orb-secondary {
+  bottom: -26px;
+  left: 8%;
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(85, 214, 194, 0.2), rgba(85, 214, 194, 0));
+  animation: updateOrbFloat 7.4s ease-in-out infinite reverse;
+}
+
+.update-install-statusbar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.update-install-statusbar-title-block {
+  display: grid;
+  gap: 6px;
+}
+
+.update-install-statusbar-kicker {
+  color: #7ebff6;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 800;
 }
 
 .update-install-statusbar-meta {
@@ -5543,17 +5614,73 @@ body .attachment-preview-table td {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
   font-size: 13px;
   font-weight: 700;
 }
 
 .update-install-statusbar-label {
   color: #e6f2ff;
+  font-size: 16px;
+}
+
+.update-install-statusbar-tone {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 190, 240, 0.16);
+  background: rgba(10, 21, 37, 0.72);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.update-install-statusbar-tone-running {
+  color: #9eefff;
+  border-color: rgba(126, 214, 255, 0.24);
+  background: rgba(13, 47, 67, 0.54);
+}
+
+.update-install-statusbar-tone-completed {
+  color: #bcf6db;
+  border-color: rgba(112, 231, 181, 0.24);
+  background: rgba(15, 58, 38, 0.56);
+}
+
+.update-install-statusbar-tone-failed {
+  color: #ffd5d0;
+  border-color: rgba(255, 152, 152, 0.24);
+  background: rgba(71, 23, 23, 0.62);
+}
+
+.update-install-statusbar-tone-idle {
+  color: #c5d7ea;
 }
 
 .update-install-statusbar-percent {
   color: #8fdcff;
+  min-width: 78px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(74, 184, 255, 0.18), rgba(85, 214, 194, 0.2));
+  border: 1px solid rgba(132, 206, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.update-install-statusbar-track-label {
+  color: rgba(220, 236, 255, 0.82);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.update-install-statusbar-track-value {
+  color: #8eb7db;
+  font-size: 12px;
 }
 
 .update-install-statusbar-live-row {
@@ -5633,18 +5760,46 @@ body .attachment-preview-table td {
 
 .update-install-statusbar-track {
   width: 100%;
-  height: 10px;
+  position: relative;
+  height: 14px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(126, 156, 196, 0.16);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+  background: linear-gradient(180deg, rgba(13, 24, 38, 0.86), rgba(16, 31, 50, 0.76));
+  border: 1px solid rgba(116, 171, 222, 0.14);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.24), inset 0 0 18px rgba(40, 93, 148, 0.14);
+}
+
+.update-install-statusbar-track-glow {
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(75, 184, 255, 0.08), rgba(85, 214, 194, 0.06));
+}
+
+.update-install-statusbar-track-scanline {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.16) 48%, transparent 100%);
+  transform: translateX(-100%);
+  opacity: 0.75;
 }
 
 .update-install-statusbar-fill {
+  position: relative;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #4ab8ff 0%, #55d6c2 100%);
-  transition: width 220ms ease;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0)),
+    linear-gradient(90deg, #39aeff 0%, #58d9c3 52%, #7fe0af 100%);
+  box-shadow: 0 0 14px rgba(74, 184, 255, 0.36), inset 0 -1px 0 rgba(0, 0, 0, 0.14);
+  transition: width 260ms ease;
+}
+
+.update-install-statusbar-fill-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.34) 45%, transparent 80%);
+  transform: translateX(-120%);
 }
 
 .update-install-statusbar-stages {
@@ -5686,6 +5841,7 @@ body .attachment-preview-table td {
 .update-install-statusbar-stage {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 28px;
   padding: 5px 10px;
   border-radius: 999px;
@@ -5694,6 +5850,7 @@ body .attachment-preview-table td {
   color: #7e93aa;
   font-size: 12px;
   font-weight: 700;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .update-install-statusbar-stage-active {
@@ -5702,6 +5859,7 @@ body .attachment-preview-table td {
   border-color: rgba(129, 230, 217, 0.32);
   box-shadow: 0 0 0 0 rgba(135, 214, 255, 0.36);
   animation: updateStagePulse 1.4s ease-in-out infinite;
+  transform: translateY(-1px);
 }
 
 .update-install-statusbar-stage-completed {
@@ -5717,7 +5875,9 @@ body .attachment-preview-table td {
 }
 
 .update-install-statusbar-running .update-install-statusbar-fill {
-  background: linear-gradient(90deg, #4ab8ff 0%, #55d6c2 100%);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0)),
+    linear-gradient(90deg, #4ab8ff 0%, #55d6c2 100%);
 }
 
 .update-install-statusbar-completed .update-install-statusbar-fill {
@@ -5731,6 +5891,18 @@ body .attachment-preview-table td {
 .update-install-statusbar-running .update-install-statusbar-fill {
   background-size: 200% 100%;
   animation: updateFillShift 1.8s linear infinite;
+}
+
+.update-install-statusbar-running .update-install-statusbar-track-scanline {
+  animation: updateTrackScan 2.2s linear infinite;
+}
+
+.update-install-statusbar-running .update-install-statusbar-fill-shimmer {
+  animation: updateFillShimmer 1.8s linear infinite;
+}
+
+.update-install-statusbar-running .update-install-statusbar-percent {
+  animation: updateMetricGlow 1.8s ease-in-out infinite;
 }
 
 @keyframes updateStatusPulse {
@@ -5766,6 +5938,42 @@ body .attachment-preview-table td {
   }
   100% {
     background-position: 200% 0;
+  }
+}
+
+@keyframes updateFillShimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(160%);
+  }
+}
+
+@keyframes updateTrackScan {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes updateMetricGlow {
+  0%, 100% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 rgba(74, 184, 255, 0);
+  }
+  50% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 18px rgba(74, 184, 255, 0.18);
+  }
+}
+
+@keyframes updateOrbFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, 10px, 0) scale(1.06);
   }
 }
 
@@ -7740,16 +7948,52 @@ body .service-details-console-logs {
 }
 
 body .update-install-statusbar {
-  background: rgba(245, 249, 255, 0.96);
+  background:
+    radial-gradient(circle at top right, rgba(115, 194, 255, 0.16), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(133, 225, 201, 0.12), transparent 32%),
+    rgba(245, 249, 255, 0.96);
   border-color: rgba(120, 164, 212, 0.18);
+}
+
+body .update-install-statusbar-kicker {
+  color: #3e76a8;
 }
 
 body .update-install-statusbar-label {
   color: #21405e;
 }
 
+body .update-install-statusbar-tone {
+  background: rgba(252, 254, 255, 0.96);
+  border-color: rgba(120, 164, 212, 0.18);
+}
+
+body .update-install-statusbar-tone-running {
+  color: #1d658e;
+  background: rgba(236, 247, 255, 0.98);
+}
+
+body .update-install-statusbar-tone-completed {
+  color: #207050;
+  background: rgba(235, 250, 242, 0.98);
+}
+
+body .update-install-statusbar-tone-failed {
+  color: #a04848;
+  background: rgba(255, 241, 241, 0.98);
+}
+
 body .update-install-statusbar-percent {
   color: #2b6ea5;
+  background: linear-gradient(135deg, rgba(111, 184, 241, 0.16), rgba(108, 214, 191, 0.16));
+}
+
+body .update-install-statusbar-track-label {
+  color: #547494;
+}
+
+body .update-install-statusbar-track-value {
+  color: #6a86a4;
 }
 
 body .update-install-statusbar-live-badge,
@@ -7787,7 +8031,11 @@ body .update-install-statusbar-live-badge-failed {
 }
 
 body .update-install-statusbar-track {
-  background: rgba(166, 189, 217, 0.22);
+  background: linear-gradient(180deg, rgba(208, 222, 239, 0.52), rgba(194, 211, 231, 0.34));
+}
+
+body .update-install-statusbar-track-glow {
+  background: linear-gradient(90deg, rgba(88, 169, 230, 0.1), rgba(76, 190, 157, 0.08));
 }
 
 body .update-install-statusbar-stage {
