@@ -1126,6 +1126,7 @@ function OrdersWorkspace() {
       ? `${selectedStageSingleSelection.orderId || ''}::${selectedStageSingleSelection.itemId || ''}::${selectedStageSingleSelection.columnKey || ''}`
       : ''
   ), [selectedStageSingleSelection]);
+  const cellLogsVisibleCount = Math.min(cellLogs.length, 3);
   const selectedStageCellKeysSignature = useMemo(
     () => selectedStageCellKeys.join('|'),
     [selectedStageCellKeys],
@@ -1301,28 +1302,57 @@ function OrdersWorkspace() {
         bottom: rects[0].bottom,
       });
 
-      const viewportWidth = window.visualViewport?.width || window.innerWidth;
-      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const visualViewport = window.visualViewport || null;
+      const viewportWidth = visualViewport?.width || window.innerWidth;
+      const viewportHeight = visualViewport?.height || window.innerHeight;
+      const viewportLeft = visualViewport?.offsetLeft || 0;
+      const viewportTop = visualViewport?.offsetTop || 0;
+      const viewportRight = viewportLeft + viewportWidth;
+      const viewportBottom = viewportTop + viewportHeight;
       const margin = 12;
+      const gap = 10;
+      const availableWidth = Math.max(1, viewportWidth - (margin * 2));
+      const availableHeight = Math.max(1, viewportHeight - (margin * 2));
       const toolbarRect = manualStageToolbarRef.current?.getBoundingClientRect();
-      const fallbackToolbarWidth = Math.min(420, Math.max(320, viewportWidth - (margin * 2)));
+      const fallbackToolbarWidth = Math.min(420, availableWidth);
       const toolbarWidth = toolbarRect?.width || fallbackToolbarWidth;
       const toolbarHeight = toolbarRect?.height || 56;
-      const preferredLeft = bounds.left + ((bounds.right - bounds.left) / 2) - (toolbarWidth / 2);
-      const clampedLeft = Math.min(
-        Math.max(margin, preferredLeft),
-        Math.max(margin, viewportWidth - toolbarWidth - margin),
-      );
-      const fitsBelow = bounds.bottom + margin + toolbarHeight <= viewportHeight - margin;
-      const preferredTop = fitsBelow
-        ? bounds.bottom + margin
-        : Math.max(margin, bounds.top - toolbarHeight - margin);
-      const maxTop = Math.max(margin, viewportHeight - toolbarHeight - margin);
-      const top = Math.min(Math.max(margin, preferredTop), maxTop);
+      const minLeft = viewportLeft + margin;
+      const maxLeft = Math.max(minLeft, viewportRight - toolbarWidth - margin);
+      const leftAligned = bounds.left;
+      const rightAligned = bounds.right - toolbarWidth;
+      const centeredLeft = bounds.left + ((bounds.right - bounds.left) / 2) - (toolbarWidth / 2);
+      let left = centeredLeft;
+      if (leftAligned + toolbarWidth <= viewportRight - margin) {
+        left = leftAligned;
+      } else if (rightAligned >= minLeft) {
+        left = rightAligned;
+      }
+      left = Math.min(Math.max(minLeft, left), maxLeft);
+
+      const belowTop = bounds.bottom + gap;
+      const aboveTop = bounds.top - toolbarHeight - gap;
+      const fitsBelow = belowTop + toolbarHeight <= viewportBottom - margin;
+      const fitsAbove = aboveTop >= viewportTop + margin;
+      const minTop = viewportTop + margin;
+      const maxTop = Math.max(minTop, viewportBottom - toolbarHeight - margin);
+      let top = belowTop;
+      if (fitsBelow) {
+        top = belowTop;
+      } else if (fitsAbove) {
+        top = aboveTop;
+      } else {
+        const spaceBelow = viewportBottom - bounds.bottom - gap - margin;
+        const spaceAbove = bounds.top - viewportTop - gap - margin;
+        top = spaceBelow >= spaceAbove ? belowTop : aboveTop;
+      }
+      top = Math.min(Math.max(minTop, top), maxTop);
 
       setManualStageToolbarPosition({
-        left: clampedLeft,
+        left,
         top,
+        maxWidth: availableWidth,
+        maxHeight: availableHeight,
       });
     };
 
@@ -3781,6 +3811,8 @@ function OrdersWorkspace() {
           style={{
             left: manualStageToolbarPosition?.left ?? -9999,
             top: manualStageToolbarPosition?.top ?? -9999,
+            maxWidth: manualStageToolbarPosition?.maxWidth,
+            maxHeight: manualStageToolbarPosition?.maxHeight,
             visibility: manualStageToolbarPosition ? 'visible' : 'hidden',
           }}
         >
@@ -3862,6 +3894,7 @@ function OrdersWorkspace() {
           <div className="manual-stage-toolbar-logs">
             <div className="manual-stage-toolbar-logs-title">
               История действий
+              {selectedStageSingleSelection && cellLogs.length > 0 ? ` · ${cellLogsVisibleCount} из ${cellLogs.length}` : ''}
             </div>
             {selectedStageSingleSelection ? (
               cellLogsError ? (
