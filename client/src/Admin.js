@@ -914,7 +914,11 @@ function Admin() {
         fetchSteps(),
         fetchEmployees().catch(() => {}),
         fetchAppSettings().catch(() => {}),
+        fetchUpdateStatus().catch(() => {}),
+        refreshRoleConfig().catch(() => {}),
       ]);
+      setTelegramCheckResult(null);
+      setTelegramLogs([]);
       setSettingsSuccess(data?.message || 'Резервная копия импортирована.');
     } catch (error) {
       setSettingsError(toUserErrorMessage(error, 'Не удалось импортировать резервную копию.'));

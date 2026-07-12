@@ -10,16 +10,30 @@ const {
 } = require('../services/activityLog');
 
 const router = express.Router();
-const BACKUP_KEYS = ['orders', 'employees', 'processSteps', 'colors', 'settings', 'activityLogs'];
+const BACKUP_KEYS = [
+  'orders',
+  'customers',
+  'employees',
+  'processSteps',
+  'colors',
+  'settings',
+  'activityLogs',
+  'customerTelegramAccesses',
+  'customerTelegramLogs',
+];
 
 function countSnapshotEntities(snapshot = {}) {
   const db = normalizeDb(snapshot);
   return {
     orders: db.orders.length,
+    customers: db.customers.length,
     employees: db.employees.length,
     processSteps: db.processSteps.length,
     colors: db.colors.length,
+    customerTelegramAccesses: db.customerTelegramAccesses.length,
+    customerTelegramLogs: db.customerTelegramLogs.length,
     activityLogs: db.activityLogs.length,
+    settingsKeys: Object.keys(db.settings || {}).length,
   };
 }
 
@@ -63,6 +77,7 @@ router.get('/backup/export', requireAdminAccess(), (req, res) => {
       exportedAt: new Date().toISOString(),
       app: 'kaznadzei',
       version: 1,
+      counts: countSnapshotEntities(snapshot),
     },
     data: snapshot,
   });
