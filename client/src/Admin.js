@@ -1578,6 +1578,21 @@ function Admin() {
       <div>
         <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />
 
+          <UpdatesOverview
+            updateStatus={updateStatus}
+            installJob={installJob}
+            updateMessage={updateMessage}
+            updateError={updateError}
+            checkingUpdates={checkingUpdates}
+            installingUpdates={installingUpdates}
+            appSettings={appSettings}
+            onSettingsChange={setAppSettings}
+            onRefresh={fetchUpdateStatus}
+            onInstall={installUpdates}
+            onSaveUpdateSettings={saveUpdateSettings}
+            savingUpdateSettings={savingUpdateSettings}
+          />
+
           <div className="card">
             <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
@@ -1755,20 +1770,6 @@ function Admin() {
             </div>
           )}
 
-          <UpdatesOverview
-            updateStatus={updateStatus}
-            installJob={installJob}
-            updateMessage={updateMessage}
-            updateError={updateError}
-            checkingUpdates={checkingUpdates}
-            installingUpdates={installingUpdates}
-            appSettings={appSettings}
-            onSettingsChange={setAppSettings}
-            onRefresh={fetchUpdateStatus}
-            onInstall={installUpdates}
-            onSaveUpdateSettings={saveUpdateSettings}
-            savingUpdateSettings={savingUpdateSettings}
-          />
           <AdminTokenControls />
       </div>
     );
