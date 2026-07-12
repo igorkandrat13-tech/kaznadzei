@@ -90,15 +90,25 @@ async function copyTextToClipboard(text) {
 
 function getTelegramAccessLabel(access = null) {
   if (!access?.hasAccess) {
-    return 'Ссылка еще не создана';
+    return 'Доступ не создан';
   }
 
-  return [
-    access.telegramLinkedAt
-      ? 'Telegram привязан'
-      : 'ждет перехода по ссылке',
-    Number.isFinite(Number(access.logCount)) ? `логов: ${access.logCount}` : '',
-  ].filter(Boolean).join(' · ');
+  const parts = [];
+  if (access.telegramLinkedAt) {
+    parts.push('Telegram подключен');
+    if (access.telegramUsername) {
+      parts.push(access.telegramUsername);
+    }
+  } else {
+    parts.push('Ожидает перехода по ссылке');
+    if (access.lastIssuedAt) {
+      parts.push(`ссылка выдана ${formatDateTimeDisplay(access.lastIssuedAt)}`);
+    }
+  }
+  if (Number.isFinite(Number(access.logCount))) {
+    parts.push(`логов: ${access.logCount}`);
+  }
+  return parts.join(' · ');
 }
 
 function getTelegramAccessStatusMeta(access = null) {
@@ -110,7 +120,9 @@ function getTelegramAccessStatusMeta(access = null) {
   }
   if (access.telegramLinkedAt) {
     return {
-      label: 'Telegram подключен',
+      label: access.telegramUsername
+        ? `Telegram подключен · ${access.telegramUsername}`
+        : 'Telegram подключен',
       tone: 'success',
     };
   }
@@ -240,21 +252,6 @@ function CustomersPage() {
     fetchPageData();
   }, [fetchPageData]);
 
-  const customerOrderStats = useMemo(() => orders.reduce((acc, order) => {
-    const customerId = String(order?.customerId || '').trim();
-    if (!customerId) return acc;
-    if (!acc[customerId]) {
-      acc[customerId] = { total: 0, active: 0, archived: 0 };
-    }
-    acc[customerId].total += 1;
-    if (order?.archivedAt) {
-      acc[customerId].archived += 1;
-    } else {
-      acc[customerId].active += 1;
-    }
-    return acc;
-  }, {}), [orders]);
-
   const ordersByCustomerId = useMemo(() => {
     const nextMap = {};
     const uniqueCustomerNameMap = customers.reduce((acc, customer) => {
@@ -292,6 +289,20 @@ function CustomersPage() {
 
     return nextMap;
   }, [customers, orders]);
+
+  const customerOrderStats = useMemo(() => {
+    return customers.reduce((acc, customer) => {
+      const linkedOrders = ordersByCustomerId[customer._id] || [];
+      const archivedOrders = linkedOrders.filter((order) => Boolean(order?.archivedAt));
+      const activeOrders = linkedOrders.filter((order) => !order?.archivedAt);
+      acc[customer._id] = {
+        total: linkedOrders.length,
+        active: activeOrders.length,
+        archived: archivedOrders.length,
+      };
+      return acc;
+    }, {});
+  }, [customers, ordersByCustomerId]);
 
   const filteredCustomers = useMemo(() => {
     const normalizedSearch = String(search || '').trim().toLowerCase();
@@ -691,15 +702,18 @@ function CustomersPage() {
         {!loading && filteredCustomers.map((customer) => {
           const stats = customerOrderStats[customer._id] || { total: 0, active: 0, archived: 0 };
           const customerOrders = ordersByCustomerId[customer._id] || [];
-          const telegramButtonsDisabled = customerOrders.length === 0;
+          const activeCustomerOrders = customerOrders.filter((order) => !order?.archivedAt);
+          const telegramButtonsDisabled = activeCustomerOrders.length === 0;
           return (
             <div key={customer._id} className="mobile-order-card customer-card">
               <div className="mobile-order-card-header">
                 <div>
                   <div className="mobile-order-card-title">{customer.fullName || 'Без имени'}</div>
                   <div className="mobile-order-card-subtitle">
-                    {stats.total > 0
-                      ? `Связано заказов: ${stats.total} · активных: ${stats.active} · архив: ${stats.archived}`
+                    {stats.active > 0
+                      ? `Активных заказов: ${stats.active}${stats.archived > 0 ? ` · архив: ${stats.archived}` : ''}`
+                      : stats.archived > 0
+                        ? `Активных заказов нет · архив: ${stats.archived}`
                       : 'Пока не привязан ни к одному заказу'}
                   </div>
                 </div>
@@ -740,8 +754,10 @@ function CustomersPage() {
                 <div className="mobile-order-card-label">Telegram-доступ к заказу</div>
                 <div className="mobile-order-card-value customer-card-note-value">
                   {telegramButtonsDisabled
-                    ? 'Сначала привяжите к заказчику хотя бы один заказ.'
-                    : (customerOrders.length === 1
+                    ? (stats.archived > 0
+                        ? 'У заказчика нет активных заказов. Для архива доступ заказчика не открывается.'
+                        : 'Сначала привяжите к заказчику хотя бы один активный заказ.')
+                    : (activeCustomerOrders.length === 1
                         ? 'Откройте доступ к заказу: внутри будет ссылка и QR-код для всего заказа.'
                         : 'У заказчика несколько заказов. Откройте модалку и выберите нужный заказ целиком.' )}
                 </div>
