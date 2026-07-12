@@ -7,14 +7,15 @@ const {
   getConfiguredServiceName,
   getErrorText,
   getInstallJobSnapshot,
+  getRestartSudoersHint,
   getStoredInstallJob,
-  getSudoersHint,
   getUpdateStatus,
   hasSystemctl,
   isInstallInProgress,
   requiresInteractiveSudo,
   spawnDetachedInstallWorker,
   tryJournalctlDetailed,
+  tryRestartServiceDetailed,
   trySystemctlDetailed,
 } = require('../services/updateService');
 
@@ -126,12 +127,12 @@ router.post('/updates/restart-service', requireAdminAccess(), async (req, res) =
     });
   }
 
-  const restartResult = await trySystemctlDetailed(['restart', '--no-block', serviceName]);
+  const restartResult = await tryRestartServiceDetailed(serviceName);
   if (!restartResult.ok) {
-    const sudoHint = requiresInteractiveSudo(restartResult.errorText) ? `\n\n${getSudoersHint(serviceName)}` : '';
+    const sudoHint = requiresInteractiveSudo(restartResult.errorText) ? `\n\n${getRestartSudoersHint(serviceName)}` : '';
     return res.status(500).json({
       message: 'Не удалось запустить перезапуск сервиса.',
-      details: `${restartResult.errorText || 'Проверьте права на systemctl и sudoers.'}${sudoHint}`,
+      details: `${restartResult.errorText || 'Проверьте права на выполнение sudo systemctl restart.'}${sudoHint}`,
     });
   }
 
@@ -162,10 +163,9 @@ router.get('/updates/service-details', requireAdminAccess(), async (req, res) =>
 
   if (!statusResult.ok && !logsResult.ok) {
     const combinedErrorText = [statusResult.errorText, logsResult.errorText].filter(Boolean).join('\n\n');
-    const sudoHint = requiresInteractiveSudo(combinedErrorText) ? `\n\n${getSudoersHint(serviceName)}` : '';
     return res.status(500).json({
       message: 'Не удалось получить статус и логи сервиса.',
-      details: `${combinedErrorText}${sudoHint}`,
+      details: combinedErrorText || 'Проверьте права процесса на выполнение systemctl и journalctl.',
     });
   }
 

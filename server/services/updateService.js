@@ -130,14 +130,14 @@ function requiresInteractiveSudo(errorText) {
     || text.includes('sudo-rs:');
 }
 
-function getSudoersHint(serviceName) {
+function getRestartSudoersHint(serviceName) {
   const sudoUser = process.env.SUDO_USER || process.env.USER || 'www-data';
   const safeServiceName = serviceName || 'kaznadzei';
   return [
-    'Для кнопок перезапуска и логов настройте sudoers в режиме NOPASSWD.',
+    'Для кнопки перезапуска настройте sudoers только на одну команду.',
     'Откройте sudoers командой: sudo visudo',
     'Добавьте строку:',
-    `${sudoUser} ALL=(root) NOPASSWD: /usr/bin/systemctl restart --no-block ${safeServiceName}, /usr/bin/systemctl status ${safeServiceName} --no-pager -l, /usr/bin/journalctl -u ${safeServiceName} -n 80 --no-pager -o short-iso`,
+    `${sudoUser} ALL=(root) NOPASSWD: /usr/bin/systemctl restart --no-block ${safeServiceName}`,
   ].join('\n');
 }
 
@@ -305,12 +305,8 @@ async function trySystemctl(args) {
     return null;
   }
 
-  const sudoCommand = getSudoCommand();
-  const command = sudoCommand || systemctlCommand;
-  const finalArgs = sudoCommand ? ['-n', systemctlCommand, ...args] : args;
-
   try {
-    return await runFile(command, finalArgs);
+    return await runFile(systemctlCommand, args);
   } catch {
     return null;
   }
@@ -327,12 +323,42 @@ async function trySystemctlDetailed(args) {
     };
   }
 
+  try {
+    const result = await runFile(systemctlCommand, args);
+    return { ok: true, ...result };
+  } catch (error) {
+    return {
+      ok: false,
+      stdout: error.stdout || '',
+      stderr: error.stderr || '',
+      errorText: getErrorText(error),
+    };
+  }
+}
+
+async function tryRestartServiceDetailed(serviceName) {
+  const systemctlCommand = getSystemctlCommand();
+  if (!systemctlCommand) {
+    return {
+      ok: false,
+      stdout: '',
+      stderr: '',
+      errorText: 'systemctl недоступен на этой платформе.',
+    };
+  }
+
   const sudoCommand = getSudoCommand();
-  const command = sudoCommand || systemctlCommand;
-  const finalArgs = sudoCommand ? ['-n', systemctlCommand, ...args] : args;
+  if (!sudoCommand) {
+    return {
+      ok: false,
+      stdout: '',
+      stderr: '',
+      errorText: 'sudo недоступен на этой платформе.',
+    };
+  }
 
   try {
-    const result = await runFile(command, finalArgs);
+    const result = await runFile(sudoCommand, ['-n', systemctlCommand, 'restart', '--no-block', String(serviceName || '').trim()]);
     return { ok: true, ...result };
   } catch (error) {
     return {
@@ -355,12 +381,8 @@ async function tryJournalctlDetailed(args) {
     };
   }
 
-  const sudoCommand = getSudoCommand();
-  const command = sudoCommand || journalctlCommand;
-  const finalArgs = sudoCommand ? ['-n', journalctlCommand, ...args] : args;
-
   try {
-    const result = await runFile(command, finalArgs);
+    const result = await runFile(journalctlCommand, args);
     return { ok: true, ...result };
   } catch (error) {
     return {
@@ -754,7 +776,7 @@ module.exports = {
   getErrorText,
   getInstallJobSnapshot,
   getStoredInstallJob,
-  getSudoersHint,
+  getRestartSudoersHint,
   getUpdateStatus,
   hasSystemctl,
   isInstallInProgress,
@@ -762,5 +784,6 @@ module.exports = {
   runInstallJob,
   spawnDetachedInstallWorker,
   tryJournalctlDetailed,
+  tryRestartServiceDetailed,
   trySystemctlDetailed,
 };
