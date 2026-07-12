@@ -15,6 +15,7 @@ const {
   verifyTelegramEmployeeSessionToken,
 } = require('../services/telegramWebAppAuth');
 const {
+  CUSTOMER_FULL_ORDER_BUTTON_TEXT,
   extractCustomerAccessTokenFromStartText,
   getCustomerAlreadyLinkedText,
   getCustomerFullOrderText,
@@ -117,9 +118,11 @@ function getUnauthorizedReplyMarkup() {
 function isCustomerFullOrderRequest(text = '') {
   const normalizedText = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
   return normalizedText === 'весь заказ'
+    || normalizedText === '📋 весь заказ'
     || normalizedText === 'весьзаказ'
     || normalizedText === 'заказ целиком'
     || normalizedText.includes('весь заказ')
+    || normalizedText.includes(String(CUSTOMER_FULL_ORDER_BUTTON_TEXT || '').trim().toLowerCase())
     || normalizedText.includes('заказ целиком');
 }
 

@@ -9,6 +9,7 @@ const { getBotInfo, sendMessage } = require('./telegramService');
 const { addTelegramDiagnosticLog } = require('./telegramDiagnostics');
 
 const CUSTOMER_START_PREFIX = 'customer_';
+const CUSTOMER_FULL_ORDER_BUTTON_TEXT = '📋 Весь заказ';
 
 function getConfiguredBotToken() {
   return String(SettingsStore.get().telegramBotToken || '').trim();
@@ -179,7 +180,7 @@ function getCustomerSubscriptionReadyText(access = {}) {
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
-    'Для полного списка изделий нажмите "Весь заказ".',
+    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
 }
 
@@ -199,14 +200,17 @@ function getCustomerAlreadyLinkedText(accesses = []) {
   return [
     '✅ Уведомления уже подключены:',
     ...lines.map((line) => `• ${line}`),
-    'Для полного списка изделий нажмите "Весь заказ".',
+    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].join('\n');
 }
 
 function getCustomerKeyboardReplyMarkup() {
   return {
-    keyboard: [[{ text: 'Весь заказ' }]],
+    keyboard: [[{ text: CUSTOMER_FULL_ORDER_BUTTON_TEXT }]],
     resize_keyboard: true,
+    is_persistent: true,
+    one_time_keyboard: false,
+    input_field_placeholder: 'Выберите действие',
   };
 }
 
@@ -244,7 +248,7 @@ function getCustomerOrderUpdateItemText(order = {}, item = {}, stageLabel = '', 
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${clear ? '↩️' : '✅'} ${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}`,
     `${getStatusEmoji(itemStatus)} Статус изделия: ${itemStatus}`,
-    'Для полного списка изделий нажмите "Весь заказ".',
+    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
 }
 
@@ -255,7 +259,7 @@ function getCustomerOrderChangedItemsText(order = {}, changedItems = [], { clear
     return [
       '🛠 Обновление по заказу',
       `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-      'Для полного списка изделий нажмите "Весь заказ".',
+      `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
     ].filter(Boolean).join('\n');
   }
 
@@ -266,7 +270,7 @@ function getCustomerOrderChangedItemsText(order = {}, changedItems = [], { clear
       const itemStatus = getReadableItemStatus(item);
       return `${clear ? '↩️' : '✅'} ${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}\n${getStatusEmoji(itemStatus)} Статус изделия: ${itemStatus}`;
     }),
-    'Для полного списка изделий нажмите "Весь заказ".',
+    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
 }
 
@@ -504,7 +508,7 @@ async function notifyCustomerOrderArchived(order = {}) {
     '📦 Заказ переведен в архив.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     buildCustomerOrderProgressSummary(order),
-    'Для полного списка изделий нажмите "Весь заказ".',
+    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
   return notifyCustomerOrderStatusText(order, text, {
     type: 'order.archived',
@@ -518,7 +522,7 @@ async function notifyCustomerOrderRestored(order = {}) {
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
-    'Для полного списка изделий нажмите "Весь заказ".',
+    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
   return notifyCustomerOrderStatusText(order, text, {
     type: 'order.restored',
@@ -546,6 +550,7 @@ module.exports = {
   getCustomerOrderUpdateItemText,
   buildCustomerOrderItemsStatusLines,
   buildCustomerOrderProgressSummary,
+  CUSTOMER_FULL_ORDER_BUTTON_TEXT,
   ensureCustomerOrderAccess,
   CUSTOMER_START_PREFIX,
   extractCustomerAccessTokenFromStartText,
