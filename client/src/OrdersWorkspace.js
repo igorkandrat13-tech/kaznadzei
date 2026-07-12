@@ -840,10 +840,12 @@ function OrdersWorkspace() {
   const [cellLogs, setCellLogs] = useState([]);
   const [cellLogsLoading, setCellLogsLoading] = useState(false);
   const [cellLogsError, setCellLogsError] = useState('');
+  const [manualStageLogListMaxHeight, setManualStageLogListMaxHeight] = useState('');
   useGlobalErrorEffect(cellLogsError, 'Ошибка загрузки истории ячейки.');
   const headerScrollRef = useRef(null);
   const bodyScrollRef = useRef(null);
   const manualStageToolbarRef = useRef(null);
+  const manualStageLogListRef = useRef(null);
   const manualDatePickerOpenRef = useRef(false);
   const manualDateSelectionSyncRef = useRef('');
   const attachmentInputRefs = useRef({});
@@ -1456,6 +1458,46 @@ function OrdersWorkspace() {
     }
     fetchCellLogs(selectedStageSingleSelection);
   }, [fetchCellLogs, selectedStageSingleSelection, selectedStageSingleSelectionLogKey]);
+
+  useLayoutEffect(() => {
+    const listNode = manualStageLogListRef.current;
+    if (!listNode) {
+      setManualStageLogListMaxHeight('');
+      return undefined;
+    }
+
+    const updateLogListHeight = () => {
+      const entries = Array.from(listNode.querySelectorAll('.cell-log-entry'));
+      if (entries.length <= 3) {
+        setManualStageLogListMaxHeight('');
+        return;
+      }
+
+      const computedStyle = window.getComputedStyle(listNode);
+      const gap = Number.parseFloat(computedStyle.rowGap || computedStyle.gap || '0') || 0;
+      const nextHeight = entries
+        .slice(0, 3)
+        .reduce((sum, entry, index) => sum + entry.getBoundingClientRect().height + (index > 0 ? gap : 0), 0);
+      setManualStageLogListMaxHeight(nextHeight > 0 ? `${Math.ceil(nextHeight)}px` : '');
+    };
+
+    updateLogListHeight();
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          updateLogListHeight();
+        })
+      : null;
+
+    resizeObserver?.observe(listNode);
+    Array.from(listNode.querySelectorAll('.cell-log-entry')).forEach((entry) => resizeObserver?.observe(entry));
+    window.addEventListener('resize', updateLogListHeight);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateLogListHeight);
+    };
+  }, [cellLogs, cellLogsLoading, selectedStageSingleSelectionLogKey]);
 
   const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
     if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0) return;
@@ -3902,7 +3944,11 @@ function OrdersWorkspace() {
                   {cellLogsError}
                 </div>
               ) : cellLogs.length > 0 ? (
-                <div className="cell-log-list manual-stage-toolbar-log-list">
+                <div
+                  ref={manualStageLogListRef}
+                  className="cell-log-list manual-stage-toolbar-log-list"
+                  style={manualStageLogListMaxHeight ? { maxHeight: manualStageLogListMaxHeight } : undefined}
+                >
                   {cellLogs.map((entry) => (
                     <div key={entry._id || `${entry.createdAt}-${entry.action}`} className="cell-log-entry">
                       <div className="cell-log-entry-title">{formatCellLogHeadline(entry)}</div>
