@@ -3,7 +3,7 @@ const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
 const { requireAdminAccess } = require('../middleware/security');
-const { getBotInfo, getWebhookInfo, setWebhook, setChatMenuButton, sendMessage } = require('../services/telegramService');
+const { getBotInfo, getWebhookInfo, setWebhook, setChatMenuButton, sendMessage, answerCallbackQuery } = require('../services/telegramService');
 const {
   addTelegramDiagnosticLog,
   clearTelegramDiagnosticLogs,
@@ -18,9 +18,11 @@ const {
   CUSTOMER_FULL_ORDER_BUTTON_TEXT,
   extractCustomerAccessTokenFromStartText,
   getCustomerAlreadyLinkedText,
-  getCustomerFullOrderText,
+  getCustomerItemCardMessage,
+  getCustomerOrderCardMessage,
   getCustomerKeyboardReplyMarkup,
   getCustomerSubscriptionReadyText,
+  parseCustomerCallbackData,
   sendCustomerTelegramMessage,
 } = require('../services/customerTelegramService');
 const { getRoleDefinitions, getRoleLabel } = require('../config/roles');
@@ -321,14 +323,15 @@ async function processTelegramMessage(token, message) {
       text,
     });
     for (const access of linkedCustomerAccesses) {
+      const orderCardMessage = getCustomerOrderCardMessage(access);
       await sendCustomerTelegramMessage({
         access,
         chatId,
         telegramUserId: from.id,
         type: 'customer.order.full',
-        text: getCustomerFullOrderText(access),
+        text: orderCardMessage.text,
         meta: { event: 'full-order' },
-        extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
+        extra: orderCardMessage.extra,
       });
     }
     logCustomerTelegramDebug('full-order.sent', {
@@ -377,6 +380,76 @@ async function processTelegramMessage(token, message) {
     `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь используйте кнопку меню "📷 Сканер QR".`,
     linkedEmployee
   );
+}
+
+async function processTelegramCallbackQuery(token, callbackQuery) {
+  const callbackId = String(callbackQuery?.id || '').trim();
+  const payload = parseCustomerCallbackData(callbackQuery?.data);
+  if (!callbackId || !payload) return;
+
+  const chatId = callbackQuery?.message?.chat?.id;
+  const from = callbackQuery?.from;
+  if (!chatId || !from) {
+    await answerCallbackQuery(token, callbackId).catch(() => null);
+    return;
+  }
+
+  const touchedCustomerAccesses = CustomerTelegramAccessStore.touchLinkedByTelegramContext({
+    chatId,
+    telegramUserId: from.id,
+    username: from.username ? `@${String(from.username).replace(/^@+/, '')}` : '',
+    firstName: from.first_name || '',
+    lastName: from.last_name || '',
+  });
+  const linkedCustomerAccesses = (() => {
+    const items = [
+      ...touchedCustomerAccesses,
+      ...CustomerTelegramAccessStore.findLinkedByTelegramUserId(from.id),
+      ...CustomerTelegramAccessStore.findLinkedByTelegramChatId(chatId),
+    ];
+    const uniqueById = new Map();
+    for (const item of items) {
+      if (!item?._id) continue;
+      uniqueById.set(item._id, item);
+    }
+    return Array.from(uniqueById.values());
+  })();
+  const access = linkedCustomerAccesses.find((item) => item._id === payload.accessId) || null;
+  if (!access) {
+    await answerCallbackQuery(token, callbackId, 'Доступ к заказу больше недоступен.').catch(() => null);
+    return;
+  }
+
+  try {
+    if (payload.action === 'order') {
+      const orderCardMessage = getCustomerOrderCardMessage(access);
+      await sendCustomerTelegramMessage({
+        access,
+        chatId,
+        telegramUserId: from.id,
+        type: 'customer.order.full',
+        text: orderCardMessage.text,
+        meta: { event: 'full-order-callback' },
+        extra: orderCardMessage.extra,
+      });
+      return;
+    }
+
+    if (payload.action === 'item') {
+      const itemCardMessage = getCustomerItemCardMessage(access, payload.itemId);
+      await sendCustomerTelegramMessage({
+        access,
+        chatId,
+        telegramUserId: from.id,
+        type: 'customer.order.item',
+        text: itemCardMessage.text,
+        meta: { event: 'item-card', itemId: payload.itemId || '' },
+        extra: itemCardMessage.extra,
+      });
+    }
+  } finally {
+    await answerCallbackQuery(token, callbackId).catch(() => null);
+  }
 }
 
 router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
@@ -616,6 +689,9 @@ router.post('/telegram/webhook', async (req, res) => {
   try {
     if (req.body?.message) {
       await processTelegramMessage(token, req.body.message);
+    }
+    if (req.body?.callback_query) {
+      await processTelegramCallbackQuery(token, req.body.callback_query);
     }
   } catch (error) {
     console.error('Telegram webhook error:', error.message);

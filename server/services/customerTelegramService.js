@@ -10,6 +10,71 @@ const { addTelegramDiagnosticLog } = require('./telegramDiagnostics');
 
 const CUSTOMER_START_PREFIX = 'customer_';
 const CUSTOMER_FULL_ORDER_BUTTON_TEXT = '📋 Весь заказ';
+const CUSTOMER_CALLBACK_PREFIX = 'customer';
+const CUSTOMER_CALLBACK_ACTION_ORDER = 'order';
+const CUSTOMER_CALLBACK_ACTION_ITEM = 'item';
+const ORDER_PRIMARY_HEADERS = [
+  'Номер заказа',
+  'Заказчик',
+  'Помещение',
+  '№ помещения',
+  '№ изделия в заказе',
+  'Кол-во изделй',
+  'Наименование',
+  'Карточка заказа',
+  'Комплектация заказа',
+  'Примечания',
+  'Отгрузка до',
+  'СТОЛЯР',
+  'Заявки на расходники',
+  'Покраска',
+  'Начало изготовления изделия',
+  'Окончание изготовления изделия',
+  'Время изготовления изделий',
+  'Время изготовления заказа',
+];
+const ORDER_COLUMN_KEY_TO_PRIMARY_INDEX = {
+  orderNumber: ORDER_PRIMARY_HEADERS.indexOf('Номер заказа'),
+  customer: ORDER_PRIMARY_HEADERS.indexOf('Заказчик'),
+  room: ORDER_PRIMARY_HEADERS.indexOf('Помещение'),
+  roomNumber: ORDER_PRIMARY_HEADERS.indexOf('№ помещения'),
+  itemNumber: ORDER_PRIMARY_HEADERS.indexOf('№ изделия в заказе'),
+  quantity: ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй'),
+  name: ORDER_PRIMARY_HEADERS.indexOf('Наименование'),
+  orderCard: ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа'),
+  packageName: ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа'),
+  notes: ORDER_PRIMARY_HEADERS.indexOf('Примечания'),
+  deliveryDate: ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до'),
+  carpenter: ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР'),
+  materialRequests: ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники'),
+  paint: ORDER_PRIMARY_HEADERS.indexOf('Покраска'),
+  itemStartDate: ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления изделия'),
+  itemEndDate: ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия'),
+  itemDuration: ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий'),
+  duration: ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа'),
+};
+const PRIMARY_INDEX_TO_ORDER_COLUMN_KEY = Object.entries(ORDER_COLUMN_KEY_TO_PRIMARY_INDEX).reduce((acc, [columnKey, index]) => {
+  if (Number.isInteger(index)) {
+    acc[index] = columnKey;
+  }
+  return acc;
+}, {});
+const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
+  'room',
+  'roomNumber',
+  'itemNumber',
+  'quantity',
+  'name',
+  'orderCard',
+  'packageName',
+  'notes',
+  'deliveryDate',
+  'carpenter',
+  'materialRequests',
+  'paint',
+];
+const ORDER_TRACKED_PRIMARY_START_INDEX = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX.room;
+const ORDER_TRACKED_PRIMARY_END_INDEX = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX.duration;
 
 function getConfiguredBotToken() {
   return String(SettingsStore.get().telegramBotToken || '').trim();
@@ -17,6 +82,390 @@ function getConfiguredBotToken() {
 
 function createAccessToken() {
   return crypto.randomBytes(16).toString('hex');
+}
+
+function getLatestTimestamp(...timestamps) {
+  return timestamps
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .sort()
+    .at(-1) || '';
+}
+
+function getEarliestTimestamp(...timestamps) {
+  return timestamps
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .sort()
+    .at(0) || '';
+}
+
+function formatDateLabel(value = '') {
+  const normalized = String(value || '').trim();
+  if (!normalized) return 'не указана';
+  const plainDateMatch = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (plainDateMatch) {
+    return `${plainDateMatch[3]}.${plainDateMatch[2]}.${plainDateMatch[1]}`;
+  }
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return normalized;
+  return parsed.toLocaleDateString('ru-RU');
+}
+
+function truncateTelegramLabel(value = '', maxLength = 26) {
+  const normalized = String(value || '').trim().replace(/\s+/g, ' ');
+  if (!normalized) return '';
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(1, maxLength - 1)).trim()}…`;
+}
+
+function buildTelegramProgressBar(completed = 0, total = 0, { segments = 8 } = {}) {
+  const safeTotal = Math.max(0, Number(total) || 0);
+  const safeCompleted = Math.max(0, Math.min(safeTotal, Number(completed) || 0));
+  if (!safeTotal) {
+    return { bar: '⬜⬜⬜⬜⬜⬜⬜⬜', percent: 0 };
+  }
+  const percent = Math.round((safeCompleted / safeTotal) * 100);
+  const filledSegments = Math.max(0, Math.min(segments, Math.round((safeCompleted / safeTotal) * segments)));
+  return {
+    bar: `${'🟩'.repeat(filledSegments)}${'⬜'.repeat(Math.max(0, segments - filledSegments))}`,
+    percent,
+  };
+}
+
+function getStageStatusMarker(status = '') {
+  const normalizedStatus = String(status || '').trim();
+  if (normalizedStatus === 'completed') return '🟩';
+  if (normalizedStatus === 'in_progress') return '🟨';
+  return '⬜';
+}
+
+function getItemActiveRoleStage(item = {}, role = '') {
+  return (Array.isArray(item?.stages) ? item.stages : []).find((stage) => stage?.role === role && stage?.status === 'in_progress') || null;
+}
+
+function getItemActiveStage(item = {}) {
+  return (Array.isArray(item?.stages) ? item.stages : []).find((stage) => stage?.status === 'in_progress') || null;
+}
+
+function getItemAssignedStage(item = {}) {
+  const stages = Array.isArray(item?.stages) ? item.stages : [];
+  const stagesWithEmployee = stages.filter((stage) => String(stage?.employeeName || '').trim());
+  if (stagesWithEmployee.length === 0) return null;
+
+  const inProgressStages = stagesWithEmployee.filter((stage) => stage?.status === 'in_progress');
+  const candidates = inProgressStages.length > 0 ? inProgressStages : stagesWithEmployee;
+  return candidates.reduce((currentStage, stage) => {
+    if (!currentStage) return stage;
+    const currentTs = Date.parse(currentStage.startedAt || currentStage.completedAt || '') || 0;
+    const nextTs = Date.parse(stage.startedAt || stage.completedAt || '') || 0;
+    return nextTs >= currentTs ? stage : currentStage;
+  }, null);
+}
+
+function getItemEffectiveColumnTimestamp(item = {}, columnKey = '') {
+  const normalizedColumnKey = String(columnKey || '').trim();
+  if (!normalizedColumnKey) return '';
+
+  const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
+    ? item.manualStageMarks
+    : {};
+  const manualStageClears = item?.manualStageClears && typeof item.manualStageClears === 'object'
+    ? item.manualStageClears
+    : {};
+
+  if (manualStageClears[normalizedColumnKey]) return '';
+
+  const manualMark = manualStageMarks[normalizedColumnKey] || null;
+  const manualMarkLegendKey = String(manualMark?.legendKey || '').trim();
+  if ((normalizedColumnKey === 'itemStartDate' || normalizedColumnKey === 'itemEndDate') && manualMarkLegendKey) {
+    return '';
+  }
+
+  const updatedAt = String(manualMark?.updatedAt || '').trim();
+  if (updatedAt) return updatedAt;
+
+  if (normalizedColumnKey === 'orderCard' || normalizedColumnKey === 'paint') {
+    const fieldName = normalizedColumnKey === 'paint' ? 'paintAttachments' : 'attachments';
+    const attachments = Array.isArray(item?.[fieldName]) ? item[fieldName] : [];
+    return getLatestTimestamp(...attachments.map((attachment) => (
+      attachment?.uploadedAt || attachment?.createdAt || attachment?.updatedAt || ''
+    )));
+  }
+
+  if (normalizedColumnKey === 'packageName') {
+    const packageItems = Array.isArray(item?.packageItems) ? item.packageItems : [];
+    if (packageItems.length === 0 || packageItems.some((packageItem) => !packageItem?.isCompleted)) {
+      return '';
+    }
+    return getLatestTimestamp(...packageItems.map((packageItem) => (
+      packageItem?.completedAt || packageItem?.updatedAt || ''
+    )));
+  }
+
+  if (normalizedColumnKey === 'materialRequests') {
+    const materialRequestItems = Array.isArray(item?.materialRequestItems) ? item.materialRequestItems : [];
+    if (materialRequestItems.length === 0 || materialRequestItems.some((requestItem) => !requestItem?.isCompleted)) {
+      return '';
+    }
+    return getLatestTimestamp(...materialRequestItems.map((requestItem) => (
+      requestItem?.completedAt || requestItem?.updatedAt || ''
+    )));
+  }
+
+  if (normalizedColumnKey !== 'carpenter') return '';
+
+  const carpenterAssignment = item?.workerAssignments?.carpenter || null;
+  const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
+  const activeStage = getItemActiveStage(item);
+  const assignedStage = getItemAssignedStage(item);
+  const workerStageForText = assignedStage || carpenterActiveStage || activeStage || null;
+  const earliestAutoAt = getEarliestTimestamp(
+    carpenterAssignment?.scannedAt,
+    carpenterActiveStage?.startedAt,
+    workerStageForText?.startedAt,
+  );
+  return (carpenterAssignment || workerStageForText)
+    ? earliestAutoAt
+    : '';
+}
+
+function getItemManufacturingMeta(item = {}) {
+  const explicitStartAt = getItemEffectiveColumnTimestamp(item, 'itemStartDate');
+  const triggerStartAt = getItemEffectiveColumnTimestamp(item, 'room');
+  const startAt = explicitStartAt || triggerStartAt || '';
+  const explicitEndAt = getItemEffectiveColumnTimestamp(item, 'itemEndDate');
+  const completionTimestamps = ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS.map((columnKey) => (
+    getItemEffectiveColumnTimestamp(item, columnKey)
+  ));
+  const isCompleted = completionTimestamps.every(Boolean);
+  const endAt = explicitEndAt || (isCompleted ? getLatestTimestamp(...completionTimestamps) : '');
+
+  return {
+    startAt,
+    endAt,
+    isCompleted,
+  };
+}
+
+function getTrackedSecondaryHeaderCells() {
+  const settings = SettingsStore.get();
+  const secondaryHeaders = Array.isArray(settings?.orderStageLegendConfig?.secondaryHeaders)
+    ? settings.orderStageLegendConfig.secondaryHeaders
+    : [];
+  let startIndex = 0;
+  return secondaryHeaders
+    .map((header) => {
+      const span = Number(header?.colSpan) || 1;
+      const cell = {
+        ...header,
+        startIndex,
+        endIndex: startIndex + span - 1,
+      };
+      startIndex += span;
+      return cell;
+    })
+    .filter((header) => (
+      String(header?.legendKey || '').trim()
+      && header.endIndex >= ORDER_TRACKED_PRIMARY_START_INDEX
+      && header.startIndex <= ORDER_TRACKED_PRIMARY_END_INDEX
+    ));
+}
+
+function getTrackedStageLabel(header = {}) {
+  const label = String(header?.label || '').trim();
+  if (label === 'Готово') return 'Заказ готов';
+  return label || 'Этап';
+}
+
+function getItemTrackedStageProgress(order = {}, item = {}) {
+  const headers = getTrackedSecondaryHeaderCells();
+  return headers.map((header) => {
+    const columnIndexes = [];
+    for (let columnIndex = Math.max(header.startIndex, ORDER_TRACKED_PRIMARY_START_INDEX); columnIndex <= Math.min(header.endIndex, ORDER_TRACKED_PRIMARY_END_INDEX); columnIndex += 1) {
+      columnIndexes.push(columnIndex);
+    }
+
+    const cells = columnIndexes
+      .map((columnIndex) => {
+        const columnKey = PRIMARY_INDEX_TO_ORDER_COLUMN_KEY[columnIndex] || '';
+        if (!columnKey) return null;
+        let value = getItemEffectiveColumnTimestamp(item, columnKey);
+        if (!value && (columnKey === 'itemStartDate' || columnKey === 'itemEndDate' || columnKey === 'itemDuration')) {
+          const itemMeta = getItemManufacturingMeta(item);
+          if (columnKey === 'itemStartDate') value = itemMeta.startAt;
+          if (columnKey === 'itemEndDate') value = itemMeta.endAt;
+          if (columnKey === 'itemDuration' && itemMeta.isCompleted) value = itemMeta.endAt || itemMeta.startAt;
+        }
+        if (!value && columnKey === 'duration') {
+          const orderMeta = OrderStore.deriveOrderManufacturingMeta(order);
+          if (orderMeta.isCompleted) {
+            value = orderMeta.endAt || orderMeta.startAt;
+          }
+        }
+        return {
+          columnKey,
+          value,
+          isCompleted: Boolean(value),
+        };
+      })
+      .filter(Boolean);
+
+    const completedCount = cells.filter((cell) => cell.isCompleted).length;
+    const totalCount = cells.length;
+    let status = 'pending';
+    if (completedCount > 0 && completedCount < totalCount) {
+      status = 'in_progress';
+    } else if (totalCount > 0 && completedCount === totalCount) {
+      status = 'completed';
+    }
+
+    return {
+      key: `${String(header?.legendKey || '').trim()}-${header.startIndex}-${header.endIndex}`,
+      label: getTrackedStageLabel(header),
+      status,
+      completedCount,
+      totalCount,
+    };
+  });
+}
+
+function getItemProgressSnapshot(order = {}, item = {}) {
+  const stageProgress = getItemTrackedStageProgress(order, item);
+  const total = stageProgress.reduce((sum, stage) => sum + stage.totalCount, 0);
+  const completed = stageProgress.reduce((sum, stage) => sum + stage.completedCount, 0);
+  return {
+    total,
+    completed,
+    ...buildTelegramProgressBar(completed, total),
+  };
+}
+
+function getOrderProgressSnapshot(order = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const snapshots = items.map((item) => getItemProgressSnapshot(order, item));
+  const total = snapshots.reduce((sum, snapshot) => sum + snapshot.total, 0);
+  const completed = snapshots.reduce((sum, snapshot) => sum + snapshot.completed, 0);
+  return {
+    total,
+    completed,
+    ...buildTelegramProgressBar(completed, total),
+  };
+}
+
+function buildCustomerOrderInlineKeyboard(access = {}, order = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const buttons = items.map((item, index) => {
+    const progress = getItemProgressSnapshot(order, item);
+    return {
+      text: `${truncateTelegramLabel(getOrderItemDisplayName(item, index), 20)} ${buildTelegramProgressBar(progress.completed, progress.total, { segments: 5 }).bar} ${progress.percent}%`,
+      callback_data: `${CUSTOMER_CALLBACK_PREFIX}|${CUSTOMER_CALLBACK_ACTION_ITEM}|${String(access?._id || '').trim()}|${String(item?.itemId || '').trim()}`,
+    };
+  }).filter((button) => button.callback_data.split('|')[3]);
+
+  if (buttons.length === 0) return [];
+
+  const rows = [];
+  for (let index = 0; index < buttons.length; index += 2) {
+    rows.push(buttons.slice(index, index + 2));
+  }
+  return rows;
+}
+
+function getCustomerOrderCardMessage(access = {}) {
+  const { order } = getCustomerAccessContext(access);
+  const progress = getOrderProgressSnapshot(order);
+  const text = [
+    '📋 Весь заказ',
+    `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
+    `Дата заказа: ${formatDateLabel(order?.orderDate || order?.createdAt || '')}`,
+    `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
+    `Готовность заказа: ${progress.bar} ${progress.percent}%`,
+    `Изделий в заказе: ${getOrderItemCount(order)}`,
+    'Нажмите на изделие ниже, чтобы открыть его карточку.',
+  ].filter(Boolean).join('\n');
+
+  const inlineKeyboard = buildCustomerOrderInlineKeyboard(access, order);
+  return {
+    text,
+    extra: inlineKeyboard.length > 0
+      ? {
+          reply_markup: {
+            inline_keyboard: inlineKeyboard,
+          },
+        }
+      : {},
+  };
+}
+
+function getCustomerItemCardMessage(access = {}, itemId = '') {
+  const { order } = getCustomerAccessContext(access);
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const item = items.find((entry) => String(entry?.itemId || '').trim() === String(itemId || '').trim()) || null;
+  if (!item) {
+    return {
+      text: [
+        '📦 Карточка изделия',
+        `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
+        'Изделие не найдено. Откройте заказ еще раз и выберите нужное изделие.',
+      ].join('\n'),
+      extra: {
+        reply_markup: {
+          inline_keyboard: [[{
+            text: '⬅️ К заказу',
+            callback_data: `${CUSTOMER_CALLBACK_PREFIX}|${CUSTOMER_CALLBACK_ACTION_ORDER}|${String(access?._id || '').trim()}`,
+          }]],
+        },
+      },
+    };
+  }
+
+  const itemIndex = items.findIndex((entry) => String(entry?.itemId || '').trim() === String(itemId || '').trim());
+  const itemNumber = String(item?.itemNumber || itemIndex + 1).trim() || String(itemIndex + 1);
+  const itemProgress = getItemProgressSnapshot(order, item);
+  const stageLines = getItemTrackedStageProgress(order, item).map((stage) => {
+    const progress = buildTelegramProgressBar(stage.completedCount, stage.totalCount, { segments: Math.max(3, Math.min(6, stage.totalCount || 3)) });
+    return `${getStageStatusMarker(stage.status)} ${stage.label} ${progress.bar} ${stage.completedCount}/${stage.totalCount}`;
+  });
+
+  return {
+    text: [
+      '📦 Карточка изделия',
+      `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
+      `Изделие № ${itemNumber}`,
+      `${String(item?.name || '').trim() || `Изделие ${itemNumber}`}`,
+      `Готовность изделия: ${itemProgress.bar} ${itemProgress.percent}%`,
+      'Стадии:',
+      ...stageLines,
+    ].filter(Boolean).join('\n'),
+    extra: {
+      reply_markup: {
+        inline_keyboard: [[{
+          text: '⬅️ К заказу',
+          callback_data: `${CUSTOMER_CALLBACK_PREFIX}|${CUSTOMER_CALLBACK_ACTION_ORDER}|${String(access?._id || '').trim()}`,
+        }]],
+      },
+    },
+  };
+}
+
+function parseCustomerCallbackData(value = '') {
+  const parts = String(value || '').trim().split('|');
+  if (parts.length < 3 || parts[0] !== CUSTOMER_CALLBACK_PREFIX) {
+    return null;
+  }
+  const action = String(parts[1] || '').trim();
+  const accessId = String(parts[2] || '').trim();
+  if (!accessId) return null;
+  if (action === CUSTOMER_CALLBACK_ACTION_ORDER) {
+    return { action, accessId, itemId: '' };
+  }
+  if (action === CUSTOMER_CALLBACK_ACTION_ITEM) {
+    const itemId = String(parts[3] || '').trim();
+    if (!itemId) return null;
+    return { action, accessId, itemId };
+  }
+  return null;
 }
 
 function getReadableOrderStatus(order = {}) {
@@ -221,14 +670,7 @@ function getCustomerRemoveKeyboardReplyMarkup() {
 }
 
 function getCustomerFullOrderText(access = {}) {
-  const { order } = getCustomerAccessContext(access);
-  return [
-    `📋 Весь заказ`,
-    `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
-    buildCustomerOrderProgressSummary(order),
-    ...buildCustomerOrderItemsStatusLines(order),
-  ].filter(Boolean).join('\n');
+  return getCustomerOrderCardMessage(access).text;
 }
 
 function getCustomerAccessClosedText(order = {}, { hasOtherAccesses = false } = {}) {
@@ -362,6 +804,8 @@ async function sendCustomerTelegramMessage({
         ? 'force_reply'
         : extra?.reply_markup?.keyboard
           ? 'keyboard'
+          : extra?.reply_markup?.inline_keyboard
+            ? 'inline_keyboard'
           : extra?.reply_markup?.remove_keyboard
             ? 'remove_keyboard'
             : '',
@@ -546,14 +990,19 @@ module.exports = {
   getCustomerRemoveKeyboardReplyMarkup,
   getCustomerAccessClosedText,
   getCustomerFullOrderText,
+  getCustomerOrderCardMessage,
+  getCustomerItemCardMessage,
   getCustomerOrderChangedItemsText,
   getCustomerOrderUpdateItemText,
   buildCustomerOrderItemsStatusLines,
   buildCustomerOrderProgressSummary,
   CUSTOMER_FULL_ORDER_BUTTON_TEXT,
+  CUSTOMER_CALLBACK_ACTION_ITEM,
+  CUSTOMER_CALLBACK_ACTION_ORDER,
   ensureCustomerOrderAccess,
   CUSTOMER_START_PREFIX,
   extractCustomerAccessTokenFromStartText,
+  parseCustomerCallbackData,
   getCustomerAlreadyLinkedText,
   getCustomerSubscriptionReadyText,
   getCustomerOrderShare,

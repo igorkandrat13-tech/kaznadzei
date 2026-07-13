@@ -48,7 +48,7 @@ async function getWebhookInfo(token) {
 async function setWebhook(token, url) {
   return telegramRequest(token, 'setWebhook', {
     url,
-    allowed_updates: ['message'],
+    allowed_updates: ['message', 'callback_query'],
   });
 }
 
@@ -57,6 +57,13 @@ async function sendMessage(token, chatId, text, extra = {}) {
     chat_id: chatId,
     text,
     ...extra,
+  });
+}
+
+async function answerCallbackQuery(token, callbackQueryId, text = '') {
+  return telegramRequest(token, 'answerCallbackQuery', {
+    callback_query_id: callbackQueryId,
+    ...(text ? { text } : {}),
   });
 }
 
@@ -83,4 +90,5 @@ module.exports = {
   setWebhook,
   setChatMenuButton,
   sendMessage,
+  answerCallbackQuery,
 };
