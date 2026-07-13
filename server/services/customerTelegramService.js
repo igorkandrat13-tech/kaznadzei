@@ -394,12 +394,11 @@ function getCustomerBackToItemsButtonText(access = {}) {
 }
 
 function getCustomerItemButtonText(access = {}, order = {}, item = {}, index = 0) {
-  const progress = getItemProgressSnapshot(order, item);
   const orderNumber = String(order?.orderNumber || '').trim() || 'без номера';
   const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
-  const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 64);
+  const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 24);
   return normalizeTelegramButtonText(
-    `${CUSTOMER_ITEM_BUTTON_PREFIX} Заказ ${orderNumber} • Изделие ${itemNumber} • ${itemName} • ${progress.bar} ${progress.percent}%`
+    `${CUSTOMER_ITEM_BUTTON_PREFIX} Заказ ${orderNumber} • Изделие ${itemNumber} • ${itemName}`
   );
 }
 
@@ -474,6 +473,22 @@ function resolveCustomerBackToItemsFromText(accesses = [], text = '') {
   return (Array.isArray(accesses) ? accesses[0] : null) || null;
 }
 
+function buildCustomerOrderCardItemsLines(order = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  if (items.length === 0) return [];
+
+  const lines = ['Изделия:'];
+  items.forEach((item, index) => {
+    const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
+    const itemName = String(item?.name || '').trim() || `Изделие ${itemNumber}`;
+    const itemProgress = getItemProgressSnapshot(order, item);
+    lines.push(`Изделие № ${itemNumber}`);
+    lines.push(itemName);
+    lines.push(`${itemProgress.bar} ${itemProgress.percent}%`);
+  });
+  return lines;
+}
+
 function getCustomerOrderCardMessage(access = {}) {
   const { order } = getCustomerAccessContext(access);
   const progress = getOrderProgressSnapshot(order);
@@ -485,6 +500,7 @@ function getCustomerOrderCardMessage(access = {}) {
     'Готовность заказа:',
     `${progress.bar} ${progress.percent}%`,
     `Изделий в заказе: ${getOrderItemCount(order)}`,
+    ...buildCustomerOrderCardItemsLines(order),
     'Нажмите на изделие ниже, чтобы открыть его карточку.',
   ].filter(Boolean).join('\n');
 
