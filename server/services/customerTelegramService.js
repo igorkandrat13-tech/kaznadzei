@@ -482,7 +482,8 @@ function getCustomerOrderCardMessage(access = {}) {
     `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
     `Дата заказа: ${formatDateLabel(order?.orderDate || order?.createdAt || '')}`,
     `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
-    `Готовность заказа: ${progress.bar} ${progress.percent}%`,
+    'Готовность заказа:',
+    `${progress.bar} ${progress.percent}%`,
     `Изделий в заказе: ${getOrderItemCount(order)}`,
     'Нажмите на изделие ниже, чтобы открыть его карточку.',
   ].filter(Boolean).join('\n');
