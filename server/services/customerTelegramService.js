@@ -10,7 +10,6 @@ const { addTelegramDiagnosticLog } = require('./telegramDiagnostics');
 
 const CUSTOMER_START_PREFIX = 'customer_';
 const CUSTOMER_FULL_ORDER_BUTTON_TEXT = '📋 Весь заказ';
-const CUSTOMER_ITEM_BUTTON_PREFIX = '📦';
 const CUSTOMER_BACK_TO_ITEMS_BUTTON_PREFIX = '⬅️ Назад к изделиям';
 const CUSTOMER_CALLBACK_PREFIX = 'customer';
 const CUSTOMER_CALLBACK_ACTION_ORDER = 'order';
@@ -398,7 +397,7 @@ function getCustomerItemButtonText(access = {}, order = {}, item = {}, index = 0
   const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
   const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 24);
   return normalizeTelegramButtonText(
-    `${CUSTOMER_ITEM_BUTTON_PREFIX} Заказ ${orderNumber} • Изделие ${itemNumber} • ${itemName}`
+    `Заказ ${orderNumber} • Изделие ${itemNumber} • ${itemName}`
   );
 }
 
@@ -417,7 +416,7 @@ function buildCustomerOrderReplyKeyboard(access = {}, order = {}) {
 
 function parseCustomerItemButtonText(text = '') {
   const normalized = normalizeTelegramButtonText(text);
-  const match = normalized.match(/^📦\s*Заказ\s+(.+?)\s+•\s+Изделие\s+(.+?)\s+•/i);
+  const match = normalized.match(/^Заказ\s+(.+?)\s+•\s+Изделие\s+(.+?)\s+•/i);
   if (!match) return null;
   return {
     orderNumber: String(match[1] || '').trim(),
@@ -493,10 +492,10 @@ function getCustomerOrderCardMessage(access = {}) {
   const { order } = getCustomerAccessContext(access);
   const progress = getOrderProgressSnapshot(order);
   const text = [
-    '📋 Весь заказ',
+    'Весь заказ',
     `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
     `Дата заказа: ${formatDateLabel(order?.orderDate || order?.createdAt || '')}`,
-    `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
+    `Статус заказа: ${getReadableOrderStatus(order)}`,
     'Готовность заказа:',
     `${progress.bar} ${progress.percent}%`,
     `Изделий в заказе: ${getOrderItemCount(order)}`,
@@ -528,7 +527,7 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
   if (!item) {
     return {
       text: [
-        '📦 Карточка изделия',
+        'Карточка изделия',
         `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
         'Изделие не найдено. Откройте заказ еще раз и выберите нужное изделие.',
       ].join('\n'),
@@ -556,7 +555,7 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
 
   return {
     text: [
-      '📦 Карточка изделия',
+      'Карточка изделия',
       `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
       `Изделие № ${itemNumber}`,
       `${String(item?.name || '').trim() || `Изделие ${itemNumber}`}`,
@@ -675,11 +674,11 @@ function buildCustomerOrderItemsStatusLines(order = {}, { title = '' } = {}) {
   const lines = items.map((item, index) => {
     const itemStatus = getReadableItemStatus(item);
     const currentStageLabel = getItemCurrentStageLabel(item);
-    return `${getStatusEmoji(itemStatus)} ${getOrderItemDisplayName(item, index)}${currentStageLabel ? ` · ${currentStageLabel}` : ` · ${itemStatus}`}`;
+    return `${getOrderItemDisplayName(item, index)}${currentStageLabel ? ` · ${currentStageLabel}` : ` · ${itemStatus}`}`;
   });
 
   return [
-    title || (items.length > 1 ? '📋 Изделия:' : '📋 Изделие:'),
+    title || (items.length > 1 ? 'Изделия:' : 'Изделие:'),
     ...lines,
   ];
 }
@@ -704,7 +703,7 @@ function buildCustomerOrderProgressSummary(order = {}) {
     pending: 0,
   });
 
-  return `📦 Изделий: ${items.length} · ✅ ${counts.completed} · 🟡 ${counts.inProgress} · ⏳ ${counts.pending}`;
+  return `Изделий: ${items.length} · Завершено: ${counts.completed} · В работе: ${counts.inProgress} · Ожидают: ${counts.pending}`;
 }
 
 function getOrderDisplayName(order = {}) {
@@ -758,7 +757,7 @@ function getCustomerSubscriptionReadyText(access = {}) {
     '✅ Доступ к заказу подключен.',
     `${getCustomerDisplayName(customer)}, отслеживание включено.`,
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `${getStatusEmoji(getReadableOrderStatus(order))} Статус заказа: ${getReadableOrderStatus(order)}`,
+    `Статус заказа: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
     `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
@@ -774,11 +773,11 @@ function getCustomerAlreadyLinkedText(accesses = []) {
     .filter(Boolean);
 
   if (lines.length === 0) {
-    return '✅ Уведомления по заказу уже подключены.';
+    return 'Уведомления по заказу уже подключены.';
   }
 
   return [
-    '✅ Уведомления уже подключены:',
+    'Уведомления уже подключены:',
     ...lines.map((line) => `• ${line}`),
     `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].join('\n');
@@ -806,7 +805,7 @@ function getCustomerFullOrderText(access = {}) {
 
 function getCustomerAccessClosedText(order = {}, { hasOtherAccesses = false } = {}) {
   return [
-    '🔒 Доступ к заказу закрыт.',
+    'Доступ к заказу закрыт.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     hasOtherAccesses
       ? 'Уведомления по другим вашим заказам остаются активными.'
@@ -817,10 +816,10 @@ function getCustomerAccessClosedText(order = {}, { hasOtherAccesses = false } = 
 function getCustomerOrderUpdateItemText(order = {}, item = {}, stageLabel = '', { clear = false } = {}) {
   const itemStatus = getReadableItemStatus(item);
   return [
-    '🛠 Обновление по заказу',
+    'Обновление по заказу',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `${clear ? '↩️' : '✅'} ${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}`,
-    `${getStatusEmoji(itemStatus)} Статус изделия: ${itemStatus}`,
+    `${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}`,
+    `Статус изделия: ${itemStatus}`,
     `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
 }
@@ -830,18 +829,18 @@ function getCustomerOrderChangedItemsText(order = {}, changedItems = [], { clear
     .filter((entry) => entry?.item);
   if (normalizedItems.length === 0) {
     return [
-      '🛠 Обновление по заказу',
+      'Обновление по заказу',
       `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
       `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
     ].filter(Boolean).join('\n');
   }
 
   return [
-    '🛠 Обновление по заказу',
+    'Обновление по заказу',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     ...normalizedItems.map(({ item, stageLabel }) => {
       const itemStatus = getReadableItemStatus(item);
-      return `${clear ? '↩️' : '✅'} ${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}\n${getStatusEmoji(itemStatus)} Статус изделия: ${itemStatus}`;
+      return `${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}\nСтатус изделия: ${itemStatus}`;
     }),
     `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
@@ -1051,9 +1050,9 @@ async function notifyCustomerOrderCreated(order = {}) {
   if (!access) return null;
 
   const text = [
-    '🔗 Доступ к заказу готов.',
+    'Доступ к заказу готов.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
+    `Статус: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
     'После перехода по ссылке или QR-коду обновления придут сюда.',
   ].filter(Boolean).join('\n');
@@ -1080,7 +1079,7 @@ async function notifyCustomerOrderStatusText(order = {}, text = '', { type = 'or
 
 async function notifyCustomerOrderArchived(order = {}) {
   const text = [
-    '📦 Заказ переведен в архив.',
+    'Заказ переведен в архив.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     buildCustomerOrderProgressSummary(order),
     `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
@@ -1093,9 +1092,9 @@ async function notifyCustomerOrderArchived(order = {}) {
 
 async function notifyCustomerOrderRestored(order = {}) {
   const text = [
-    '↩️ Заказ снова в работе.',
+    'Заказ снова в работе.',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `${getStatusEmoji(getReadableOrderStatus(order))} Статус: ${getReadableOrderStatus(order)}`,
+    `Статус: ${getReadableOrderStatus(order)}`,
     buildCustomerOrderProgressSummary(order),
     `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
