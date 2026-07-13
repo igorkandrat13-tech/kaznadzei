@@ -139,10 +139,16 @@ function buildTelegramProgressBar(completed = 0, total = 0, { segments = 8 } = {
   };
 }
 
-function getStageStatusMarker(status = '') {
+function getStageStatusMarker(status = '', legendKey = '') {
   const normalizedStatus = String(status || '').trim();
-  if (normalizedStatus === 'completed') return '🟩';
-  if (normalizedStatus === 'in_progress') return '🟨';
+  const normalizedLegendKey = String(legendKey || '').trim();
+  if (normalizedStatus !== 'completed') return '⬜';
+  if (normalizedLegendKey === 'stock') return '🟦';
+  if (normalizedLegendKey === 'assembly') return '🟧';
+  if (normalizedLegendKey === 'paint') return '🟪';
+  if (normalizedLegendKey === 'postpaint') return '🟥';
+  if (normalizedLegendKey === 'ready') return '🟩';
+  if (normalizedLegendKey === 'brief' || normalizedLegendKey === 'drafting') return '🟩';
   return '⬜';
 }
 
@@ -328,6 +334,7 @@ function getItemTrackedStageProgress(order = {}, item = {}) {
 
     return {
       key: `${String(header?.legendKey || '').trim()}-${header.startIndex}-${header.endIndex}`,
+      legendKey: String(header?.legendKey || '').trim(),
       label: getTrackedStageLabel(header),
       status,
       completedCount,
@@ -527,8 +534,7 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
   const itemNumber = String(item?.itemNumber || itemIndex + 1).trim() || String(itemIndex + 1);
   const itemProgress = getItemProgressSnapshot(order, item);
   const stageLines = getItemTrackedStageProgress(order, item).map((stage) => {
-    const progress = buildTelegramProgressBar(stage.completedCount, stage.totalCount, { segments: Math.max(3, Math.min(6, stage.totalCount || 3)) });
-    return `${getStageStatusMarker(stage.status)} ${stage.label} ${progress.bar} ${stage.completedCount}/${stage.totalCount}`;
+    return `${getStageStatusMarker(stage.status, stage.legendKey)} ${stage.label}`;
   });
 
   return {
@@ -537,7 +543,8 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
       `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
       `Изделие № ${itemNumber}`,
       `${String(item?.name || '').trim() || `Изделие ${itemNumber}`}`,
-      `Готовность изделия: ${itemProgress.bar} ${itemProgress.percent}%`,
+      'Готовность изделия:',
+      `${itemProgress.bar} ${itemProgress.percent}%`,
       'Стадии:',
       ...stageLines,
     ].filter(Boolean).join('\n'),
