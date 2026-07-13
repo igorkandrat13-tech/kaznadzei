@@ -10,6 +10,8 @@ const { addTelegramDiagnosticLog } = require('./telegramDiagnostics');
 
 const CUSTOMER_START_PREFIX = 'customer_';
 const CUSTOMER_FULL_ORDER_BUTTON_TEXT = '📋 Весь заказ';
+const CUSTOMER_ITEM_BUTTON_PREFIX = '📦';
+const CUSTOMER_BACK_TO_ITEMS_BUTTON_PREFIX = '⬅️ Назад к изделиям';
 const CUSTOMER_CALLBACK_PREFIX = 'customer';
 const CUSTOMER_CALLBACK_ACTION_ORDER = 'order';
 const CUSTOMER_CALLBACK_ACTION_ITEM = 'item';
@@ -117,6 +119,10 @@ function truncateTelegramLabel(value = '', maxLength = 26) {
   if (!normalized) return '';
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, Math.max(1, maxLength - 1)).trim()}…`;
+}
+
+function normalizeTelegramButtonText(value = '') {
+  return String(value || '').trim().replace(/\s+/g, ' ');
 }
 
 function buildTelegramProgressBar(completed = 0, total = 0, { segments = 8 } = {}) {
@@ -372,6 +378,95 @@ function buildCustomerOrderInlineKeyboard(access = {}, order = {}) {
   return rows;
 }
 
+function getCustomerBackToItemsButtonText(access = {}) {
+  const { order } = getCustomerAccessContext(access);
+  const orderNumber = String(order?.orderNumber || '').trim();
+  return orderNumber
+    ? `${CUSTOMER_BACK_TO_ITEMS_BUTTON_PREFIX} Заказ ${orderNumber}`
+    : CUSTOMER_BACK_TO_ITEMS_BUTTON_PREFIX;
+}
+
+function getCustomerItemButtonText(access = {}, order = {}, item = {}, index = 0) {
+  const progress = getItemProgressSnapshot(order, item);
+  const orderNumber = String(order?.orderNumber || '').trim() || 'без номера';
+  const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
+  const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 64);
+  return normalizeTelegramButtonText(
+    `${CUSTOMER_ITEM_BUTTON_PREFIX} Заказ ${orderNumber} • Изделие ${itemNumber} • ${itemName} • ${progress.bar} ${progress.percent}%`
+  );
+}
+
+function buildCustomerOrderReplyKeyboard(access = {}, order = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const rows = items
+    .map((item, index) => {
+      const buttonText = getCustomerItemButtonText(access, order, item, index);
+      return buttonText ? [{ text: buttonText }] : null;
+    })
+    .filter(Boolean);
+
+  rows.push([{ text: CUSTOMER_FULL_ORDER_BUTTON_TEXT }]);
+  return rows;
+}
+
+function parseCustomerItemButtonText(text = '') {
+  const normalized = normalizeTelegramButtonText(text);
+  const match = normalized.match(/^📦\s*Заказ\s+(.+?)\s+•\s+Изделие\s+(.+?)\s+•/i);
+  if (!match) return null;
+  return {
+    orderNumber: String(match[1] || '').trim(),
+    itemNumber: String(match[2] || '').trim(),
+  };
+}
+
+function parseCustomerBackToItemsButtonText(text = '') {
+  const normalized = normalizeTelegramButtonText(text);
+  const match = normalized.match(/^⬅️\s*Назад к изделиям(?:\s+Заказ\s+(.+))?$/i);
+  if (!match) return null;
+  return {
+    orderNumber: String(match[1] || '').trim(),
+  };
+}
+
+function resolveCustomerAccessByOrderNumber(accesses = [], orderNumber = '') {
+  const normalizedOrderNumber = String(orderNumber || '').trim();
+  if (!normalizedOrderNumber) return null;
+  return (Array.isArray(accesses) ? accesses : []).find((access) => {
+    const { order } = getCustomerAccessContext(access);
+    return String(order?.orderNumber || '').trim() === normalizedOrderNumber;
+  }) || null;
+}
+
+function resolveCustomerItemSelectionFromText(accesses = [], text = '') {
+  const parsed = parseCustomerItemButtonText(text);
+  if (!parsed) return null;
+
+  const access = resolveCustomerAccessByOrderNumber(accesses, parsed.orderNumber);
+  if (!access) return null;
+
+  const { order } = getCustomerAccessContext(access);
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const item = items.find((entry, index) => {
+    const itemNumber = String(entry?.itemNumber || index + 1).trim() || String(index + 1);
+    return itemNumber === parsed.itemNumber;
+  }) || null;
+
+  if (!item) return null;
+  return {
+    access,
+    itemId: String(item?.itemId || '').trim(),
+  };
+}
+
+function resolveCustomerBackToItemsFromText(accesses = [], text = '') {
+  const parsed = parseCustomerBackToItemsButtonText(text);
+  if (!parsed) return null;
+  if (parsed.orderNumber) {
+    return resolveCustomerAccessByOrderNumber(accesses, parsed.orderNumber);
+  }
+  return (Array.isArray(accesses) ? accesses[0] : null) || null;
+}
+
 function getCustomerOrderCardMessage(access = {}) {
   const { order } = getCustomerAccessContext(access);
   const progress = getOrderProgressSnapshot(order);
@@ -385,13 +480,17 @@ function getCustomerOrderCardMessage(access = {}) {
     'Нажмите на изделие ниже, чтобы открыть его карточку.',
   ].filter(Boolean).join('\n');
 
-  const inlineKeyboard = buildCustomerOrderInlineKeyboard(access, order);
+  const replyKeyboard = buildCustomerOrderReplyKeyboard(access, order);
   return {
     text,
-    extra: inlineKeyboard.length > 0
+    extra: replyKeyboard.length > 0
       ? {
           reply_markup: {
-            inline_keyboard: inlineKeyboard,
+            keyboard: replyKeyboard,
+            resize_keyboard: true,
+            is_persistent: true,
+            one_time_keyboard: false,
+            input_field_placeholder: 'Выберите изделие',
           },
         }
       : {},
@@ -411,10 +510,14 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
       ].join('\n'),
       extra: {
         reply_markup: {
-          inline_keyboard: [[{
-            text: '⬅️ К заказу',
-            callback_data: `${CUSTOMER_CALLBACK_PREFIX}|${CUSTOMER_CALLBACK_ACTION_ORDER}|${String(access?._id || '').trim()}`,
-          }]],
+          keyboard: [
+            [{ text: getCustomerBackToItemsButtonText(access) }],
+            [{ text: CUSTOMER_FULL_ORDER_BUTTON_TEXT }],
+          ],
+          resize_keyboard: true,
+          is_persistent: true,
+          one_time_keyboard: false,
+          input_field_placeholder: 'Вернитесь к списку изделий',
         },
       },
     };
@@ -440,10 +543,14 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
     ].filter(Boolean).join('\n'),
     extra: {
       reply_markup: {
-        inline_keyboard: [[{
-          text: '⬅️ К заказу',
-          callback_data: `${CUSTOMER_CALLBACK_PREFIX}|${CUSTOMER_CALLBACK_ACTION_ORDER}|${String(access?._id || '').trim()}`,
-        }]],
+        keyboard: [
+          [{ text: getCustomerBackToItemsButtonText(access) }],
+          [{ text: CUSTOMER_FULL_ORDER_BUTTON_TEXT }],
+        ],
+        resize_keyboard: true,
+        is_persistent: true,
+        one_time_keyboard: false,
+        input_field_placeholder: 'Вернитесь к выбору изделий',
       },
     },
   };
@@ -990,6 +1097,7 @@ module.exports = {
   getCustomerRemoveKeyboardReplyMarkup,
   getCustomerAccessClosedText,
   getCustomerFullOrderText,
+  getCustomerBackToItemsButtonText,
   getCustomerOrderCardMessage,
   getCustomerItemCardMessage,
   getCustomerOrderChangedItemsText,
@@ -1003,6 +1111,8 @@ module.exports = {
   CUSTOMER_START_PREFIX,
   extractCustomerAccessTokenFromStartText,
   parseCustomerCallbackData,
+  resolveCustomerBackToItemsFromText,
+  resolveCustomerItemSelectionFromText,
   getCustomerAlreadyLinkedText,
   getCustomerSubscriptionReadyText,
   getCustomerOrderShare,

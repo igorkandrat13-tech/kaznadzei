@@ -18,11 +18,14 @@ const {
   CUSTOMER_FULL_ORDER_BUTTON_TEXT,
   extractCustomerAccessTokenFromStartText,
   getCustomerAlreadyLinkedText,
+  getCustomerBackToItemsButtonText,
   getCustomerItemCardMessage,
   getCustomerOrderCardMessage,
   getCustomerKeyboardReplyMarkup,
   getCustomerSubscriptionReadyText,
   parseCustomerCallbackData,
+  resolveCustomerBackToItemsFromText,
+  resolveCustomerItemSelectionFromText,
   sendCustomerTelegramMessage,
 } = require('../services/customerTelegramService');
 const { getRoleDefinitions, getRoleLabel } = require('../config/roles');
@@ -340,6 +343,38 @@ async function processTelegramMessage(token, message) {
       accessCount: linkedCustomerAccesses.length,
     });
     return;
+  }
+
+  if (linkedCustomerAccesses.length > 0) {
+    const backToItemsAccess = resolveCustomerBackToItemsFromText(linkedCustomerAccesses, text);
+    if (backToItemsAccess) {
+      const orderCardMessage = getCustomerOrderCardMessage(backToItemsAccess);
+      await sendCustomerTelegramMessage({
+        access: backToItemsAccess,
+        chatId,
+        telegramUserId: from.id,
+        type: 'customer.order.full',
+        text: orderCardMessage.text,
+        meta: { event: 'back-to-items', buttonText: getCustomerBackToItemsButtonText(backToItemsAccess) },
+        extra: orderCardMessage.extra,
+      });
+      return;
+    }
+
+    const itemSelection = resolveCustomerItemSelectionFromText(linkedCustomerAccesses, text);
+    if (itemSelection?.access && itemSelection?.itemId) {
+      const itemCardMessage = getCustomerItemCardMessage(itemSelection.access, itemSelection.itemId);
+      await sendCustomerTelegramMessage({
+        access: itemSelection.access,
+        chatId,
+        telegramUserId: from.id,
+        type: 'customer.order.item',
+        text: itemCardMessage.text,
+        meta: { event: 'item-card-by-text', itemId: itemSelection.itemId },
+        extra: itemCardMessage.extra,
+      });
+      return;
+    }
   }
 
   if (linkedCustomerAccesses.length > 0) {
