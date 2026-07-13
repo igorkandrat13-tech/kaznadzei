@@ -165,6 +165,7 @@ function Admin() {
     employeeModalMode || stepModalMode || showLegendColorModal || stageManagerRoleKey || showTelegramLogs || showActivityLogs || confirmAction,
   );
   const hasSettingsAccess = !settingsPinStatus.loading && (!settingsPinStatus.configured || settingsPinStatus.accessGranted);
+  const canOpenEmployeesWithoutPin = !settingsPinStatus.loading && activeRole === 'employees';
   const setEmployeeForm = (nextValue) => {
     if (employeeModalMode === 'edit') {
       setEditEmployee(nextValue);
@@ -368,10 +369,12 @@ function Admin() {
   }, []);
 
   useEffect(() => {
+    if (!settingsPinStatus.loading) {
+      fetchEmployees().catch(error => setSettingsError(toUserErrorMessage(error, 'Не удалось загрузить сотрудников.')));
+    }
     if (!hasSettingsAccess) return;
     fetchAppSettings().catch(error => setSettingsError(toUserErrorMessage(error, 'Не удалось загрузить настройки.')));
-    fetchEmployees().catch(error => setSettingsError(toUserErrorMessage(error, 'Не удалось загрузить сотрудников.')));
-  }, [hasSettingsAccess]);
+  }, [hasSettingsAccess, settingsPinStatus.loading]);
 
   useEffect(() => {
     if (!roleTabs.length) {
@@ -1539,7 +1542,7 @@ function Admin() {
     );
   }
 
-  if (settingsPinStatus.configured && !settingsPinStatus.accessGranted) {
+  if (settingsPinStatus.configured && !settingsPinStatus.accessGranted && !canOpenEmployeesWithoutPin) {
     return (
       <div>
         <SettingsHeader title="⚙️ Настройки — PIN-доступ" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />

@@ -60,6 +60,15 @@ function resolveBackupSource(payload = {}) {
 router.get('/backup/export', requireAdminAccess(), (req, res) => {
   const snapshot = getSnapshot();
   const fileName = `kaznadzei-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  const exportPayload = {
+    meta: {
+      exportedAt: new Date().toISOString(),
+      app: 'kaznadzei',
+      version: 1,
+      counts: countSnapshotEntities(snapshot),
+    },
+    data: snapshot,
+  };
 
   addActivityLog({
     action: 'backup.export',
@@ -72,15 +81,7 @@ router.get('/backup/export', requireAdminAccess(), (req, res) => {
 
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-  res.json({
-    meta: {
-      exportedAt: new Date().toISOString(),
-      app: 'kaznadzei',
-      version: 1,
-      counts: countSnapshotEntities(snapshot),
-    },
-    data: snapshot,
-  });
+  res.send(`${JSON.stringify(exportPayload, null, 2)}\n`);
 });
 
 router.post('/backup/import', requireAdminAccess(), (req, res) => {
