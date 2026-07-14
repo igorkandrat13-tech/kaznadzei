@@ -136,7 +136,6 @@ function normalizeTelegramPinInput(value = '') {
 }
 
 async function clearTelegramMenuButton(token, chatId) {
-  await setChatMenuButton(token, { type: 'default' }).catch(() => null);
   if (chatId) {
     await setChatMenuButton(token, { chatId, type: 'default' }).catch(() => null);
   }
@@ -148,7 +147,6 @@ async function syncTelegramMenuButton(token, chatId) {
     await clearTelegramMenuButton(token, chatId);
     return;
   }
-  await setChatMenuButton(token, menuButton).catch(() => null);
   if (chatId) {
     await setChatMenuButton(token, { chatId, ...menuButton }).catch(() => null);
   }
@@ -498,7 +496,6 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
       getBotInfo(token),
       getWebhookInfo(token).catch(() => null),
     ]);
-    await syncTelegramMenuButton(token);
     const refreshResult = await refreshAuthorizedEmployeeAccess(token);
 
     res.json({
@@ -534,7 +531,6 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
   try {
     const webhookUrl = getRecommendedWebhookUrl();
     await setWebhook(token, webhookUrl);
-    await syncTelegramMenuButton(token);
     const refreshResult = await refreshAuthorizedEmployeeAccess(token);
     const [bot, webhook] = await Promise.all([
       getBotInfo(token),

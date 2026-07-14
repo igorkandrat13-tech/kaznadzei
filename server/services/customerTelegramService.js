@@ -5,7 +5,7 @@ const OrderStore = require('../stores/orderStore');
 const CustomerStore = require('../stores/customerStore');
 const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
 const CustomerTelegramLogStore = require('../stores/customerTelegramLogStore');
-const { getBotInfo, sendMessage } = require('./telegramService');
+const { getBotInfo, sendMessage, setChatMenuButton } = require('./telegramService');
 const { addTelegramDiagnosticLog } = require('./telegramDiagnostics');
 
 const CUSTOMER_START_PREFIX = 'customer_';
@@ -912,6 +912,7 @@ async function sendCustomerTelegramMessage({
     if (type === 'customer.order.full' || type === 'customer.order.item') {
       rememberCustomerChatOrderContext(effectiveChatId, normalizedAccess);
     }
+    await setChatMenuButton(token, { chatId: effectiveChatId, type: 'default' }).catch(() => null);
     addTelegramDiagnosticLog('customer-telegram', 'send.request', {
       accessId: normalizedAccess._id,
       orderId: normalizedAccess.orderId,
