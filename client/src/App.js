@@ -230,9 +230,9 @@ function AppLayout() {
                                 <nav className="App-header-nav App-header-nav-primary">
                                     {canAccessOrders && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
                                     {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
-                                    {canAccessOrders && <Link to="/customers" onClick={() => setMobileMenuOpen(false)}>Заказчики</Link>}
-                                    {canAccessRole('admin', authRole) && <Link to="/settings?tab=employees" onClick={() => setMobileMenuOpen(false)}>Сотрудники</Link>}
-                                    {canAccessRole('admin', authRole) && <Link to="/settings?tab=colors" onClick={() => setMobileMenuOpen(false)}>Этапы производства</Link>}
+                                    {canAccessOrders && <Link to="/customers" onClick={() => setMobileMenuOpen(false)}>Заказчики 🔒</Link>}
+                                    {canAccessRole('admin', authRole) && <Link to="/settings?tab=employees" onClick={() => setMobileMenuOpen(false)}>Сотрудники 🔒</Link>}
+                                    {canAccessRole('admin', authRole) && <Link to="/settings?tab=colors" onClick={() => setMobileMenuOpen(false)}>Этапы производства 🔒</Link>}
                                     {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки 🔒</Link>}
                                 </nav>
                                 <div className="App-header-menu-footer">
