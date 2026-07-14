@@ -14,6 +14,7 @@ const CUSTOMER_BACK_TO_ITEMS_BUTTON_PREFIX = '⬅️ Назад к издели�
 const CUSTOMER_CALLBACK_PREFIX = 'customer';
 const CUSTOMER_CALLBACK_ACTION_ORDER = 'order';
 const CUSTOMER_CALLBACK_ACTION_ITEM = 'item';
+const customerChatOrderContext = new Map();
 const ORDER_PRIMARY_HEADERS = [
   'Номер заказа',
   'Заказчик',
@@ -118,6 +119,26 @@ function truncateTelegramLabel(value = '', maxLength = 26) {
   if (!normalized) return '';
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, Math.max(1, maxLength - 1)).trim()}…`;
+}
+
+function rememberCustomerChatOrderContext(chatId = '', access = null) {
+  const normalizedChatId = String(chatId || '').trim();
+  const normalizedAccess = access ? CustomerTelegramAccessStore.findById(access._id || access.accessId || access.id) || access : null;
+  if (!normalizedChatId || !normalizedAccess?._id) return;
+  customerChatOrderContext.set(normalizedChatId, {
+    accessId: String(normalizedAccess._id || '').trim(),
+    updatedAt: Date.now(),
+  });
+}
+
+function resolveRememberedCustomerAccess(accesses = [], chatId = '') {
+  const normalizedChatId = String(chatId || '').trim();
+  if (!normalizedChatId) return null;
+  const context = customerChatOrderContext.get(normalizedChatId);
+  if (!context?.accessId) return null;
+  return (Array.isArray(accesses) ? accesses : []).find((access) => (
+    String(access?._id || access?.accessId || access?.id || '').trim() === context.accessId
+  )) || null;
 }
 
 function normalizeTelegramButtonText(value = '') {
@@ -377,11 +398,10 @@ function getCustomerBackToItemsButtonText(access = {}) {
 }
 
 function getCustomerItemButtonText(access = {}, order = {}, item = {}, index = 0) {
-  const orderNumber = String(order?.orderNumber || '').trim() || 'без номера';
   const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
-  const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 24);
+  const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 28);
   return normalizeTelegramButtonText(
-    `Заказ ${orderNumber} • Изделие ${itemNumber} • ${itemName}`
+    `Изделие № ${itemNumber} - ${itemName}`
   );
 }
 
@@ -400,11 +420,11 @@ function buildCustomerOrderReplyKeyboard(access = {}, order = {}) {
 
 function parseCustomerItemButtonText(text = '') {
   const normalized = normalizeTelegramButtonText(text);
-  const match = normalized.match(/^Заказ\s+(.+?)\s+•\s+Изделие\s+(.+?)\s+•/i);
+  const match = normalized.match(/^Изделие\s*№\s*(.+?)\s*-\s*(.+)$/i);
   if (!match) return null;
   return {
-    orderNumber: String(match[1] || '').trim(),
-    itemNumber: String(match[2] || '').trim(),
+    itemNumber: String(match[1] || '').trim(),
+    itemName: String(match[2] || '').trim(),
   };
 }
 
@@ -426,25 +446,33 @@ function resolveCustomerAccessByOrderNumber(accesses = [], orderNumber = '') {
   }) || null;
 }
 
-function resolveCustomerItemSelectionFromText(accesses = [], text = '') {
+function resolveCustomerItemSelectionFromText(accesses = [], text = '', options = {}) {
   const parsed = parseCustomerItemButtonText(text);
   if (!parsed) return null;
 
-  const access = resolveCustomerAccessByOrderNumber(accesses, parsed.orderNumber);
-  if (!access) return null;
+  const rememberedAccess = resolveRememberedCustomerAccess(accesses, options.chatId);
+  const orderedAccesses = rememberedAccess
+    ? [rememberedAccess, ...(Array.isArray(accesses) ? accesses : []).filter((access) => access !== rememberedAccess)]
+    : (Array.isArray(accesses) ? accesses : []);
 
-  const { order } = getCustomerAccessContext(access);
-  const items = Array.isArray(order?.items) ? order.items : [];
-  const item = items.find((entry, index) => {
-    const itemNumber = String(entry?.itemNumber || index + 1).trim() || String(index + 1);
-    return itemNumber === parsed.itemNumber;
-  }) || null;
+  for (const access of orderedAccesses) {
+    const { order } = getCustomerAccessContext(access);
+    const items = Array.isArray(order?.items) ? order.items : [];
+    const item = items.find((entry, index) => {
+      const itemNumber = String(entry?.itemNumber || index + 1).trim() || String(index + 1);
+      const itemName = truncateTelegramLabel(String(entry?.name || '').trim() || `Изделие ${itemNumber}`, 28);
+      return itemNumber === parsed.itemNumber && itemName === parsed.itemName;
+    }) || null;
 
-  if (!item) return null;
-  return {
-    access,
-    itemId: String(item?.itemId || '').trim(),
-  };
+    if (item) {
+      return {
+        access,
+        itemId: String(item?.itemId || '').trim(),
+      };
+    }
+  }
+
+  return null;
 }
 
 function resolveCustomerBackToItemsFromText(accesses = [], text = '') {
@@ -477,12 +505,10 @@ function getCustomerOrderCardMessage(access = {}) {
   const progress = getOrderProgressSnapshot(order);
   const text = [
     'Весь заказ',
-    `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
-    `Дата заказа: ${formatDateLabel(order?.orderDate || order?.createdAt || '')}`,
     `Статус заказа: ${getReadableOrderStatus(order)}`,
-    'Готовность заказа:',
-    `${progress.bar} ${progress.percent}%`,
-    `Изделий в заказе: ${getOrderItemCount(order)}`,
+    `Общая готовность заказа: ${progress.percent}%`,
+    `Всего изделий в заказе: ${getOrderItemCount(order)}`,
+    '________________',
     ...buildCustomerOrderCardItemsLines(order),
     'Нажмите на изделие ниже, чтобы открыть его карточку.',
   ].filter(Boolean).join('\n');
@@ -908,6 +934,9 @@ async function sendCustomerTelegramMessage({
   }
 
   try {
+    if (type === 'customer.order.full' || type === 'customer.order.item') {
+      rememberCustomerChatOrderContext(effectiveChatId, normalizedAccess);
+    }
     addTelegramDiagnosticLog('customer-telegram', 'send.request', {
       accessId: normalizedAccess._id,
       orderId: normalizedAccess.orderId,

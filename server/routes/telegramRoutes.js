@@ -361,7 +361,7 @@ async function processTelegramMessage(token, message) {
       return;
     }
 
-    const itemSelection = resolveCustomerItemSelectionFromText(linkedCustomerAccesses, text);
+    const itemSelection = resolveCustomerItemSelectionFromText(linkedCustomerAccesses, text, { chatId });
     if (itemSelection?.access && itemSelection?.itemId) {
       const itemCardMessage = getCustomerItemCardMessage(itemSelection.access, itemSelection.itemId);
       await sendCustomerTelegramMessage({
