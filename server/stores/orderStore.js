@@ -256,21 +256,7 @@ function getItemEffectiveManufacturingTimestamp(item = {}, columnKey = '', helpe
     );
   }
 
-  if (columnKey === 'packageName') {
-    const packageItems = Array.isArray(item?.packageItems) ? item.packageItems : [];
-    if (packageItems.length === 0 || packageItems.some((packageItem) => !packageItem?.isCompleted)) return '';
-    return getLatestTimestamp(
-      ...packageItems.map((packageItem) => packageItem?.completedAt || packageItem?.updatedAt || ''),
-    );
-  }
-
-  if (columnKey === 'materialRequests') {
-    const materialRequestItems = Array.isArray(item?.materialRequestItems) ? item.materialRequestItems : [];
-    if (materialRequestItems.length === 0 || materialRequestItems.some((requestItem) => !requestItem?.isCompleted)) return '';
-    return getLatestTimestamp(
-      ...materialRequestItems.map((requestItem) => requestItem?.completedAt || requestItem?.updatedAt || ''),
-    );
-  }
+  if (columnKey === 'packageName' || columnKey === 'materialRequests') return '';
 
   if (columnKey !== 'carpenter') return '';
 
@@ -1181,29 +1167,7 @@ const OrderStore = {
         const currentItem = currentItems.find(existingItem => existingItem.itemId === String(item?.itemId || '').trim())
           || currentItems[index]
           || {};
-        const currentPackageItems = normalizePackageItems(currentItem?.packageItems, currentItem?.packageName);
-        const nextPackageItems = normalizePackageItems(item?.packageItems, item?.packageName);
-        const packageItemsChanged = JSON.stringify(currentPackageItems) !== JSON.stringify(nextPackageItems);
-        const currentMaterialRequestItems = normalizeMaterialRequestItems(currentItem?.materialRequestItems, currentItem?.materialRequests);
-        const nextMaterialRequestItems = normalizeMaterialRequestItems(item?.materialRequestItems, item?.materialRequests);
-        const materialRequestItemsChanged = JSON.stringify(currentMaterialRequestItems) !== JSON.stringify(nextMaterialRequestItems);
         const nextManualStageClears = normalizeManualStageClears(item?.manualStageClears || currentItem?.manualStageClears || {});
-        if (
-          packageItemsChanged
-          && nextPackageItems.length > 0
-          && nextPackageItems.every((packageItem) => packageItem.isCompleted)
-          && nextManualStageClears.packageName
-        ) {
-          delete nextManualStageClears.packageName;
-        }
-        if (
-          materialRequestItemsChanged
-          && nextMaterialRequestItems.length > 0
-          && nextMaterialRequestItems.every((requestItem) => requestItem.isCompleted)
-          && nextManualStageClears.materialRequests
-        ) {
-          delete nextManualStageClears.materialRequests;
-        }
         return buildOrderItem({
           ...currentItem,
           ...item,

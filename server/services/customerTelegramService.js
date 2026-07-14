@@ -204,24 +204,8 @@ function getItemEffectiveColumnTimestamp(item = {}, columnKey = '') {
     )));
   }
 
-  if (normalizedColumnKey === 'packageName') {
-    const packageItems = Array.isArray(item?.packageItems) ? item.packageItems : [];
-    if (packageItems.length === 0 || packageItems.some((packageItem) => !packageItem?.isCompleted)) {
-      return '';
-    }
-    return getLatestTimestamp(...packageItems.map((packageItem) => (
-      packageItem?.completedAt || packageItem?.updatedAt || ''
-    )));
-  }
-
-  if (normalizedColumnKey === 'materialRequests') {
-    const materialRequestItems = Array.isArray(item?.materialRequestItems) ? item.materialRequestItems : [];
-    if (materialRequestItems.length === 0 || materialRequestItems.some((requestItem) => !requestItem?.isCompleted)) {
-      return '';
-    }
-    return getLatestTimestamp(...materialRequestItems.map((requestItem) => (
-      requestItem?.completedAt || requestItem?.updatedAt || ''
-    )));
+  if (normalizedColumnKey === 'packageName' || normalizedColumnKey === 'materialRequests') {
+    return '';
   }
 
   if (normalizedColumnKey !== 'carpenter') return '';

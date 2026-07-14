@@ -3516,12 +3516,7 @@ function OrdersWorkspace() {
                       background: columnStageMeta.paint.hex || '#BDA6D5',
                       color: columnStageMeta.paint.textHex,
                     };
-                    const packageCellStyle = packageStats.total > 0 && packageStats.pending === 0
-                      ? {
-                          background: columnStageMeta.package.hex || '#99E5FF',
-                          color: columnStageMeta.package.textHex,
-                        }
-                      : undefined;
+                    const packageCellStyle = undefined;
                     const packageSummaryBadgeStyle = hasPackageStageMark
                       ? {
                           background: getSecondaryHeaderBackground(packageStageHeader),
@@ -3536,12 +3531,7 @@ function OrdersWorkspace() {
                       ...packageCellPropsBase,
                       className: cn(packageCellPropsBase.className, 'package-cell'),
                     };
-                    const materialRequestCellStyle = materialRequestStats.total > 0 && materialRequestStats.pending === 0
-                      ? {
-                          background: columnStageMeta.materialRequests.hex || '#F4C2A4',
-                          color: columnStageMeta.materialRequests.textHex,
-                        }
-                      : undefined;
+                    const materialRequestCellStyle = undefined;
                     const materialRequestSummaryBadgeStyle = {
                       background: columnStageMeta.materialRequests.hex || '#F4C2A4',
                       color: columnStageMeta.materialRequests.textHex,
