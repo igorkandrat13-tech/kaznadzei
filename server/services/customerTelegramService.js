@@ -394,10 +394,13 @@ function getCustomerBackToItemsButtonText(access = {}) {
 
 function getCustomerItemButtonText(access = {}, order = {}, item = {}, index = 0) {
   const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
-  const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 28);
-  return normalizeTelegramButtonText(
-    `Изделие № ${itemNumber} - ${itemName}`
-  );
+  const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 32);
+  const itemProgress = getItemProgressSnapshot(order, item);
+  return [
+    `Изделие № ${itemNumber}`,
+    itemName,
+    `${itemProgress.bar} ${itemProgress.percent}%`,
+  ].filter(Boolean).join('\n');
 }
 
 function buildCustomerOrderReplyKeyboard(access = {}, order = {}) {
