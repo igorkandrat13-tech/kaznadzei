@@ -407,14 +407,15 @@ function getCustomerItemButtonText(access = {}, order = {}, item = {}, index = 0
 
 function buildCustomerOrderReplyKeyboard(access = {}, order = {}) {
   const items = Array.isArray(order?.items) ? order.items : [];
-  const rows = items
+  const rows = [
+    [{ text: CUSTOMER_FULL_ORDER_BUTTON_TEXT }],
+    ...items
     .map((item, index) => {
       const buttonText = getCustomerItemButtonText(access, order, item, index);
       return buttonText ? [{ text: buttonText }] : null;
     })
-    .filter(Boolean);
-
-  rows.push([{ text: CUSTOMER_FULL_ORDER_BUTTON_TEXT }]);
+    .filter(Boolean),
+  ];
   return rows;
 }
 
@@ -500,6 +501,15 @@ function buildCustomerOrderCardItemsLines(order = {}) {
   return lines;
 }
 
+function buildCustomerOrderLaunchSummary(access = {}) {
+  const { order } = getCustomerAccessContext(access);
+  return [
+    `№ Заказа ${String(order?.orderNumber || '').trim() || 'не указан'}`,
+    `Всего в заказе ${getOrderItemCount(order)} изделий`,
+    `Статус заказа: ${getReadableOrderStatus(order)}`,
+  ];
+}
+
 function getCustomerOrderCardMessage(access = {}) {
   const { order } = getCustomerAccessContext(access);
   const progress = getOrderProgressSnapshot(order);
@@ -545,7 +555,6 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
         reply_markup: {
           keyboard: [
             [{ text: getCustomerBackToItemsButtonText(access) }],
-            [{ text: CUSTOMER_FULL_ORDER_BUTTON_TEXT }],
           ],
           resize_keyboard: true,
           is_persistent: true,
@@ -578,7 +587,6 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
       reply_markup: {
         keyboard: [
           [{ text: getCustomerBackToItemsButtonText(access) }],
-          [{ text: CUSTOMER_FULL_ORDER_BUTTON_TEXT }],
         ],
         resize_keyboard: true,
         is_persistent: true,
@@ -766,30 +774,25 @@ function getCustomerSubscriptionReadyText(access = {}) {
   return [
     '✅ Доступ к заказу подключен.',
     `${getCustomerDisplayName(customer)}, отслеживание включено.`,
-    `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `Статус заказа: ${getReadableOrderStatus(order)}`,
-    buildCustomerOrderProgressSummary(order),
-    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
+    ...buildCustomerOrderLaunchSummary(access),
+    'Для просмотра всего заказа - жмите кнопку Весь заказ.',
   ].filter(Boolean).join('\n');
 }
 
 function getCustomerAlreadyLinkedText(accesses = []) {
   const normalizedAccesses = Array.isArray(accesses) ? accesses : [];
-  const lines = normalizedAccesses
-    .map((access) => {
-      const order = OrderStore.findById(access.orderId);
-      return getOrderDisplayName(order);
-    })
-    .filter(Boolean);
-
-  if (lines.length === 0) {
+  if (normalizedAccesses.length === 0) {
     return 'Уведомления по заказу уже подключены.';
   }
 
+  const blocks = normalizedAccesses.map((access) => (
+    buildCustomerOrderLaunchSummary(access).join('\n')
+  )).filter(Boolean);
+
   return [
     'Уведомления уже подключены:',
-    ...lines.map((line) => `• ${line}`),
-    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
+    ...blocks,
+    'Для просмотра всего заказа - жмите кнопку Весь заказ.',
   ].join('\n');
 }
 
