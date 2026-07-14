@@ -396,9 +396,8 @@ function getCustomerItemButtonText(access = {}, order = {}, item = {}, index = 0
   const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
   const itemName = String(item?.name || '').trim() || `Изделие ${itemNumber}`;
   const itemProgress = getItemProgressSnapshot(order, item);
-  const compactBar = buildTelegramProgressBar(itemProgress.completed, itemProgress.total, { segments: 4 }).bar;
   return normalizeTelegramButtonText(
-    `Изделие № ${itemNumber} · ${itemName} · ${compactBar} ${itemProgress.percent}%`
+    `Изд. № ${itemNumber} · ${itemName} · ${itemProgress.percent}%`
   );
 }
 
