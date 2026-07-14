@@ -373,20 +373,15 @@ function getOrderProgressSnapshot(order = {}) {
 function buildCustomerOrderInlineKeyboard(access = {}, order = {}) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const buttons = items.map((item, index) => {
-    const progress = getItemProgressSnapshot(order, item);
     return {
-      text: `${truncateTelegramLabel(getOrderItemDisplayName(item, index), 20)} ${buildTelegramProgressBar(progress.completed, progress.total, { segments: 5 }).bar} ${progress.percent}%`,
+      text: getCustomerItemButtonText(access, order, item, index),
       callback_data: `${CUSTOMER_CALLBACK_PREFIX}|${CUSTOMER_CALLBACK_ACTION_ITEM}|${String(access?._id || '').trim()}|${String(item?.itemId || '').trim()}`,
     };
   }).filter((button) => button.callback_data.split('|')[3]);
 
   if (buttons.length === 0) return [];
 
-  const rows = [];
-  for (let index = 0; index < buttons.length; index += 2) {
-    rows.push(buttons.slice(index, index + 2));
-  }
-  return rows;
+  return buttons.map((button) => [button]);
 }
 
 function getCustomerBackToItemsButtonText(access = {}) {
@@ -523,17 +518,13 @@ function getCustomerOrderCardMessage(access = {}) {
     'Нажмите на изделие ниже, чтобы открыть его карточку.',
   ].filter(Boolean).join('\n');
 
-  const replyKeyboard = buildCustomerOrderReplyKeyboard(access, order);
+  const inlineKeyboard = buildCustomerOrderInlineKeyboard(access, order);
   return {
     text,
-    extra: replyKeyboard.length > 0
+    extra: inlineKeyboard.length > 0
       ? {
           reply_markup: {
-            keyboard: replyKeyboard,
-            resize_keyboard: true,
-            is_persistent: true,
-            one_time_keyboard: false,
-            input_field_placeholder: 'Выберите изделие',
+            inline_keyboard: inlineKeyboard,
           },
         }
       : {},
@@ -553,13 +544,12 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
       ].join('\n'),
       extra: {
         reply_markup: {
-          keyboard: [
-            [{ text: getCustomerBackToItemsButtonText(access) }],
+          inline_keyboard: [
+            [{
+              text: getCustomerBackToItemsButtonText(access),
+              callback_data: `${CUSTOMER_CALLBACK_PREFIX}|${CUSTOMER_CALLBACK_ACTION_ORDER}|${String(access?._id || '').trim()}`,
+            }],
           ],
-          resize_keyboard: true,
-          is_persistent: true,
-          one_time_keyboard: false,
-          input_field_placeholder: 'Вернитесь к списку изделий',
         },
       },
     };
@@ -585,13 +575,12 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
     ].filter(Boolean).join('\n'),
     extra: {
       reply_markup: {
-        keyboard: [
-          [{ text: getCustomerBackToItemsButtonText(access) }],
+        inline_keyboard: [
+          [{
+            text: getCustomerBackToItemsButtonText(access),
+            callback_data: `${CUSTOMER_CALLBACK_PREFIX}|${CUSTOMER_CALLBACK_ACTION_ORDER}|${String(access?._id || '').trim()}`,
+          }],
         ],
-        resize_keyboard: true,
-        is_persistent: true,
-        one_time_keyboard: false,
-        input_field_placeholder: 'Вернитесь к выбору изделий',
       },
     },
   };
