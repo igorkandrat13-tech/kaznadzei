@@ -394,13 +394,12 @@ function getCustomerBackToItemsButtonText(access = {}) {
 
 function getCustomerItemButtonText(access = {}, order = {}, item = {}, index = 0) {
   const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
-  const itemName = truncateTelegramLabel(String(item?.name || '').trim() || `Изделие ${itemNumber}`, 32);
+  const itemName = String(item?.name || '').trim() || `Изделие ${itemNumber}`;
   const itemProgress = getItemProgressSnapshot(order, item);
-  return [
-    `Изделие № ${itemNumber}`,
-    itemName,
-    `${itemProgress.bar} ${itemProgress.percent}%`,
-  ].filter(Boolean).join('\n');
+  const compactBar = buildTelegramProgressBar(itemProgress.completed, itemProgress.total, { segments: 4 }).bar;
+  return normalizeTelegramButtonText(
+    `Изделие № ${itemNumber} · ${itemName} · ${compactBar} ${itemProgress.percent}%`
+  );
 }
 
 function buildCustomerOrderReplyKeyboard(access = {}, order = {}) {
@@ -483,22 +482,6 @@ function resolveCustomerBackToItemsFromText(accesses = [], text = '') {
   return (Array.isArray(accesses) ? accesses[0] : null) || null;
 }
 
-function buildCustomerOrderCardItemsLines(order = {}) {
-  const items = Array.isArray(order?.items) ? order.items : [];
-  if (items.length === 0) return [];
-
-  const lines = ['Изделия:'];
-  items.forEach((item, index) => {
-    const itemNumber = String(item?.itemNumber || index + 1).trim() || String(index + 1);
-    const itemName = String(item?.name || '').trim() || `Изделие ${itemNumber}`;
-    const itemProgress = getItemProgressSnapshot(order, item);
-    lines.push(`Изделие № ${itemNumber}`);
-    lines.push(itemName);
-    lines.push(`${itemProgress.bar} ${itemProgress.percent}%`);
-  });
-  return lines;
-}
-
 function buildCustomerOrderLaunchSummary(access = {}) {
   const { order } = getCustomerAccessContext(access);
   return [
@@ -516,8 +499,6 @@ function getCustomerOrderCardMessage(access = {}) {
     `Статус заказа: ${getReadableOrderStatus(order)}`,
     `Общая готовность заказа: ${progress.percent}%`,
     `Всего изделий в заказе: ${getOrderItemCount(order)}`,
-    '________________',
-    ...buildCustomerOrderCardItemsLines(order),
     'Нажмите на изделие ниже, чтобы открыть его карточку.',
   ].filter(Boolean).join('\n');
 
