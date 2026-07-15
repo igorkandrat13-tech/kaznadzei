@@ -34,6 +34,7 @@ const ORDER_ITEM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ изд
 const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй');
 const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
 const ORDER_MATERIAL_REQUESTS_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
+const ITEM_START_DATE_STAGE_MARK_COLUMN_KEY = 'itemStartDateStageMark';
 const ITEM_END_DATE_STAGE_MARK_COLUMN_KEY = 'itemEndDateStageMark';
 const LEGACY_ORDER_COLUMN_KEY_MAP = {
   photoLink: 'materialRequests',
@@ -429,8 +430,13 @@ function isManualDateColumn(columnKey) {
   return columnKey === 'itemStartDate' || columnKey === 'itemEndDate';
 }
 
-function getManualStageVisualColumnKey(columnKey) {
-  return columnKey === 'itemEndDate' ? ITEM_END_DATE_STAGE_MARK_COLUMN_KEY : columnKey;
+function getManualStageVisualColumnKey(columnKey, legendKey = '') {
+  if (!isManualDateColumn(columnKey) || !String(legendKey || '').trim()) {
+    return columnKey;
+  }
+  if (columnKey === 'itemStartDate') return ITEM_START_DATE_STAGE_MARK_COLUMN_KEY;
+  if (columnKey === 'itemEndDate') return ITEM_END_DATE_STAGE_MARK_COLUMN_KEY;
+  return columnKey;
 }
 
 function getItemManualStageClear(item, columnKey) {
@@ -1153,7 +1159,7 @@ function OrdersWorkspace() {
   const canEditSelectedDates = selectedStageSingleColumnKey === 'itemStartDate'
     || selectedStageSingleColumnKey === 'itemEndDate'
     || selectedStageSingleColumnKey === 'duration';
-  const canEditSelectedStageHighlight = !canEditSelectedDates || selectedStageSingleColumnKey === 'itemEndDate';
+  const canEditSelectedStageHighlight = !canEditSelectedDates || selectedStageSingleSelection?.autoLegendKey === 'postpaint';
 
   const firstOrderRowKeys = useMemo(() => {
     const seenOrders = new Set();
@@ -1531,8 +1537,8 @@ function OrdersWorkspace() {
         orderId: selection.orderId,
         itemId: selection.itemId,
         columnKey: selection.columnKey,
-        ...(selection.columnKey === 'itemEndDate'
-          ? { storageColumnKey: getManualStageVisualColumnKey(selection.columnKey) }
+        ...(isManualDateColumn(selection.columnKey) && selection.autoLegendKey
+          ? { storageColumnKey: getManualStageVisualColumnKey(selection.columnKey, selection.autoLegendKey) }
           : {}),
         ...(!clear && selection.autoLegendKey ? { legendKey: selection.autoLegendKey } : {}),
       }));
@@ -1819,10 +1825,11 @@ function OrdersWorkspace() {
 
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
-    const visualManualMark = getItemManualStageMark(item, getManualStageVisualColumnKey(columnKey));
-    const manualClear = getItemManualStageClear(item, getManualStageVisualColumnKey(columnKey));
-    const hasVisibleManualMark = Boolean(visualManualMark?.legendKey);
     const columnHeader = getManualStageSecondaryHeader(columnKey, secondaryHeaderSchema);
+    const visualColumnKey = getManualStageVisualColumnKey(columnKey, columnHeader?.legendKey || '');
+    const visualManualMark = getItemManualStageMark(item, visualColumnKey);
+    const manualClear = getItemManualStageClear(item, visualColumnKey);
+    const hasVisibleManualMark = Boolean(visualManualMark?.legendKey);
     const isSelected = selectedStageCellKeys.includes(buildManualStageCellKey(rowKey, columnKey));
     const canSelectCell = !disabled && canEditManualColumn(columnKey);
     const className = cn(
@@ -1844,7 +1851,7 @@ function OrdersWorkspace() {
             : {}),
         }
       : baseStyle;
-    const title = manualMark
+    const title = hasVisibleManualMark
       ? (
         visualManualMark?.legendKey
         || manualMark?.legendKey
@@ -3518,9 +3525,10 @@ function OrdersWorkspace() {
                     };
                     const nameCellProps = getManualStageCellProps(key, item, 'name', regularOrderClass, undefined, { disabled: isInlineEditing });
                     const deliveryDateCellProps = getManualStageCellProps(key, item, 'deliveryDate', regularOrderClass, undefined, { disabled: isInlineEditing });
-                    const itemStartDateManualMark = getItemManualStageMark(item, 'itemStartDate');
-                    const itemStartDateManualClear = Boolean(getItemManualStageClear(item, 'itemStartDate'));
-                    const hasItemStartStageMark = Boolean(itemStartDateManualMark && !itemStartDateManualClear);
+                    const itemStartDateVisualColumnKey = getManualStageVisualColumnKey('itemStartDate', columnStageMeta.itemStart.legendKey);
+                    const itemStartDateManualMark = getItemManualStageMark(item, itemStartDateVisualColumnKey);
+                    const itemStartDateManualClear = Boolean(getItemManualStageClear(item, itemStartDateVisualColumnKey));
+                    const hasItemStartStageMark = Boolean(itemStartDateManualMark?.legendKey && !itemStartDateManualClear);
                     const itemStartDateCellStyle = hasItemStartStageMark
                       ? {
                           background: columnStageMeta.itemStart.hex || '#C37C8E',
@@ -3535,7 +3543,16 @@ function OrdersWorkspace() {
                       itemStartDateCellStyle,
                       { disabled: isInlineEditing },
                     );
-                    const itemEndDateCellStyle = undefined;
+                    const itemEndDateVisualColumnKey = getManualStageVisualColumnKey('itemEndDate', columnStageMeta.itemEnd.legendKey);
+                    const itemEndDateManualMark = getItemManualStageMark(item, itemEndDateVisualColumnKey);
+                    const itemEndDateManualClear = Boolean(getItemManualStageClear(item, itemEndDateVisualColumnKey));
+                    const hasItemEndStageMark = Boolean(itemEndDateManualMark?.legendKey && !itemEndDateManualClear);
+                    const itemEndDateCellStyle = hasItemEndStageMark
+                      ? {
+                          background: columnStageMeta.itemEnd.hex || '#C37C8E',
+                          color: columnStageMeta.itemEnd.textHex,
+                        }
+                      : undefined;
                     const itemEndDateCellPropsBase = getManualStageCellProps(
                       key,
                       item,
