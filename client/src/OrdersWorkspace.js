@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
+import DateTextInput from './DateTextInput';
 import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { showGlobalError, useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
-import { formatDateDisplay, formatDateTimeDisplay, formatTimeDisplay } from './dateTime';
+import { formatDateDisplay, formatDateShortDisplay, formatDateTimeDisplay, formatTimeDisplay } from './dateTime';
 import { useRoleConfig } from './RoleConfigContext';
 import {
   getItemManufacturingMeta,
@@ -1847,9 +1848,9 @@ function OrdersWorkspace() {
         manualDatePickerOpenRef.current = false;
       }, 150);
     },
-    onChange: (event) => {
+    onChange: (value) => {
       manualDatePickerOpenRef.current = false;
-      valueSetter(event.target.value);
+      valueSetter(value);
     },
   }), []);
 
@@ -2108,7 +2109,7 @@ function OrdersWorkspace() {
   };
 
   const handleOrderFieldChange = (field) => (event) => {
-    const value = event.target.value;
+    const value = event?.target ? event.target.value : event;
     setError('');
     setOrderForm(current => ({ ...current, [field]: value }));
   };
@@ -2336,7 +2337,7 @@ function OrdersWorkspace() {
   };
 
   const handleRoomEditorItemFieldChange = (index, field) => (event) => {
-    const value = event.target.value;
+    const value = event?.target ? event.target.value : event;
     setError('');
     setRoomEditor((current) => {
       if (!current) return current;
@@ -3065,7 +3066,7 @@ function OrdersWorkspace() {
   };
 
   const handleInlineChange = (rowKey, field) => (event) => {
-    const value = event.target.value;
+    const value = event?.target ? event.target.value : event;
     setError('');
     setInlineDrafts(current => ({
       ...current,
@@ -3437,6 +3438,7 @@ function OrdersWorkspace() {
                     const orderGroupClass = `order-group-cell${isFirstOrderRow ? ' order-group-top' : ''}${isLastOrderRow ? ' order-group-bottom' : ''}`.trim();
                     const orderOutlineClass = `${isHoveredOrder ? `order-outline-cell${isFirstOrderRow ? ' order-outline-top' : ''}${isLastOrderRow ? ' order-outline-bottom' : ''}` : ''}`.trim();
                     const regularOrderClass = `order-filled-cell ${orderGroupClass} ${orderOutlineClass}`.trim();
+                    const plainOrderClass = `${orderGroupClass} ${orderOutlineClass}`.trim();
                     const currentOrderDraftKeys = orderDraftKeys[orderId] || [];
                     const orderInlineDraft = currentOrderDraftKeys.length > 0 ? inlineDrafts[currentOrderDraftKeys[0]] : null;
                     const isOrderInlineEditing = Boolean(orderInlineDraft);
@@ -3507,7 +3509,7 @@ function OrdersWorkspace() {
                       key,
                       item,
                       'itemStartDate',
-                      regularOrderClass,
+                      plainOrderClass,
                       itemStartDateCellStyle,
                       { disabled: isInlineEditing },
                     );
@@ -3516,7 +3518,7 @@ function OrdersWorkspace() {
                       key,
                       item,
                       'itemEndDate',
-                      regularOrderClass,
+                      plainOrderClass,
                       itemEndDateCellStyle,
                       { disabled: isInlineEditing },
                     );
@@ -3740,7 +3742,7 @@ function OrdersWorkspace() {
                         {item.notes || (commentPreview !== '—' ? null : '—')}
                       </>
                     );
-                    const deliveryDateCellContent = isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateDisplay(item.deliveryDate);
+                    const deliveryDateCellContent = isInlineEditing ? <DateTextInput className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateShortDisplay(item.deliveryDate);
                     const carpenterCellContent = renderManualStageCellContent(item, 'carpenter', isPlaceholder ? '—' : workerCellText, { timestampOnly: true });
                     const materialRequestCellContent = (
                       <div className="package-cell-content">
@@ -3777,15 +3779,15 @@ function OrdersWorkspace() {
                       disabled: isPlaceholder,
                       actionStyle: paintActionStyle,
                     });
-                    const itemStartDateCellContent = renderManualStageCellContent(item, 'itemStartDate', formatDateDisplay(itemManufacturingMeta.startDate));
-                    const itemEndDateCellContent = renderManualStageCellContent(item, 'itemEndDate', formatDateDisplay(itemManufacturingMeta.endDate));
+                    const itemStartDateCellContent = renderManualStageCellContent(item, 'itemStartDate', formatDateShortDisplay(itemManufacturingMeta.startDate));
+                    const itemEndDateCellContent = renderManualStageCellContent(item, 'itemEndDate', formatDateShortDisplay(itemManufacturingMeta.endDate));
                     const itemDurationCellContent = renderManualStageCellContent(item, 'itemDuration', itemDurationValue);
                     const durationMetaCellContent = renderManualStageCellContent(
                       item,
                       'duration',
                       <div className="merged-order-meta-content merged-order-meta-content-stacked">
-                        <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.startDate)}</span>
-                        <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.endDate)}</span>
+                        <span className="merged-order-meta-pill">{formatDateShortDisplay(orderManufacturingMeta.startDate)}</span>
+                        <span className="merged-order-meta-pill">{formatDateShortDisplay(orderManufacturingMeta.endDate)}</span>
                         <span className="merged-order-meta-pill">{orderDurationValue}</span>
                       </div>
                     );
@@ -3870,8 +3872,7 @@ function OrdersWorkspace() {
                 <>
                   <label className="manual-stage-toolbar-date-field">
                     <span>Начало заказа</span>
-                    <input
-                      type="date"
+                    <DateTextInput
                       value={manualOrderDateDraft.startDate}
                       {...bindManualDateInputProps((value) => setManualOrderDateDraft((current) => ({ ...current, startDate: value })))}
                       disabled={manualStageSaving}
@@ -3879,8 +3880,7 @@ function OrdersWorkspace() {
                   </label>
                   <label className="manual-stage-toolbar-date-field">
                     <span>Окончание заказа</span>
-                    <input
-                      type="date"
+                    <DateTextInput
                       value={manualOrderDateDraft.endDate}
                       {...bindManualDateInputProps((value) => setManualOrderDateDraft((current) => ({ ...current, endDate: value })))}
                       disabled={manualStageSaving}
@@ -3890,8 +3890,7 @@ function OrdersWorkspace() {
               ) : (
                 <label className="manual-stage-toolbar-date-field">
                   <span>{selectedStageSingleColumnKey === 'itemStartDate' ? 'Дата начала' : 'Дата окончания'}</span>
-                  <input
-                    type="date"
+                  <DateTextInput
                     value={manualDateDraft}
                     {...bindManualDateInputProps(setManualDateDraft)}
                     disabled={manualStageSaving}
@@ -4022,8 +4021,7 @@ function OrdersWorkspace() {
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Дата заказа *</label>
-                <input
-                  type="date"
+                <DateTextInput
                   value={orderForm.orderDate}
                   onChange={handleOrderFieldChange('orderDate')}
                   className={formErrors.orderDate ? 'input-invalid' : ''}
@@ -4258,7 +4256,7 @@ function OrdersWorkspace() {
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Отгрузка до</label>
-                    <input type="date" value={item.deliveryDate} onChange={handleRoomEditorItemFieldChange(index, 'deliveryDate')} />
+                    <DateTextInput value={item.deliveryDate} onChange={handleRoomEditorItemFieldChange(index, 'deliveryDate')} />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
                     <label>Примечания</label>

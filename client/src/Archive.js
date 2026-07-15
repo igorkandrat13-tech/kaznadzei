@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
+import DateTextInput from './DateTextInput';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
-import { formatDateDisplay, formatTimeDisplay } from './dateTime';
+import { formatDateDisplay, formatDateShortDisplay, formatTimeDisplay } from './dateTime';
 import {
   getItemManufacturingMeta,
   getOrderManufacturingMeta,
@@ -751,7 +752,7 @@ function Archive() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Дата с</label>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            <DateTextInput value={dateFrom} onChange={setDateFrom} />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Ответственный</label>
@@ -764,7 +765,7 @@ function Archive() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Дата по</label>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <DateTextInput value={dateTo} onChange={setDateTo} />
           </div>
           <div className="filters-summary">Найдено: {filteredOrders.length}</div>
         </div>
@@ -1085,7 +1086,7 @@ function Archive() {
                           {item.notes || (commentPreview !== '—' ? null : '—')}
                         </>
                       </td>
-                      <td {...deliveryDateCellProps}>{formatDateDisplay(item.deliveryDate)}</td>
+                      <td {...deliveryDateCellProps}>{formatDateShortDisplay(item.deliveryDate)}</td>
                       <td {...carpenterCellProps} title={workerCellTitle}>
                         {isPlaceholder ? '—' : workerCellText}
                       </td>
@@ -1095,14 +1096,14 @@ function Archive() {
                       <td {...paintCellProps}>
                         {renderAttachmentCountCell(paintAttachments, paintActionStyle, 'Файлы покраски не прикреплены')}
                       </td>
-                      <td {...itemStartDateCellProps}>{formatDateDisplay(itemManufacturingMeta.startDate)}</td>
-                      <td {...itemEndDateCellProps}>{formatDateDisplay(itemManufacturingMeta.endDate)}</td>
+                      <td {...itemStartDateCellProps}>{formatDateShortDisplay(itemManufacturingMeta.startDate)}</td>
+                      <td {...itemEndDateCellProps}>{formatDateShortDisplay(itemManufacturingMeta.endDate)}</td>
                       <td {...itemDurationCellProps}>{itemDurationValue}</td>
                       {isFirstOrderRow ? (
                         <td rowSpan={orderRowSpan} {...durationMetaCellProps}>
                           <div className="merged-order-meta-content merged-order-meta-content-stacked">
-                            <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.startDate)}</span>
-                            <span className="merged-order-meta-pill">{formatDateDisplay(orderManufacturingMeta.endDate)}</span>
+                            <span className="merged-order-meta-pill">{formatDateShortDisplay(orderManufacturingMeta.startDate)}</span>
+                            <span className="merged-order-meta-pill">{formatDateShortDisplay(orderManufacturingMeta.endDate)}</span>
                             <span className="merged-order-meta-pill">{orderDurationValue}</span>
                           </div>
                         </td>
