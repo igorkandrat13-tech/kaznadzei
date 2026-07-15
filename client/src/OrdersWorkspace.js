@@ -1589,11 +1589,14 @@ function OrdersWorkspace() {
       const item = orderUpdate.items[itemIndex];
       const columnKey = String(selection?.columnKey || payload.columnKey || '').trim();
       const currentMark = item.manualStageMarks?.[columnKey] || {};
+      const nextLegendKey = (columnKey === 'itemStartDate' || columnKey === 'itemEndDate')
+        ? ''
+        : String(selection?.legendKey || currentMark.legendKey || '').trim();
       item.manualStageMarks = {
         ...(item.manualStageMarks || {}),
         [columnKey]: {
           ...currentMark,
-          legendKey: String(selection?.legendKey || currentMark.legendKey || '').trim(),
+          legendKey: nextLegendKey,
           updatedAt: new Date(`${payload.date}T00:00:00.000Z`).toISOString(),
           updatedBy: 'admin',
         },
@@ -1654,7 +1657,12 @@ function OrdersWorkspace() {
           orderId: selection.orderId,
           itemId: selection.itemId,
           columnKey: selection.columnKey,
-          legendKey: selection.autoLegendKey,
+          ...(
+            selectedStageSingleColumnKey === 'itemStartDate'
+            || selectedStageSingleColumnKey === 'itemEndDate'
+              ? {}
+              : { legendKey: selection.autoLegendKey }
+          ),
         })),
       };
       if (selectedStageSingleColumnKey === 'duration') {

@@ -1519,9 +1519,12 @@ const OrderStore = {
       const currentOverrides = normalizeOrderManualDateOverrides(order.manualDateOverrides);
       const currentMarks = normalizeManualStageMarks(item.manualStageMarks);
       const currentClears = normalizeManualStageClears(item.manualStageClears);
+      const nextLegendKey = (columnKey === 'itemStartDate' || columnKey === 'itemEndDate')
+        ? ''
+        : String(entry?.legendKey || currentMarks[columnKey]?.legendKey || '').trim();
       const nextMark = {
         ...(currentMarks[columnKey] || {}),
-        legendKey: String(entry?.legendKey || currentMarks[columnKey]?.legendKey || '').trim(),
+        legendKey: nextLegendKey,
         updatedAt: new Date(`${date}T00:00:00.000Z`).toISOString(),
         updatedBy: actor,
       };
