@@ -413,7 +413,15 @@ function getItemAssignedStage(item) {
 
 function getItemManualStageMark(item, columnKey) {
   if (!item?.manualStageMarks || typeof item.manualStageMarks !== 'object') return null;
-  return item.manualStageMarks[columnKey] || null;
+  const mark = item.manualStageMarks[columnKey] || null;
+  if (!mark) return null;
+  if (columnKey === 'itemStartDate' || columnKey === 'itemEndDate') {
+    return {
+      ...mark,
+      legendKey: '',
+    };
+  }
+  return mark;
 }
 
 function getItemManualStageClear(item, columnKey) {

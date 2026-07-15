@@ -164,8 +164,8 @@ function normalizeManualStageMarks(source = {}) {
     const normalizedColumnKey = normalizeOrderColumnKey(columnKey);
     if (!normalizedColumnKey || !mark || typeof mark !== 'object') return acc;
 
-    const legendKey = String(mark.legendKey || '').trim();
     const allowsEmptyLegendKey = normalizedColumnKey === 'itemStartDate' || normalizedColumnKey === 'itemEndDate';
+    const legendKey = allowsEmptyLegendKey ? '' : String(mark.legendKey || '').trim();
     if ((!legendKey || !MANUAL_STAGE_ORDER.includes(legendKey)) && !allowsEmptyLegendKey) return acc;
 
     acc[normalizedColumnKey] = {
