@@ -1414,7 +1414,12 @@ const OrderStore = {
       item.manualStageClears = { ...currentClears };
       const currentMark = item.manualStageMarks[columnKey];
       const currentClear = item.manualStageClears[columnKey];
+      const isManualDateColumn = columnKey === 'itemStartDate' || columnKey === 'itemEndDate';
       let itemChanged = false;
+
+      if (isManualDateColumn) {
+        continue;
+      }
 
       if (shouldClear) {
         if (currentMark) {

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ConfirmDialog from './ConfirmDialog';
-import DateTextInput from './DateTextInput';
 import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
 import { showGlobalError, useGlobalErrorEffect } from './globalErrors';
@@ -423,6 +422,10 @@ function getItemManualStageMark(item, columnKey) {
     };
   }
   return mark;
+}
+
+function isManualDateColumn(columnKey) {
+  return columnKey === 'itemStartDate' || columnKey === 'itemEndDate';
 }
 
 function getItemManualStageClear(item, columnKey) {
@@ -1510,6 +1513,10 @@ function OrdersWorkspace() {
 
   const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
     if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0) return;
+    if (canEditSelectedDates) {
+      clearSelectedStageCells();
+      return;
+    }
 
     setManualStageSaving(true);
     setError('');
@@ -1548,7 +1555,7 @@ function OrdersWorkspace() {
     } finally {
       setManualStageSaving(false);
     }
-  }, [clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
+  }, [canEditSelectedDates, clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
 
   const applyManualDateThroughOrderUpdate = useCallback(async (payload) => {
     const ordersById = new Map(
@@ -1804,12 +1811,13 @@ function OrdersWorkspace() {
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
     const manualClear = getItemManualStageClear(item, columnKey);
+    const hasVisibleManualMark = Boolean(manualMark && !isManualDateColumn(columnKey));
     const columnHeader = getManualStageSecondaryHeader(columnKey, secondaryHeaderSchema);
     const isSelected = selectedStageCellKeys.includes(buildManualStageCellKey(rowKey, columnKey));
     const canSelectCell = !disabled && canEditManualColumn(columnKey);
     const className = cn(
       baseClassName,
-      manualMark ? 'manual-stage-cell-marked' : '',
+      hasVisibleManualMark ? 'manual-stage-cell-marked' : '',
       canSelectCell ? 'manual-stage-cell-selectable' : '',
       isSelected ? 'manual-stage-cell-selected' : '',
     );
@@ -1818,7 +1826,7 @@ function OrdersWorkspace() {
       : manualMark
       ? {
           ...(baseStyle || {}),
-          ...(manualMark.legendKey
+          ...(manualMark.legendKey && !isManualDateColumn(columnKey)
             ? {
                 background: getSecondaryHeaderBackground(columnHeader),
                 color: getSecondaryHeaderTextColor(columnHeader),
@@ -1827,7 +1835,7 @@ function OrdersWorkspace() {
         }
       : baseStyle;
     const title = manualMark
-      ? (manualMark.legendKey || 'Ручная дата')
+      ? (manualMark.legendKey || (isManualDateColumn(columnKey) ? 'Ручная дата' : ''))
       : (manualClear ? 'Сброшено' : undefined);
 
     return {
@@ -1848,9 +1856,9 @@ function OrdersWorkspace() {
         manualDatePickerOpenRef.current = false;
       }, 150);
     },
-    onChange: (value) => {
+    onChange: (event) => {
       manualDatePickerOpenRef.current = false;
-      valueSetter(value);
+      valueSetter(event.target.value);
     },
   }), []);
 
@@ -3742,7 +3750,7 @@ function OrdersWorkspace() {
                         {item.notes || (commentPreview !== '—' ? null : '—')}
                       </>
                     );
-                    const deliveryDateCellContent = isInlineEditing ? <DateTextInput className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateShortDisplay(item.deliveryDate);
+                    const deliveryDateCellContent = isInlineEditing ? <input type="date" className="table-inline-input" value={inlineDraft.deliveryDate} onChange={handleInlineChange(key, 'deliveryDate')} /> : formatDateShortDisplay(item.deliveryDate);
                     const carpenterCellContent = renderManualStageCellContent(item, 'carpenter', isPlaceholder ? '—' : workerCellText, { timestampOnly: true });
                     const materialRequestCellContent = (
                       <div className="package-cell-content">
@@ -3872,7 +3880,8 @@ function OrdersWorkspace() {
                 <>
                   <label className="manual-stage-toolbar-date-field">
                     <span>Начало заказа</span>
-                    <DateTextInput
+                    <input
+                      type="date"
                       value={manualOrderDateDraft.startDate}
                       {...bindManualDateInputProps((value) => setManualOrderDateDraft((current) => ({ ...current, startDate: value })))}
                       disabled={manualStageSaving}
@@ -3880,7 +3889,8 @@ function OrdersWorkspace() {
                   </label>
                   <label className="manual-stage-toolbar-date-field">
                     <span>Окончание заказа</span>
-                    <DateTextInput
+                    <input
+                      type="date"
                       value={manualOrderDateDraft.endDate}
                       {...bindManualDateInputProps((value) => setManualOrderDateDraft((current) => ({ ...current, endDate: value })))}
                       disabled={manualStageSaving}
@@ -3890,7 +3900,8 @@ function OrdersWorkspace() {
               ) : (
                 <label className="manual-stage-toolbar-date-field">
                   <span>{selectedStageSingleColumnKey === 'itemStartDate' ? 'Дата начала' : 'Дата окончания'}</span>
-                  <DateTextInput
+                  <input
+                    type="date"
                     value={manualDateDraft}
                     {...bindManualDateInputProps(setManualDateDraft)}
                     disabled={manualStageSaving}
@@ -3909,25 +3920,29 @@ function OrdersWorkspace() {
             </div>
           ) : null}
           <div className="manual-stage-toolbar-actions">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="manual-stage-toolbar-btn manual-stage-toolbar-btn-accent"
-              onClick={() => applyManualStageToSelection()}
-              disabled={manualStageSaving || selectedStageSelections.length === 0}
-              title="Закрасит выбранные ячейки цветом этапов их колонок."
-            >
-              Закрасить
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="manual-stage-toolbar-btn"
-              onClick={() => applyManualStageToSelection({ clear: true })}
-              disabled={manualStageSaving}
-            >
-              Сбросить
-            </Button>
+            {!canEditSelectedDates ? (
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="manual-stage-toolbar-btn manual-stage-toolbar-btn-accent"
+                  onClick={() => applyManualStageToSelection()}
+                  disabled={manualStageSaving || selectedStageSelections.length === 0}
+                  title="Закрасит выбранные ячейки цветом этапов их колонок."
+                >
+                  Закрасить
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="manual-stage-toolbar-btn"
+                  onClick={() => applyManualStageToSelection({ clear: true })}
+                  disabled={manualStageSaving}
+                >
+                  Сбросить
+                </Button>
+              </>
+            ) : null}
             <Button
               variant="secondary"
               size="sm"
@@ -4021,7 +4036,8 @@ function OrdersWorkspace() {
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Дата заказа *</label>
-                <DateTextInput
+                <input
+                  type="date"
                   value={orderForm.orderDate}
                   onChange={handleOrderFieldChange('orderDate')}
                   className={formErrors.orderDate ? 'input-invalid' : ''}
@@ -4256,7 +4272,7 @@ function OrdersWorkspace() {
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Отгрузка до</label>
-                    <DateTextInput value={item.deliveryDate} onChange={handleRoomEditorItemFieldChange(index, 'deliveryDate')} />
+                    <input type="date" value={item.deliveryDate} onChange={handleRoomEditorItemFieldChange(index, 'deliveryDate')} />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
                     <label>Примечания</label>

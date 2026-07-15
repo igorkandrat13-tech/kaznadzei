@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
-import DateTextInput from './DateTextInput';
 import { apiFetch, getErrorMessage, parseJsonSafely } from './api';
 import { useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
@@ -752,7 +751,7 @@ function Archive() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Дата с</label>
-            <DateTextInput value={dateFrom} onChange={setDateFrom} />
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Ответственный</label>
@@ -765,7 +764,7 @@ function Archive() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Дата по</label>
-            <DateTextInput value={dateTo} onChange={setDateTo} />
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
           <div className="filters-summary">Найдено: {filteredOrders.length}</div>
         </div>
