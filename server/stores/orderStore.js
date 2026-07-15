@@ -1394,14 +1394,15 @@ const OrderStore = {
     for (const entry of Array.isArray(entries) ? entries : []) {
       const orderId = String(entry?.orderId || '').trim();
       const itemId = String(entry?.itemId || '').trim();
-      const columnKey = String(entry?.columnKey || '').trim();
+      const displayColumnKey = String(entry?.columnKey || '').trim();
+      const columnKey = String(entry?.storageColumnKey || entry?.columnKey || '').trim();
       const entryLegendKey = String(entry?.legendKey || '').trim();
       const effectiveLegendKey = entryLegendKey || normalizedLegendKey;
       const shouldClear = !effectiveLegendKey;
       if (!shouldClear && !MANUAL_STAGE_ORDER.includes(effectiveLegendKey)) {
         continue;
       }
-      if (!orderId || !itemId || !columnKey) continue;
+      if (!orderId || !itemId || !displayColumnKey || !columnKey) continue;
 
       const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
       if (!order) continue;
@@ -1414,10 +1415,10 @@ const OrderStore = {
       item.manualStageClears = { ...currentClears };
       const currentMark = item.manualStageMarks[columnKey];
       const currentClear = item.manualStageClears[columnKey];
-      const isManualDateColumn = columnKey === 'itemStartDate' || columnKey === 'itemEndDate';
+      const isManualDateColumn = displayColumnKey === 'itemStartDate' || displayColumnKey === 'itemEndDate';
       let itemChanged = false;
 
-      if (isManualDateColumn) {
+      if (isManualDateColumn && columnKey === displayColumnKey) {
         continue;
       }
 

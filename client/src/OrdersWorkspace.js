@@ -34,6 +34,7 @@ const ORDER_ITEM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ изд
 const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй');
 const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
 const ORDER_MATERIAL_REQUESTS_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
+const ITEM_END_DATE_STAGE_MARK_COLUMN_KEY = 'itemEndDateStageMark';
 const LEGACY_ORDER_COLUMN_KEY_MAP = {
   photoLink: 'materialRequests',
 };
@@ -426,6 +427,10 @@ function getItemManualStageMark(item, columnKey) {
 
 function isManualDateColumn(columnKey) {
   return columnKey === 'itemStartDate' || columnKey === 'itemEndDate';
+}
+
+function getManualStageVisualColumnKey(columnKey) {
+  return columnKey === 'itemEndDate' ? ITEM_END_DATE_STAGE_MARK_COLUMN_KEY : columnKey;
 }
 
 function getItemManualStageClear(item, columnKey) {
@@ -1148,6 +1153,7 @@ function OrdersWorkspace() {
   const canEditSelectedDates = selectedStageSingleColumnKey === 'itemStartDate'
     || selectedStageSingleColumnKey === 'itemEndDate'
     || selectedStageSingleColumnKey === 'duration';
+  const canEditSelectedStageHighlight = !canEditSelectedDates || selectedStageSingleColumnKey === 'itemEndDate';
 
   const firstOrderRowKeys = useMemo(() => {
     const seenOrders = new Set();
@@ -1513,7 +1519,7 @@ function OrdersWorkspace() {
 
   const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
     if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0) return;
-    if (canEditSelectedDates) {
+    if (!canEditSelectedStageHighlight) {
       clearSelectedStageCells();
       return;
     }
@@ -1525,6 +1531,9 @@ function OrdersWorkspace() {
         orderId: selection.orderId,
         itemId: selection.itemId,
         columnKey: selection.columnKey,
+        ...(selection.columnKey === 'itemEndDate'
+          ? { storageColumnKey: getManualStageVisualColumnKey(selection.columnKey) }
+          : {}),
         ...(!clear && selection.autoLegendKey ? { legendKey: selection.autoLegendKey } : {}),
       }));
       const payload = {
@@ -1555,7 +1564,7 @@ function OrdersWorkspace() {
     } finally {
       setManualStageSaving(false);
     }
-  }, [canEditSelectedDates, clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
+  }, [canEditSelectedStageHighlight, clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
 
   const applyManualDateThroughOrderUpdate = useCallback(async (payload) => {
     const ordersById = new Map(
@@ -1810,8 +1819,9 @@ function OrdersWorkspace() {
 
   const getManualStageCellProps = useCallback((rowKey, item, columnKey, baseClassName, baseStyle, { disabled = false } = {}) => {
     const manualMark = getItemManualStageMark(item, columnKey);
-    const manualClear = getItemManualStageClear(item, columnKey);
-    const hasVisibleManualMark = Boolean(manualMark && !isManualDateColumn(columnKey));
+    const visualManualMark = getItemManualStageMark(item, getManualStageVisualColumnKey(columnKey));
+    const manualClear = getItemManualStageClear(item, getManualStageVisualColumnKey(columnKey));
+    const hasVisibleManualMark = Boolean(visualManualMark?.legendKey);
     const columnHeader = getManualStageSecondaryHeader(columnKey, secondaryHeaderSchema);
     const isSelected = selectedStageCellKeys.includes(buildManualStageCellKey(rowKey, columnKey));
     const canSelectCell = !disabled && canEditManualColumn(columnKey);
@@ -1826,7 +1836,7 @@ function OrdersWorkspace() {
       : manualMark
       ? {
           ...(baseStyle || {}),
-          ...(manualMark.legendKey && !isManualDateColumn(columnKey)
+          ...(visualManualMark?.legendKey
             ? {
                 background: getSecondaryHeaderBackground(columnHeader),
                 color: getSecondaryHeaderTextColor(columnHeader),
@@ -1835,7 +1845,11 @@ function OrdersWorkspace() {
         }
       : baseStyle;
     const title = manualMark
-      ? (manualMark.legendKey || (isManualDateColumn(columnKey) ? 'Ручная дата' : ''))
+      ? (
+        visualManualMark?.legendKey
+        || manualMark?.legendKey
+        || (isManualDateColumn(columnKey) ? 'Ручная дата' : '')
+      )
       : (manualClear ? 'Сброшено' : undefined);
 
     return {
@@ -3880,8 +3894,8 @@ function OrdersWorkspace() {
                 <>
                   <label className="manual-stage-toolbar-date-field">
                     <span>Начало заказа</span>
-                    <input
-                      type="date"
+                      <input
+                        type="date"
                       value={manualOrderDateDraft.startDate}
                       {...bindManualDateInputProps((value) => setManualOrderDateDraft((current) => ({ ...current, startDate: value })))}
                       disabled={manualStageSaving}
@@ -3889,8 +3903,8 @@ function OrdersWorkspace() {
                   </label>
                   <label className="manual-stage-toolbar-date-field">
                     <span>Окончание заказа</span>
-                    <input
-                      type="date"
+                      <input
+                        type="date"
                       value={manualOrderDateDraft.endDate}
                       {...bindManualDateInputProps((value) => setManualOrderDateDraft((current) => ({ ...current, endDate: value })))}
                       disabled={manualStageSaving}
@@ -3920,7 +3934,7 @@ function OrdersWorkspace() {
             </div>
           ) : null}
           <div className="manual-stage-toolbar-actions">
-            {!canEditSelectedDates ? (
+            {canEditSelectedStageHighlight ? (
               <>
                 <Button
                   variant="secondary"

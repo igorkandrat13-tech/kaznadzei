@@ -593,6 +593,7 @@ function handleManualStageMarks(req, res) {
       orderId: String(selection?.orderId || '').trim(),
       itemId: String(selection?.itemId || '').trim(),
       columnKey: String(selection?.columnKey || '').trim(),
+      storageColumnKey: String(selection?.storageColumnKey || selection?.columnKey || '').trim(),
       legendKey: isClearRequest
         ? ''
         : (
