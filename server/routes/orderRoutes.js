@@ -1687,12 +1687,6 @@ router.get('/orders/:id/items/:itemId/attachments/:attachmentId/telegram-file', 
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
     }
 
-    const allowedColumns = getEmployeeAllowedColumns(employee);
-    const requiredColumnKey = attachmentScope === 'paint' ? 'paint' : 'orderCard';
-    if (!allowedColumns.has(requiredColumnKey)) {
-      return res.status(403).json({ message: 'Нет доступа к этому вложению.' });
-    }
-
     const attachmentScopeLabel = getAttachmentScopeLabel(attachmentScope);
     const attachment = OrderStore.getAttachment(req.params.id, req.params.itemId, req.params.attachmentId, { scope: attachmentScope });
     if (attachment === null) {

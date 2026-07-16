@@ -298,6 +298,7 @@ function OrderDetail() {
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
+  const [telegramReadOnlySectionKey, setTelegramReadOnlySectionKey] = useState('');
   const [telegramAttachmentOpeningKey, setTelegramAttachmentOpeningKey] = useState('');
   const [telegramAttachmentPreview, setTelegramAttachmentPreview] = useState(null);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
@@ -669,21 +670,16 @@ function OrderDetail() {
   );
 
   const canManageMaterialRequests = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId);
-  const canViewOrderCard = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId && allowedColumns.includes('orderCard'));
-  const canViewPaint = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId && allowedColumns.includes('paint'));
-  const telegramReadOnlyViewKey = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return String(params.get('telegramView') || '').trim();
-  }, [location.search]);
-  const telegramReadOnlySection = useMemo(() => {
-    if (telegramReadOnlyViewKey === 'orderCard' && !canViewOrderCard) return null;
-    if (telegramReadOnlyViewKey === 'paint' && !canViewPaint) return null;
-    return getTelegramReadOnlySection(selectedItem, telegramReadOnlyViewKey);
-  }, [canViewOrderCard, canViewPaint, selectedItem, telegramReadOnlyViewKey]);
+  const canViewOrderCard = Boolean(telegramMode && selectedItem?.itemId);
+  const canViewPaint = Boolean(telegramMode && selectedItem?.itemId);
+  const telegramReadOnlySection = useMemo(
+    () => getTelegramReadOnlySection(selectedItem, telegramReadOnlySectionKey),
+    [selectedItem, telegramReadOnlySectionKey],
+  );
 
   useEffect(() => {
     return () => {
-      if (telegramAttachmentPreview?.url) {
+      if (telegramAttachmentPreview?.revokeUrl && telegramAttachmentPreview?.url) {
         window.URL.revokeObjectURL(telegramAttachmentPreview.url);
       }
     };
@@ -779,7 +775,7 @@ function OrderDetail() {
 
   const closeTelegramAttachmentPreview = useCallback(() => {
     setTelegramAttachmentPreview((current) => {
-      if (current?.url) {
+      if (current?.revokeUrl && current?.url) {
         window.URL.revokeObjectURL(current.url);
       }
       return null;
@@ -788,17 +784,13 @@ function OrderDetail() {
 
   useEffect(() => {
     closeTelegramAttachmentPreview();
-  }, [closeTelegramAttachmentPreview, selectedItem?.itemId, telegramReadOnlyViewKey]);
+    setTelegramReadOnlySectionKey('');
+  }, [closeTelegramAttachmentPreview, selectedItem?.itemId]);
 
   const closeTelegramReadOnlySection = useCallback(() => {
     closeTelegramAttachmentPreview();
-    const params = new URLSearchParams(location.search);
-    params.delete('telegramView');
-    navigate({
-      pathname: location.pathname,
-      search: params.toString() ? `?${params.toString()}` : '',
-    });
-  }, [closeTelegramAttachmentPreview, location.pathname, location.search, navigate]);
+    setTelegramReadOnlySectionKey('');
+  }, [closeTelegramAttachmentPreview]);
 
   const openTelegramReadOnlySection = useCallback((sectionKey, event) => {
     if (event) {
@@ -808,13 +800,8 @@ function OrderDetail() {
     const normalizedSectionKey = String(sectionKey || '').trim();
     if (!normalizedSectionKey) return;
     closeTelegramAttachmentPreview();
-    const params = new URLSearchParams(location.search);
-    params.set('telegramView', normalizedSectionKey);
-    navigate({
-      pathname: location.pathname,
-      search: params.toString() ? `?${params.toString()}` : '',
-    });
-  }, [closeTelegramAttachmentPreview, location.pathname, location.search, navigate]);
+    setTelegramReadOnlySectionKey(normalizedSectionKey);
+  }, [closeTelegramAttachmentPreview]);
 
   const openTelegramBlobInNewTab = useCallback((blob, fileName = 'attachment') => {
     const blobUrl = window.URL.createObjectURL(blob);
@@ -855,12 +842,26 @@ function OrderDetail() {
     const openKey = `${attachmentScope}:${attachment.attachmentId}`;
     const query = new URLSearchParams({ sessionToken });
     if (attachmentScope === 'paint') query.set('scope', 'paint');
+    const fileUrl = `/api/orders/${order._id}/items/${selectedItem.itemId}/attachments/${attachment.attachmentId}/telegram-file?${query.toString()}`;
 
     setTelegramAttachmentOpeningKey(openKey);
     setTelegramActionError('');
 
     try {
-      const res = await apiFetch(`/api/orders/${order._id}/items/${selectedItem.itemId}/attachments/${attachment.attachmentId}/telegram-file?${query.toString()}`);
+      if (isPdfAttachment(attachment)) {
+        setTelegramAttachmentPreview({
+          attachment,
+          mode: 'pdf',
+          name: attachment.name || 'PDF',
+          kindLabel: getAttachmentKindLabel(attachment),
+          sizeLabel: formatAttachmentSize(attachment.size),
+          url: fileUrl,
+          revokeUrl: false,
+        });
+        return;
+      }
+
+      const res = await apiFetch(fileUrl);
       if (!res.ok) {
         setTelegramActionError(await getErrorMessage(res, 'Не удалось открыть вложение.'));
         return;
@@ -876,19 +877,7 @@ function OrderDetail() {
           kindLabel: getAttachmentKindLabel(attachment),
           sizeLabel: formatAttachmentSize(attachment.size),
           url: blobUrl,
-        });
-        return;
-      }
-
-      if (isPdfAttachment(attachment)) {
-        const blobUrl = window.URL.createObjectURL(blob);
-        setTelegramAttachmentPreview({
-          attachment,
-          mode: 'pdf',
-          name: attachment.name || 'PDF',
-          kindLabel: getAttachmentKindLabel(attachment),
-          sizeLabel: formatAttachmentSize(attachment.size),
-          url: blobUrl,
+          revokeUrl: true,
         });
         return;
       }
@@ -1115,35 +1104,33 @@ function OrderDetail() {
 
       {telegramMode ? (
         <>
-          {!telegramReadOnlySection ? (
-            <div className="telegram-order-summary">
-              <div className="telegram-order-summary-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={(event) => openTelegramReadOnlySection('orderCard', event)}
-                  disabled={!canViewOrderCard}
-                >
-                  Карточка заказа
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={(event) => openTelegramReadOnlySection('paint', event)}
-                  disabled={!canViewPaint}
-                >
-                  Покраска
-                </button>
-              </div>
+          <div className="telegram-order-summary">
+            <div className="telegram-order-summary-actions">
+              <button
+                type="button"
+                className={`btn ${telegramReadOnlySection?.key === 'orderCard' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={(event) => openTelegramReadOnlySection('orderCard', event)}
+                disabled={!canViewOrderCard}
+              >
+                Карточка заказа
+              </button>
+              <button
+                type="button"
+                className={`btn ${telegramReadOnlySection?.key === 'paint' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={(event) => openTelegramReadOnlySection('paint', event)}
+                disabled={!canViewPaint}
+              >
+                Покраска
+              </button>
             </div>
-          ) : null}
+          </div>
 
           {telegramReadOnlySection ? (
             <div className="telegram-readonly-panel">
               <div className="telegram-readonly-panel-header">
                 <div className="telegram-readonly-title">{telegramReadOnlySection.title}</div>
                 <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramReadOnlySection}>
-                  Назад
+                  Закрыть
                 </button>
               </div>
 
@@ -1199,9 +1186,21 @@ function OrderDetail() {
                         <span className="attachment-preview-toolbar-size">{telegramAttachmentPreview.sizeLabel}</span>
                       ) : null}
                     </div>
-                    <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramAttachmentPreview}>
-                      Закрыть файл
-                    </button>
+                    <div className="telegram-readonly-panel-toolbar-actions">
+                      {telegramAttachmentPreview.mode === 'pdf' && telegramAttachmentPreview.url ? (
+                        <a
+                          href={telegramAttachmentPreview.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="telegram-readonly-close-btn"
+                        >
+                          Открыть PDF
+                        </a>
+                      ) : null}
+                      <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramAttachmentPreview}>
+                        Закрыть файл
+                      </button>
+                    </div>
                   </div>
                   <div
                     className={[
@@ -1279,24 +1278,22 @@ function OrderDetail() {
             </div>
           ) : null}
 
-          {!telegramReadOnlySection ? (
-            <>
-              {scanActivationError && (
-                <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
-                  {scanActivationError}
-                </div>
-              )}
+          {scanActivationError && (
+            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+              {scanActivationError}
+            </div>
+          )}
 
-              <div className="telegram-order-grid">
-                {detailItems.map((item) => (
-                  <div key={item.label} className="detail-block">
-                    <div className="detail-label">{item.label}</div>
-                    <div className="detail-value">{item.value}</div>
-                  </div>
-                ))}
+          <div className="telegram-order-grid">
+            {detailItems.map((item) => (
+              <div key={item.label} className="detail-block">
+                <div className="detail-label">{item.label}</div>
+                <div className="detail-value">{item.value}</div>
               </div>
+            ))}
+          </div>
 
-              <div className="telegram-stage-section">
+          <div className="telegram-stage-section">
             <div className="telegram-section-title">Этапы</div>
 
             {sessionLoading && (
@@ -1585,8 +1582,6 @@ function OrderDetail() {
               )}
             </div>
           )}
-            </>
-          ) : null}
         </>
       ) : (
         <div className="table-scroll">

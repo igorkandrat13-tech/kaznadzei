@@ -6606,6 +6606,12 @@ body .role-allowed-column-marker {
   background: rgba(240, 246, 255, 0.98);
 }
 
+.telegram-readonly-panel-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .telegram-inline-attachment-preview {
   margin-top: 6px;
 }
@@ -8747,6 +8753,10 @@ body .home-auth-status-pending {
   .telegram-readonly-panel-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .telegram-readonly-panel-toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
   .detail-block {
     padding: 11px;
