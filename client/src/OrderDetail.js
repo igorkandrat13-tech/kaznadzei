@@ -191,62 +191,8 @@ function isLinkAttachment(attachment = {}) {
   return Boolean(url) || type.includes('link');
 }
 
-function getAttachmentExtension(attachment = {}) {
-  const fileName = String(attachment?.name || '').trim().toLowerCase();
-  const match = fileName.match(/(\.[a-z0-9]+)$/i);
-  return match ? match[1] : '';
-}
-
-function isImageAttachment(attachment = {}) {
-  const type = String(attachment?.type || '').toLowerCase();
-  return type.startsWith('image/');
-}
-
-function isPdfAttachment(attachment = {}) {
-  const type = String(attachment?.type || '').toLowerCase();
-  return type.includes('pdf') || getAttachmentExtension(attachment) === '.pdf';
-}
-
-function isDocxAttachment(attachment = {}) {
-  const type = String(attachment?.type || '').toLowerCase();
-  return type.includes('wordprocessingml') || getAttachmentExtension(attachment) === '.docx';
-}
-
-function isLegacyWordAttachment(attachment = {}) {
-  const type = String(attachment?.type || '').toLowerCase();
-  return type.includes('msword') || getAttachmentExtension(attachment) === '.doc';
-}
-
-function isSpreadsheetAttachment(attachment = {}) {
-  const type = String(attachment?.type || '').toLowerCase();
-  const extension = getAttachmentExtension(attachment);
-  return type.includes('excel')
-    || type.includes('spreadsheet')
-    || extension === '.xlsx'
-    || extension === '.xls';
-}
-
 function getAttachmentLinkUrl(attachment = {}) {
   return String(attachment?.url || '').trim();
-}
-
-function getAttachmentKindLabel(attachment = {}) {
-  const type = String(attachment?.type || '').toLowerCase();
-  if (isLinkAttachment(attachment)) return 'Ссылка';
-  if (type.includes('pdf')) return 'PDF';
-  if (type.includes('word') || type.includes('document') || isLegacyWordAttachment(attachment)) return 'Word';
-  if (type.includes('excel') || type.includes('spreadsheet') || type.includes('sheet')) return 'Excel';
-  if (type.startsWith('image/')) return 'Изображение';
-  return 'Файл';
-}
-
-function formatAttachmentSize(size) {
-  const numericSize = Number(size) || 0;
-  if (numericSize <= 0) return '';
-  if (numericSize >= 1024 * 1024) {
-    return `${(numericSize / (1024 * 1024)).toFixed(1)} МБ`;
-  }
-  return `${Math.max(1, Math.round(numericSize / 1024))} КБ`;
 }
 
 function getTelegramReadOnlySection(item, sectionKey) {
@@ -300,7 +246,6 @@ function OrderDetail() {
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
   const [telegramReadOnlySectionKey, setTelegramReadOnlySectionKey] = useState('');
   const [telegramAttachmentOpeningKey, setTelegramAttachmentOpeningKey] = useState('');
-  const [telegramAttachmentPreview, setTelegramAttachmentPreview] = useState(null);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
@@ -678,14 +623,6 @@ function OrderDetail() {
   );
 
   useEffect(() => {
-    return () => {
-      if (telegramAttachmentPreview?.revokeUrl && telegramAttachmentPreview?.url) {
-        window.URL.revokeObjectURL(telegramAttachmentPreview.url);
-      }
-    };
-  }, [telegramAttachmentPreview]);
-
-  useEffect(() => {
     if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
     const activationKey = `${id}:${selectedItem.itemId}:${telegramEmployee.role}`;
     if (activatedItemKeyRef.current === activationKey) return;
@@ -773,24 +710,29 @@ function OrderDetail() {
     telegramUnsafeUser,
   ]);
 
-  const closeTelegramAttachmentPreview = useCallback(() => {
-    setTelegramAttachmentPreview((current) => {
-      if (current?.revokeUrl && current?.url) {
-        window.URL.revokeObjectURL(current.url);
-      }
-      return null;
-    });
+  const openTelegramFileUrl = useCallback((targetUrl, fileName = 'attachment') => {
+    const normalizedUrl = String(targetUrl || '').trim();
+    if (!normalizedUrl) return false;
+    const openedWindow = window.open(normalizedUrl, '_blank', 'noopener,noreferrer');
+    if (openedWindow) return true;
+    const link = document.createElement('a');
+    link.href = normalizedUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return true;
   }, []);
 
   useEffect(() => {
-    closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey('');
-  }, [closeTelegramAttachmentPreview, selectedItem?.itemId]);
+  }, [selectedItem?.itemId]);
 
   const closeTelegramReadOnlySection = useCallback(() => {
-    closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey('');
-  }, [closeTelegramAttachmentPreview]);
+  }, []);
 
   const openTelegramReadOnlySection = useCallback((sectionKey, event) => {
     if (event) {
@@ -799,24 +741,7 @@ function OrderDetail() {
     }
     const normalizedSectionKey = String(sectionKey || '').trim();
     if (!normalizedSectionKey) return;
-    closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey(normalizedSectionKey);
-  }, [closeTelegramAttachmentPreview]);
-
-  const openTelegramBlobInNewTab = useCallback((blob, fileName = 'attachment') => {
-    const blobUrl = window.URL.createObjectURL(blob);
-    const openedWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
-    if (!openedWindow) {
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-    window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60 * 1000);
   }, []);
 
   const handleOpenTelegramReadOnlyAttachment = useCallback(async (attachment, scope = 'order') => {
@@ -848,95 +773,16 @@ function OrderDetail() {
     setTelegramActionError('');
 
     try {
-      if (isPdfAttachment(attachment)) {
-        setTelegramAttachmentPreview({
-          attachment,
-          mode: 'pdf',
-          name: attachment.name || 'PDF',
-          kindLabel: getAttachmentKindLabel(attachment),
-          sizeLabel: formatAttachmentSize(attachment.size),
-          url: fileUrl,
-          revokeUrl: false,
-        });
-        return;
+      const opened = openTelegramFileUrl(fileUrl, attachment.name || 'attachment');
+      if (!opened) {
+        setTelegramActionError('Браузер заблокировал открытие файла. Разрешите открытие новой вкладки.');
       }
-
-      const res = await apiFetch(fileUrl);
-      if (!res.ok) {
-        setTelegramActionError(await getErrorMessage(res, 'Не удалось открыть вложение.'));
-        return;
-      }
-
-      const blob = await res.blob();
-      if (isImageAttachment(attachment)) {
-        const blobUrl = window.URL.createObjectURL(blob);
-        setTelegramAttachmentPreview({
-          attachment,
-          mode: 'image',
-          name: attachment.name || 'Изображение',
-          kindLabel: getAttachmentKindLabel(attachment),
-          sizeLabel: formatAttachmentSize(attachment.size),
-          url: blobUrl,
-          revokeUrl: true,
-        });
-        return;
-      }
-
-      if (isDocxAttachment(attachment)) {
-        const mammothImport = await import('mammoth/mammoth.browser');
-        const mammoth = mammothImport.default || mammothImport;
-        const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
-        setTelegramAttachmentPreview({
-          attachment,
-          mode: 'word',
-          name: attachment.name || 'Word',
-          kindLabel: getAttachmentKindLabel(attachment),
-          sizeLabel: formatAttachmentSize(attachment.size),
-          html: result.value || '<p>Пустой документ.</p>',
-        });
-        return;
-      }
-
-      if (isSpreadsheetAttachment(attachment)) {
-        const xlsxImport = await import('xlsx');
-        const XLSX = xlsxImport.default || xlsxImport;
-        const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
-        const sheets = workbook.SheetNames.map((sheetName) => {
-          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
-            header: 1,
-            raw: false,
-            blankrows: false,
-          });
-          return {
-            name: sheetName,
-            rows: rows.slice(0, 100),
-            totalRows: rows.length,
-          };
-        });
-        setTelegramAttachmentPreview({
-          attachment,
-          mode: 'spreadsheet',
-          name: attachment.name || 'Excel',
-          kindLabel: getAttachmentKindLabel(attachment),
-          sizeLabel: formatAttachmentSize(attachment.size),
-          sheets,
-          activeSheetIndex: 0,
-        });
-        return;
-      }
-
-      if (isLegacyWordAttachment(attachment)) {
-        openTelegramBlobInNewTab(blob, attachment.name || 'document.doc');
-        return;
-      }
-
-      openTelegramBlobInNewTab(blob, attachment.name || 'attachment');
     } catch (openError) {
       setTelegramActionError(toUserErrorMessage(openError, 'Не удалось открыть вложение.'));
     } finally {
       setTelegramAttachmentOpeningKey('');
     }
-  }, [getActiveTelegramSessionToken, openTelegramBlobInNewTab, order?._id, selectedItem?.itemId]);
+  }, [getActiveTelegramSessionToken, openTelegramFileUrl, order?._id, selectedItem?.itemId]);
 
   const addTelegramPackageItem = useCallback(async () => {
     const nextName = String(packageDraft || '').trim();
@@ -1177,104 +1023,6 @@ function OrderDetail() {
                 </div>
               ) : null}
 
-              {telegramAttachmentPreview ? (
-                <div className="attachment-preview-panel telegram-inline-attachment-preview">
-                  <div className="attachment-preview-toolbar">
-                    <div className="attachment-preview-toolbar-meta">
-                      <span className="attachment-preview-toolbar-kind">{telegramAttachmentPreview.kindLabel || 'Файл'}</span>
-                      {telegramAttachmentPreview.sizeLabel ? (
-                        <span className="attachment-preview-toolbar-size">{telegramAttachmentPreview.sizeLabel}</span>
-                      ) : null}
-                    </div>
-                    <div className="telegram-readonly-panel-toolbar-actions">
-                      {telegramAttachmentPreview.mode === 'pdf' && telegramAttachmentPreview.url ? (
-                        <a
-                          href={telegramAttachmentPreview.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="telegram-readonly-close-btn"
-                        >
-                          Открыть PDF
-                        </a>
-                      ) : null}
-                      <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramAttachmentPreview}>
-                        Закрыть файл
-                      </button>
-                    </div>
-                  </div>
-                  <div
-                    className={[
-                      'attachment-preview-wrap',
-                      telegramAttachmentPreview.mode === 'image' ? 'attachment-preview-wrap-image' : '',
-                      telegramAttachmentPreview.mode === 'pdf' ? 'attachment-preview-wrap-pdf' : '',
-                      telegramAttachmentPreview.mode === 'word' ? 'attachment-preview-wrap-document' : '',
-                      telegramAttachmentPreview.mode === 'spreadsheet' ? 'attachment-preview-wrap-sheet' : '',
-                    ].filter(Boolean).join(' ')}
-                  >
-                    {telegramAttachmentPreview.mode === 'image' ? (
-                      <img src={telegramAttachmentPreview.url} alt={telegramAttachmentPreview.name || 'Изображение'} className="attachment-preview-image" />
-                    ) : null}
-                    {telegramAttachmentPreview.mode === 'pdf' ? (
-                      <iframe
-                        title={telegramAttachmentPreview.name || 'PDF'}
-                        src={telegramAttachmentPreview.url}
-                        className="attachment-preview-frame"
-                      />
-                    ) : null}
-                    {telegramAttachmentPreview.mode === 'word' ? (
-                      <div
-                        className="attachment-preview-document"
-                        dangerouslySetInnerHTML={{ __html: telegramAttachmentPreview.html || '<p>Пустой документ.</p>' }}
-                      />
-                    ) : null}
-                    {telegramAttachmentPreview.mode === 'spreadsheet' ? (
-                      <div className="attachment-preview-sheet-view">
-                        <div className="attachment-preview-sheet-tabs">
-                          {(telegramAttachmentPreview.sheets || []).map((sheet, index) => (
-                            <button
-                              key={`${sheet.name}-${index}`}
-                              type="button"
-                              className={[
-                                'attachment-preview-sheet-tab',
-                                index === (telegramAttachmentPreview.activeSheetIndex || 0) ? 'attachment-preview-sheet-tab-active' : '',
-                              ].filter(Boolean).join(' ')}
-                              onClick={() => setTelegramAttachmentPreview((current) => current ? {
-                                ...current,
-                                activeSheetIndex: index,
-                              } : current)}
-                            >
-                              {sheet.name}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="attachment-preview-sheet-meta">
-                          {(() => {
-                            const activeSheet = (telegramAttachmentPreview.sheets || [])[telegramAttachmentPreview.activeSheetIndex || 0];
-                            const shownRows = Math.min((activeSheet?.rows || []).length, 100);
-                            const totalRows = Number(activeSheet?.totalRows) || 0;
-                            return totalRows > shownRows
-                              ? `Показаны первые ${shownRows} из ${totalRows} строк`
-                              : `Показано строк: ${shownRows}`;
-                          })()}
-                        </div>
-                        <div className="attachment-preview-table-wrap">
-                          <table className="attachment-preview-table">
-                            <tbody>
-                              {(((telegramAttachmentPreview.sheets || [])[telegramAttachmentPreview.activeSheetIndex || 0]?.rows) || []).map((row, rowIndex) => (
-                                <tr key={`sheet-row-${rowIndex}`}>
-                                  {(Array.isArray(row) ? row : [row]).map((cell, cellIndex) => (
-                                    <td key={`sheet-cell-${rowIndex}-${cellIndex}`}>{String(cell ?? '') || ' '}</td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
             </div>
           ) : null}
 
