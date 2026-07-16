@@ -298,7 +298,6 @@ function OrderDetail() {
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
-  const [telegramReadOnlyPanel, setTelegramReadOnlyPanel] = useState(null);
   const [telegramAttachmentOpeningKey, setTelegramAttachmentOpeningKey] = useState('');
   const [telegramAttachmentPreview, setTelegramAttachmentPreview] = useState(null);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
@@ -672,11 +671,15 @@ function OrderDetail() {
   const canManageMaterialRequests = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId);
   const canViewOrderCard = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId && allowedColumns.includes('orderCard'));
   const canViewPaint = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId && allowedColumns.includes('paint'));
-
-  useEffect(() => {
-    setTelegramReadOnlyPanel(null);
-    closeTelegramAttachmentPreview();
-  }, [selectedItem?.itemId]);
+  const telegramReadOnlyViewKey = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return String(params.get('telegramView') || '').trim();
+  }, [location.search]);
+  const telegramReadOnlySection = useMemo(() => {
+    if (telegramReadOnlyViewKey === 'orderCard' && !canViewOrderCard) return null;
+    if (telegramReadOnlyViewKey === 'paint' && !canViewPaint) return null;
+    return getTelegramReadOnlySection(selectedItem, telegramReadOnlyViewKey);
+  }, [canViewOrderCard, canViewPaint, selectedItem, telegramReadOnlyViewKey]);
 
   useEffect(() => {
     return () => {
@@ -783,23 +786,35 @@ function OrderDetail() {
     });
   }, []);
 
-  const closeTelegramReadOnlySection = useCallback(() => {
-    setTelegramReadOnlyPanel(null);
+  useEffect(() => {
     closeTelegramAttachmentPreview();
-  }, [closeTelegramAttachmentPreview]);
+  }, [closeTelegramAttachmentPreview, selectedItem?.itemId, telegramReadOnlyViewKey]);
+
+  const closeTelegramReadOnlySection = useCallback(() => {
+    closeTelegramAttachmentPreview();
+    const params = new URLSearchParams(location.search);
+    params.delete('telegramView');
+    navigate({
+      pathname: location.pathname,
+      search: params.toString() ? `?${params.toString()}` : '',
+    });
+  }, [closeTelegramAttachmentPreview, location.pathname, location.search, navigate]);
 
   const openTelegramReadOnlySection = useCallback((sectionKey, event) => {
     if (event) {
       event.preventDefault();
       event.stopPropagation();
     }
-    const nextSection = getTelegramReadOnlySection(selectedItem, sectionKey);
-    if (!nextSection) return;
-    window.setTimeout(() => {
-      closeTelegramAttachmentPreview();
-      setTelegramReadOnlyPanel(nextSection);
-    }, 0);
-  }, [closeTelegramAttachmentPreview, selectedItem]);
+    const normalizedSectionKey = String(sectionKey || '').trim();
+    if (!normalizedSectionKey) return;
+    closeTelegramAttachmentPreview();
+    const params = new URLSearchParams(location.search);
+    params.set('telegramView', normalizedSectionKey);
+    navigate({
+      pathname: location.pathname,
+      search: params.toString() ? `?${params.toString()}` : '',
+    });
+  }, [closeTelegramAttachmentPreview, location.pathname, location.search, navigate]);
 
   const openTelegramBlobInNewTab = useCallback((blob, fileName = 'attachment') => {
     const blobUrl = window.URL.createObjectURL(blob);
@@ -1100,43 +1115,45 @@ function OrderDetail() {
 
       {telegramMode ? (
         <>
-          <div className="telegram-order-summary">
-            <div className="telegram-order-summary-actions">
-              <button
-                type="button"
-                className={`btn ${telegramReadOnlyPanel?.key === 'orderCard' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={(event) => openTelegramReadOnlySection('orderCard', event)}
-                disabled={!canViewOrderCard}
-              >
-                Карточка заказа
-              </button>
-              <button
-                type="button"
-                className={`btn ${telegramReadOnlyPanel?.key === 'paint' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={(event) => openTelegramReadOnlySection('paint', event)}
-                disabled={!canViewPaint}
-              >
-                Покраска
-              </button>
+          {!telegramReadOnlySection ? (
+            <div className="telegram-order-summary">
+              <div className="telegram-order-summary-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={(event) => openTelegramReadOnlySection('orderCard', event)}
+                  disabled={!canViewOrderCard}
+                >
+                  Карточка заказа
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={(event) => openTelegramReadOnlySection('paint', event)}
+                  disabled={!canViewPaint}
+                >
+                  Покраска
+                </button>
+              </div>
             </div>
-          </div>
+          ) : null}
 
-          {telegramReadOnlyPanel ? (
+          {telegramReadOnlySection ? (
             <div className="telegram-readonly-panel">
               <div className="telegram-readonly-panel-header">
-                <div className="telegram-readonly-title">{telegramReadOnlyPanel.title}</div>
+                <div className="telegram-readonly-title">{telegramReadOnlySection.title}</div>
                 <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramReadOnlySection}>
-                  Закрыть
+                  Назад
                 </button>
               </div>
 
-              {telegramReadOnlyPanel.text ? (
-                <div className="telegram-readonly-text">{telegramReadOnlyPanel.text}</div>
+              {telegramReadOnlySection.text ? (
+                <div className="telegram-readonly-text">{telegramReadOnlySection.text}</div>
               ) : null}
 
-              {telegramReadOnlyPanel.attachments.length > 0 ? (
+              {telegramReadOnlySection.attachments.length > 0 ? (
                 <div className="telegram-readonly-files">
-                  {telegramReadOnlyPanel.attachments.map((attachment) => {
+                  {telegramReadOnlySection.attachments.map((attachment) => {
                     const attachmentName = String(attachment?.name || '').trim() || 'Без названия';
                     const attachmentMeta = [
                       isLinkAttachment(attachment) ? 'Ссылка' : 'Файл',
@@ -1150,11 +1167,11 @@ function OrderDetail() {
                           className="telegram-readonly-open-btn"
                           onClick={() => handleOpenTelegramReadOnlyAttachment(
                             attachment,
-                            telegramReadOnlyPanel.key === 'paint' ? 'paint' : 'order',
+                            telegramReadOnlySection.key === 'paint' ? 'paint' : 'order',
                           )}
-                          disabled={telegramAttachmentOpeningKey === `${telegramReadOnlyPanel.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`}
+                          disabled={telegramAttachmentOpeningKey === `${telegramReadOnlySection.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`}
                         >
-                          {telegramAttachmentOpeningKey === `${telegramReadOnlyPanel.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`
+                          {telegramAttachmentOpeningKey === `${telegramReadOnlySection.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`
                             ? 'Открываю...'
                             : attachmentName}
                         </button>
@@ -1167,9 +1184,9 @@ function OrderDetail() {
                 </div>
               ) : null}
 
-              {!telegramReadOnlyPanel.text && telegramReadOnlyPanel.attachments.length === 0 ? (
+              {!telegramReadOnlySection.text && telegramReadOnlySection.attachments.length === 0 ? (
                 <div className="telegram-empty-box">
-                  {telegramReadOnlyPanel.emptyText}
+                  {telegramReadOnlySection.emptyText}
                 </div>
               ) : null}
 
@@ -1262,22 +1279,24 @@ function OrderDetail() {
             </div>
           ) : null}
 
-          {scanActivationError && (
-            <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
-              {scanActivationError}
-            </div>
-          )}
+          {!telegramReadOnlySection ? (
+            <>
+              {scanActivationError && (
+                <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
+                  {scanActivationError}
+                </div>
+              )}
 
-          <div className="telegram-order-grid">
-            {detailItems.map((item) => (
-              <div key={item.label} className="detail-block">
-                <div className="detail-label">{item.label}</div>
-                <div className="detail-value">{item.value}</div>
+              <div className="telegram-order-grid">
+                {detailItems.map((item) => (
+                  <div key={item.label} className="detail-block">
+                    <div className="detail-label">{item.label}</div>
+                    <div className="detail-value">{item.value}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="telegram-stage-section">
+              <div className="telegram-stage-section">
             <div className="telegram-section-title">Этапы</div>
 
             {sessionLoading && (
@@ -1566,6 +1585,8 @@ function OrderDetail() {
               )}
             </div>
           )}
+            </>
+          ) : null}
         </>
       ) : (
         <div className="table-scroll">
