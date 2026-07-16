@@ -191,6 +191,21 @@ function isLinkAttachment(attachment = {}) {
   return Boolean(url) || type.includes('link');
 }
 
+function getAttachmentExtension(attachment = {}) {
+  const fileName = String(attachment?.name || '').trim().toLowerCase();
+  const match = fileName.match(/(\.[a-z0-9]+)$/i);
+  return match ? match[1] : '';
+}
+
+function isSpreadsheetAttachment(attachment = {}) {
+  const type = String(attachment?.type || '').toLowerCase();
+  const extension = getAttachmentExtension(attachment);
+  return type.includes('excel')
+    || type.includes('spreadsheet')
+    || extension === '.xlsx'
+    || extension === '.xls';
+}
+
 function getAttachmentLinkUrl(attachment = {}) {
   return String(attachment?.url || '').trim();
 }
@@ -246,6 +261,7 @@ function OrderDetail() {
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
   const [telegramReadOnlySectionKey, setTelegramReadOnlySectionKey] = useState('');
   const [telegramAttachmentOpeningKey, setTelegramAttachmentOpeningKey] = useState('');
+  const [telegramSpreadsheetPreview, setTelegramSpreadsheetPreview] = useState(null);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
@@ -726,13 +742,19 @@ function OrderDetail() {
     return true;
   }, []);
 
+  const closeTelegramSpreadsheetPreview = useCallback(() => {
+    setTelegramSpreadsheetPreview(null);
+  }, []);
+
   useEffect(() => {
+    closeTelegramSpreadsheetPreview();
     setTelegramReadOnlySectionKey('');
-  }, [selectedItem?.itemId]);
+  }, [closeTelegramSpreadsheetPreview, selectedItem?.itemId]);
 
   const closeTelegramReadOnlySection = useCallback(() => {
+    closeTelegramSpreadsheetPreview();
     setTelegramReadOnlySectionKey('');
-  }, []);
+  }, [closeTelegramSpreadsheetPreview]);
 
   const openTelegramReadOnlySection = useCallback((sectionKey, event) => {
     if (event) {
@@ -741,8 +763,9 @@ function OrderDetail() {
     }
     const normalizedSectionKey = String(sectionKey || '').trim();
     if (!normalizedSectionKey) return;
+    closeTelegramSpreadsheetPreview();
     setTelegramReadOnlySectionKey(normalizedSectionKey);
-  }, []);
+  }, [closeTelegramSpreadsheetPreview]);
 
   const handleOpenTelegramReadOnlyAttachment = useCallback(async (attachment, scope = 'order') => {
     if (!order?._id || !selectedItem?.itemId || !attachment?.attachmentId) return;
@@ -773,6 +796,36 @@ function OrderDetail() {
     setTelegramActionError('');
 
     try {
+      if (isSpreadsheetAttachment(attachment)) {
+        const res = await apiFetch(fileUrl);
+        if (!res.ok) {
+          setTelegramActionError(await getErrorMessage(res, 'Не удалось открыть Excel-файл.'));
+          return;
+        }
+        const blob = await res.blob();
+        const xlsxImport = await import('xlsx');
+        const XLSX = xlsxImport.default || xlsxImport;
+        const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+        const sheets = workbook.SheetNames.map((sheetName) => {
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+            header: 1,
+            raw: false,
+            blankrows: false,
+          });
+          return {
+            name: sheetName,
+            rows: rows.slice(0, 100),
+            totalRows: rows.length,
+          };
+        });
+        setTelegramSpreadsheetPreview({
+          name: attachment.name || 'Excel',
+          sheets,
+          activeSheetIndex: 0,
+        });
+        return;
+      }
+
       const opened = openTelegramFileUrl(fileUrl, attachment.name || 'attachment');
       if (!opened) {
         setTelegramActionError('Браузер заблокировал открытие файла. Разрешите открытие новой вкладки.');
@@ -1020,6 +1073,65 @@ function OrderDetail() {
               {!telegramReadOnlySection.text && telegramReadOnlySection.attachments.length === 0 ? (
                 <div className="telegram-empty-box">
                   {telegramReadOnlySection.emptyText}
+                </div>
+              ) : null}
+
+              {telegramSpreadsheetPreview ? (
+                <div className="attachment-preview-panel telegram-inline-attachment-preview">
+                  <div className="attachment-preview-toolbar">
+                    <div className="attachment-preview-toolbar-meta">
+                      <span className="attachment-preview-toolbar-kind">Excel</span>
+                      <span className="attachment-preview-toolbar-size">{telegramSpreadsheetPreview.name || 'Файл'}</span>
+                    </div>
+                    <div className="telegram-readonly-panel-toolbar-actions">
+                      <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramSpreadsheetPreview}>
+                        Закрыть файл
+                      </button>
+                    </div>
+                  </div>
+                  <div className="attachment-preview-sheet-view">
+                    <div className="attachment-preview-sheet-tabs">
+                      {(telegramSpreadsheetPreview.sheets || []).map((sheet, index) => (
+                        <button
+                          key={`${sheet.name}-${index}`}
+                          type="button"
+                          className={[
+                            'attachment-preview-sheet-tab',
+                            index === (telegramSpreadsheetPreview.activeSheetIndex || 0) ? 'attachment-preview-sheet-tab-active' : '',
+                          ].filter(Boolean).join(' ')}
+                          onClick={() => setTelegramSpreadsheetPreview((current) => current ? {
+                            ...current,
+                            activeSheetIndex: index,
+                          } : current)}
+                        >
+                          {sheet.name}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="attachment-preview-sheet-meta">
+                      {(() => {
+                        const activeSheet = (telegramSpreadsheetPreview.sheets || [])[telegramSpreadsheetPreview.activeSheetIndex || 0];
+                        const shownRows = Math.min((activeSheet?.rows || []).length, 100);
+                        const totalRows = Number(activeSheet?.totalRows) || 0;
+                        return totalRows > shownRows
+                          ? `Показаны первые ${shownRows} из ${totalRows} строк`
+                          : `Показано строк: ${shownRows}`;
+                      })()}
+                    </div>
+                    <div className="attachment-preview-table-wrap">
+                      <table className="attachment-preview-table">
+                        <tbody>
+                          {(((telegramSpreadsheetPreview.sheets || [])[telegramSpreadsheetPreview.activeSheetIndex || 0]?.rows) || []).map((row, rowIndex) => (
+                            <tr key={`sheet-row-${rowIndex}`}>
+                              {(Array.isArray(row) ? row : [row]).map((cell, cellIndex) => (
+                                <td key={`sheet-cell-${rowIndex}-${cellIndex}`}>{String(cell ?? '') || ' '}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
