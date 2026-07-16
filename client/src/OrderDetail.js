@@ -791,6 +791,16 @@ function OrderDetail() {
     setTelegramReadOnlySectionKey('');
   }, []);
 
+  const openTelegramReadOnlySection = useCallback((sectionKey, event) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    window.setTimeout(() => {
+      setTelegramReadOnlySectionKey(String(sectionKey || '').trim());
+    }, 0);
+  }, []);
+
   const openTelegramBlobInNewTab = useCallback((blob, fileName = 'attachment') => {
     const blobUrl = window.URL.createObjectURL(blob);
     const openedWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
@@ -1093,15 +1103,17 @@ function OrderDetail() {
           <div className="telegram-order-summary">
             <div className="telegram-order-summary-actions">
               <button
+                type="button"
                 className={`btn ${telegramReadOnlySectionKey === 'orderCard' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setTelegramReadOnlySectionKey('orderCard')}
+                onClick={(event) => openTelegramReadOnlySection('orderCard', event)}
                 disabled={!canViewOrderCard}
               >
                 Карточка заказа
               </button>
               <button
+                type="button"
                 className={`btn ${telegramReadOnlySectionKey === 'paint' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setTelegramReadOnlySectionKey('paint')}
+                onClick={(event) => openTelegramReadOnlySection('paint', event)}
                 disabled={!canViewPaint}
               >
                 Покраска

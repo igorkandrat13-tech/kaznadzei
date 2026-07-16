@@ -6547,25 +6547,26 @@ body .role-allowed-column-marker {
 }
 
 .telegram-order-summary-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(92px, 120px));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 10px;
   justify-content: flex-start;
+  align-items: stretch;
 }
 
 .telegram-order-summary-actions .btn {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  min-height: 92px;
-  padding: 8px;
-  display: flex;
+  width: auto;
+  min-width: 108px;
+  min-height: 52px;
+  padding: 8px 10px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   white-space: normal;
   line-height: 1.25;
   word-break: break-word;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .telegram-readonly-panel {
@@ -8704,12 +8705,13 @@ body .home-auth-status-pending {
     padding: 12px;
   }
   .telegram-order-summary-actions {
-    grid-template-columns: repeat(2, minmax(84px, 104px));
+    gap: 8px;
   }
   .telegram-order-summary-actions .btn {
-    aspect-ratio: 1 / 1;
-    min-height: 84px;
-    font-size: 12px;
+    min-width: 96px;
+    min-height: 46px;
+    font-size: 11px;
+    padding: 6px 8px;
   }
   .telegram-readonly-panel {
     margin-bottom: 10px;
