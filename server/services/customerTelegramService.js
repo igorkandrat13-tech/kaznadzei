@@ -801,7 +801,6 @@ function getCustomerAccessClosedText(order = {}, { hasOtherAccesses = false } = 
 function getCustomerOrderUpdateItemText(order = {}, item = {}, stageLabel = '', { clear = false } = {}) {
   const itemStatus = getReadableItemStatus(item);
   return [
-    'Обновление по заказу',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     `${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}`,
     `Статус изделия: ${itemStatus}`,
@@ -814,14 +813,12 @@ function getCustomerOrderChangedItemsText(order = {}, changedItems = [], { clear
     .filter((entry) => entry?.item);
   if (normalizedItems.length === 0) {
     return [
-      'Обновление по заказу',
       `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
       `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
     ].filter(Boolean).join('\n');
   }
 
   return [
-    'Обновление по заказу',
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
     ...normalizedItems.map(({ item, stageLabel }) => {
       const itemStatus = getReadableItemStatus(item);

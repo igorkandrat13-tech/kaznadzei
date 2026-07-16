@@ -1665,6 +1665,76 @@ router.get('/orders/:id/items/:itemId/attachments/:attachmentId/file', requireWr
   }
 });
 
+router.get('/orders/:id/items/:itemId/attachments/:attachmentId/telegram-file', (req, res) => {
+  try {
+    const token = String(SettingsStore.get().telegramBotToken || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+    }
+
+    const attachmentScope = getAttachmentScope(req);
+    const context = {
+      route: 'telegram-attachment-file',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.params.itemId || '').trim(),
+      attachmentId: String(req.params.attachmentId || '').trim(),
+      scope: attachmentScope,
+    };
+    const employee = resolveTelegramEmployee(token, {
+      sessionToken: String(req.query?.sessionToken || '').trim(),
+    }, context);
+    if (!employee) {
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+
+    const allowedColumns = getEmployeeAllowedColumns(employee);
+    const requiredColumnKey = attachmentScope === 'paint' ? 'paint' : 'orderCard';
+    if (!allowedColumns.has(requiredColumnKey)) {
+      return res.status(403).json({ message: 'Нет доступа к этому вложению.' });
+    }
+
+    const attachmentScopeLabel = getAttachmentScopeLabel(attachmentScope);
+    const attachment = OrderStore.getAttachment(req.params.id, req.params.itemId, req.params.attachmentId, { scope: attachmentScope });
+    if (attachment === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (attachment === 'item_not_found') {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+    if (attachment === false) {
+      return res.status(404).json({ message: `Файл ${attachmentScopeLabel} не найден.` });
+    }
+
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(attachment.name || 'attachment')}`);
+    if (attachment.type) {
+      res.type(attachment.type);
+    }
+
+    if (attachment.url) {
+      return res.status(400).json({ message: 'Это вложение является ссылкой. Откройте его как ссылку.' });
+    }
+
+    if (attachment.content) {
+      const legacyFile = parseLegacyDataUrl(attachment.content);
+      if (!legacyFile) {
+        return res.status(404).json({ message: `Файл ${attachmentScopeLabel} поврежден.` });
+      }
+      if (!attachment.type) {
+        res.type(legacyFile.mimeType);
+      }
+      return res.send(legacyFile.buffer);
+    }
+
+    const absolutePath = resolveOrderAttachmentAbsolutePath(attachment.relativePath);
+    if (!absolutePath || !fs.existsSync(absolutePath)) {
+      return res.status(404).json({ message: `Файл ${attachmentScopeLabel} не найден на диске.` });
+    }
+    return res.sendFile(absolutePath);
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message || 'Не удалось открыть вложение.' });
+  }
+});
+
 router.post('/orders/:id/items/:itemId/attachments', requireManagerAccess(), (req, res) => {
   uploadOrderAttachment.single('file')(req, res, (uploadError) => {
     try {
