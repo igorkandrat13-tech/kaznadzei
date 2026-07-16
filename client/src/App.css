@@ -6569,6 +6569,7 @@ body .role-allowed-column-marker {
 }
 
 .telegram-readonly-panel {
+  margin-top: 14px;
   margin-bottom: 14px;
   padding: 16px;
   border-radius: 16px;
@@ -6576,11 +6577,37 @@ body .role-allowed-column-marker {
   border: 1px solid rgba(108, 153, 201, 0.16);
 }
 
+.telegram-readonly-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .telegram-readonly-title {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-main);
-  margin-bottom: 10px;
+  margin-bottom: 0;
+}
+
+.telegram-readonly-close-btn {
+  border: 1px solid rgba(106, 154, 207, 0.34);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #35506f;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.telegram-readonly-close-btn:hover {
+  background: rgba(240, 246, 255, 0.98);
+}
+
+.telegram-inline-attachment-preview {
+  margin-top: 6px;
 }
 
 .telegram-readonly-text {
@@ -8713,8 +8740,13 @@ body .home-auth-status-pending {
     padding: 6px 8px;
   }
   .telegram-readonly-panel {
+    margin-top: 10px;
     margin-bottom: 10px;
     padding: 12px;
+  }
+  .telegram-readonly-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .detail-block {
     padding: 11px;

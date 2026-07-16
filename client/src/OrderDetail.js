@@ -7,7 +7,6 @@ import { formatDateDisplay, formatDateTimeDisplay } from './dateTime';
 import { getOrderOverallStatus, getOrderPrimaryItem } from './orderSelectors';
 import { ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
 import { getOrderStatusMeta } from './statusMeta';
-import { Modal, ModalHeader } from './ui';
 import {
   getTelegramEmployeeSessionToken,
   getTelegramInitData,
@@ -299,7 +298,7 @@ function OrderDetail() {
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
-  const [telegramReadOnlyDialog, setTelegramReadOnlyDialog] = useState(null);
+  const [telegramReadOnlyPanel, setTelegramReadOnlyPanel] = useState(null);
   const [telegramAttachmentOpeningKey, setTelegramAttachmentOpeningKey] = useState('');
   const [telegramAttachmentPreview, setTelegramAttachmentPreview] = useState(null);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
@@ -675,7 +674,8 @@ function OrderDetail() {
   const canViewPaint = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId && allowedColumns.includes('paint'));
 
   useEffect(() => {
-    setTelegramReadOnlyDialog(null);
+    setTelegramReadOnlyPanel(null);
+    closeTelegramAttachmentPreview();
   }, [selectedItem?.itemId]);
 
   useEffect(() => {
@@ -784,8 +784,9 @@ function OrderDetail() {
   }, []);
 
   const closeTelegramReadOnlySection = useCallback(() => {
-    setTelegramReadOnlyDialog(null);
-  }, []);
+    setTelegramReadOnlyPanel(null);
+    closeTelegramAttachmentPreview();
+  }, [closeTelegramAttachmentPreview]);
 
   const openTelegramReadOnlySection = useCallback((sectionKey, event) => {
     if (event) {
@@ -795,9 +796,10 @@ function OrderDetail() {
     const nextSection = getTelegramReadOnlySection(selectedItem, sectionKey);
     if (!nextSection) return;
     window.setTimeout(() => {
-      setTelegramReadOnlyDialog(nextSection);
+      closeTelegramAttachmentPreview();
+      setTelegramReadOnlyPanel(nextSection);
     }, 0);
-  }, [selectedItem]);
+  }, [closeTelegramAttachmentPreview, selectedItem]);
 
   const openTelegramBlobInNewTab = useCallback((blob, fileName = 'attachment') => {
     const blobUrl = window.URL.createObjectURL(blob);
@@ -1102,7 +1104,7 @@ function OrderDetail() {
             <div className="telegram-order-summary-actions">
               <button
                 type="button"
-                className={`btn ${telegramReadOnlyDialog?.key === 'orderCard' ? 'btn-primary' : 'btn-secondary'}`}
+                className={`btn ${telegramReadOnlyPanel?.key === 'orderCard' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={(event) => openTelegramReadOnlySection('orderCard', event)}
                 disabled={!canViewOrderCard}
               >
@@ -1110,7 +1112,7 @@ function OrderDetail() {
               </button>
               <button
                 type="button"
-                className={`btn ${telegramReadOnlyDialog?.key === 'paint' ? 'btn-primary' : 'btn-secondary'}`}
+                className={`btn ${telegramReadOnlyPanel?.key === 'paint' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={(event) => openTelegramReadOnlySection('paint', event)}
                 disabled={!canViewPaint}
               >
@@ -1118,6 +1120,147 @@ function OrderDetail() {
               </button>
             </div>
           </div>
+
+          {telegramReadOnlyPanel ? (
+            <div className="telegram-readonly-panel">
+              <div className="telegram-readonly-panel-header">
+                <div className="telegram-readonly-title">{telegramReadOnlyPanel.title}</div>
+                <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramReadOnlySection}>
+                  Закрыть
+                </button>
+              </div>
+
+              {telegramReadOnlyPanel.text ? (
+                <div className="telegram-readonly-text">{telegramReadOnlyPanel.text}</div>
+              ) : null}
+
+              {telegramReadOnlyPanel.attachments.length > 0 ? (
+                <div className="telegram-readonly-files">
+                  {telegramReadOnlyPanel.attachments.map((attachment) => {
+                    const attachmentName = String(attachment?.name || '').trim() || 'Без названия';
+                    const attachmentMeta = [
+                      isLinkAttachment(attachment) ? 'Ссылка' : 'Файл',
+                      attachment?.uploadedAt ? formatDateTimeDisplay(attachment.uploadedAt) : '',
+                    ].filter(Boolean).join(' · ');
+
+                    return (
+                      <div key={String(attachment?.attachmentId || attachmentName)} className="telegram-readonly-file">
+                        <button
+                          type="button"
+                          className="telegram-readonly-open-btn"
+                          onClick={() => handleOpenTelegramReadOnlyAttachment(
+                            attachment,
+                            telegramReadOnlyPanel.key === 'paint' ? 'paint' : 'order',
+                          )}
+                          disabled={telegramAttachmentOpeningKey === `${telegramReadOnlyPanel.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`}
+                        >
+                          {telegramAttachmentOpeningKey === `${telegramReadOnlyPanel.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`
+                            ? 'Открываю...'
+                            : attachmentName}
+                        </button>
+                        {attachmentMeta ? (
+                          <div className="telegram-readonly-file-meta">{attachmentMeta}</div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {!telegramReadOnlyPanel.text && telegramReadOnlyPanel.attachments.length === 0 ? (
+                <div className="telegram-empty-box">
+                  {telegramReadOnlyPanel.emptyText}
+                </div>
+              ) : null}
+
+              {telegramAttachmentPreview ? (
+                <div className="attachment-preview-panel telegram-inline-attachment-preview">
+                  <div className="attachment-preview-toolbar">
+                    <div className="attachment-preview-toolbar-meta">
+                      <span className="attachment-preview-toolbar-kind">{telegramAttachmentPreview.kindLabel || 'Файл'}</span>
+                      {telegramAttachmentPreview.sizeLabel ? (
+                        <span className="attachment-preview-toolbar-size">{telegramAttachmentPreview.sizeLabel}</span>
+                      ) : null}
+                    </div>
+                    <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramAttachmentPreview}>
+                      Закрыть файл
+                    </button>
+                  </div>
+                  <div
+                    className={[
+                      'attachment-preview-wrap',
+                      telegramAttachmentPreview.mode === 'image' ? 'attachment-preview-wrap-image' : '',
+                      telegramAttachmentPreview.mode === 'pdf' ? 'attachment-preview-wrap-pdf' : '',
+                      telegramAttachmentPreview.mode === 'word' ? 'attachment-preview-wrap-document' : '',
+                      telegramAttachmentPreview.mode === 'spreadsheet' ? 'attachment-preview-wrap-sheet' : '',
+                    ].filter(Boolean).join(' ')}
+                  >
+                    {telegramAttachmentPreview.mode === 'image' ? (
+                      <img src={telegramAttachmentPreview.url} alt={telegramAttachmentPreview.name || 'Изображение'} className="attachment-preview-image" />
+                    ) : null}
+                    {telegramAttachmentPreview.mode === 'pdf' ? (
+                      <iframe
+                        title={telegramAttachmentPreview.name || 'PDF'}
+                        src={telegramAttachmentPreview.url}
+                        className="attachment-preview-frame"
+                      />
+                    ) : null}
+                    {telegramAttachmentPreview.mode === 'word' ? (
+                      <div
+                        className="attachment-preview-document"
+                        dangerouslySetInnerHTML={{ __html: telegramAttachmentPreview.html || '<p>Пустой документ.</p>' }}
+                      />
+                    ) : null}
+                    {telegramAttachmentPreview.mode === 'spreadsheet' ? (
+                      <div className="attachment-preview-sheet-view">
+                        <div className="attachment-preview-sheet-tabs">
+                          {(telegramAttachmentPreview.sheets || []).map((sheet, index) => (
+                            <button
+                              key={`${sheet.name}-${index}`}
+                              type="button"
+                              className={[
+                                'attachment-preview-sheet-tab',
+                                index === (telegramAttachmentPreview.activeSheetIndex || 0) ? 'attachment-preview-sheet-tab-active' : '',
+                              ].filter(Boolean).join(' ')}
+                              onClick={() => setTelegramAttachmentPreview((current) => current ? {
+                                ...current,
+                                activeSheetIndex: index,
+                              } : current)}
+                            >
+                              {sheet.name}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="attachment-preview-sheet-meta">
+                          {(() => {
+                            const activeSheet = (telegramAttachmentPreview.sheets || [])[telegramAttachmentPreview.activeSheetIndex || 0];
+                            const shownRows = Math.min((activeSheet?.rows || []).length, 100);
+                            const totalRows = Number(activeSheet?.totalRows) || 0;
+                            return totalRows > shownRows
+                              ? `Показаны первые ${shownRows} из ${totalRows} строк`
+                              : `Показано строк: ${shownRows}`;
+                          })()}
+                        </div>
+                        <div className="attachment-preview-table-wrap">
+                          <table className="attachment-preview-table">
+                            <tbody>
+                              {(((telegramAttachmentPreview.sheets || [])[telegramAttachmentPreview.activeSheetIndex || 0]?.rows) || []).map((row, rowIndex) => (
+                                <tr key={`sheet-row-${rowIndex}`}>
+                                  {(Array.isArray(row) ? row : [row]).map((cell, cellIndex) => (
+                                    <td key={`sheet-cell-${rowIndex}-${cellIndex}`}>{String(cell ?? '') || ' '}</td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {scanActivationError && (
             <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
@@ -1448,149 +1591,6 @@ function OrderDetail() {
           </table>
         </div>
       )}
-      {telegramReadOnlyDialog ? (
-        <Modal open={Boolean(telegramReadOnlyDialog)} onClose={closeTelegramReadOnlySection} size="lg" className="order-form-modal">
-          <ModalHeader
-            title={telegramReadOnlyDialog.title}
-            subtitle={selectedItem?.name || primaryItem?.name || 'Изделие'}
-            onClose={closeTelegramReadOnlySection}
-          />
-          <div className="telegram-readonly-panel">
-            {telegramReadOnlyDialog.text ? (
-              <div className="telegram-readonly-text">{telegramReadOnlyDialog.text}</div>
-            ) : null}
-
-            {telegramReadOnlyDialog.attachments.length > 0 ? (
-              <div className="telegram-readonly-files">
-                {telegramReadOnlyDialog.attachments.map((attachment) => {
-                  const attachmentName = String(attachment?.name || '').trim() || 'Без названия';
-                  const attachmentMeta = [
-                    isLinkAttachment(attachment) ? 'Ссылка' : 'Файл',
-                    attachment?.uploadedAt ? formatDateTimeDisplay(attachment.uploadedAt) : '',
-                  ].filter(Boolean).join(' · ');
-
-                  return (
-                    <div key={String(attachment?.attachmentId || attachmentName)} className="telegram-readonly-file">
-                      <button
-                        type="button"
-                        className="telegram-readonly-open-btn"
-                        onClick={() => handleOpenTelegramReadOnlyAttachment(
-                          attachment,
-                          telegramReadOnlyDialog.key === 'paint' ? 'paint' : 'order',
-                        )}
-                        disabled={telegramAttachmentOpeningKey === `${telegramReadOnlyDialog.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`}
-                      >
-                        {telegramAttachmentOpeningKey === `${telegramReadOnlyDialog.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`
-                          ? 'Открываю...'
-                          : attachmentName}
-                      </button>
-                      {attachmentMeta ? (
-                        <div className="telegram-readonly-file-meta">{attachmentMeta}</div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            {!telegramReadOnlyDialog.text && telegramReadOnlyDialog.attachments.length === 0 ? (
-              <div className="telegram-empty-box">
-                {telegramReadOnlyDialog.emptyText}
-              </div>
-            ) : null}
-          </div>
-        </Modal>
-      ) : null}
-      {telegramAttachmentPreview ? (
-        <Modal open={Boolean(telegramAttachmentPreview)} onClose={closeTelegramAttachmentPreview} size="xl" className="order-form-modal">
-          <ModalHeader
-            title={telegramAttachmentPreview.name || 'Просмотр файла'}
-            subtitle={telegramAttachmentPreview.kindLabel || 'Файл'}
-            onClose={closeTelegramAttachmentPreview}
-          />
-          <div className="attachment-preview-panel">
-            <div className="attachment-preview-toolbar">
-              <div className="attachment-preview-toolbar-meta">
-                <span className="attachment-preview-toolbar-kind">{telegramAttachmentPreview.kindLabel || 'Файл'}</span>
-                {telegramAttachmentPreview.sizeLabel ? (
-                  <span className="attachment-preview-toolbar-size">{telegramAttachmentPreview.sizeLabel}</span>
-                ) : null}
-              </div>
-            </div>
-            <div
-              className={[
-                'attachment-preview-wrap',
-                telegramAttachmentPreview.mode === 'image' ? 'attachment-preview-wrap-image' : '',
-                telegramAttachmentPreview.mode === 'pdf' ? 'attachment-preview-wrap-pdf' : '',
-                telegramAttachmentPreview.mode === 'word' ? 'attachment-preview-wrap-document' : '',
-                telegramAttachmentPreview.mode === 'spreadsheet' ? 'attachment-preview-wrap-sheet' : '',
-              ].filter(Boolean).join(' ')}
-            >
-              {telegramAttachmentPreview.mode === 'image' ? (
-                <img src={telegramAttachmentPreview.url} alt={telegramAttachmentPreview.name || 'Изображение'} className="attachment-preview-image" />
-              ) : null}
-              {telegramAttachmentPreview.mode === 'pdf' ? (
-                <iframe
-                  title={telegramAttachmentPreview.name || 'PDF'}
-                  src={telegramAttachmentPreview.url}
-                  className="attachment-preview-frame"
-                />
-              ) : null}
-              {telegramAttachmentPreview.mode === 'word' ? (
-                <div
-                  className="attachment-preview-document"
-                  dangerouslySetInnerHTML={{ __html: telegramAttachmentPreview.html || '<p>Пустой документ.</p>' }}
-                />
-              ) : null}
-              {telegramAttachmentPreview.mode === 'spreadsheet' ? (
-                <div className="attachment-preview-sheet-view">
-                  <div className="attachment-preview-sheet-tabs">
-                    {(telegramAttachmentPreview.sheets || []).map((sheet, index) => (
-                      <button
-                        key={`${sheet.name}-${index}`}
-                        type="button"
-                        className={[
-                          'attachment-preview-sheet-tab',
-                          index === (telegramAttachmentPreview.activeSheetIndex || 0) ? 'attachment-preview-sheet-tab-active' : '',
-                        ].filter(Boolean).join(' ')}
-                        onClick={() => setTelegramAttachmentPreview((current) => current ? {
-                          ...current,
-                          activeSheetIndex: index,
-                        } : current)}
-                      >
-                        {sheet.name}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="attachment-preview-sheet-meta">
-                    {(() => {
-                      const activeSheet = (telegramAttachmentPreview.sheets || [])[telegramAttachmentPreview.activeSheetIndex || 0];
-                      const shownRows = Math.min((activeSheet?.rows || []).length, 100);
-                      const totalRows = Number(activeSheet?.totalRows) || 0;
-                      return totalRows > shownRows
-                        ? `Показаны первые ${shownRows} из ${totalRows} строк`
-                        : `Показано строк: ${shownRows}`;
-                    })()}
-                  </div>
-                  <div className="attachment-preview-table-wrap">
-                    <table className="attachment-preview-table">
-                      <tbody>
-                        {(((telegramAttachmentPreview.sheets || [])[telegramAttachmentPreview.activeSheetIndex || 0]?.rows) || []).map((row, rowIndex) => (
-                          <tr key={`sheet-row-${rowIndex}`}>
-                            {(Array.isArray(row) ? row : [row]).map((cell, cellIndex) => (
-                              <td key={`sheet-cell-${rowIndex}-${cellIndex}`}>{String(cell ?? '') || ' '}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </Modal>
-      ) : null}
     </div>
   );
 }
