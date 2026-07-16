@@ -6548,15 +6548,16 @@ body .role-allowed-column-marker {
 
 .telegram-order-summary-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(92px, 120px));
   gap: 10px;
+  justify-content: flex-start;
 }
 
 .telegram-order-summary-actions .btn {
   width: 100%;
   aspect-ratio: 1 / 1;
-  min-height: 112px;
-  padding: 12px;
+  min-height: 92px;
+  padding: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6564,6 +6565,7 @@ body .role-allowed-column-marker {
   white-space: normal;
   line-height: 1.25;
   word-break: break-word;
+  font-size: 13px;
 }
 
 .telegram-readonly-panel {
@@ -8702,11 +8704,12 @@ body .home-auth-status-pending {
     padding: 12px;
   }
   .telegram-order-summary-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(84px, 104px));
   }
   .telegram-order-summary-actions .btn {
     aspect-ratio: 1 / 1;
-    min-height: 72px;
+    min-height: 84px;
+    font-size: 12px;
   }
   .telegram-readonly-panel {
     margin-bottom: 10px;

@@ -787,6 +787,10 @@ function OrderDetail() {
     });
   }, []);
 
+  const closeTelegramReadOnlySection = useCallback(() => {
+    setTelegramReadOnlySectionKey('');
+  }, []);
+
   const openTelegramBlobInNewTab = useCallback((blob, fileName = 'attachment') => {
     const blobUrl = window.URL.createObjectURL(blob);
     const openedWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
@@ -1090,69 +1094,20 @@ function OrderDetail() {
             <div className="telegram-order-summary-actions">
               <button
                 className={`btn ${telegramReadOnlySectionKey === 'orderCard' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setTelegramReadOnlySectionKey((current) => (current === 'orderCard' ? '' : 'orderCard'))}
+                onClick={() => setTelegramReadOnlySectionKey('orderCard')}
                 disabled={!canViewOrderCard}
               >
                 Карточка заказа
               </button>
               <button
                 className={`btn ${telegramReadOnlySectionKey === 'paint' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setTelegramReadOnlySectionKey((current) => (current === 'paint' ? '' : 'paint'))}
+                onClick={() => setTelegramReadOnlySectionKey('paint')}
                 disabled={!canViewPaint}
               >
                 Покраска
               </button>
             </div>
           </div>
-
-          {telegramReadOnlySection ? (
-            <div className="telegram-readonly-panel">
-              <div className="telegram-readonly-title">{telegramReadOnlySection.title}</div>
-
-              {telegramReadOnlySection.text ? (
-                <div className="telegram-readonly-text">{telegramReadOnlySection.text}</div>
-              ) : null}
-
-              {telegramReadOnlySection.attachments.length > 0 ? (
-                <div className="telegram-readonly-files">
-                  {telegramReadOnlySection.attachments.map((attachment) => {
-                    const attachmentName = String(attachment?.name || '').trim() || 'Без названия';
-                    const attachmentMeta = [
-                      isLinkAttachment(attachment) ? 'Ссылка' : 'Файл',
-                      attachment?.uploadedAt ? formatDateTimeDisplay(attachment.uploadedAt) : '',
-                    ].filter(Boolean).join(' · ');
-
-                    return (
-                      <div key={String(attachment?.attachmentId || attachmentName)} className="telegram-readonly-file">
-                        <button
-                          type="button"
-                          className="telegram-readonly-open-btn"
-                          onClick={() => handleOpenTelegramReadOnlyAttachment(
-                            attachment,
-                            telegramReadOnlySection.key === 'paint' ? 'paint' : 'order',
-                          )}
-                          disabled={telegramAttachmentOpeningKey === `${telegramReadOnlySection.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`}
-                        >
-                          {telegramAttachmentOpeningKey === `${telegramReadOnlySection.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`
-                            ? 'Открываю...'
-                            : attachmentName}
-                        </button>
-                        {attachmentMeta ? (
-                          <div className="telegram-readonly-file-meta">{attachmentMeta}</div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-
-              {!telegramReadOnlySection.text && telegramReadOnlySection.attachments.length === 0 ? (
-                <div className="telegram-empty-box">
-                  {telegramReadOnlySection.emptyText}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           {scanActivationError && (
             <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
@@ -1483,6 +1438,59 @@ function OrderDetail() {
           </table>
         </div>
       )}
+      {telegramReadOnlySection ? (
+        <Modal open={Boolean(telegramReadOnlySection)} onClose={closeTelegramReadOnlySection} size="lg" className="order-form-modal">
+          <ModalHeader
+            title={telegramReadOnlySection.title}
+            subtitle={selectedItem?.name || primaryItem?.name || 'Изделие'}
+            onClose={closeTelegramReadOnlySection}
+          />
+          <div className="telegram-readonly-panel">
+            {telegramReadOnlySection.text ? (
+              <div className="telegram-readonly-text">{telegramReadOnlySection.text}</div>
+            ) : null}
+
+            {telegramReadOnlySection.attachments.length > 0 ? (
+              <div className="telegram-readonly-files">
+                {telegramReadOnlySection.attachments.map((attachment) => {
+                  const attachmentName = String(attachment?.name || '').trim() || 'Без названия';
+                  const attachmentMeta = [
+                    isLinkAttachment(attachment) ? 'Ссылка' : 'Файл',
+                    attachment?.uploadedAt ? formatDateTimeDisplay(attachment.uploadedAt) : '',
+                  ].filter(Boolean).join(' · ');
+
+                  return (
+                    <div key={String(attachment?.attachmentId || attachmentName)} className="telegram-readonly-file">
+                      <button
+                        type="button"
+                        className="telegram-readonly-open-btn"
+                        onClick={() => handleOpenTelegramReadOnlyAttachment(
+                          attachment,
+                          telegramReadOnlySection.key === 'paint' ? 'paint' : 'order',
+                        )}
+                        disabled={telegramAttachmentOpeningKey === `${telegramReadOnlySection.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`}
+                      >
+                        {telegramAttachmentOpeningKey === `${telegramReadOnlySection.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`
+                          ? 'Открываю...'
+                          : attachmentName}
+                      </button>
+                      {attachmentMeta ? (
+                        <div className="telegram-readonly-file-meta">{attachmentMeta}</div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {!telegramReadOnlySection.text && telegramReadOnlySection.attachments.length === 0 ? (
+              <div className="telegram-empty-box">
+                {telegramReadOnlySection.emptyText}
+              </div>
+            ) : null}
+          </div>
+        </Modal>
+      ) : null}
       {telegramAttachmentPreview ? (
         <Modal open={Boolean(telegramAttachmentPreview)} onClose={closeTelegramAttachmentPreview} size="xl" className="order-form-modal">
           <ModalHeader
