@@ -6546,6 +6546,68 @@ body .role-allowed-column-marker {
   gap: 8px;
 }
 
+.telegram-order-summary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.telegram-readonly-panel {
+  margin-bottom: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffffff, #f7fbff);
+  border: 1px solid rgba(108, 153, 201, 0.16);
+}
+
+.telegram-readonly-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 10px;
+}
+
+.telegram-readonly-text {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.telegram-readonly-files {
+  display: grid;
+  gap: 8px;
+}
+
+.telegram-readonly-file {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(108, 153, 201, 0.14);
+}
+
+.telegram-readonly-link,
+.telegram-readonly-file-name {
+  font-weight: 600;
+  color: var(--text-main);
+  word-break: break-word;
+}
+
+.telegram-readonly-link {
+  text-decoration: none;
+}
+
+.telegram-readonly-link:hover {
+  text-decoration: underline;
+}
+
+.telegram-readonly-file-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .telegram-order-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8599,6 +8661,13 @@ body .home-auth-status-pending {
     padding: 14px;
   }
   .telegram-order-summary {
+    margin-bottom: 10px;
+    padding: 12px;
+  }
+  .telegram-order-summary-actions {
+    grid-template-columns: 1fr;
+  }
+  .telegram-readonly-panel {
     margin-bottom: 10px;
     padding: 12px;
   }

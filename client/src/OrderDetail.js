@@ -8,8 +8,6 @@ import { getOrderOverallStatus, getOrderPrimaryItem } from './orderSelectors';
 import { ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
 import { getOrderStatusMeta } from './statusMeta';
 import {
-  buildTelegramOrderPath,
-  closeTelegramWebApp,
   getTelegramEmployeeSessionToken,
   getTelegramInitData,
   getTelegramUnsafeUser,
@@ -17,7 +15,6 @@ import {
   isTelegramEmployeeSessionTokenExpired,
   isTelegramWebApp,
   markTelegramWebAppSession,
-  openTelegramQrScanner,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
   setTelegramEmployeeSessionToken,
@@ -188,6 +185,38 @@ function getSecondaryHeaderTextColor(header = null) {
   return String(header.textHex || '').trim() || '#000000';
 }
 
+function isLinkAttachment(attachment = {}) {
+  const type = String(attachment?.type || '').toLowerCase();
+  const url = String(attachment?.url || '').trim();
+  return Boolean(url) || type.includes('link');
+}
+
+function getTelegramReadOnlySection(item, sectionKey) {
+  if (!item || !sectionKey) return null;
+
+  if (sectionKey === 'orderCard') {
+    return {
+      key: 'orderCard',
+      title: 'Карточка заказа',
+      emptyText: 'Файлы карточки заказа не прикреплены.',
+      text: '',
+      attachments: Array.isArray(item.attachments) ? item.attachments : [],
+    };
+  }
+
+  if (sectionKey === 'paint') {
+    return {
+      key: 'paint',
+      title: 'Покраска',
+      emptyText: 'Данные по покраске не добавлены.',
+      text: String(item.paint || '').trim(),
+      attachments: Array.isArray(item.paintAttachments) ? item.paintAttachments : [],
+    };
+  }
+
+  return null;
+}
+
 function OrderDetail() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -211,6 +240,7 @@ function OrderDetail() {
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
+  const [telegramReadOnlySectionKey, setTelegramReadOnlySectionKey] = useState('');
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
@@ -515,7 +545,6 @@ function OrderDetail() {
     { label: 'Изделие', value: selectedItem?.name || primaryItem?.name || '—' },
     { label: '№ изделия в заказе', value: selectedItem?.itemNumber || '—' },
     { label: 'Помещение', value: selectedItem?.room || '—' },
-    { label: '№ помещения', value: selectedItem?.roomNumber || '—' },
     { label: 'Количество', value: selectedItem?.quantity || primaryItem?.quantity || 1 },
   ] : [];
 
@@ -581,6 +610,14 @@ function OrderDetail() {
   );
 
   const canManageMaterialRequests = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId);
+  const telegramReadOnlySection = useMemo(
+    () => getTelegramReadOnlySection(selectedItem, telegramReadOnlySectionKey),
+    [selectedItem, telegramReadOnlySectionKey],
+  );
+
+  useEffect(() => {
+    setTelegramReadOnlySectionKey('');
+  }, [selectedItem?.itemId]);
 
   useEffect(() => {
     if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
@@ -824,37 +861,9 @@ function OrderDetail() {
     );
   }
 
-  const handleScanAnotherQr = () => {
-    setTelegramActionError('');
-    openTelegramQrScanner({
-      onSuccess: (orderPath) => navigate(buildTelegramOrderPath(orderPath)),
-      onError: setTelegramActionError,
-    });
-  };
-
-  const handleCloseTelegramApp = () => {
-    if (!closeTelegramWebApp()) {
-      navigate('/telegram-app');
-    }
-  };
-
   return (
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
       <h2>{telegramMode ? `Изделие: ${selectedItem?.name || primaryItem?.name || '—'}` : `📋 Изделие: ${selectedItem?.name || primaryItem?.name || '—'}`}</h2>
-      {telegramMode && (
-        <p className="telegram-order-subtitle">Общие данные заказа, доступные этапы и заявки на расходники.</p>
-      )}
-
-      {telegramMode && (
-        <div className="telegram-order-actions">
-          <button className="btn btn-primary" onClick={handleScanAnotherQr}>
-            Сканировать другой QR-код
-          </button>
-          <button className="btn" onClick={handleCloseTelegramApp}>
-            Закрыть и вернуться в бот
-          </button>
-        </div>
-      )}
 
       {telegramActionError && (
         <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
@@ -865,11 +874,65 @@ function OrderDetail() {
       {telegramMode ? (
         <>
           <div className="telegram-order-summary">
-            <div className="telegram-order-summary-label">Статус изделия</div>
-            <div className="telegram-order-summary-value">
-              <span className={statusMeta.className}>{statusMeta.label}</span>
+            <div className="telegram-order-summary-actions">
+              <button
+                className={`btn ${telegramReadOnlySectionKey === 'orderCard' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setTelegramReadOnlySectionKey((current) => (current === 'orderCard' ? '' : 'orderCard'))}
+              >
+                Карточка заказа
+              </button>
+              <button
+                className={`btn ${telegramReadOnlySectionKey === 'paint' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setTelegramReadOnlySectionKey((current) => (current === 'paint' ? '' : 'paint'))}
+              >
+                Покраска
+              </button>
             </div>
           </div>
+
+          {telegramReadOnlySection ? (
+            <div className="telegram-readonly-panel">
+              <div className="telegram-readonly-title">{telegramReadOnlySection.title}</div>
+
+              {telegramReadOnlySection.text ? (
+                <div className="telegram-readonly-text">{telegramReadOnlySection.text}</div>
+              ) : null}
+
+              {telegramReadOnlySection.attachments.length > 0 ? (
+                <div className="telegram-readonly-files">
+                  {telegramReadOnlySection.attachments.map((attachment) => {
+                    const attachmentName = String(attachment?.name || '').trim() || 'Без названия';
+                    const attachmentUrl = String(attachment?.url || '').trim();
+                    const attachmentMeta = [
+                      isLinkAttachment(attachment) ? 'Ссылка' : 'Файл',
+                      attachment?.uploadedAt ? formatDateTimeDisplay(attachment.uploadedAt) : '',
+                    ].filter(Boolean).join(' · ');
+
+                    return (
+                      <div key={String(attachment?.attachmentId || attachmentName)} className="telegram-readonly-file">
+                        {attachmentUrl ? (
+                          <a href={attachmentUrl} target="_blank" rel="noreferrer" className="telegram-readonly-link">
+                            {attachmentName}
+                          </a>
+                        ) : (
+                          <span className="telegram-readonly-file-name">{attachmentName}</span>
+                        )}
+                        {attachmentMeta ? (
+                          <div className="telegram-readonly-file-meta">{attachmentMeta}</div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {!telegramReadOnlySection.text && telegramReadOnlySection.attachments.length === 0 ? (
+                <div className="telegram-empty-box">
+                  {telegramReadOnlySection.emptyText}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {scanActivationError && (
             <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
