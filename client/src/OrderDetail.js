@@ -197,6 +197,34 @@ function getAttachmentExtension(attachment = {}) {
   return match ? match[1] : '';
 }
 
+function isImageAttachment(attachment = {}) {
+  const type = String(attachment?.type || '').toLowerCase();
+  const extension = getAttachmentExtension(attachment);
+  return type.startsWith('image/')
+    || extension === '.png'
+    || extension === '.jpg'
+    || extension === '.jpeg'
+    || extension === '.gif'
+    || extension === '.webp'
+    || extension === '.bmp';
+}
+
+function isPdfAttachment(attachment = {}) {
+  const type = String(attachment?.type || '').toLowerCase();
+  return type.includes('pdf') || getAttachmentExtension(attachment) === '.pdf';
+}
+
+function isDocxAttachment(attachment = {}) {
+  const type = String(attachment?.type || '').toLowerCase();
+  const extension = getAttachmentExtension(attachment);
+  return type.includes('wordprocessingml') || extension === '.docx';
+}
+
+function isLegacyWordAttachment(attachment = {}) {
+  const type = String(attachment?.type || '').toLowerCase();
+  return type.includes('msword') || getAttachmentExtension(attachment) === '.doc';
+}
+
 function isSpreadsheetAttachment(attachment = {}) {
   const type = String(attachment?.type || '').toLowerCase();
   const extension = getAttachmentExtension(attachment);
@@ -204,6 +232,24 @@ function isSpreadsheetAttachment(attachment = {}) {
     || type.includes('spreadsheet')
     || extension === '.xlsx'
     || extension === '.xls';
+}
+
+function getAttachmentKindLabel(attachment = {}) {
+  if (isLinkAttachment(attachment)) return 'Ссылка';
+  if (isPdfAttachment(attachment)) return 'PDF';
+  if (isDocxAttachment(attachment) || isLegacyWordAttachment(attachment)) return 'Word';
+  if (isSpreadsheetAttachment(attachment)) return 'Excel';
+  if (isImageAttachment(attachment)) return 'Изображение';
+  return 'Файл';
+}
+
+function formatAttachmentSize(size) {
+  const numericSize = Number(size) || 0;
+  if (numericSize <= 0) return '';
+  if (numericSize >= 1024 * 1024) {
+    return `${(numericSize / (1024 * 1024)).toFixed(1)} МБ`;
+  }
+  return `${Math.max(1, Math.round(numericSize / 1024))} КБ`;
 }
 
 function getAttachmentLinkUrl(attachment = {}) {
@@ -262,6 +308,7 @@ function OrderDetail() {
   const [telegramReadOnlySectionKey, setTelegramReadOnlySectionKey] = useState('');
   const [telegramAttachmentOpeningKey, setTelegramAttachmentOpeningKey] = useState('');
   const [telegramSpreadsheetPreview, setTelegramSpreadsheetPreview] = useState(null);
+  const [telegramAttachmentPreview, setTelegramAttachmentPreview] = useState(null);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
@@ -742,19 +789,45 @@ function OrderDetail() {
     return true;
   }, []);
 
+  const revokeTelegramAttachmentPreviewUrl = useCallback((preview) => {
+    if (!preview?.url || !preview?.revokeUrl) return;
+    const previewUrl = String(preview.url || '').trim();
+    if (!previewUrl.startsWith('blob:')) return;
+    window.URL.revokeObjectURL(previewUrl);
+  }, []);
+
+  const setTelegramAttachmentPreviewState = useCallback((nextPreview) => {
+    setTelegramAttachmentPreview((current) => {
+      revokeTelegramAttachmentPreviewUrl(current);
+      return nextPreview;
+    });
+  }, [revokeTelegramAttachmentPreviewUrl]);
+
+  const closeTelegramAttachmentPreview = useCallback(() => {
+    setTelegramAttachmentPreviewState(null);
+  }, [setTelegramAttachmentPreviewState]);
+
   const closeTelegramSpreadsheetPreview = useCallback(() => {
     setTelegramSpreadsheetPreview(null);
   }, []);
 
   useEffect(() => {
+    return () => {
+      revokeTelegramAttachmentPreviewUrl(telegramAttachmentPreview);
+    };
+  }, [revokeTelegramAttachmentPreviewUrl, telegramAttachmentPreview]);
+
+  useEffect(() => {
     closeTelegramSpreadsheetPreview();
+    closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey('');
-  }, [closeTelegramSpreadsheetPreview, selectedItem?.itemId]);
+  }, [closeTelegramAttachmentPreview, closeTelegramSpreadsheetPreview, selectedItem?.itemId]);
 
   const closeTelegramReadOnlySection = useCallback(() => {
     closeTelegramSpreadsheetPreview();
+    closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey('');
-  }, [closeTelegramSpreadsheetPreview]);
+  }, [closeTelegramAttachmentPreview, closeTelegramSpreadsheetPreview]);
 
   const openTelegramReadOnlySection = useCallback((sectionKey, event) => {
     if (event) {
@@ -764,8 +837,9 @@ function OrderDetail() {
     const normalizedSectionKey = String(sectionKey || '').trim();
     if (!normalizedSectionKey) return;
     closeTelegramSpreadsheetPreview();
+    closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey(normalizedSectionKey);
-  }, [closeTelegramSpreadsheetPreview]);
+  }, [closeTelegramAttachmentPreview, closeTelegramSpreadsheetPreview]);
 
   const handleOpenTelegramReadOnlyAttachment = useCallback(async (attachment, scope = 'order') => {
     if (!order?._id || !selectedItem?.itemId || !attachment?.attachmentId) return;
@@ -796,7 +870,16 @@ function OrderDetail() {
     setTelegramActionError('');
 
     try {
+      const previewMeta = {
+        attachment,
+        kindLabel: getAttachmentKindLabel(attachment),
+        name: attachment.name || 'Файл',
+        sizeLabel: formatAttachmentSize(attachment.size),
+        sourceUrl: fileUrl,
+      };
+
       if (isSpreadsheetAttachment(attachment)) {
+        closeTelegramAttachmentPreview();
         const res = await apiFetch(fileUrl);
         if (!res.ok) {
           setTelegramActionError(await getErrorMessage(res, 'Не удалось открыть Excel-файл.'));
@@ -819,9 +902,61 @@ function OrderDetail() {
           };
         });
         setTelegramSpreadsheetPreview({
-          name: attachment.name || 'Excel',
+          ...previewMeta,
           sheets,
           activeSheetIndex: 0,
+        });
+        return;
+      }
+
+      closeTelegramSpreadsheetPreview();
+
+      if (isImageAttachment(attachment)) {
+        setTelegramAttachmentPreviewState({
+          ...previewMeta,
+          mode: 'image',
+          url: fileUrl,
+          revokeUrl: false,
+        });
+        return;
+      }
+
+      if (isPdfAttachment(attachment)) {
+        setTelegramAttachmentPreviewState({
+          ...previewMeta,
+          mode: 'pdf',
+          url: fileUrl,
+          revokeUrl: false,
+        });
+        return;
+      }
+
+      if (isLegacyWordAttachment(attachment)) {
+        setTelegramAttachmentPreviewState({
+          ...previewMeta,
+          mode: 'word-legacy',
+          url: fileUrl,
+          revokeUrl: false,
+        });
+        return;
+      }
+
+      if (isDocxAttachment(attachment)) {
+        const res = await apiFetch(fileUrl);
+        if (!res.ok) {
+          setTelegramActionError(await getErrorMessage(res, 'Не удалось открыть Word-файл.'));
+          return;
+        }
+        const blob = await res.blob();
+        const mammothImport = await import('mammoth/mammoth.browser');
+        const mammoth = mammothImport.default || mammothImport;
+        const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
+        setTelegramAttachmentPreviewState({
+          ...previewMeta,
+          mode: 'word',
+          url: fileUrl,
+          revokeUrl: false,
+          html: result.value || '<p>Пустой документ.</p>',
         });
         return;
       }
@@ -835,7 +970,15 @@ function OrderDetail() {
     } finally {
       setTelegramAttachmentOpeningKey('');
     }
-  }, [getActiveTelegramSessionToken, openTelegramFileUrl, order?._id, selectedItem?.itemId]);
+  }, [
+    closeTelegramAttachmentPreview,
+    closeTelegramSpreadsheetPreview,
+    getActiveTelegramSessionToken,
+    openTelegramFileUrl,
+    order?._id,
+    selectedItem?.itemId,
+    setTelegramAttachmentPreviewState,
+  ]);
 
   const addTelegramPackageItem = useCallback(async () => {
     const nextName = String(packageDraft || '').trim();
@@ -1080,10 +1223,26 @@ function OrderDetail() {
                 <div className="attachment-preview-panel telegram-inline-attachment-preview">
                   <div className="attachment-preview-toolbar">
                     <div className="attachment-preview-toolbar-meta">
-                      <span className="attachment-preview-toolbar-kind">Excel</span>
-                      <span className="attachment-preview-toolbar-size">{telegramSpreadsheetPreview.name || 'Файл'}</span>
+                      <span className="attachment-preview-toolbar-kind">{telegramSpreadsheetPreview.kindLabel || 'Excel'}</span>
+                      <span className="attachment-preview-toolbar-size">
+                        {telegramSpreadsheetPreview.sizeLabel
+                          ? `${telegramSpreadsheetPreview.name || 'Файл'} · ${telegramSpreadsheetPreview.sizeLabel}`
+                          : (telegramSpreadsheetPreview.name || 'Файл')}
+                      </span>
                     </div>
                     <div className="telegram-readonly-panel-toolbar-actions">
+                      {telegramSpreadsheetPreview.sourceUrl ? (
+                        <button
+                          type="button"
+                          className="telegram-readonly-close-btn"
+                          onClick={() => openTelegramFileUrl(
+                            telegramSpreadsheetPreview.sourceUrl,
+                            telegramSpreadsheetPreview.name || 'attachment',
+                          )}
+                        >
+                          Открыть отдельно
+                        </button>
+                      ) : null}
                       <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramSpreadsheetPreview}>
                         Закрыть файл
                       </button>
@@ -1131,6 +1290,75 @@ function OrderDetail() {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {telegramAttachmentPreview ? (
+                <div className="attachment-preview-panel telegram-inline-attachment-preview">
+                  <div className="attachment-preview-toolbar">
+                    <div className="attachment-preview-toolbar-meta">
+                      <span className="attachment-preview-toolbar-kind">{telegramAttachmentPreview.kindLabel || 'Файл'}</span>
+                      <span className="attachment-preview-toolbar-size">
+                        {telegramAttachmentPreview.sizeLabel
+                          ? `${telegramAttachmentPreview.name || 'Файл'} · ${telegramAttachmentPreview.sizeLabel}`
+                          : (telegramAttachmentPreview.name || 'Файл')}
+                      </span>
+                    </div>
+                    <div className="telegram-readonly-panel-toolbar-actions">
+                      {telegramAttachmentPreview.sourceUrl ? (
+                        <button
+                          type="button"
+                          className="telegram-readonly-close-btn"
+                          onClick={() => openTelegramFileUrl(
+                            telegramAttachmentPreview.sourceUrl,
+                            telegramAttachmentPreview.name || 'attachment',
+                          )}
+                        >
+                          Открыть отдельно
+                        </button>
+                      ) : null}
+                      <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramAttachmentPreview}>
+                        Закрыть файл
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    className={[
+                      'attachment-preview-wrap',
+                      telegramAttachmentPreview.mode === 'image' ? 'attachment-preview-wrap-image' : '',
+                      telegramAttachmentPreview.mode === 'pdf' ? 'attachment-preview-wrap-pdf' : '',
+                      telegramAttachmentPreview.mode === 'word' || telegramAttachmentPreview.mode === 'word-legacy'
+                        ? 'attachment-preview-wrap-document'
+                        : '',
+                    ].filter(Boolean).join(' ')}
+                  >
+                    {telegramAttachmentPreview.mode === 'image' ? (
+                      <img
+                        src={telegramAttachmentPreview.url}
+                        alt={telegramAttachmentPreview.name || 'Изображение'}
+                        className="attachment-preview-image"
+                      />
+                    ) : null}
+                    {telegramAttachmentPreview.mode === 'pdf' ? (
+                      <iframe
+                        title={telegramAttachmentPreview.name || 'PDF'}
+                        src={telegramAttachmentPreview.url}
+                        className="attachment-preview-frame"
+                      />
+                    ) : null}
+                    {telegramAttachmentPreview.mode === 'word' ? (
+                      <div
+                        className="attachment-preview-document"
+                        dangerouslySetInnerHTML={{ __html: telegramAttachmentPreview.html || '<p>Пустой документ.</p>' }}
+                      />
+                    ) : null}
+                    {telegramAttachmentPreview.mode === 'word-legacy' ? (
+                      <div className="attachment-preview-document">
+                        <p>Формат `.doc` не всегда стабильно рендерится внутри Telegram Web App.</p>
+                        <p>Файл доступен по кнопке «Открыть отдельно» без выхода из карточки изделия.</p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
