@@ -473,8 +473,11 @@ function normalizeComments(source = []) {
     .filter(comment => comment.role && comment.text);
 }
 
-function normalizeChecklistItems(source = [], legacyValue = '') {
+function normalizeChecklistItems(source = [], legacyValue = '', options = {}) {
   const sourceItems = Array.isArray(source) ? source : [];
+  const mapExtraFields = typeof options.mapExtraFields === 'function'
+    ? options.mapExtraFields
+    : null;
   const normalizedItems = sourceItems.reduce((acc, item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
     const name = String(item.name || '').trim();
@@ -484,6 +487,7 @@ function normalizeChecklistItems(source = [], legacyValue = '') {
       name,
       isCompleted: Boolean(item.isCompleted),
       completedAt: item.isCompleted ? (item.completedAt || new Date().toISOString().split('T')[0]) : null,
+      ...(mapExtraFields ? mapExtraFields(item) : {}),
     });
     return acc;
   }, []);
@@ -519,7 +523,11 @@ function normalizePackageItems(source = [], legacyPackageName = '') {
 }
 
 function normalizeMaterialRequestItems(source = [], legacyRequests = '') {
-  return normalizeChecklistItems(source, legacyRequests);
+  return normalizeChecklistItems(source, legacyRequests, {
+    mapExtraFields: (item) => ({
+      attachments: normalizeOrderAttachments(item.attachments),
+    }),
+  });
 }
 
 function getChecklistSummary(items = []) {
@@ -1281,6 +1289,7 @@ const OrderStore = {
         completedAt: materialRequestItem?.isCompleted
           ? (String(materialRequestItem?.completedAt || '').trim() || new Date().toISOString().split('T')[0])
           : null,
+        attachments: normalizeOrderAttachments(materialRequestItem?.attachments),
       },
     ];
 
@@ -1291,6 +1300,74 @@ const OrderStore = {
     syncOrderStatus(order);
     save();
     return order;
+  },
+
+  saveMaterialRequestAttachment(orderId, itemId, materialRequestItemId, attachment = {}) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return { status: 'order_not_found' };
+    const item = getOrderItem(order, itemId);
+    if (!item) return { status: 'item_not_found' };
+
+    const normalizedMaterialRequestItemId = String(materialRequestItemId || '').trim();
+    if (!normalizedMaterialRequestItemId) return { status: 'invalid_material_request_item' };
+
+    const currentMaterialRequestItems = normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests);
+    const materialRequestItemIndex = currentMaterialRequestItems.findIndex((requestItem) => requestItem.id === normalizedMaterialRequestItemId);
+    if (materialRequestItemIndex === -1) {
+      return { status: 'material_request_item_not_found' };
+    }
+
+    const normalizedAttachment = normalizeOrderAttachments([attachment])[0];
+    if (!normalizedAttachment) {
+      return { status: 'invalid_attachment' };
+    }
+
+    const nextMaterialRequestItems = currentMaterialRequestItems.map((requestItem, index) => {
+      if (index !== materialRequestItemIndex) return requestItem;
+      return {
+        ...requestItem,
+        attachments: normalizeOrderAttachments([...(requestItem.attachments || []), normalizedAttachment]),
+      };
+    });
+
+    if (!updateItemMaterialRequestState(item, nextMaterialRequestItems)) {
+      return { status: 'unchanged' };
+    }
+
+    syncOrderStatus(order);
+    save();
+    return {
+      status: 'created',
+      attachment: normalizedAttachment,
+      materialRequestItem: normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests)
+        .find((requestItem) => requestItem.id === normalizedMaterialRequestItemId) || null,
+      item,
+      order,
+    };
+  },
+
+  getMaterialRequestAttachment(orderId, itemId, materialRequestItemId, attachmentId) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return 'item_not_found';
+
+    const normalizedMaterialRequestItemId = String(materialRequestItemId || '').trim();
+    if (!normalizedMaterialRequestItemId) return 'invalid_material_request_item';
+
+    const materialRequestItem = normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests)
+      .find((requestItem) => requestItem.id === normalizedMaterialRequestItemId);
+    if (!materialRequestItem) return 'material_request_item_not_found';
+
+    const normalizedAttachmentId = String(attachmentId || '').trim();
+    if (!normalizedAttachmentId) return false;
+
+    return normalizeOrderAttachments(materialRequestItem.attachments)
+      .find((attachment) => attachment.attachmentId === normalizedAttachmentId) || false;
   },
 
   toggleMaterialRequestItem(orderId, itemId, materialRequestItemId) {

@@ -6915,6 +6915,43 @@ body .role-allowed-column-marker {
     0 10px 22px rgba(186, 125, 39, 0.1);
 }
 
+.telegram-material-request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.telegram-material-request-upload-btn {
+  min-height: 34px;
+}
+
+.telegram-material-request-file-input {
+  display: none;
+}
+
+.telegram-material-request-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.telegram-material-request-attachment-btn {
+  border: 1px solid rgba(227, 162, 73, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #7a3612;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.telegram-material-request-attachment-btn:hover {
+  background: rgba(255, 249, 238, 0.98);
+}
+
 .telegram-material-request-pill {
   background: rgba(255, 221, 153, 0.95);
   color: #7a3612;

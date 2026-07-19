@@ -393,6 +393,12 @@ function sanitizeOrderItemInput(payload, options = {}) {
           name: normalizeString(item.name, `materialRequestItems[${index}].name`, { required: true, maxLength: 160 }),
           isCompleted: item.isCompleted === undefined ? false : normalizeBoolean(item.isCompleted, `materialRequestItems[${index}].isCompleted`),
           completedAt: item.completedAt === undefined ? null : normalizeDate(item.completedAt, `materialRequestItems[${index}].completedAt`, { allowUndefined: true }),
+          attachments: Array.isArray(item.attachments)
+            ? item.attachments.map((attachment, attachmentIndex) => sanitizeOrderAttachmentInput(
+              attachment,
+              { partial: false, label: `materialRequestItems[${index}].attachments[${attachmentIndex}]` },
+            ))
+            : [],
         };
       });
     }
@@ -601,4 +607,3 @@ module.exports = {
   sanitizeRoleInput,
   sanitizeSettingsInput,
 };
-

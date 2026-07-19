@@ -84,8 +84,60 @@ function getPackageStats(items = [], legacyPackageName = '') {
   };
 }
 
+function normalizeItemAttachments(attachments = []) {
+  const sourceAttachments = Array.isArray(attachments) ? attachments : [];
+  return sourceAttachments.reduce((acc, attachment) => {
+    if (!attachment || typeof attachment !== 'object' || Array.isArray(attachment)) return acc;
+    const attachmentId = String(attachment.attachmentId || '').trim();
+    const name = String(attachment.name || '').trim();
+    if (!attachmentId || !name) return acc;
+    acc.push({
+      attachmentId,
+      name,
+      type: String(attachment.type || '').trim(),
+      size: Number(attachment.size) || 0,
+      uploadedAt: String(attachment.uploadedAt || '').trim(),
+      url: String(attachment.url || '').trim(),
+    });
+    return acc;
+  }, []);
+}
+
 function normalizeMaterialRequestItems(items = [], legacyRequests = '') {
-  return normalizePackageItems(items, legacyRequests);
+  const sourceItems = Array.isArray(items) ? items : [];
+  const normalizedItems = sourceItems.reduce((acc, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
+    const name = String(item.name || '').trim();
+    if (!name) return acc;
+    acc.push({
+      id: String(item.id || createPackageItemId()).trim(),
+      name,
+      isCompleted: Boolean(item.isCompleted),
+      completedAt: item.isCompleted ? (String(item.completedAt || '').trim() || new Date().toISOString().split('T')[0]) : null,
+      attachments: normalizeItemAttachments(item.attachments),
+    });
+    return acc;
+  }, []);
+  if (normalizedItems.length > 0) return normalizedItems;
+
+  return String(legacyRequests || '')
+    .split(/[\n,;]+/g)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((token) => {
+      const isCompleted = /^(\+|\[x\]|x\s+|✓\s+|✔\s+)/i.test(token);
+      const normalizedName = token
+        .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|✓\s+|✔\s+)/i, '')
+        .trim();
+      return {
+        id: createPackageItemId(),
+        name: normalizedName || token,
+        isCompleted,
+        completedAt: isCompleted ? new Date().toISOString().split('T')[0] : null,
+        attachments: [],
+      };
+    })
+    .filter((item) => item.name);
 }
 
 function getMaterialRequestStats(items = [], legacyRequests = '') {
@@ -312,6 +364,7 @@ function OrderDetail() {
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
+  const materialRequestAttachmentInputRefs = useRef({});
   useGlobalErrorEffect(sessionError, 'Ошибка определения профиля в Telegram.');
   useGlobalErrorEffect(scanActivationError, 'Ошибка принятия изделия в работу.');
   useGlobalErrorEffect(stageError, 'Ошибка отметки этапа.');
@@ -677,7 +730,12 @@ function OrderDetail() {
       && allowedColumns.includes('packageName')
   );
 
-  const canManageMaterialRequests = Boolean(telegramMode && telegramEmployee && selectedItem?.itemId);
+  const canManageMaterialRequests = Boolean(
+    telegramMode
+      && telegramEmployee
+      && selectedItem?.itemId
+      && allowedColumns.includes('materialRequests')
+  );
   const canViewOrderCard = Boolean(telegramMode && selectedItem?.itemId);
   const canViewPaint = Boolean(telegramMode && selectedItem?.itemId);
   const telegramReadOnlySection = useMemo(
@@ -972,6 +1030,111 @@ function OrderDetail() {
     }
   }, [
     closeTelegramAttachmentPreview,
+    closeTelegramSpreadsheetPreview,
+    getActiveTelegramSessionToken,
+    openTelegramFileUrl,
+    order?._id,
+    selectedItem?.itemId,
+    setTelegramAttachmentPreviewState,
+  ]);
+
+  const handleUploadTelegramMaterialRequestAttachment = useCallback(async (materialRequestItem, file, source = 'gallery') => {
+    const requestItemId = String(materialRequestItem?.id || '').trim();
+    if (!order?._id || !selectedItem?.itemId || !requestItemId || !file) return;
+
+    const sessionToken = getActiveTelegramSessionToken();
+    if (!sessionToken) {
+      setMaterialRequestError('Не удалось подтвердить Telegram-сессию для загрузки фото.');
+      return;
+    }
+
+    const busyKey = `upload:${requestItemId}:${source}`;
+    setMaterialRequestBusyKey(busyKey);
+    setMaterialRequestError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('itemId', selectedItem.itemId);
+      formData.append('sessionToken', sessionToken);
+      const res = await apiFetch(`/api/orders/${order._id}/telegram-material-request-items/${encodeURIComponent(requestItemId)}/attachments`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, 'Не удалось добавить фото к заявке на расходники.'));
+      }
+      const data = await parseJsonSafely(res);
+      setOrder(data?.order || null);
+      if (data?.employee) {
+        setTelegramEmployee(data.employee);
+      }
+    } catch (error) {
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось добавить фото к заявке на расходники.'));
+    } finally {
+      setMaterialRequestBusyKey('');
+    }
+  }, [getActiveTelegramSessionToken, order?._id, selectedItem?.itemId]);
+
+  const handleTelegramMaterialRequestAttachmentInputChange = useCallback((materialRequestItem, source = 'gallery') => async (event) => {
+    const file = event.target?.files?.[0] || null;
+    if (event.target) {
+      event.target.value = '';
+    }
+    if (!file) return;
+    await handleUploadTelegramMaterialRequestAttachment(materialRequestItem, file, source);
+  }, [handleUploadTelegramMaterialRequestAttachment]);
+
+  const openTelegramMaterialRequestAttachmentPicker = useCallback((materialRequestItemId, source = 'gallery') => {
+    const inputKey = `${String(materialRequestItemId || '').trim()}:${source}`;
+    materialRequestAttachmentInputRefs.current[inputKey]?.click();
+  }, []);
+
+  const handleOpenTelegramMaterialRequestAttachment = useCallback(async (materialRequestItem, attachment) => {
+    const requestItemId = String(materialRequestItem?.id || '').trim();
+    if (!order?._id || !selectedItem?.itemId || !requestItemId || !attachment?.attachmentId) return;
+
+    const sessionToken = getActiveTelegramSessionToken();
+    if (!sessionToken) {
+      setMaterialRequestError('Не удалось подтвердить Telegram-сессию для открытия фото.');
+      return;
+    }
+
+    const openKey = `material-request:${requestItemId}:${attachment.attachmentId}`;
+    const query = new URLSearchParams({ sessionToken });
+    const fileUrl = `/api/orders/${order._id}/items/${selectedItem.itemId}/material-request-items/${requestItemId}/attachments/${attachment.attachmentId}/telegram-file?${query.toString()}`;
+
+    setTelegramAttachmentOpeningKey(openKey);
+    setMaterialRequestError('');
+    try {
+      const previewMeta = {
+        attachment,
+        kindLabel: getAttachmentKindLabel(attachment),
+        name: attachment.name || 'Фото',
+        sizeLabel: formatAttachmentSize(attachment.size),
+        sourceUrl: fileUrl,
+      };
+
+      closeTelegramSpreadsheetPreview();
+      if (isImageAttachment(attachment)) {
+        setTelegramAttachmentPreviewState({
+          ...previewMeta,
+          mode: 'image',
+          url: fileUrl,
+          revokeUrl: false,
+        });
+        return;
+      }
+
+      const opened = openTelegramFileUrl(fileUrl, attachment.name || 'attachment');
+      if (!opened) {
+        setMaterialRequestError('Браузер заблокировал открытие файла. Разрешите открытие новой вкладки.');
+      }
+    } catch (error) {
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось открыть фото заявки на расходники.'));
+    } finally {
+      setTelegramAttachmentOpeningKey('');
+    }
+  }, [
     closeTelegramSpreadsheetPreview,
     getActiveTelegramSessionToken,
     openTelegramFileUrl,
@@ -1658,6 +1821,73 @@ function OrderDetail() {
                               Срочно
                             </span>
                           </div>
+                          <div className="telegram-material-request-actions">
+                            <input
+                              ref={(node) => {
+                                const inputKey = `${requestItem.id}:camera`;
+                                if (node) {
+                                  materialRequestAttachmentInputRefs.current[inputKey] = node;
+                                } else {
+                                  delete materialRequestAttachmentInputRefs.current[inputKey];
+                                }
+                              }}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="telegram-material-request-file-input"
+                              onChange={handleTelegramMaterialRequestAttachmentInputChange(requestItem, 'camera')}
+                            />
+                            <input
+                              ref={(node) => {
+                                const inputKey = `${requestItem.id}:gallery`;
+                                if (node) {
+                                  materialRequestAttachmentInputRefs.current[inputKey] = node;
+                                } else {
+                                  delete materialRequestAttachmentInputRefs.current[inputKey];
+                                }
+                              }}
+                              type="file"
+                              accept="image/*"
+                              className="telegram-material-request-file-input"
+                              onChange={handleTelegramMaterialRequestAttachmentInputChange(requestItem, 'gallery')}
+                            />
+                            <button
+                              type="button"
+                              className="telegram-readonly-close-btn telegram-material-request-upload-btn"
+                              onClick={() => openTelegramMaterialRequestAttachmentPicker(requestItem.id, 'camera')}
+                              disabled={Boolean(materialRequestBusyKey)}
+                            >
+                              {materialRequestBusyKey === `upload:${requestItem.id}:camera` ? 'Загружаю...' : 'Сделать фото'}
+                            </button>
+                            <button
+                              type="button"
+                              className="telegram-readonly-close-btn telegram-material-request-upload-btn"
+                              onClick={() => openTelegramMaterialRequestAttachmentPicker(requestItem.id, 'gallery')}
+                              disabled={Boolean(materialRequestBusyKey)}
+                            >
+                              {materialRequestBusyKey === `upload:${requestItem.id}:gallery` ? 'Загружаю...' : 'Добавить из галереи'}
+                            </button>
+                          </div>
+                          {Array.isArray(requestItem.attachments) && requestItem.attachments.length > 0 ? (
+                            <div className="telegram-material-request-attachments">
+                              {requestItem.attachments.map((attachment, attachmentIndex) => {
+                                const attachmentOpenKey = `material-request:${requestItem.id}:${attachment.attachmentId}`;
+                                return (
+                                  <button
+                                    key={attachment.attachmentId || `${requestItem.id}-attachment-${attachmentIndex}`}
+                                    type="button"
+                                    className="telegram-material-request-attachment-btn"
+                                    onClick={() => handleOpenTelegramMaterialRequestAttachment(requestItem, attachment)}
+                                    disabled={telegramAttachmentOpeningKey === attachmentOpenKey}
+                                  >
+                                    {telegramAttachmentOpeningKey === attachmentOpenKey
+                                      ? 'Открываю фото...'
+                                      : `Фото ${attachmentIndex + 1}${attachment?.uploadedAt ? ` · ${formatDateTimeDisplay(attachment.uploadedAt)}` : ''}`}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
                         </div>
                       ))}
                     </div>
