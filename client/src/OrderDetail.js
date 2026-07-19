@@ -359,6 +359,8 @@ function OrderDetail() {
   const [materialRequestError, setMaterialRequestError] = useState('');
   const [materialRequestBusyKey, setMaterialRequestBusyKey] = useState('');
   const [materialRequestCommentDrafts, setMaterialRequestCommentDrafts] = useState({});
+  const [telegramCameraDebugState, setTelegramCameraDebugState] = useState(null);
+  const [telegramCameraDebugModalOpen, setTelegramCameraDebugModalOpen] = useState(false);
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
@@ -406,31 +408,41 @@ function OrderDetail() {
     return telegramSessionTokenRef.current || getTelegramEmployeeSessionToken();
   }, []);
 
-  // #region debug-point A:telegram-camera-report
   const reportTelegramCameraDebug = useCallback((hypothesisId, msg, data = {}) => {
-    fetch('http://10.255.0.1:7777/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'telegram-camera-open',
-        runId: 'pre-fix',
-        hypothesisId,
-        location: 'client/src/OrderDetail.js',
-        msg: `[DEBUG] ${msg}`,
-        data: {
-          orderId: order?._id || '',
-          itemId: selectedItem?.itemId || '',
-          telegramMode,
-          userAgent: navigator.userAgent,
-          hasMediaDevices: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
-          hasGetUserMedia: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
-          ...data,
-        },
-        ts: Date.now(),
-      }),
-    }).catch(() => {});
+    const nextDebugState = {
+      hypothesisId,
+      msg,
+      ts: Date.now(),
+      data: {
+        orderId: order?._id || '',
+        itemId: selectedItem?.itemId || '',
+        telegramMode,
+        userAgent: navigator.userAgent,
+        hasMediaDevices: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
+        hasGetUserMedia: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
+        ...data,
+      },
+    };
+    setTelegramCameraDebugState(nextDebugState);
   }, [order?._id, selectedItem?.itemId, telegramMode]);
-  // #endregion
+
+  useEffect(() => {
+    if (!materialRequestError) return;
+    setTelegramCameraDebugModalOpen(true);
+  }, [materialRequestError]);
+
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      if (!telegramCameraDebugState?.data?.source) return;
+      const source = String(telegramCameraDebugState.data.source || '').trim();
+      if (source !== 'camera' && source !== 'gallery') return;
+      if (telegramCameraDebugState.msg !== 'camera label click' && telegramCameraDebugState.msg !== 'gallery label click') return;
+      setTelegramCameraDebugModalOpen(true);
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [telegramCameraDebugState]);
 
   const keepMaterialRequestInputVisible = useCallback(({ behavior = 'smooth' } = {}) => {
     const input = materialRequestInputRef.current;
@@ -769,13 +781,11 @@ function OrderDetail() {
 
   useEffect(() => {
     if (!canManageMaterialRequests) return;
-    // #region debug-point B:telegram-camera-env
     reportTelegramCameraDebug('B', 'material requests photo controls visible', {
       hasTelegramWebAppObject: typeof window !== 'undefined' && !!window.Telegram?.WebApp,
       hasMediaDevices: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
       hasGetUserMedia: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
     });
-    // #endregion
   }, [canManageMaterialRequests, reportTelegramCameraDebug]);
   const canViewOrderCard = Boolean(telegramMode && selectedItem?.itemId);
   const canViewPaint = Boolean(telegramMode && selectedItem?.itemId);
@@ -1129,7 +1139,6 @@ function OrderDetail() {
 
   const handleTelegramMaterialRequestPhotoInputChange = useCallback((source = 'gallery') => async (event) => {
     const file = event.target?.files?.[0] || null;
-    // #region debug-point C:telegram-camera-input-change
     reportTelegramCameraDebug('C', 'material request photo input change', {
       source,
       filesCount: Number(event.target?.files?.length || 0),
@@ -1138,7 +1147,6 @@ function OrderDetail() {
       capture: String(event.target?.getAttribute?.('capture') || ''),
       accept: String(event.target?.getAttribute?.('accept') || ''),
     });
-    // #endregion
     if (event.target) {
       event.target.value = '';
     }
@@ -1901,11 +1909,9 @@ function OrderDetail() {
                     <label
                       className="telegram-readonly-close-btn telegram-material-request-upload-label"
                       onClick={() => {
-                        // #region debug-point D:camera-label-click
                         reportTelegramCameraDebug('D', 'camera label click', {
                           source: 'camera',
                         });
-                        // #endregion
                       }}
                     >
                       <input
@@ -1913,13 +1919,11 @@ function OrderDetail() {
                         accept="image/*"
                         capture="environment"
                         onClick={(event) => {
-                          // #region debug-point E:camera-input-click
                           reportTelegramCameraDebug('E', 'camera input click', {
                             source: 'camera',
                             capture: String(event.currentTarget?.getAttribute?.('capture') || ''),
                             accept: String(event.currentTarget?.getAttribute?.('accept') || ''),
                           });
-                          // #endregion
                         }}
                         onChange={handleTelegramMaterialRequestPhotoInputChange('camera')}
                         disabled={Boolean(materialRequestBusyKey)}
@@ -1931,24 +1935,20 @@ function OrderDetail() {
                     <label
                       className="telegram-readonly-close-btn telegram-material-request-upload-label"
                       onClick={() => {
-                        // #region debug-point F:gallery-label-click
                         reportTelegramCameraDebug('F', 'gallery label click', {
                           source: 'gallery',
                         });
-                        // #endregion
                       }}
                     >
                       <input
                         type="file"
                         accept="image/*"
                         onClick={(event) => {
-                          // #region debug-point G:gallery-input-click
                           reportTelegramCameraDebug('G', 'gallery input click', {
                             source: 'gallery',
                             capture: String(event.currentTarget?.getAttribute?.('capture') || ''),
                             accept: String(event.currentTarget?.getAttribute?.('accept') || ''),
                           });
-                          // #endregion
                         }}
                         onChange={handleTelegramMaterialRequestPhotoInputChange('gallery')}
                         disabled={Boolean(materialRequestBusyKey)}
@@ -1957,6 +1957,13 @@ function OrderDetail() {
                         {materialRequestBusyKey === 'add-photo:gallery' ? 'Загружаю...' : 'Добавить из галереи'}
                       </span>
                     </label>
+                    <button
+                      type="button"
+                      className="telegram-readonly-close-btn telegram-material-request-upload-btn"
+                      onClick={() => setTelegramCameraDebugModalOpen(true)}
+                    >
+                      Диагностика
+                    </button>
                   </div>
 
                   {materialRequestError && (
@@ -2087,6 +2094,85 @@ function OrderDetail() {
               )}
             </div>
           )}
+
+          {telegramCameraDebugModalOpen ? (
+            <div className="modal-overlay" onClick={() => setTelegramCameraDebugModalOpen(false)}>
+              <div
+                className="modal-window modal-window-sm telegram-camera-debug-modal"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <div>
+                    <div className="modal-title">Диагностика фото</div>
+                    <div className="modal-subtitle">
+                      Покажите этот экран, если камера или галерея работают не так.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="modal-close-btn"
+                    onClick={() => setTelegramCameraDebugModalOpen(false)}
+                  >
+                    Закрыть
+                  </button>
+                </div>
+                <div className="modal-section">
+                  {materialRequestError ? (
+                    <div className="settings-alert settings-alert-error">
+                      {materialRequestError}
+                    </div>
+                  ) : (
+                    <div className="modal-note-box modal-note-box-muted">
+                      Явной ошибки нет. Ниже показано последнее диагностическое событие по кнопкам фото.
+                    </div>
+                  )}
+                </div>
+                <div className="modal-section telegram-camera-debug-grid">
+                  <div className="telegram-camera-debug-item">
+                    <strong>Событие</strong>
+                    <span>{telegramCameraDebugState?.msg || 'Нет данных'}</span>
+                  </div>
+                  <div className="telegram-camera-debug-item">
+                    <strong>Код</strong>
+                    <span>{telegramCameraDebugState?.hypothesisId || 'Нет данных'}</span>
+                  </div>
+                  <div className="telegram-camera-debug-item">
+                    <strong>Источник</strong>
+                    <span>{telegramCameraDebugState?.data?.source || 'Нет данных'}</span>
+                  </div>
+                  <div className="telegram-camera-debug-item">
+                    <strong>`capture`</strong>
+                    <span>{telegramCameraDebugState?.data?.capture || 'Нет данных'}</span>
+                  </div>
+                  <div className="telegram-camera-debug-item">
+                    <strong>`accept`</strong>
+                    <span>{telegramCameraDebugState?.data?.accept || 'Нет данных'}</span>
+                  </div>
+                  <div className="telegram-camera-debug-item">
+                    <strong>Файл</strong>
+                    <span>{telegramCameraDebugState?.data?.fileName || 'Не выбран'}</span>
+                  </div>
+                  <div className="telegram-camera-debug-item">
+                    <strong>Тип файла</strong>
+                    <span>{telegramCameraDebugState?.data?.fileType || 'Нет данных'}</span>
+                  </div>
+                  <div className="telegram-camera-debug-item">
+                    <strong>`mediaDevices`</strong>
+                    <span>{telegramCameraDebugState?.data?.hasMediaDevices ? 'Есть' : 'Нет'}</span>
+                  </div>
+                  <div className="telegram-camera-debug-item">
+                    <strong>`getUserMedia`</strong>
+                    <span>{telegramCameraDebugState?.data?.hasGetUserMedia ? 'Есть' : 'Нет'}</span>
+                  </div>
+                </div>
+                <div className="modal-section">
+                  <div className="telegram-camera-debug-raw">
+                    {JSON.stringify(telegramCameraDebugState?.data || {}, null, 2)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </>
       ) : (
         <div className="table-scroll">
