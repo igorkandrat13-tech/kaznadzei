@@ -1657,7 +1657,7 @@ router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/
       return res.status(404).json({ message: 'Заявка на расходники не найдена.' });
     }
     if (updatedOrder === 'empty_name') {
-      return res.status(400).json({ message: 'Укажите название фото.' });
+      return res.status(400).json({ message: 'Укажите название заявки.' });
     }
 
     const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
@@ -1675,7 +1675,7 @@ router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/
       entityId: updatedItem.itemId,
       entityName: updatedItem.name || '',
       actor: getTelegramActivityActor(employee),
-      message: 'Название фото в заявках на расходники обновлено из Telegram.',
+      message: 'Название заявки на расходники обновлено из Telegram.',
       details: {
         orderId: req.params.id,
         itemId: updatedItem.itemId,
@@ -1701,9 +1701,9 @@ router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/
       itemId: String(req.body?.itemId || '').trim(),
       materialRequestItemId: String(req.params.materialRequestItemId || '').trim(),
       ...getTelegramPayloadDebug(req.body || {}),
-      message: error.message || 'Не удалось обновить название фото в заявке на расходники из Telegram.',
+      message: error.message || 'Не удалось обновить название заявки на расходники из Telegram.',
     });
-    return res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить название фото в заявке на расходники из Telegram.' });
+    return res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить название заявки на расходники из Telegram.' });
   }
 });
 

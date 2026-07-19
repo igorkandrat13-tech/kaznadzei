@@ -6989,27 +6989,52 @@ body .role-allowed-column-marker {
   box-shadow: 0 10px 22px rgba(186, 125, 39, 0.1);
 }
 
-.telegram-material-request-name-input {
-  width: 100%;
-  margin-top: 12px;
-  min-height: 42px;
-  padding: 10px 12px;
-  border-radius: 12px;
+.telegram-stage-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.telegram-material-request-edit-btn {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 1px solid rgba(227, 162, 73, 0.26);
-  background: rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #9b4b20;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.telegram-material-request-title-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(227, 162, 73, 0.32);
+  background: rgba(255, 255, 255, 0.98);
   color: #6c2a10;
   font: inherit;
+  font-weight: 600;
 }
 
-.telegram-material-request-comment-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+.telegram-material-request-inline-preview {
+  margin-top: 12px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(227, 162, 73, 0.22);
+  background: rgba(255, 255, 255, 0.82);
 }
 
-.telegram-material-request-comment-save-btn {
-  min-height: 34px;
+.telegram-material-request-inline-preview-image {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  background: #fff8ee;
 }
 
 

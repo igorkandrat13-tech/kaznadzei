@@ -369,6 +369,7 @@ function OrderDetail() {
   const [materialRequestError, setMaterialRequestError] = useState('');
   const [materialRequestBusyKey, setMaterialRequestBusyKey] = useState('');
   const [materialRequestNameDrafts, setMaterialRequestNameDrafts] = useState({});
+  const [materialRequestEditingItemId, setMaterialRequestEditingItemId] = useState('');
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
@@ -895,6 +896,7 @@ function OrderDetail() {
     closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey('');
     setMaterialRequestNameDrafts({});
+    setMaterialRequestEditingItemId('');
   }, [closeTelegramAttachmentPreview, closeTelegramSpreadsheetPreview, selectedItem?.itemId]);
 
   const closeTelegramReadOnlySection = useCallback(() => {
@@ -1115,6 +1117,14 @@ function OrderDetail() {
     if (!order?._id || !selectedItem?.itemId || !requestItemId || !attachment?.attachmentId) return;
 
     const openKey = `material-request:${requestItemId}:${attachment.attachmentId}`;
+    if (
+      telegramAttachmentPreview?.scope === 'material-request'
+      && telegramAttachmentPreview?.materialRequestItemId === requestItemId
+      && telegramAttachmentPreview?.mode === 'image'
+    ) {
+      closeTelegramAttachmentPreview();
+      return;
+    }
     const fileUrl = getTelegramMaterialRequestAttachmentUrl(requestItemId, attachment.attachmentId);
     if (!fileUrl) {
       setMaterialRequestError('Не удалось подготовить ссылку для открытия фото.');
@@ -1139,6 +1149,8 @@ function OrderDetail() {
           mode: 'image',
           url: fileUrl,
           revokeUrl: false,
+          scope: 'material-request',
+          materialRequestItemId: requestItemId,
         });
         return;
       }
@@ -1153,11 +1165,40 @@ function OrderDetail() {
       setTelegramAttachmentOpeningKey('');
     }
   }, [
+    closeTelegramAttachmentPreview,
     closeTelegramSpreadsheetPreview,
     getTelegramMaterialRequestAttachmentUrl,
     openTelegramFileUrl,
+    telegramAttachmentPreview,
     setTelegramAttachmentPreviewState,
   ]);
+
+  const startTelegramMaterialRequestNameEdit = useCallback((materialRequestItem) => {
+    const requestItemId = String(materialRequestItem?.id || '').trim();
+    if (!requestItemId) return;
+    setMaterialRequestNameDrafts((current) => (
+      Object.prototype.hasOwnProperty.call(current, requestItemId)
+        ? current
+        : {
+            ...current,
+            [requestItemId]: getMaterialRequestItemDisplayName(materialRequestItem),
+          }
+    ));
+    setMaterialRequestEditingItemId(requestItemId);
+    setMaterialRequestError('');
+  }, []);
+
+  const cancelTelegramMaterialRequestNameEdit = useCallback((materialRequestItemId = '') => {
+    const requestItemId = String(materialRequestItemId || '').trim();
+    if (!requestItemId) return;
+    setMaterialRequestEditingItemId((current) => (current === requestItemId ? '' : current));
+    setMaterialRequestNameDrafts((current) => {
+      if (!Object.prototype.hasOwnProperty.call(current, requestItemId)) return current;
+      const next = { ...current };
+      delete next[requestItemId];
+      return next;
+    });
+  }, []);
 
   const saveTelegramMaterialRequestName = useCallback(async (materialRequestItem) => {
     const requestItemId = String(materialRequestItem?.id || '').trim();
@@ -1165,7 +1206,7 @@ function OrderDetail() {
 
     const sessionToken = getActiveTelegramSessionToken();
     if (!sessionToken) {
-      setMaterialRequestError('Не удалось подтвердить Telegram-сессию для сохранения названия фото.');
+      setMaterialRequestError('Не удалось подтвердить Telegram-сессию для сохранения названия заявки.');
       return;
     }
 
@@ -1188,7 +1229,7 @@ function OrderDetail() {
         }),
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, 'Не удалось сохранить название фото.'));
+        throw new Error(await getErrorMessage(res, 'Не удалось сохранить название заявки.'));
       }
       const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
@@ -1200,8 +1241,9 @@ function OrderDetail() {
         delete next[requestItemId];
         return next;
       });
+      setMaterialRequestEditingItemId((current) => (current === requestItemId ? '' : current));
     } catch (error) {
-      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось сохранить название фото.'));
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось сохранить название заявки.'));
     } finally {
       setMaterialRequestBusyKey('');
     }
@@ -1527,7 +1569,10 @@ function OrderDetail() {
                 </div>
               ) : null}
 
-              {telegramAttachmentPreview ? (
+              {telegramAttachmentPreview && !(
+                telegramAttachmentPreview.scope === 'material-request'
+                && telegramAttachmentPreview.mode === 'image'
+              ) ? (
                 <div className="attachment-preview-panel telegram-inline-attachment-preview">
                   <div className="attachment-preview-toolbar">
                     <div className="attachment-preview-toolbar-meta">
@@ -1899,16 +1944,60 @@ function OrderDetail() {
                                   ? materialRequestNameDrafts[requestItem.id]
                                   : photoDisplayName;
                                 const isNameBusy = materialRequestBusyKey === `name:${requestItem.id}`;
+                                const isEditingName = materialRequestEditingItemId === requestItem.id;
                                 const attachmentOpenKey = `material-request:${requestItem.id}:${attachment?.attachmentId || ''}`;
+                                const isInlinePreviewOpen = telegramAttachmentPreview?.scope === 'material-request'
+                                  && telegramAttachmentPreview?.materialRequestItemId === requestItem.id
+                                  && telegramAttachmentPreview?.mode === 'image';
                                 return (
                                   <>
                                     <div className="telegram-stage-card-top">
                                       <div className="telegram-stage-card-main">
                                         <div className="telegram-stage-card-swatch" aria-hidden="true" />
                                         <div className="telegram-stage-card-copy">
-                                          <div className="telegram-stage-card-title">
-                                            {photoDisplayName}
-                                          </div>
+                                          {isEditingName ? (
+                                            <input
+                                              type="text"
+                                              className="telegram-material-request-title-input"
+                                              value={photoNameValue}
+                                              onChange={(event) => {
+                                                const nextValue = event.target.value;
+                                                setMaterialRequestNameDrafts((current) => ({
+                                                  ...current,
+                                                  [requestItem.id]: nextValue,
+                                                }));
+                                                setMaterialRequestError('');
+                                              }}
+                                              onBlur={() => saveTelegramMaterialRequestName(requestItem)}
+                                              onKeyDown={(event) => {
+                                                if (event.key === 'Enter') {
+                                                  event.preventDefault();
+                                                  saveTelegramMaterialRequestName(requestItem);
+                                                }
+                                                if (event.key === 'Escape') {
+                                                  event.preventDefault();
+                                                  cancelTelegramMaterialRequestNameEdit(requestItem.id);
+                                                }
+                                              }}
+                                              autoFocus
+                                              disabled={isNameBusy}
+                                            />
+                                          ) : (
+                                            <div className="telegram-stage-card-title-row">
+                                              <div className="telegram-stage-card-title">
+                                                {photoDisplayName}
+                                              </div>
+                                              <button
+                                                type="button"
+                                                className="telegram-material-request-edit-btn"
+                                                onClick={() => startTelegramMaterialRequestNameEdit(requestItem)}
+                                                disabled={isNameBusy}
+                                                aria-label="Редактировать название заявки"
+                                              >
+                                                ✎
+                                              </button>
+                                            </div>
+                                          )}
                                           <div className="telegram-stage-card-subtitle">
                                             {attachment?.uploadedAt ? `Добавлено · ${formatDateTimeDisplay(attachment.uploadedAt)}` : 'Добавлено в заявки на расходники'}
                                           </div>
@@ -1936,31 +2025,15 @@ function OrderDetail() {
                                         />
                                       </button>
                                     ) : null}
-                                    <input
-                                      type="text"
-                                      className="telegram-material-request-name-input"
-                                      value={photoNameValue}
-                                      onChange={(event) => {
-                                        const nextValue = event.target.value;
-                                        setMaterialRequestNameDrafts((current) => ({
-                                          ...current,
-                                          [requestItem.id]: nextValue,
-                                        }));
-                                        setMaterialRequestError('');
-                                      }}
-                                      placeholder="Название фото"
-                                      disabled={isNameBusy}
-                                    />
-                                    <div className="telegram-material-request-comment-actions">
-                                      <button
-                                        type="button"
-                                        className="btn btn-primary telegram-material-request-comment-save-btn"
-                                        onClick={() => saveTelegramMaterialRequestName(requestItem)}
-                                        disabled={isNameBusy}
-                                      >
-                                        {isNameBusy ? 'Сохраняю...' : 'Сохранить название'}
-                                      </button>
-                                    </div>
+                                    {isInlinePreviewOpen ? (
+                                      <div className="telegram-material-request-inline-preview">
+                                        <img
+                                          src={telegramAttachmentPreview.url}
+                                          alt={telegramAttachmentPreview.name || 'Фото'}
+                                          className="telegram-material-request-inline-preview-image"
+                                        />
+                                      </div>
+                                    ) : null}
                                   </>
                                 );
                               })()}
@@ -1971,9 +2044,51 @@ function OrderDetail() {
                             <div className="telegram-stage-card-main">
                               <div className="telegram-stage-card-swatch" aria-hidden="true" />
                               <div className="telegram-stage-card-copy">
-                                <div className="telegram-stage-card-title">
-                                  {requestItem.name}
-                                </div>
+                                {materialRequestEditingItemId === requestItem.id ? (
+                                  <input
+                                    type="text"
+                                    className="telegram-material-request-title-input"
+                                    value={Object.prototype.hasOwnProperty.call(materialRequestNameDrafts, requestItem.id)
+                                      ? materialRequestNameDrafts[requestItem.id]
+                                      : requestItem.name}
+                                    onChange={(event) => {
+                                      const nextValue = event.target.value;
+                                      setMaterialRequestNameDrafts((current) => ({
+                                        ...current,
+                                        [requestItem.id]: nextValue,
+                                      }));
+                                      setMaterialRequestError('');
+                                    }}
+                                    onBlur={() => saveTelegramMaterialRequestName(requestItem)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        saveTelegramMaterialRequestName(requestItem);
+                                      }
+                                      if (event.key === 'Escape') {
+                                        event.preventDefault();
+                                        cancelTelegramMaterialRequestNameEdit(requestItem.id);
+                                      }
+                                    }}
+                                    autoFocus
+                                    disabled={materialRequestBusyKey === `name:${requestItem.id}`}
+                                  />
+                                ) : (
+                                  <div className="telegram-stage-card-title-row">
+                                    <div className="telegram-stage-card-title">
+                                      {requestItem.name}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="telegram-material-request-edit-btn"
+                                      onClick={() => startTelegramMaterialRequestNameEdit(requestItem)}
+                                      disabled={materialRequestBusyKey === `name:${requestItem.id}`}
+                                      aria-label="Редактировать название заявки"
+                                    >
+                                      ✎
+                                    </button>
+                                  </div>
+                                )}
                                 <div className="telegram-stage-card-subtitle">
                                   Добавлено в заявку на расходники
                                 </div>
