@@ -406,6 +406,32 @@ function OrderDetail() {
     return telegramSessionTokenRef.current || getTelegramEmployeeSessionToken();
   }, []);
 
+  // #region debug-point A:telegram-camera-report
+  const reportTelegramCameraDebug = useCallback((hypothesisId, msg, data = {}) => {
+    fetch('http://10.255.0.1:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'telegram-camera-open',
+        runId: 'pre-fix',
+        hypothesisId,
+        location: 'client/src/OrderDetail.js',
+        msg: `[DEBUG] ${msg}`,
+        data: {
+          orderId: order?._id || '',
+          itemId: selectedItem?.itemId || '',
+          telegramMode,
+          userAgent: navigator.userAgent,
+          hasMediaDevices: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
+          hasGetUserMedia: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
+          ...data,
+        },
+        ts: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [order?._id, selectedItem?.itemId, telegramMode]);
+  // #endregion
+
   const keepMaterialRequestInputVisible = useCallback(({ behavior = 'smooth' } = {}) => {
     const input = materialRequestInputRef.current;
     if (!input || document.activeElement !== input) return;
@@ -740,6 +766,17 @@ function OrderDetail() {
       && selectedItem?.itemId
       && allowedColumns.includes('materialRequests')
   );
+
+  useEffect(() => {
+    if (!canManageMaterialRequests) return;
+    // #region debug-point B:telegram-camera-env
+    reportTelegramCameraDebug('B', 'material requests photo controls visible', {
+      hasTelegramWebAppObject: typeof window !== 'undefined' && !!window.Telegram?.WebApp,
+      hasMediaDevices: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
+      hasGetUserMedia: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
+    });
+    // #endregion
+  }, [canManageMaterialRequests, reportTelegramCameraDebug]);
   const canViewOrderCard = Boolean(telegramMode && selectedItem?.itemId);
   const canViewPaint = Boolean(telegramMode && selectedItem?.itemId);
   const telegramReadOnlySection = useMemo(
@@ -1092,12 +1129,22 @@ function OrderDetail() {
 
   const handleTelegramMaterialRequestPhotoInputChange = useCallback((source = 'gallery') => async (event) => {
     const file = event.target?.files?.[0] || null;
+    // #region debug-point C:telegram-camera-input-change
+    reportTelegramCameraDebug('C', 'material request photo input change', {
+      source,
+      filesCount: Number(event.target?.files?.length || 0),
+      fileName: file?.name || '',
+      fileType: file?.type || '',
+      capture: String(event.target?.getAttribute?.('capture') || ''),
+      accept: String(event.target?.getAttribute?.('accept') || ''),
+    });
+    // #endregion
     if (event.target) {
       event.target.value = '';
     }
     if (!file) return;
     await addTelegramMaterialRequestPhotoItem(file, source);
-  }, [addTelegramMaterialRequestPhotoItem]);
+  }, [addTelegramMaterialRequestPhotoItem, reportTelegramCameraDebug]);
 
   const handleOpenTelegramMaterialRequestAttachment = useCallback(async (materialRequestItem, attachment) => {
     const requestItemId = String(materialRequestItem?.id || '').trim();
@@ -1851,11 +1898,29 @@ function OrderDetail() {
                   </div>
 
                   <div className="telegram-material-request-add-photo-row">
-                    <label className="telegram-readonly-close-btn telegram-material-request-upload-label">
+                    <label
+                      className="telegram-readonly-close-btn telegram-material-request-upload-label"
+                      onClick={() => {
+                        // #region debug-point D:camera-label-click
+                        reportTelegramCameraDebug('D', 'camera label click', {
+                          source: 'camera',
+                        });
+                        // #endregion
+                      }}
+                    >
                       <input
                         type="file"
                         accept="image/*"
                         capture="environment"
+                        onClick={(event) => {
+                          // #region debug-point E:camera-input-click
+                          reportTelegramCameraDebug('E', 'camera input click', {
+                            source: 'camera',
+                            capture: String(event.currentTarget?.getAttribute?.('capture') || ''),
+                            accept: String(event.currentTarget?.getAttribute?.('accept') || ''),
+                          });
+                          // #endregion
+                        }}
                         onChange={handleTelegramMaterialRequestPhotoInputChange('camera')}
                         disabled={Boolean(materialRequestBusyKey)}
                       />
@@ -1863,10 +1928,28 @@ function OrderDetail() {
                         {materialRequestBusyKey === 'add-photo:camera' ? 'Загружаю...' : 'Сделать фото'}
                       </span>
                     </label>
-                    <label className="telegram-readonly-close-btn telegram-material-request-upload-label">
+                    <label
+                      className="telegram-readonly-close-btn telegram-material-request-upload-label"
+                      onClick={() => {
+                        // #region debug-point F:gallery-label-click
+                        reportTelegramCameraDebug('F', 'gallery label click', {
+                          source: 'gallery',
+                        });
+                        // #endregion
+                      }}
+                    >
                       <input
                         type="file"
                         accept="image/*"
+                        onClick={(event) => {
+                          // #region debug-point G:gallery-input-click
+                          reportTelegramCameraDebug('G', 'gallery input click', {
+                            source: 'gallery',
+                            capture: String(event.currentTarget?.getAttribute?.('capture') || ''),
+                            accept: String(event.currentTarget?.getAttribute?.('accept') || ''),
+                          });
+                          // #endregion
+                        }}
                         onChange={handleTelegramMaterialRequestPhotoInputChange('gallery')}
                         disabled={Boolean(materialRequestBusyKey)}
                       />
