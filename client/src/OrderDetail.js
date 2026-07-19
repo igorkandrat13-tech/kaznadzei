@@ -1114,14 +1114,12 @@ function OrderDetail() {
     const requestItemId = String(materialRequestItem?.id || '').trim();
     if (!order?._id || !selectedItem?.itemId || !requestItemId || !attachment?.attachmentId) return;
 
-    const sessionToken = getActiveTelegramSessionToken();
-    if (!sessionToken) {
-      setMaterialRequestError('Не удалось подтвердить Telegram-сессию для открытия фото.');
-      return;
-    }
-
     const openKey = `material-request:${requestItemId}:${attachment.attachmentId}`;
     const fileUrl = getTelegramMaterialRequestAttachmentUrl(requestItemId, attachment.attachmentId);
+    if (!fileUrl) {
+      setMaterialRequestError('Не удалось подготовить ссылку для открытия фото.');
+      return;
+    }
 
     setTelegramAttachmentOpeningKey(openKey);
     setMaterialRequestError('');
@@ -1129,7 +1127,7 @@ function OrderDetail() {
       const previewMeta = {
         attachment,
         kindLabel: getAttachmentKindLabel(attachment),
-        name: attachment.name || 'Фото',
+        name: getMaterialRequestItemDisplayName(materialRequestItem),
         sizeLabel: formatAttachmentSize(attachment.size),
         sourceUrl: fileUrl,
       };
@@ -1156,7 +1154,6 @@ function OrderDetail() {
     }
   }, [
     closeTelegramSpreadsheetPreview,
-    getActiveTelegramSessionToken,
     getTelegramMaterialRequestAttachmentUrl,
     openTelegramFileUrl,
     setTelegramAttachmentPreviewState,
@@ -1862,7 +1859,7 @@ function OrderDetail() {
                   </div>
 
                   <div className="telegram-material-request-add-photo-row">
-                    <label className="telegram-readonly-close-btn telegram-material-request-upload-label">
+                    <label className="btn btn-primary telegram-material-request-upload-label">
                       <input
                         type="file"
                         accept="image/*"
@@ -1925,7 +1922,11 @@ function OrderDetail() {
                                       <button
                                         type="button"
                                         className="telegram-material-request-photo-preview"
-                                        onClick={() => handleOpenTelegramMaterialRequestAttachment(requestItem, attachment)}
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          handleOpenTelegramMaterialRequestAttachment(requestItem, attachment);
+                                        }}
                                         disabled={telegramAttachmentOpeningKey === attachmentOpenKey}
                                       >
                                         <img

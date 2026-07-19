@@ -6950,6 +6950,12 @@ body .role-allowed-column-marker {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  min-height: 40px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .telegram-material-request-upload-label input {
@@ -6969,6 +6975,8 @@ body .role-allowed-column-marker {
   width: 132px;
   max-width: 100%;
   cursor: pointer;
+  border-radius: 14px;
+  overflow: hidden;
 }
 
 .telegram-material-request-photo-image {
