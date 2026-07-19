@@ -156,6 +156,16 @@ function getMaterialRequestStats(items = [], legacyRequests = '') {
   };
 }
 
+function getMaterialRequestItemDisplayName(item = {}) {
+  const normalizedName = String(item.name || '').trim();
+  if (normalizedName && normalizedName.toLowerCase() !== 'фото') return normalizedName;
+  const legacyComment = String(item.comment || '').trim();
+  if (legacyComment) return legacyComment;
+  const firstAttachmentName = String(item.attachments?.[0]?.name || '').trim();
+  if (firstAttachmentName) return firstAttachmentName;
+  return normalizedName || 'Фото';
+}
+
 function getTelegramMaterialRequestErrorMessage(error, fallbackMessage = 'Не удалось добавить заявку на расходники.') {
   const rawMessage = String(error?.message || '').trim();
   if (rawMessage && !/^error\.?$/i.test(rawMessage)) {
@@ -358,7 +368,7 @@ function OrderDetail() {
   const [materialRequestDraft, setMaterialRequestDraft] = useState('');
   const [materialRequestError, setMaterialRequestError] = useState('');
   const [materialRequestBusyKey, setMaterialRequestBusyKey] = useState('');
-  const [materialRequestCommentDrafts, setMaterialRequestCommentDrafts] = useState({});
+  const [materialRequestNameDrafts, setMaterialRequestNameDrafts] = useState({});
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
@@ -884,7 +894,7 @@ function OrderDetail() {
     closeTelegramSpreadsheetPreview();
     closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey('');
-    setMaterialRequestCommentDrafts({});
+    setMaterialRequestNameDrafts({});
   }, [closeTelegramAttachmentPreview, closeTelegramSpreadsheetPreview, selectedItem?.itemId]);
 
   const closeTelegramReadOnlySection = useCallback(() => {
@@ -1152,56 +1162,56 @@ function OrderDetail() {
     setTelegramAttachmentPreviewState,
   ]);
 
-  const saveTelegramMaterialRequestComment = useCallback(async (materialRequestItem) => {
+  const saveTelegramMaterialRequestName = useCallback(async (materialRequestItem) => {
     const requestItemId = String(materialRequestItem?.id || '').trim();
     if (!order?._id || !selectedItem?.itemId || !requestItemId) return;
 
     const sessionToken = getActiveTelegramSessionToken();
     if (!sessionToken) {
-      setMaterialRequestError('Не удалось подтвердить Telegram-сессию для сохранения комментария.');
+      setMaterialRequestError('Не удалось подтвердить Telegram-сессию для сохранения названия фото.');
       return;
     }
 
-    const comment = String(
-      Object.prototype.hasOwnProperty.call(materialRequestCommentDrafts, requestItemId)
-        ? materialRequestCommentDrafts[requestItemId]
-        : (materialRequestItem?.comment || ''),
+    const name = String(
+      Object.prototype.hasOwnProperty.call(materialRequestNameDrafts, requestItemId)
+        ? materialRequestNameDrafts[requestItemId]
+        : (materialRequestItem?.name || ''),
     ).trim();
 
-    setMaterialRequestBusyKey(`comment:${requestItemId}`);
+    setMaterialRequestBusyKey(`name:${requestItemId}`);
     setMaterialRequestError('');
     try {
-      const res = await apiFetch(`/api/orders/${id}/telegram-material-request-items/${encodeURIComponent(requestItemId)}/comment`, {
+      const res = await apiFetch(`/api/orders/${id}/telegram-material-request-items/${encodeURIComponent(requestItemId)}/name`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           itemId: selectedItem.itemId,
           sessionToken,
-          comment,
+          name,
         }),
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, 'Не удалось сохранить комментарий к фото.'));
+        throw new Error(await getErrorMessage(res, 'Не удалось сохранить название фото.'));
       }
       const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
       if (data?.employee) {
         setTelegramEmployee(data.employee);
       }
-      setMaterialRequestCommentDrafts((current) => {
+      setMaterialRequestNameDrafts((current) => {
         const next = { ...current };
         delete next[requestItemId];
         return next;
       });
     } catch (error) {
-      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось сохранить комментарий к фото.'));
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось сохранить название фото.'));
     } finally {
       setMaterialRequestBusyKey('');
     }
   }, [
     getActiveTelegramSessionToken,
     id,
-    materialRequestCommentDrafts,
+    materialRequestNameDrafts,
     order?._id,
     selectedItem?.itemId,
   ]);
@@ -1887,10 +1897,11 @@ function OrderDetail() {
                               {(() => {
                                 const attachment = requestItem.attachments[0];
                                 const photoUrl = getTelegramMaterialRequestAttachmentUrl(requestItem.id, attachment?.attachmentId);
-                                const commentValue = Object.prototype.hasOwnProperty.call(materialRequestCommentDrafts, requestItem.id)
-                                  ? materialRequestCommentDrafts[requestItem.id]
-                                  : (requestItem.comment || '');
-                                const isCommentBusy = materialRequestBusyKey === `comment:${requestItem.id}`;
+                                const photoDisplayName = getMaterialRequestItemDisplayName(requestItem);
+                                const photoNameValue = Object.prototype.hasOwnProperty.call(materialRequestNameDrafts, requestItem.id)
+                                  ? materialRequestNameDrafts[requestItem.id]
+                                  : photoDisplayName;
+                                const isNameBusy = materialRequestBusyKey === `name:${requestItem.id}`;
                                 const attachmentOpenKey = `material-request:${requestItem.id}:${attachment?.attachmentId || ''}`;
                                 return (
                                   <>
@@ -1899,7 +1910,7 @@ function OrderDetail() {
                                         <div className="telegram-stage-card-swatch" aria-hidden="true" />
                                         <div className="telegram-stage-card-copy">
                                           <div className="telegram-stage-card-title">
-                                            Фото расходника
+                                            {photoDisplayName}
                                           </div>
                                           <div className="telegram-stage-card-subtitle">
                                             {attachment?.uploadedAt ? `Добавлено · ${formatDateTimeDisplay(attachment.uploadedAt)}` : 'Добавлено в заявки на расходники'}
@@ -1924,37 +1935,29 @@ function OrderDetail() {
                                         />
                                       </button>
                                     ) : null}
-                                    <textarea
-                                      className="telegram-material-request-comment-input"
-                                      value={commentValue}
+                                    <input
+                                      type="text"
+                                      className="telegram-material-request-name-input"
+                                      value={photoNameValue}
                                       onChange={(event) => {
                                         const nextValue = event.target.value;
-                                        setMaterialRequestCommentDrafts((current) => ({
+                                        setMaterialRequestNameDrafts((current) => ({
                                           ...current,
                                           [requestItem.id]: nextValue,
                                         }));
                                         setMaterialRequestError('');
                                       }}
-                                      placeholder="Комментарий под фото"
-                                      rows={3}
-                                      disabled={isCommentBusy}
+                                      placeholder="Название фото"
+                                      disabled={isNameBusy}
                                     />
                                     <div className="telegram-material-request-comment-actions">
                                       <button
                                         type="button"
-                                        className="telegram-readonly-close-btn telegram-material-request-upload-btn"
-                                        onClick={() => handleOpenTelegramMaterialRequestAttachment(requestItem, attachment)}
-                                        disabled={telegramAttachmentOpeningKey === attachmentOpenKey}
-                                      >
-                                        {telegramAttachmentOpeningKey === attachmentOpenKey ? 'Открываю фото...' : 'Открыть фото'}
-                                      </button>
-                                      <button
-                                        type="button"
                                         className="btn btn-primary telegram-material-request-comment-save-btn"
-                                        onClick={() => saveTelegramMaterialRequestComment(requestItem)}
-                                        disabled={isCommentBusy}
+                                        onClick={() => saveTelegramMaterialRequestName(requestItem)}
+                                        disabled={isNameBusy}
                                       >
-                                        {isCommentBusy ? 'Сохраняю...' : 'Сохранить комментарий'}
+                                        {isNameBusy ? 'Сохраняю...' : 'Сохранить название'}
                                       </button>
                                     </div>
                                   </>

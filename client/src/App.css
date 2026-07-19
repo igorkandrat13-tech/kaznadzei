@@ -3962,6 +3962,24 @@ body .merged-order-meta-pill {
   word-break: break-word;
 }
 
+.package-editor-item-name-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #8ecbff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.package-editor-item-name-btn:hover {
+  color: #b7e0ff;
+  text-decoration: underline;
+}
+
 .package-editor-item-completed .package-editor-item-name {
   text-decoration: line-through;
   color: var(--text-soft);
@@ -6948,25 +6966,25 @@ body .role-allowed-column-marker {
   border: none;
   background: transparent;
   padding: 0;
-  width: 100%;
+  width: 132px;
+  max-width: 100%;
   cursor: pointer;
 }
 
 .telegram-material-request-photo-image {
   display: block;
-  width: 100%;
-  max-height: 260px;
+  width: 132px;
+  height: 132px;
   object-fit: cover;
   border-radius: 14px;
   border: 1px solid rgba(227, 162, 73, 0.26);
   box-shadow: 0 10px 22px rgba(186, 125, 39, 0.1);
 }
 
-.telegram-material-request-comment-input {
+.telegram-material-request-name-input {
   width: 100%;
   margin-top: 12px;
-  min-height: 84px;
-  resize: vertical;
+  min-height: 42px;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(227, 162, 73, 0.26);

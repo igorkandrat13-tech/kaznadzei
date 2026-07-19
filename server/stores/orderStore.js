@@ -532,6 +532,16 @@ function normalizeMaterialRequestItems(source = [], legacyRequests = '') {
   });
 }
 
+function getMaterialRequestItemDisplayName(item = {}) {
+  const normalizedName = String(item.name || '').trim();
+  if (normalizedName && normalizedName.toLowerCase() !== 'фото') return normalizedName;
+  const legacyComment = String(item.comment || '').trim();
+  if (legacyComment) return legacyComment;
+  const firstAttachmentName = String(item.attachments?.[0]?.name || '').trim();
+  if (firstAttachmentName) return firstAttachmentName;
+  return normalizedName || 'Фото';
+}
+
 function getChecklistSummary(items = []) {
   return normalizeChecklistItems(items)
     .map((item) => `${item.isCompleted ? '+' : '-'} ${item.name}`)
@@ -546,7 +556,7 @@ function getMaterialRequestSummary(materialRequestItems = []) {
   return normalizeMaterialRequestItems(materialRequestItems)
     .map((item) => {
       const summaryName = item.kind === 'photo'
-        ? (item.comment || 'Фото')
+        ? getMaterialRequestItemDisplayName(item)
         : item.name;
       return `${item.isCompleted ? '+' : '-'} ${summaryName}`;
     })
@@ -1317,7 +1327,7 @@ const OrderStore = {
     return order;
   },
 
-  updateMaterialRequestItemComment(orderId, itemId, materialRequestItemId, comment = '') {
+  updateMaterialRequestItemName(orderId, itemId, materialRequestItemId, name = '') {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1332,12 +1342,13 @@ const OrderStore = {
     const hasTargetItem = currentMaterialRequestItems.some((requestItem) => requestItem.id === normalizedMaterialRequestItemId);
     if (!hasTargetItem) return 'material_request_item_not_found';
 
-    const normalizedComment = String(comment || '').trim();
+    const normalizedName = String(name || '').trim();
+    if (!normalizedName) return 'empty_name';
     const nextMaterialRequestItems = currentMaterialRequestItems.map((requestItem) => (
       requestItem.id === normalizedMaterialRequestItemId
         ? {
             ...requestItem,
-            comment: normalizedComment,
+            name: normalizedName,
           }
         : requestItem
     ));

@@ -288,12 +288,58 @@ function getPackageStats(items = [], legacyPackageName = '') {
   return { total, completed, pending, items: normalizedItems };
 }
 
+function normalizeItemAttachments(attachments = []) {
+  const sourceAttachments = Array.isArray(attachments) ? attachments : [];
+  return sourceAttachments.reduce((acc, attachment) => {
+    if (!attachment || typeof attachment !== 'object' || Array.isArray(attachment)) return acc;
+    const attachmentId = String(attachment.attachmentId || '').trim();
+    const name = String(attachment.name || '').trim();
+    if (!attachmentId || !name) return acc;
+    acc.push({
+      attachmentId,
+      name,
+      type: String(attachment.type || '').trim(),
+      size: Number(attachment.size) || 0,
+      uploadedAt: String(attachment.uploadedAt || '').trim(),
+      url: String(attachment.url || '').trim(),
+    });
+    return acc;
+  }, []);
+}
+
 function normalizeMaterialRequestItems(items = [], legacyRequests = '') {
+  const sourceItems = Array.isArray(items) ? items : [];
+  const normalizedItems = sourceItems.reduce((acc, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
+    const name = String(item.name || '').trim();
+    if (!name) return acc;
+    acc.push({
+      id: String(item.id || createPackageItemId()).trim(),
+      name,
+      kind: String(item.kind || (Array.isArray(item.attachments) && item.attachments.length > 0 ? 'photo' : 'text')).trim() || 'text',
+      comment: String(item.comment || '').trim(),
+      isCompleted: Boolean(item.isCompleted),
+      completedAt: item.isCompleted ? (String(item.completedAt || '').trim() || new Date().toISOString().split('T')[0]) : null,
+      attachments: normalizeItemAttachments(item.attachments),
+    });
+    return acc;
+  }, []);
+  if (normalizedItems.length > 0) return normalizedItems;
   return normalizePackageItems(items, legacyRequests);
 }
 
+function getMaterialRequestItemDisplayName(item = {}) {
+  const normalizedName = String(item.name || '').trim();
+  if (normalizedName && normalizedName.toLowerCase() !== 'фото') return normalizedName;
+  const legacyComment = String(item.comment || '').trim();
+  if (legacyComment) return legacyComment;
+  const firstAttachmentName = String(item.attachments?.[0]?.name || '').trim();
+  if (firstAttachmentName) return firstAttachmentName;
+  return normalizedName || 'Фото';
+}
+
 function getMaterialRequestSummary(items = []) {
-  return normalizeMaterialRequestItems(items).map((item) => `${item.isCompleted ? '+' : '-'} ${item.name}`).join('; ');
+  return normalizeMaterialRequestItems(items).map((item) => `${item.isCompleted ? '+' : '-'} ${getMaterialRequestItemDisplayName(item)}`).join('; ');
 }
 
 function getMaterialRequestStats(items = [], legacyRequests = '') {
@@ -2875,6 +2921,70 @@ function OrdersWorkspace() {
     }
   };
 
+  const handleOpenMaterialRequestAttachment = async (orderId, itemId, materialRequestItemId, attachment) => {
+    if (!orderId || !itemId || !materialRequestItemId || !attachment?.attachmentId) return;
+
+    if (isLinkAttachment(attachment)) {
+      const targetUrl = getAttachmentLinkUrl(attachment);
+      if (!targetUrl) {
+        setError('Ссылка пустая.');
+        return;
+      }
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const openKey = `material-request:${orderId}:${itemId}:${materialRequestItemId}:${attachment.attachmentId}`;
+    setAttachmentOpeningKey(openKey);
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/material-request-items/${materialRequestItemId}/attachments/${attachment.attachmentId}/file`);
+      if (!res.ok) {
+        setError(await getErrorMessage(res, 'Не удалось открыть фото заявки на расходники.'));
+        return;
+      }
+
+      const blob = await res.blob();
+      if (isImageAttachment(attachment)) {
+        const blobUrl = window.URL.createObjectURL(blob);
+        setAttachmentPreviewState({
+          orderId,
+          itemId,
+          attachment,
+          mode: 'image',
+          name: attachment.name || 'Изображение',
+          kindLabel: getAttachmentKindLabel(attachment),
+          sizeLabel: formatAttachmentSize(attachment.size),
+          url: blobUrl,
+          scope: 'material-request',
+        });
+        return;
+      }
+
+      if (isPdfAttachment(attachment)) {
+        const blobUrl = window.URL.createObjectURL(blob);
+        setAttachmentPreviewState({
+          orderId,
+          itemId,
+          attachment,
+          mode: 'pdf',
+          name: attachment.name || 'PDF',
+          kindLabel: getAttachmentKindLabel(attachment),
+          sizeLabel: formatAttachmentSize(attachment.size),
+          url: blobUrl,
+          scope: 'material-request',
+        });
+        return;
+      }
+
+      await handleDownloadAttachment(orderId, itemId, attachment, 'order');
+    } catch (openError) {
+      setError(toUserErrorMessage(openError, 'Не удалось открыть фото заявки на расходники.'));
+    } finally {
+      setAttachmentOpeningKey('');
+    }
+  };
+
   const handleDownloadAttachment = async (orderId, itemId, attachment, scope = 'order') => {
     if (!orderId || !itemId || !attachment?.attachmentId) return;
     const attachmentScope = String(scope || 'order').trim().toLowerCase();
@@ -4453,7 +4563,26 @@ function OrdersWorkspace() {
                       disabled={materialRequestEditorSaving}
                     />
                     <div className="package-editor-item-text">
-                      <span className="package-editor-item-name">{requestItem.name}</span>
+                      {String(requestItem.kind || '') === 'photo' && Array.isArray(requestItem.attachments) && requestItem.attachments[0] ? (
+                        <button
+                          type="button"
+                          className="package-editor-item-name-btn"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            handleOpenMaterialRequestAttachment(
+                              materialRequestEditor.orderId,
+                              materialRequestEditor.itemId,
+                              requestItem.id,
+                              requestItem.attachments[0],
+                            );
+                          }}
+                          disabled={materialRequestEditorSaving}
+                        >
+                          {getMaterialRequestItemDisplayName(requestItem)}
+                        </button>
+                      ) : (
+                        <span className="package-editor-item-name">{getMaterialRequestItemDisplayName(requestItem)}</span>
+                      )}
                       <span className="package-editor-item-meta">
                         {requestItem.isCompleted
                           ? `Исполнено${requestItem.completedAt ? ` · ${formatDateDisplay(requestItem.completedAt)}` : ''}`
