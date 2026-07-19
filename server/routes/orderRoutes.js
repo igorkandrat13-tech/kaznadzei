@@ -1378,6 +1378,140 @@ router.post('/orders/:id/telegram-material-request-items', (req, res) => {
   }
 });
 
+router.post('/orders/:id/telegram-material-request-photo-items', (req, res) => {
+  uploadOrderAttachment.single('file')(req, res, (uploadError) => {
+    try {
+      const token = String(SettingsStore.get().telegramBotToken || '').trim();
+      if (!token) {
+        return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+      }
+
+      const context = {
+        route: 'telegram-material-request-photo-item-add',
+        orderId: String(req.params.id || ''),
+        itemId: String(req.body?.itemId || '').trim(),
+      };
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const employee = resolveTelegramEmployee(token, req.body || {}, context);
+      if (!employee) {
+        logTelegramOrderDebug('telegram-material-request-photo-item-add.reject.employee-not-found', context);
+        return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+      }
+      if (!context.itemId) {
+        return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: 'Выберите фотографию для загрузки.' });
+      }
+
+      ensureActorCanUseManualColumns({
+        employeeId: employee._id,
+        role: employee.role,
+      }, [{ columnKey: 'materialRequests' }]);
+
+      if (!isImageAttachmentFile(req.file)) {
+        throw createAttachmentUploadError('Для заявок на расходники разрешены только изображения.');
+      }
+
+      const normalizedFileName = normalizeUploadedFileName(req.file.originalname || '');
+      const relativePath = path.relative(ORDER_ATTACHMENTS_ROOT, req.file.path).replace(/\\/g, '/');
+      const attachment = sanitizeOrderAttachmentInput({
+        name: normalizedFileName,
+        type: req.file.mimetype || 'application/octet-stream',
+        size: req.file.size,
+        storedName: req.file.filename,
+        relativePath,
+        uploadedAt: new Date().toISOString(),
+      });
+
+      const updatedOrder = OrderStore.addMaterialRequestItem(req.params.id, context.itemId, {
+        kind: 'photo',
+        name: 'Фото',
+        comment: String(req.body?.comment || '').trim(),
+        attachments: [attachment],
+      });
+      if (updatedOrder === null) {
+        deleteStoredAttachmentFile({ relativePath });
+        return res.status(404).json({ message: 'Заказ не найден.' });
+      }
+      if (updatedOrder === false) {
+        deleteStoredAttachmentFile({ relativePath });
+        return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+      }
+      if (updatedOrder === 'invalid') {
+        deleteStoredAttachmentFile({ relativePath });
+        return res.status(400).json({ message: 'Не удалось добавить фото в заявки на расходники.' });
+      }
+
+      const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
+      const createdPhotoItem = (updatedItem.materialRequestItems || [])
+        .find((requestItem) => (
+          String(requestItem.kind || '').trim() === 'photo'
+          && Array.isArray(requestItem.attachments)
+          && requestItem.attachments.some((itemAttachment) => itemAttachment?.attachmentId === attachment.attachmentId)
+        )) || null;
+      const allowedColumns = Array.from(getEmployeeAllowedColumns(employee));
+
+      logTelegramOrderDebug('telegram-material-request-photo-item-add.success', {
+        ...context,
+        employeeId: employee._id,
+        employeeRole: employee.role,
+        attachmentName: attachment.name || normalizedFileName,
+      });
+
+      addActivityLog({
+        action: 'order.material-request.telegram.photo.add',
+        entityType: 'orderItem',
+        entityId: updatedItem?.itemId || context.itemId,
+        entityName: updatedItem?.name || '',
+        actor: getTelegramActivityActor(employee),
+        message: 'Фото в заявках на расходники добавлено из Telegram.',
+        details: {
+          orderId: req.params.id,
+          itemId: updatedItem?.itemId || context.itemId,
+          materialRequestItemId: createdPhotoItem?.id || '',
+          attachmentId: attachment.attachmentId || '',
+          fileName: attachment.name || normalizedFileName,
+        },
+      });
+
+      return res.status(201).json({
+        ok: true,
+        order: updatedOrder,
+        item: updatedItem,
+        materialRequestItem: createdPhotoItem,
+        employee: {
+          _id: employee._id,
+          fullName: employee.fullName,
+          role: employee.role,
+          allowedColumns,
+        },
+      });
+    } catch (error) {
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      const isMulterLimit = error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE';
+      logTelegramOrderDebug('telegram-material-request-photo-item-add.error', {
+        route: 'telegram-material-request-photo-item-add',
+        orderId: String(req.params.id || ''),
+        itemId: String(req.body?.itemId || '').trim(),
+        ...getTelegramPayloadDebug(req.body || {}),
+        message: error.message || 'Не удалось добавить фото в заявки на расходники из Telegram.',
+      });
+      return res.status(error.status || (isMulterLimit ? 400 : 500)).json({
+        message: isMulterLimit
+          ? `Размер файла не должен превышать ${Math.round(ORDER_ATTACHMENT_FILE_SIZE_LIMIT / (1024 * 1024))} МБ.`
+          : (error.message || 'Не удалось добавить фото в заявки на расходники из Telegram.'),
+      });
+    }
+  });
+});
+
 router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/toggle', (req, res) => {
   try {
     const token = String(SettingsStore.get().telegramBotToken || '').trim();
@@ -1466,6 +1600,102 @@ router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/
       message: error.message || 'Не удалось изменить заявку на расходники из Telegram.',
     });
     res.status(error.status || 400).json({ message: error.message || 'Не удалось изменить заявку на расходники из Telegram.' });
+  }
+});
+
+router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/comment', (req, res) => {
+  try {
+    const token = String(SettingsStore.get().telegramBotToken || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Токен Telegram-бота не настроен.' });
+    }
+
+    const context = {
+      route: 'telegram-material-request-item-comment-update',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+      materialRequestItemId: String(req.params.materialRequestItemId || '').trim(),
+    };
+    const employee = resolveTelegramEmployee(token, req.body || {}, context);
+    if (!employee) {
+      logTelegramOrderDebug('telegram-material-request-item-comment-update.reject.employee-not-found', context);
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+    if (!context.itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+    if (!context.materialRequestItemId) {
+      return res.status(400).json({ message: 'Не указана заявка на расходники.' });
+    }
+
+    ensureActorCanUseManualColumns({
+      employeeId: employee._id,
+      role: employee.role,
+    }, [{ columnKey: 'materialRequests' }]);
+
+    const updatedOrder = OrderStore.updateMaterialRequestItemComment(
+      req.params.id,
+      context.itemId,
+      context.materialRequestItemId,
+      req.body?.comment,
+    );
+    if (updatedOrder === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (updatedOrder === false) {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+    if (updatedOrder === 'invalid') {
+      return res.status(400).json({ message: 'Некорректная заявка на расходники.' });
+    }
+    if (updatedOrder === 'material_request_item_not_found') {
+      return res.status(404).json({ message: 'Заявка на расходники не найдена.' });
+    }
+
+    const updatedItem = getOrderItemOrFail(updatedOrder, context.itemId);
+    const allowedColumns = Array.from(getEmployeeAllowedColumns(employee));
+
+    logTelegramOrderDebug('telegram-material-request-item-comment-update.success', {
+      ...context,
+      employeeId: employee._id,
+      employeeRole: employee.role,
+    });
+
+    addActivityLog({
+      action: 'order.material-request.telegram.comment.update',
+      entityType: 'orderItem',
+      entityId: updatedItem.itemId,
+      entityName: updatedItem.name || '',
+      actor: getTelegramActivityActor(employee),
+      message: 'Комментарий к фото в заявках на расходники обновлен из Telegram.',
+      details: {
+        orderId: req.params.id,
+        itemId: updatedItem.itemId,
+        materialRequestItemId: context.materialRequestItemId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      order: updatedOrder,
+      item: updatedItem,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+        allowedColumns,
+      },
+    });
+  } catch (error) {
+    logTelegramOrderDebug('telegram-material-request-item-comment-update.error', {
+      route: 'telegram-material-request-item-comment-update',
+      orderId: String(req.params.id || ''),
+      itemId: String(req.body?.itemId || '').trim(),
+      materialRequestItemId: String(req.params.materialRequestItemId || '').trim(),
+      ...getTelegramPayloadDebug(req.body || {}),
+      message: error.message || 'Не удалось обновить комментарий к заявке на расходники из Telegram.',
+    });
+    return res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить комментарий к заявке на расходники из Telegram.' });
   }
 });
 

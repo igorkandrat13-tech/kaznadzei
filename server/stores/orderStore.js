@@ -525,6 +525,8 @@ function normalizePackageItems(source = [], legacyPackageName = '') {
 function normalizeMaterialRequestItems(source = [], legacyRequests = '') {
   return normalizeChecklistItems(source, legacyRequests, {
     mapExtraFields: (item) => ({
+      kind: String(item.kind || (Array.isArray(item.attachments) && item.attachments.length > 0 ? 'photo' : 'text')).trim() || 'text',
+      comment: String(item.comment || '').trim(),
       attachments: normalizeOrderAttachments(item.attachments),
     }),
   });
@@ -541,7 +543,14 @@ function getPackageSummary(packageItems = []) {
 }
 
 function getMaterialRequestSummary(materialRequestItems = []) {
-  return getChecklistSummary(materialRequestItems);
+  return normalizeMaterialRequestItems(materialRequestItems)
+    .map((item) => {
+      const summaryName = item.kind === 'photo'
+        ? (item.comment || 'Фото')
+        : item.name;
+      return `${item.isCompleted ? '+' : '-'} ${summaryName}`;
+    })
+    .join('; ');
 }
 
 function updateItemChecklistState(item, nextItems = [], {
@@ -1277,7 +1286,11 @@ const OrderStore = {
     const item = getOrderItem(order, itemId);
     if (!item) return false;
 
-    const itemName = String(materialRequestItem?.name || '').trim();
+    const attachmentList = normalizeOrderAttachments(materialRequestItem?.attachments);
+    const normalizedKind = String(materialRequestItem?.kind || (attachmentList.length > 0 ? 'photo' : 'text')).trim().toLowerCase() === 'photo'
+      ? 'photo'
+      : 'text';
+    const itemName = String(materialRequestItem?.name || '').trim() || (normalizedKind === 'photo' ? 'Фото' : '');
     if (!itemName) return 'invalid';
 
     const nextMaterialRequestItems = [
@@ -1285,13 +1298,49 @@ const OrderStore = {
       {
         id: String(materialRequestItem?.id || id()).trim(),
         name: itemName,
+        kind: normalizedKind,
+        comment: String(materialRequestItem?.comment || '').trim(),
         isCompleted: Boolean(materialRequestItem?.isCompleted),
         completedAt: materialRequestItem?.isCompleted
           ? (String(materialRequestItem?.completedAt || '').trim() || new Date().toISOString().split('T')[0])
           : null,
-        attachments: normalizeOrderAttachments(materialRequestItem?.attachments),
+        attachments: attachmentList,
       },
     ];
+
+    if (!updateItemMaterialRequestState(item, nextMaterialRequestItems)) {
+      return order;
+    }
+
+    syncOrderStatus(order);
+    save();
+    return order;
+  },
+
+  updateMaterialRequestItemComment(orderId, itemId, materialRequestItemId, comment = '') {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return false;
+
+    const normalizedMaterialRequestItemId = String(materialRequestItemId || '').trim();
+    if (!normalizedMaterialRequestItemId) return 'invalid';
+
+    const currentMaterialRequestItems = normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests);
+    const hasTargetItem = currentMaterialRequestItems.some((requestItem) => requestItem.id === normalizedMaterialRequestItemId);
+    if (!hasTargetItem) return 'material_request_item_not_found';
+
+    const normalizedComment = String(comment || '').trim();
+    const nextMaterialRequestItems = currentMaterialRequestItems.map((requestItem) => (
+      requestItem.id === normalizedMaterialRequestItemId
+        ? {
+            ...requestItem,
+            comment: normalizedComment,
+          }
+        : requestItem
+    ));
 
     if (!updateItemMaterialRequestState(item, nextMaterialRequestItems)) {
       return order;

@@ -391,6 +391,8 @@ function sanitizeOrderItemInput(payload, options = {}) {
         return {
           id: normalizeString(item.id, `materialRequestItems[${index}].id`, { maxLength: 80 }),
           name: normalizeString(item.name, `materialRequestItems[${index}].name`, { required: true, maxLength: 160 }),
+          kind: normalizeString(item.kind, `materialRequestItems[${index}].kind`, { maxLength: 20 }),
+          comment: normalizeString(item.comment, `materialRequestItems[${index}].comment`, { maxLength: 1000 }),
           isCompleted: item.isCompleted === undefined ? false : normalizeBoolean(item.isCompleted, `materialRequestItems[${index}].isCompleted`),
           completedAt: item.completedAt === undefined ? null : normalizeDate(item.completedAt, `materialRequestItems[${index}].completedAt`, { allowUndefined: true }),
           attachments: Array.isArray(item.attachments)

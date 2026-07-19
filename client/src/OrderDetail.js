@@ -112,6 +112,8 @@ function normalizeMaterialRequestItems(items = [], legacyRequests = '') {
     acc.push({
       id: String(item.id || createPackageItemId()).trim(),
       name,
+      kind: String(item.kind || (Array.isArray(item.attachments) && item.attachments.length > 0 ? 'photo' : 'text')).trim() || 'text',
+      comment: String(item.comment || '').trim(),
       isCompleted: Boolean(item.isCompleted),
       completedAt: item.isCompleted ? (String(item.completedAt || '').trim() || new Date().toISOString().split('T')[0]) : null,
       attachments: normalizeItemAttachments(item.attachments),
@@ -132,6 +134,8 @@ function normalizeMaterialRequestItems(items = [], legacyRequests = '') {
       return {
         id: createPackageItemId(),
         name: normalizedName || token,
+        kind: 'text',
+        comment: '',
         isCompleted,
         completedAt: isCompleted ? new Date().toISOString().split('T')[0] : null,
         attachments: [],
@@ -354,6 +358,7 @@ function OrderDetail() {
   const [materialRequestDraft, setMaterialRequestDraft] = useState('');
   const [materialRequestError, setMaterialRequestError] = useState('');
   const [materialRequestBusyKey, setMaterialRequestBusyKey] = useState('');
+  const [materialRequestCommentDrafts, setMaterialRequestCommentDrafts] = useState({});
   const [telegramAuth, setTelegramAuth] = useState({ initData: '', unsafeUser: null });
   const [telegramAuthResolved, setTelegramAuthResolved] = useState(false);
   const [telegramSessionBootstrapKey, setTelegramSessionBootstrapKey] = useState(0);
@@ -364,7 +369,6 @@ function OrderDetail() {
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
-  const materialRequestAttachmentInputRefs = useRef({});
   useGlobalErrorEffect(sessionError, 'Ошибка определения профиля в Telegram.');
   useGlobalErrorEffect(scanActivationError, 'Ошибка принятия изделия в работу.');
   useGlobalErrorEffect(stageError, 'Ошибка отметки этапа.');
@@ -879,6 +883,7 @@ function OrderDetail() {
     closeTelegramSpreadsheetPreview();
     closeTelegramAttachmentPreview();
     setTelegramReadOnlySectionKey('');
+    setMaterialRequestCommentDrafts({});
   }, [closeTelegramAttachmentPreview, closeTelegramSpreadsheetPreview, selectedItem?.itemId]);
 
   const closeTelegramReadOnlySection = useCallback(() => {
@@ -1038,9 +1043,19 @@ function OrderDetail() {
     setTelegramAttachmentPreviewState,
   ]);
 
-  const handleUploadTelegramMaterialRequestAttachment = useCallback(async (materialRequestItem, file, source = 'gallery') => {
-    const requestItemId = String(materialRequestItem?.id || '').trim();
-    if (!order?._id || !selectedItem?.itemId || !requestItemId || !file) return;
+  const getTelegramMaterialRequestAttachmentUrl = useCallback((materialRequestItemId, attachmentId) => {
+    const requestItemId = String(materialRequestItemId || '').trim();
+    const normalizedAttachmentId = String(attachmentId || '').trim();
+    const sessionToken = getActiveTelegramSessionToken();
+    if (!order?._id || !selectedItem?.itemId || !requestItemId || !normalizedAttachmentId || !sessionToken) {
+      return '';
+    }
+    const query = new URLSearchParams({ sessionToken });
+    return `/api/orders/${order._id}/items/${selectedItem.itemId}/material-request-items/${requestItemId}/attachments/${normalizedAttachmentId}/telegram-file?${query.toString()}`;
+  }, [getActiveTelegramSessionToken, order?._id, selectedItem?.itemId]);
+
+  const addTelegramMaterialRequestPhotoItem = useCallback(async (file, source = 'gallery') => {
+    if (!order?._id || !selectedItem?.itemId || !file) return;
 
     const sessionToken = getActiveTelegramSessionToken();
     if (!sessionToken) {
@@ -1048,7 +1063,7 @@ function OrderDetail() {
       return;
     }
 
-    const busyKey = `upload:${requestItemId}:${source}`;
+    const busyKey = `add-photo:${source}`;
     setMaterialRequestBusyKey(busyKey);
     setMaterialRequestError('');
     try {
@@ -1056,12 +1071,12 @@ function OrderDetail() {
       formData.append('file', file);
       formData.append('itemId', selectedItem.itemId);
       formData.append('sessionToken', sessionToken);
-      const res = await apiFetch(`/api/orders/${order._id}/telegram-material-request-items/${encodeURIComponent(requestItemId)}/attachments`, {
+      const res = await apiFetch(`/api/orders/${order._id}/telegram-material-request-photo-items`, {
         method: 'POST',
         body: formData,
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, 'Не удалось добавить фото к заявке на расходники.'));
+        throw new Error(await getErrorMessage(res, 'Не удалось добавить фото в заявки на расходники.'));
       }
       const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
@@ -1069,25 +1084,20 @@ function OrderDetail() {
         setTelegramEmployee(data.employee);
       }
     } catch (error) {
-      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось добавить фото к заявке на расходники.'));
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось добавить фото в заявки на расходники.'));
     } finally {
       setMaterialRequestBusyKey('');
     }
   }, [getActiveTelegramSessionToken, order?._id, selectedItem?.itemId]);
 
-  const handleTelegramMaterialRequestAttachmentInputChange = useCallback((materialRequestItem, source = 'gallery') => async (event) => {
+  const handleTelegramMaterialRequestPhotoInputChange = useCallback((source = 'gallery') => async (event) => {
     const file = event.target?.files?.[0] || null;
     if (event.target) {
       event.target.value = '';
     }
     if (!file) return;
-    await handleUploadTelegramMaterialRequestAttachment(materialRequestItem, file, source);
-  }, [handleUploadTelegramMaterialRequestAttachment]);
-
-  const openTelegramMaterialRequestAttachmentPicker = useCallback((materialRequestItemId, source = 'gallery') => {
-    const inputKey = `${String(materialRequestItemId || '').trim()}:${source}`;
-    materialRequestAttachmentInputRefs.current[inputKey]?.click();
-  }, []);
+    await addTelegramMaterialRequestPhotoItem(file, source);
+  }, [addTelegramMaterialRequestPhotoItem]);
 
   const handleOpenTelegramMaterialRequestAttachment = useCallback(async (materialRequestItem, attachment) => {
     const requestItemId = String(materialRequestItem?.id || '').trim();
@@ -1100,8 +1110,7 @@ function OrderDetail() {
     }
 
     const openKey = `material-request:${requestItemId}:${attachment.attachmentId}`;
-    const query = new URLSearchParams({ sessionToken });
-    const fileUrl = `/api/orders/${order._id}/items/${selectedItem.itemId}/material-request-items/${requestItemId}/attachments/${attachment.attachmentId}/telegram-file?${query.toString()}`;
+    const fileUrl = getTelegramMaterialRequestAttachmentUrl(requestItemId, attachment.attachmentId);
 
     setTelegramAttachmentOpeningKey(openKey);
     setMaterialRequestError('');
@@ -1137,10 +1146,63 @@ function OrderDetail() {
   }, [
     closeTelegramSpreadsheetPreview,
     getActiveTelegramSessionToken,
+    getTelegramMaterialRequestAttachmentUrl,
     openTelegramFileUrl,
+    setTelegramAttachmentPreviewState,
+  ]);
+
+  const saveTelegramMaterialRequestComment = useCallback(async (materialRequestItem) => {
+    const requestItemId = String(materialRequestItem?.id || '').trim();
+    if (!order?._id || !selectedItem?.itemId || !requestItemId) return;
+
+    const sessionToken = getActiveTelegramSessionToken();
+    if (!sessionToken) {
+      setMaterialRequestError('Не удалось подтвердить Telegram-сессию для сохранения комментария.');
+      return;
+    }
+
+    const comment = String(
+      Object.prototype.hasOwnProperty.call(materialRequestCommentDrafts, requestItemId)
+        ? materialRequestCommentDrafts[requestItemId]
+        : (materialRequestItem?.comment || ''),
+    ).trim();
+
+    setMaterialRequestBusyKey(`comment:${requestItemId}`);
+    setMaterialRequestError('');
+    try {
+      const res = await apiFetch(`/api/orders/${id}/telegram-material-request-items/${encodeURIComponent(requestItemId)}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: selectedItem.itemId,
+          sessionToken,
+          comment,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, 'Не удалось сохранить комментарий к фото.'));
+      }
+      const data = await parseJsonSafely(res);
+      setOrder(data?.order || null);
+      if (data?.employee) {
+        setTelegramEmployee(data.employee);
+      }
+      setMaterialRequestCommentDrafts((current) => {
+        const next = { ...current };
+        delete next[requestItemId];
+        return next;
+      });
+    } catch (error) {
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, 'Не удалось сохранить комментарий к фото.'));
+    } finally {
+      setMaterialRequestBusyKey('');
+    }
+  }, [
+    getActiveTelegramSessionToken,
+    id,
+    materialRequestCommentDrafts,
     order?._id,
     selectedItem?.itemId,
-    setTelegramAttachmentPreviewState,
   ]);
 
   const addTelegramPackageItem = useCallback(async () => {
@@ -1788,6 +1850,32 @@ function OrderDetail() {
                     </button>
                   </div>
 
+                  <div className="telegram-material-request-add-photo-row">
+                    <label className="telegram-readonly-close-btn telegram-material-request-upload-label">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleTelegramMaterialRequestPhotoInputChange('camera')}
+                        disabled={Boolean(materialRequestBusyKey)}
+                      />
+                      <span>
+                        {materialRequestBusyKey === 'add-photo:camera' ? 'Загружаю...' : 'Сделать фото'}
+                      </span>
+                    </label>
+                    <label className="telegram-readonly-close-btn telegram-material-request-upload-label">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleTelegramMaterialRequestPhotoInputChange('gallery')}
+                        disabled={Boolean(materialRequestBusyKey)}
+                      />
+                      <span>
+                        {materialRequestBusyKey === 'add-photo:gallery' ? 'Загружаю...' : 'Добавить из галереи'}
+                      </span>
+                    </label>
+                  </div>
+
                   {materialRequestError && (
                     <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
                       {materialRequestError}
@@ -1805,6 +1893,87 @@ function OrderDetail() {
                             '--telegram-stage-text': '#6C2A10',
                           }}
                         >
+                          {String(requestItem.kind || 'text') === 'photo' && Array.isArray(requestItem.attachments) && requestItem.attachments.length > 0 ? (
+                            <>
+                              {(() => {
+                                const attachment = requestItem.attachments[0];
+                                const photoUrl = getTelegramMaterialRequestAttachmentUrl(requestItem.id, attachment?.attachmentId);
+                                const commentValue = Object.prototype.hasOwnProperty.call(materialRequestCommentDrafts, requestItem.id)
+                                  ? materialRequestCommentDrafts[requestItem.id]
+                                  : (requestItem.comment || '');
+                                const isCommentBusy = materialRequestBusyKey === `comment:${requestItem.id}`;
+                                const attachmentOpenKey = `material-request:${requestItem.id}:${attachment?.attachmentId || ''}`;
+                                return (
+                                  <>
+                                    <div className="telegram-stage-card-top">
+                                      <div className="telegram-stage-card-main">
+                                        <div className="telegram-stage-card-swatch" aria-hidden="true" />
+                                        <div className="telegram-stage-card-copy">
+                                          <div className="telegram-stage-card-title">
+                                            Фото расходника
+                                          </div>
+                                          <div className="telegram-stage-card-subtitle">
+                                            {attachment?.uploadedAt ? `Добавлено · ${formatDateTimeDisplay(attachment.uploadedAt)}` : 'Добавлено в заявки на расходники'}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <span className="telegram-stage-pill telegram-material-request-pill">
+                                        Фото
+                                      </span>
+                                    </div>
+                                    {photoUrl ? (
+                                      <button
+                                        type="button"
+                                        className="telegram-material-request-photo-preview"
+                                        onClick={() => handleOpenTelegramMaterialRequestAttachment(requestItem, attachment)}
+                                        disabled={telegramAttachmentOpeningKey === attachmentOpenKey}
+                                      >
+                                        <img
+                                          src={photoUrl}
+                                          alt={attachment?.name || 'Фото расходника'}
+                                          className="telegram-material-request-photo-image"
+                                        />
+                                      </button>
+                                    ) : null}
+                                    <textarea
+                                      className="telegram-material-request-comment-input"
+                                      value={commentValue}
+                                      onChange={(event) => {
+                                        const nextValue = event.target.value;
+                                        setMaterialRequestCommentDrafts((current) => ({
+                                          ...current,
+                                          [requestItem.id]: nextValue,
+                                        }));
+                                        setMaterialRequestError('');
+                                      }}
+                                      placeholder="Комментарий под фото"
+                                      rows={3}
+                                      disabled={isCommentBusy}
+                                    />
+                                    <div className="telegram-material-request-comment-actions">
+                                      <button
+                                        type="button"
+                                        className="telegram-readonly-close-btn telegram-material-request-upload-btn"
+                                        onClick={() => handleOpenTelegramMaterialRequestAttachment(requestItem, attachment)}
+                                        disabled={telegramAttachmentOpeningKey === attachmentOpenKey}
+                                      >
+                                        {telegramAttachmentOpeningKey === attachmentOpenKey ? 'Открываю фото...' : 'Открыть фото'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-primary telegram-material-request-comment-save-btn"
+                                        onClick={() => saveTelegramMaterialRequestComment(requestItem)}
+                                        disabled={isCommentBusy}
+                                      >
+                                        {isCommentBusy ? 'Сохраняю...' : 'Сохранить комментарий'}
+                                      </button>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </>
+                          ) : (
+                            <>
                           <div className="telegram-stage-card-top">
                             <div className="telegram-stage-card-main">
                               <div className="telegram-stage-card-swatch" aria-hidden="true" />
@@ -1821,73 +1990,8 @@ function OrderDetail() {
                               Срочно
                             </span>
                           </div>
-                          <div className="telegram-material-request-actions">
-                            <input
-                              ref={(node) => {
-                                const inputKey = `${requestItem.id}:camera`;
-                                if (node) {
-                                  materialRequestAttachmentInputRefs.current[inputKey] = node;
-                                } else {
-                                  delete materialRequestAttachmentInputRefs.current[inputKey];
-                                }
-                              }}
-                              type="file"
-                              accept="image/*"
-                              capture="environment"
-                              className="telegram-material-request-file-input"
-                              onChange={handleTelegramMaterialRequestAttachmentInputChange(requestItem, 'camera')}
-                            />
-                            <input
-                              ref={(node) => {
-                                const inputKey = `${requestItem.id}:gallery`;
-                                if (node) {
-                                  materialRequestAttachmentInputRefs.current[inputKey] = node;
-                                } else {
-                                  delete materialRequestAttachmentInputRefs.current[inputKey];
-                                }
-                              }}
-                              type="file"
-                              accept="image/*"
-                              className="telegram-material-request-file-input"
-                              onChange={handleTelegramMaterialRequestAttachmentInputChange(requestItem, 'gallery')}
-                            />
-                            <button
-                              type="button"
-                              className="telegram-readonly-close-btn telegram-material-request-upload-btn"
-                              onClick={() => openTelegramMaterialRequestAttachmentPicker(requestItem.id, 'camera')}
-                              disabled={Boolean(materialRequestBusyKey)}
-                            >
-                              {materialRequestBusyKey === `upload:${requestItem.id}:camera` ? 'Загружаю...' : 'Сделать фото'}
-                            </button>
-                            <button
-                              type="button"
-                              className="telegram-readonly-close-btn telegram-material-request-upload-btn"
-                              onClick={() => openTelegramMaterialRequestAttachmentPicker(requestItem.id, 'gallery')}
-                              disabled={Boolean(materialRequestBusyKey)}
-                            >
-                              {materialRequestBusyKey === `upload:${requestItem.id}:gallery` ? 'Загружаю...' : 'Добавить из галереи'}
-                            </button>
-                          </div>
-                          {Array.isArray(requestItem.attachments) && requestItem.attachments.length > 0 ? (
-                            <div className="telegram-material-request-attachments">
-                              {requestItem.attachments.map((attachment, attachmentIndex) => {
-                                const attachmentOpenKey = `material-request:${requestItem.id}:${attachment.attachmentId}`;
-                                return (
-                                  <button
-                                    key={attachment.attachmentId || `${requestItem.id}-attachment-${attachmentIndex}`}
-                                    type="button"
-                                    className="telegram-material-request-attachment-btn"
-                                    onClick={() => handleOpenTelegramMaterialRequestAttachment(requestItem, attachment)}
-                                    disabled={telegramAttachmentOpeningKey === attachmentOpenKey}
-                                  >
-                                    {telegramAttachmentOpeningKey === attachmentOpenKey
-                                      ? 'Открываю фото...'
-                                      : `Фото ${attachmentIndex + 1}${attachment?.uploadedAt ? ` · ${formatDateTimeDisplay(attachment.uploadedAt)}` : ''}`}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ) : null}
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>
