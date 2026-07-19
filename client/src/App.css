@@ -6986,50 +6986,6 @@ body .role-allowed-column-marker {
   min-height: 34px;
 }
 
-.telegram-camera-debug-modal {
-  max-width: 560px;
-}
-
-.telegram-camera-debug-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.telegram-camera-debug-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(245, 249, 255, 0.9);
-  border: 1px solid rgba(109, 155, 211, 0.18);
-}
-
-.telegram-camera-debug-item strong {
-  font-size: 12px;
-  color: #4d6284;
-}
-
-.telegram-camera-debug-item span {
-  font-size: 13px;
-  color: #16314e;
-  word-break: break-word;
-}
-
-.telegram-camera-debug-raw {
-  max-height: 220px;
-  overflow: auto;
-  padding: 12px;
-  border-radius: 12px;
-  background: #f3f7fc;
-  border: 1px solid rgba(109, 155, 211, 0.18);
-  color: #17314d;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
 
 .telegram-material-request-pill {
   background: rgba(255, 221, 153, 0.95);
