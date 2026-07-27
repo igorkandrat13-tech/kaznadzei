@@ -78,6 +78,27 @@ function getSecondaryHeaderTextColor(header = null) {
   if (header.useTableBackground) return '#000000';
   return String(header.textHex || '').trim() || '#000000';
 }
+
+function buildQrDownloadFileNameBase(orderNumber = '', itemNumber = '', itemName = '') {
+  const normalizedOrderNumber = String(orderNumber || '').trim() || '—';
+  const normalizedItemNumber = String(itemNumber || '').trim() || '—';
+  const normalizedItemName = String(itemName || '').trim() || 'Без названия';
+  const rawName = `№ заказа ${normalizedOrderNumber}, № изделия ${normalizedItemNumber}, ${normalizedItemName}`;
+  return rawName
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function escapeHtml(value = '') {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
 const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
@@ -1985,20 +2006,50 @@ function OrdersWorkspace() {
       orderNumber: order.orderNumber || '',
       itemNumber: item.itemNumber || '',
       itemName: item.name || '',
-      fileNameBase: `${order.orderNumber || 'order'}-${item.itemNumber || 'item'}`,
+      fileNameBase: buildQrDownloadFileNameBase(order.orderNumber, item.itemNumber, item.name),
     });
   };
 
-  const handlePrintQr = () => {
+  const handlePrintQr = async () => {
     if (!qrPreview?.orderId || !qrPreview?.itemId) return;
-    const qrUrl = `${window.location.origin}/api/orders/${qrPreview.orderId}/items/${qrPreview.itemId}/qrcode`;
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=720,height=900');
+    const printWindow = window.open('', '_blank', 'width=720,height=900');
     if (!printWindow) return;
-    const title = `QR ${qrPreview.orderNumber || ''} ${qrPreview.itemNumber ? `- ${qrPreview.itemNumber}` : ''}`.trim();
+    const title = buildQrDownloadFileNameBase(qrPreview.orderNumber, qrPreview.itemNumber, qrPreview.itemName);
+
+    printWindow.document.open();
     printWindow.document.write(`<!doctype html>
 <html>
   <head>
-    <title>${title}</title>
+    <title>${escapeHtml(title)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 24px; text-align: center; }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { margin: 0 0 18px; color: #444; }
+      .loading { color: #666; font-size: 14px; margin-top: 40px; }
+    </style>
+  </head>
+  <body>
+    <h1>Подготовка QR-кода к печати...</h1>
+    <p class="loading">Подождите несколько секунд.</p>
+  </body>
+</html>`);
+    printWindow.document.close();
+
+    let qrBlobUrl = '';
+    try {
+      const res = await apiFetch(`/api/orders/${qrPreview.orderId}/items/${qrPreview.itemId}/qrcode`);
+      if (!res.ok) {
+        throw new Error('Не удалось подготовить QR-код к печати.');
+      }
+
+      const qrBlob = await res.blob();
+      qrBlobUrl = window.URL.createObjectURL(qrBlob);
+
+      printWindow.document.open();
+      printWindow.document.write(`<!doctype html>
+<html>
+  <head>
+    <title>${escapeHtml(title)}</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 0; padding: 24px; text-align: center; }
       h1 { font-size: 20px; margin: 0 0 8px; }
@@ -2007,12 +2058,19 @@ function OrdersWorkspace() {
     </style>
   </head>
   <body>
-    <h1>${title || 'QR-код'}</h1>
-    <p>${qrPreview.itemName || ''}</p>
-    <img src="${qrUrl}" alt="QR code" onload="window.print(); setTimeout(() => window.close(), 150);" />
+    <h1>${escapeHtml(title || 'QR-код')}</h1>
+    <p>${escapeHtml(qrPreview.itemName || '')}</p>
+    <img src="${qrBlobUrl}" alt="QR code" onload="window.focus(); window.print(); setTimeout(() => window.close(), 150);" />
   </body>
 </html>`);
-    printWindow.document.close();
+      printWindow.document.close();
+    } catch (printError) {
+      printWindow.close();
+      if (qrBlobUrl) {
+        window.URL.revokeObjectURL(qrBlobUrl);
+      }
+      showGlobalError(printError, 'Не удалось подготовить QR-код к печати.');
+    }
   };
 
   const openCreateForm = () => {
