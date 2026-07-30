@@ -77,6 +77,7 @@ const ORDER_MANUFACTURING_REQUIRED_COLUMN_KEYS = [
 ];
 const ORDER_TRACKED_PRIMARY_START_INDEX = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX.room;
 const ORDER_TRACKED_PRIMARY_END_INDEX = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX.duration;
+const ORDER_PROGRESS_STAGE_WEIGHTS = [2, 4, 7, 2, 1, 4, 7, 4, 28, 7, 19, 6, 2, 7];
 
 function getConfiguredBotToken() {
   return String(SettingsStore.get().telegramBotToken || '').trim();
@@ -294,9 +295,13 @@ function getTrackedStageLabel(header = {}) {
   return label || 'Этап';
 }
 
+function getTrackedStageWeight(stageIndex = -1) {
+  return ORDER_PROGRESS_STAGE_WEIGHTS[stageIndex] || 0;
+}
+
 function getItemTrackedStageProgress(order = {}, item = {}) {
   const headers = getTrackedSecondaryHeaderCells();
-  return headers.map((header) => {
+  return headers.map((header, stageIndex) => {
     const columnIndexes = [];
     for (let columnIndex = Math.max(header.startIndex, ORDER_TRACKED_PRIMARY_START_INDEX); columnIndex <= Math.min(header.endIndex, ORDER_TRACKED_PRIMARY_END_INDEX); columnIndex += 1) {
       columnIndexes.push(columnIndex);
@@ -340,6 +345,7 @@ function getItemTrackedStageProgress(order = {}, item = {}) {
       key: `${String(header?.legendKey || '').trim()}-${header.startIndex}-${header.endIndex}`,
       legendKey: String(header?.legendKey || '').trim(),
       label: getTrackedStageLabel(header),
+      weight: getTrackedStageWeight(stageIndex),
       status,
       completedCount,
       totalCount,
@@ -349,8 +355,11 @@ function getItemTrackedStageProgress(order = {}, item = {}) {
 
 function getItemProgressSnapshot(order = {}, item = {}) {
   const stageProgress = getItemTrackedStageProgress(order, item);
-  const total = stageProgress.reduce((sum, stage) => sum + stage.totalCount, 0);
-  const completed = stageProgress.reduce((sum, stage) => sum + stage.completedCount, 0);
+  const total = stageProgress.reduce((sum, stage) => sum + stage.weight, 0);
+  const completed = stageProgress.reduce((sum, stage) => {
+    if (!stage.weight || !stage.totalCount) return sum;
+    return sum + ((stage.completedCount / stage.totalCount) * stage.weight);
+  }, 0);
   return {
     total,
     completed,

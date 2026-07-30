@@ -2686,7 +2686,8 @@ function OrdersWorkspace() {
 
   const removeRoomEditorItem = (index) => {
     setRoomEditor((current) => {
-      if (!current || current.items.length <= 1) return current;
+      if (!current) return current;
+      if (current.mode !== 'edit' && current.items.length <= 1) return current;
       return {
         ...current,
         items: current.items.filter((_, itemIndex) => itemIndex !== index),
@@ -2699,6 +2700,11 @@ function OrdersWorkspace() {
 
     if (!roomEditor.orderId) {
       setError('Выберите заказ.');
+      return;
+    }
+
+    if (roomEditor.mode !== 'edit' && (!roomEditor.items || roomEditor.items.length === 0)) {
+      setError('Добавьте хотя бы одно изделие.');
       return;
     }
 
@@ -4439,52 +4445,58 @@ function OrdersWorkspace() {
               <Button variant="secondary" size="sm" onClick={addRoomEditorItem} disabled={roomEditorSaving}>Добавить изделие</Button>
             </div>
 
-            {(roomEditor.items || []).map((item, index) => (
-              <div key={item.clientKey || item.itemId || index} className="order-item-editor-card">
-                <div className="order-item-editor-card-header">
-                  <div>
-                    <div className="order-item-editor-title">Изделие {index + 1}</div>
-                    <div className="order-item-editor-subtitle">Можно сохранить сразу несколько изделий одним действием.</div>
+            {(roomEditor.items || []).length > 0 ? (
+              (roomEditor.items || []).map((item, index) => (
+                <div key={item.clientKey || item.itemId || index} className="order-item-editor-card">
+                  <div className="order-item-editor-card-header">
+                    <div>
+                      <div className="order-item-editor-title">Изделие {index + 1}</div>
+                      <div className="order-item-editor-subtitle">Можно сохранить сразу несколько изделий одним действием.</div>
+                    </div>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => removeRoomEditorItem(index)}
+                      disabled={roomEditorSaving || (roomEditor.mode !== 'edit' && (roomEditor.items || []).length <= 1)}
+                    >
+                      Удалить
+                    </Button>
                   </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => removeRoomEditorItem(index)}
-                    disabled={roomEditorSaving || (roomEditor.items || []).length <= 1}
-                  >
-                    Удалить
-                  </Button>
-                </div>
 
-                <div className="responsive-form-grid">
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Наименование *</label>
-                    <input value={item.name} onChange={handleRoomEditorItemFieldChange(index, 'name')} placeholder="Например: Шкаф, стол, тумба" />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Кол-во *</label>
-                    <input type="number" min="1" value={item.quantity} onChange={handleRoomEditorItemFieldChange(index, 'quantity')} />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Материал</label>
-                    <input value={item.material} onChange={handleRoomEditorItemFieldChange(index, 'material')} placeholder="ЛДСП, массив, МДФ" />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Отгрузка до</label>
-                    <input type="date" value={item.deliveryDate} onChange={handleRoomEditorItemFieldChange(index, 'deliveryDate')} />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
-                    <label>Примечания</label>
-                    <textarea
-                      value={item.notes}
-                      onChange={handleRoomEditorItemFieldChange(index, 'notes')}
-                      placeholder="ТЗ, пожелания, особенности по изделию"
-                      rows={3}
-                    />
+                  <div className="responsive-form-grid">
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Наименование *</label>
+                      <input value={item.name} onChange={handleRoomEditorItemFieldChange(index, 'name')} placeholder="Например: Шкаф, стол, тумба" />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Кол-во *</label>
+                      <input type="number" min="1" value={item.quantity} onChange={handleRoomEditorItemFieldChange(index, 'quantity')} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Материал</label>
+                      <input value={item.material} onChange={handleRoomEditorItemFieldChange(index, 'material')} placeholder="ЛДСП, массив, МДФ" />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Отгрузка до</label>
+                      <input type="date" value={item.deliveryDate} onChange={handleRoomEditorItemFieldChange(index, 'deliveryDate')} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                      <label>Примечания</label>
+                      <textarea
+                        value={item.notes}
+                        onChange={handleRoomEditorItemFieldChange(index, 'notes')}
+                        placeholder="ТЗ, пожелания, особенности по изделию"
+                        rows={3}
+                      />
+                    </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="order-card-empty">
+                В этом помещении больше нет изделий. Сохраните изменения, чтобы удалить помещение из заказа, или добавьте новое изделие.
               </div>
-            ))}
+            )}
           </div>
 
           <div className="modal-actions">
