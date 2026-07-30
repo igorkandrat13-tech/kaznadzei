@@ -916,6 +916,7 @@ function OrdersWorkspace() {
   const [packageEditorSaving, setPackageEditorSaving] = useState(false);
   const [materialRequestEditor, setMaterialRequestEditor] = useState(null);
   const [materialRequestEditorSaving, setMaterialRequestEditorSaving] = useState(false);
+  const [confirmInlineDelete, setConfirmInlineDelete] = useState(null);
   const [attachmentUploadingTargetKey, setAttachmentUploadingTargetKey] = useState('');
   const [attachmentDeletingKey, setAttachmentDeletingKey] = useState('');
   const [attachmentOpeningKey, setAttachmentOpeningKey] = useState('');
@@ -2187,6 +2188,10 @@ function OrdersWorkspace() {
       setConfirmDelete(null);
       return;
     }
+    if (confirmInlineDelete) {
+      setConfirmInlineDelete(null);
+      return;
+    }
     if (roomEditor && !roomEditorSaving) {
       setRoomEditor(null);
       return;
@@ -2234,7 +2239,7 @@ function OrdersWorkspace() {
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || roomEditor || packageEditor || materialRequestEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || customerEditor || orderPreview || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || confirmInlineDelete || roomEditor || packageEditor || materialRequestEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || customerEditor || orderPreview || orderActionsOrder || qrPreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -2693,6 +2698,62 @@ function OrdersWorkspace() {
         items: current.items.filter((_, itemIndex) => itemIndex !== index),
       };
     });
+  };
+
+  const requestDeleteRoomEditorItem = (index) => {
+    const targetItem = roomEditor?.items?.[index] || null;
+    if (!targetItem) return;
+    const itemName = String(targetItem.name || '').trim() || `Изделие ${index + 1}`;
+    const isLastItem = (roomEditor?.items || []).length === 1;
+    setConfirmInlineDelete({
+      kind: 'room-item',
+      index,
+      title: 'Удалить изделие?',
+      message: roomEditor?.mode === 'edit' && isLastItem
+        ? `Изделие "${itemName}" будет удалено. После сохранения изменений помещение останется без изделий и исчезнет из заказа.`
+        : `Изделие "${itemName}" будет удалено из помещения. Изменение сохранится после нажатия кнопки сохранения.`,
+      confirmLabel: 'Удалить изделие',
+    });
+  };
+
+  const requestDeletePackageEditorItem = (packageItemId) => {
+    const targetItem = (packageEditor?.items || []).find((item) => item.id === packageItemId) || null;
+    if (!targetItem) return;
+    const itemName = String(targetItem.name || '').trim() || 'Позиция';
+    setConfirmInlineDelete({
+      kind: 'package-item',
+      packageItemId,
+      title: 'Удалить позицию комплектации?',
+      message: `Позиция "${itemName}" будет удалена из комплектации изделия.`,
+      confirmLabel: 'Удалить позицию',
+    });
+  };
+
+  const requestDeleteMaterialRequestEditorItem = (materialRequestItemId) => {
+    const targetItem = (materialRequestEditor?.items || []).find((item) => item.id === materialRequestItemId) || null;
+    if (!targetItem) return;
+    const itemName = getMaterialRequestItemDisplayName(targetItem);
+    setConfirmInlineDelete({
+      kind: 'material-request-item',
+      materialRequestItemId,
+      title: 'Удалить заявку на расходники?',
+      message: `Заявка "${itemName || 'Без названия'}" будет удалена из списка расходников.`,
+      confirmLabel: 'Удалить заявку',
+    });
+  };
+
+  const handleConfirmInlineDelete = () => {
+    if (!confirmInlineDelete) return;
+    if (confirmInlineDelete.kind === 'room-item') {
+      removeRoomEditorItem(confirmInlineDelete.index);
+    }
+    if (confirmInlineDelete.kind === 'package-item') {
+      removePackageEditorItem(confirmInlineDelete.packageItemId);
+    }
+    if (confirmInlineDelete.kind === 'material-request-item') {
+      removeMaterialRequestEditorItem(confirmInlineDelete.materialRequestItemId);
+    }
+    setConfirmInlineDelete(null);
   };
 
   const handleSaveRoomEditor = async () => {
@@ -4456,7 +4517,7 @@ function OrdersWorkspace() {
                     <Button
                       variant="danger"
                       size="sm"
-                      onClick={() => removeRoomEditorItem(index)}
+                      onClick={() => requestDeleteRoomEditorItem(index)}
                       disabled={roomEditorSaving || (roomEditor.mode !== 'edit' && (roomEditor.items || []).length <= 1)}
                     >
                       Удалить
@@ -4566,7 +4627,7 @@ function OrdersWorkspace() {
                     size="sm"
                     onClick={(event) => {
                       event.preventDefault();
-                      removePackageEditorItem(packageItem.id);
+                      requestDeletePackageEditorItem(packageItem.id);
                     }}
                     disabled={packageEditorSaving}
                   >
@@ -4665,7 +4726,7 @@ function OrdersWorkspace() {
                     size="sm"
                     onClick={(event) => {
                       event.preventDefault();
-                      removeMaterialRequestEditorItem(requestItem.id);
+                      requestDeleteMaterialRequestEditorItem(requestItem.id);
                     }}
                     disabled={materialRequestEditorSaving}
                   >
@@ -5159,6 +5220,16 @@ function OrdersWorkspace() {
         onConfirm={handleDelete}
         onCancel={() => !deletingOrder && setConfirmDelete(null)}
         loading={deletingOrder}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmInlineDelete)}
+        title={confirmInlineDelete?.title || 'Подтвердите удаление'}
+        message={confirmInlineDelete?.message || ''}
+        confirmLabel={confirmInlineDelete?.confirmLabel || 'Удалить'}
+        onConfirm={handleConfirmInlineDelete}
+        onCancel={() => setConfirmInlineDelete(null)}
+        variant="danger"
       />
 
       <ConfirmDialog

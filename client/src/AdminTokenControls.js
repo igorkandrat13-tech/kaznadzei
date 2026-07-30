@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch, parseJsonSafely, toUserErrorMessage } from './api';
 import { clearSettingsPinSessionToken, setSettingsPinSessionToken } from './appAuth';
 import { useGlobalErrorEffect } from './globalErrors';
+import ConfirmDialog from './ConfirmDialog';
 
 function AdminTokenControls() {
   const [form, setForm] = useState({
@@ -17,6 +18,7 @@ function AdminTokenControls() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
+  const [confirmPinDelete, setConfirmPinDelete] = useState(false);
   useGlobalErrorEffect(error, 'Не удалось изменить параметры доступа к настройкам.');
 
   const fetchConfig = async () => {
@@ -162,7 +164,7 @@ function AdminTokenControls() {
               {savingPin ? 'Сохранение PIN...' : 'Сохранить PIN'}
             </button>
             {config.settingsPinConfigured ? (
-              <button className="btn btn-danger" onClick={() => handleSaveSettingsPin({ clear: true })} disabled={savingPin}>
+              <button className="btn btn-danger" onClick={() => setConfirmPinDelete(true)} disabled={savingPin}>
                 {savingPin ? 'Удаление PIN...' : 'Удалить PIN'}
               </button>
             ) : null}
@@ -183,6 +185,20 @@ function AdminTokenControls() {
 
       {error && <div className="settings-alert settings-alert-error mt-16">{error}</div>}
       {message && <div className="settings-alert settings-alert-success mt-16">{message}</div>}
+
+      <ConfirmDialog
+        open={confirmPinDelete}
+        title="Удалить PIN-код?"
+        message="PIN-код доступа к настройкам будет удален. После этого раздел настроек снова будет открываться без дополнительного подтверждения."
+        confirmLabel="Удалить PIN"
+        onConfirm={async () => {
+          setConfirmPinDelete(false);
+          await handleSaveSettingsPin({ clear: true });
+        }}
+        onCancel={() => !savingPin && setConfirmPinDelete(false)}
+        loading={savingPin}
+        variant="danger"
+      />
     </div>
   );
 }
