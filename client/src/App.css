@@ -154,9 +154,9 @@
 }
 
 .workshop-badge-source {
-  color: var(--text-main);
-  border: 1px solid rgba(139, 188, 231, 0.16);
-  background: rgba(15, 27, 42, 0.84);
+  color: rgba(230, 238, 248, 0.96);
+  border: 1px solid rgba(139, 188, 231, 0.22);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .workshop-check-cell {
