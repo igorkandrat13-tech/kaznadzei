@@ -7,6 +7,7 @@ import GlobalNoticeLayer from './GlobalNoticeLayer';
 import OrderDetail from './OrderDetail';
 import RoleWorkspacePage from './RoleWorkspacePage';
 import OrdersWorkspace from './OrdersWorkspace';
+import WorkshopRequestsPage from './WorkshopRequestsPage';
 import Home from './Home';
 import TelegramScannerPage from './TelegramScannerPage';
 import {
@@ -229,6 +230,7 @@ function AppLayout() {
                             <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
                                 <nav className="App-header-nav App-header-nav-primary">
                                     {canAccessOrders && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
+                                    {canAccessOrders && <Link to="/requests" onClick={() => setMobileMenuOpen(false)}>Все заявки</Link>}
                                     {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
                                     {canAccessOrders && <Link to="/customers" onClick={() => setMobileMenuOpen(false)}>Заказчики 🔒</Link>}
                                     {canAccessRole('admin', authRole) && <Link to="/settings?tab=employees" onClick={() => setMobileMenuOpen(false)}>Сотрудники 🔒</Link>}
@@ -252,6 +254,7 @@ function AppLayout() {
                     <Route path='/settings' element={<ProtectedRoute requiredRole='admin'><Admin /></ProtectedRoute>} />
                     <Route path='/admin' element={<Navigate to='/settings' replace />} />
                     <Route path='/orders' element={<ProtectedRoute requiredRole='manager'><OrdersWorkspace /></ProtectedRoute>} />
+                    <Route path='/requests' element={<ProtectedRoute requiredRole='manager'><WorkshopRequestsPage /></ProtectedRoute>} />
                     <Route path='/manager' element={<Navigate to='/orders' replace />} />
                     <Route path='/archive' element={<ProtectedRoute requiredRole='manager'><Archive /></ProtectedRoute>} />
                     <Route path='/customers' element={<ProtectedRoute requiredRole='manager'><CustomersPage /></ProtectedRoute>} />

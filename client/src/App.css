@@ -4,6 +4,210 @@
   box-sizing: border-box;
 }
 
+.workshop-requests-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workshop-requests-filters {
+  margin-top: 0;
+}
+
+.workshop-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+  flex: 1 1 180px;
+}
+
+.workshop-filter-label {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workshop-filter-field input,
+.workshop-filter-field select {
+  min-height: 42px;
+}
+
+.workshop-requests-table th,
+.workshop-requests-table td {
+  vertical-align: top;
+}
+
+.workshop-requests-table {
+  min-width: 1180px;
+}
+
+.workshop-requests-table td {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.workshop-requests-table th:nth-child(1),
+.workshop-requests-table td:nth-child(1) {
+  width: 96px;
+}
+
+.workshop-requests-table th:nth-child(2),
+.workshop-requests-table td:nth-child(2) {
+  width: 56px;
+  text-align: center;
+}
+
+.workshop-requests-table th:nth-child(3),
+.workshop-requests-table td:nth-child(3) {
+  width: 96px;
+}
+
+.workshop-requests-table th:nth-child(4),
+.workshop-requests-table td:nth-child(4) {
+  width: 240px;
+}
+
+.workshop-requests-table th:nth-child(5),
+.workshop-requests-table td:nth-child(5) {
+  width: 170px;
+}
+
+.workshop-requests-table th:nth-child(6),
+.workshop-requests-table td:nth-child(6) {
+  width: 190px;
+}
+
+.workshop-requests-table th:nth-child(7),
+.workshop-requests-table td:nth-child(7) {
+  width: 140px;
+}
+
+.workshop-requests-table th:nth-child(8),
+.workshop-requests-table td:nth-child(8) {
+  width: 136px;
+}
+
+.workshop-requests-table th:nth-child(9),
+.workshop-requests-table td:nth-child(9) {
+  width: 82px;
+  text-align: center;
+}
+
+.workshop-requests-table th:nth-child(10),
+.workshop-requests-table td:nth-child(10) {
+  width: 110px;
+}
+
+.workshop-request-main {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.4;
+  color: var(--text-main);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.workshop-request-link {
+  display: inline;
+  color: var(--text-main);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(121, 222, 255, 0.22);
+  transition: color 0.18s ease, border-color 0.18s ease;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.workshop-request-link:hover {
+  color: var(--hover-link-text);
+  border-color: var(--hover-link-border);
+}
+
+.workshop-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workshop-cell-stack strong {
+  font-weight: 700;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.workshop-cell-stack span {
+  color: var(--text-soft);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.workshop-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.workshop-badge-source {
+  color: var(--text-main);
+  border: 1px solid rgba(139, 188, 231, 0.16);
+  background: rgba(15, 27, 42, 0.84);
+}
+
+.workshop-badge-source-workshop {
+  background: rgba(36, 76, 122, 0.95);
+}
+
+.workshop-badge-source-package {
+  background: rgba(25, 112, 92, 0.95);
+}
+
+.workshop-badge-source-material {
+  background: rgba(95, 70, 33, 0.95);
+}
+
+.workshop-badge-status-open {
+  color: #ffd891;
+  background: rgba(72, 54, 16, 0.92);
+  border: 1px solid rgba(139, 188, 231, 0.16);
+}
+
+.workshop-badge-status-completed {
+  color: #9ff3d7;
+  background: rgba(20, 70, 56, 0.92);
+  border: 1px solid rgba(139, 188, 231, 0.16);
+}
+
+.workshop-check-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 36px;
+}
+
+.workshop-check-cell input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #64e6c2;
+}
+
 :root {
   --app-bg: #06101d;
   --app-bg-soft: #0b1727;
@@ -146,10 +350,10 @@ body::before {
   flex: 1 1 auto;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 820px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 820px) auto;
   align-items: center;
   justify-content: stretch;
-  gap: 18px;
+  gap: 12px;
   pointer-events: none;
 }
 
@@ -288,15 +492,17 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
   pointer-events: auto;
 }
 
 .orders-header-toolbar-btn {
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: 38px;
+  padding: 0 13px;
+  font-size: 13px;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .App-header-session {
@@ -8487,8 +8693,8 @@ body .home-auth-status-pending {
 
 @media (max-width: 1366px) {
   .App-header-orders-zone {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 680px) minmax(0, 1fr);
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 640px) auto;
+    gap: 10px;
   }
 
   .App-header-brand-link {
@@ -8504,7 +8710,13 @@ body .home-auth-status-pending {
   }
 
   .orders-header-primary-actions {
-    max-width: min(100%, 720px);
+    max-width: none;
+    gap: 5px;
+  }
+
+  .orders-header-toolbar-btn {
+    padding: 0 11px;
+    font-size: 12px;
   }
 
   .unified-orders-table {

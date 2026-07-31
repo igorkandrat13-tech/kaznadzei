@@ -1608,6 +1608,63 @@ router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/
   }
 });
 
+router.patch('/orders/:id/material-request-items/:materialRequestItemId/toggle', requireManagerAccess(), (req, res) => {
+  try {
+    const orderId = String(req.params.id || '').trim();
+    const itemId = String(req.body?.itemId || '').trim();
+    const materialRequestItemId = String(req.params.materialRequestItemId || '').trim();
+
+    if (!orderId) {
+      return res.status(400).json({ message: 'Не указан заказ.' });
+    }
+    if (!itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+    if (!materialRequestItemId) {
+      return res.status(400).json({ message: 'Не указана заявка на расходники.' });
+    }
+
+    const updatedOrder = OrderStore.toggleMaterialRequestItem(orderId, itemId, materialRequestItemId);
+    if (updatedOrder === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (updatedOrder === false) {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+    if (updatedOrder === 'invalid') {
+      return res.status(400).json({ message: 'Некорректная заявка на расходники.' });
+    }
+    if (updatedOrder === 'material_request_item_not_found') {
+      return res.status(404).json({ message: 'Заявка на расходники не найдена.' });
+    }
+
+    const updatedItem = getOrderItemOrFail(updatedOrder, itemId);
+    addActivityLog({
+      action: 'order.material-request.manager.toggle',
+      entityType: 'orderItem',
+      entityId: updatedItem.itemId,
+      entityName: updatedItem.name || '',
+      actor: getRequestActor(req),
+      message: 'Статус заявки на расходники изменен из сводной таблицы.',
+      details: {
+        orderId,
+        itemId: updatedItem.itemId,
+        materialRequestItemId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      order: updatedOrder,
+      item: updatedItem,
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({
+      message: error.message || 'Не удалось изменить статус заявки на расходники.',
+    });
+  }
+});
+
 router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/name', (req, res) => {
   try {
     const token = String(SettingsStore.get().telegramBotToken || '').trim();

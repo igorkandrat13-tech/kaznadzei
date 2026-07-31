@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import { canAccessRole, getAppAuthRole } from './appAuth';
@@ -864,6 +865,7 @@ function getOrderIdentity(row) {
 }
 
 function OrdersWorkspace() {
+  const navigate = useNavigate();
   const authRole = getAppAuthRole();
   const isAdmin = canAccessRole('admin', authRole);
   const canManageCustomers = canAccessRole('manager', authRole);
@@ -3569,6 +3571,15 @@ function OrdersWorkspace() {
 
   const headerPrimaryActions = headerPrimaryActionsTarget ? createPortal(
     <div className="orders-header-primary-actions">
+      <Button
+        variant="primary"
+        className="section-toolbar-btn orders-header-toolbar-btn"
+        onClick={() => {
+          navigate('/requests');
+        }}
+      >
+        Все заявки
+      </Button>
       <Button
         variant="primary"
         className="section-toolbar-btn orders-header-toolbar-btn"

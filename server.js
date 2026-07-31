@@ -243,6 +243,7 @@ const telegramRoutes = require('./server/routes/telegramRoutes');
 const authRoutes = require('./server/routes/authRoutes');
 const adminToolsRoutes = require('./server/routes/adminToolsRoutes');
 const roleRoutes = require('./server/routes/roleRoutes');
+const workshopRequestRoutes = require('./server/routes/workshopRequestRoutes');
 app.use('/api', authRoutes);
 app.use('/api', roleRoutes);
 app.use('/api', processStepRoutes);
@@ -254,6 +255,7 @@ app.use('/api', settingsRoutes);
 app.use('/api', employeeRoutes);
 app.use('/api', customerRoutes);
 app.use('/api', telegramRoutes);
+app.use('/api', workshopRequestRoutes);
 app.use('/api', adminToolsRoutes);
 
 function resolveClientBuildPath() {
@@ -301,4 +303,3 @@ server.on('error', (error) => {
 
   throw error;
 });
-

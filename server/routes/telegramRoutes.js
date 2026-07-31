@@ -2,8 +2,10 @@ const express = require('express');
 const SettingsStore = require('../stores/settingsStore');
 const EmployeeStore = require('../stores/employeeStore');
 const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
+const { WorkshopRequestStore } = require('../stores/workshopRequestStore');
 const { requireAdminAccess } = require('../middleware/security');
 const { getBotInfo, getWebhookInfo, setWebhook, setChatMenuButton, sendMessage, answerCallbackQuery } = require('../services/telegramService');
+const { addActivityLog } = require('../services/activityLog');
 const {
   addTelegramDiagnosticLog,
   clearTelegramDiagnosticLogs,
@@ -31,6 +33,9 @@ const {
 const { getRoleDefinitions, getRoleLabel } = require('../config/roles');
 
 const router = express.Router();
+const EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT = 'Заявки';
+const EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT = 'Отмена заявки';
+const EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST = 'create_workshop_request';
 
 function getConfiguredBotToken() {
   return String(SettingsStore.get().telegramBotToken || '').trim();
@@ -99,9 +104,38 @@ function logCustomerTelegramDebug(event, details = {}) {
   console.log(`[customer-telegram] ${event}`, JSON.stringify(details));
 }
 
-function getAuthorizedMessageReplyMarkup() {
+function getEmployeePendingAction(employee = {}) {
+  return String(employee?.telegramPendingAction || '').trim();
+}
+
+function isWorkshopRequestCommand(text = '') {
+  const normalizedText = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return normalizedText === 'заявки'
+    || normalizedText === 'заявка'
+    || normalizedText === `📝 ${String(EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT).toLowerCase()}`
+    || normalizedText === `🛠 ${String(EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT).toLowerCase()}`;
+}
+
+function isCancelWorkshopRequestCommand(text = '') {
+  const normalizedText = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return normalizedText === String(EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT || '').trim().toLowerCase()
+    || normalizedText === 'отмена'
+    || normalizedText === 'отменить';
+}
+
+function getAuthorizedMessageReplyMarkup(employee = {}) {
+  const isWaitingForWorkshopRequest = getEmployeePendingAction(employee) === EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST;
   return {
-    remove_keyboard: true,
+    keyboard: [[{
+      text: isWaitingForWorkshopRequest
+        ? EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT
+        : EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT,
+    }]],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+    input_field_placeholder: isWaitingForWorkshopRequest
+      ? 'Напишите заявку для цеха'
+      : 'Выберите действие',
   };
 }
 
@@ -154,7 +188,7 @@ async function syncTelegramMenuButton(token, chatId) {
 
 async function sendAuthorizedMessage(token, chatId, text, employee) {
   await syncTelegramMenuButton(token, chatId);
-  await sendMessage(token, chatId, text, { reply_markup: getAuthorizedMessageReplyMarkup() });
+  await sendMessage(token, chatId, text, { reply_markup: getAuthorizedMessageReplyMarkup(employee) });
 }
 
 async function sendGuestMessage(token, chatId, text) {
@@ -192,6 +226,94 @@ async function refreshAuthorizedEmployeeAccess(token) {
   };
 }
 
+async function handleAuthorizedEmployeeMessage(token, chatId, text, employee) {
+  const normalizedText = String(text || '').trim();
+  if (!employee || !chatId || !normalizedText) return false;
+
+  const pendingAction = getEmployeePendingAction(employee);
+  if (isWorkshopRequestCommand(normalizedText)) {
+    const updatedEmployee = EmployeeStore.touchTelegramUser(employee._id, {
+      telegramPendingAction: EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST,
+    }) || employee;
+    await sendAuthorizedMessage(
+      token,
+      chatId,
+      'Напишите заявку одним сообщением.\nПримеры:\n- Закупить древесину\n- Сломалась вытяжка\n- Починить компрессор',
+      updatedEmployee,
+    );
+    return true;
+  }
+
+  if (isCancelWorkshopRequestCommand(normalizedText)) {
+    const updatedEmployee = EmployeeStore.touchTelegramUser(employee._id, {
+      telegramPendingAction: '',
+    }) || employee;
+    await sendAuthorizedMessage(
+      token,
+      chatId,
+      pendingAction === EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST
+        ? 'Создание заявки отменено.'
+        : 'Незавершенной заявки сейчас нет.',
+      updatedEmployee,
+    );
+    return true;
+  }
+
+  if (pendingAction !== EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST) {
+    return false;
+  }
+
+  const createdRequest = WorkshopRequestStore.create({
+    text: normalizedText,
+    actor: {
+      employeeId: employee._id,
+      employeeName: employee.fullName,
+      role: employee.role,
+      telegramChatId: chatId,
+    },
+  });
+  if (createdRequest === 'empty_text') {
+    await sendAuthorizedMessage(token, chatId, 'Введите текст заявки.', employee);
+    return true;
+  }
+
+  const updatedEmployee = EmployeeStore.touchTelegramUser(employee._id, {
+    telegramPendingAction: '',
+  }) || employee;
+
+  try {
+    addActivityLog({
+      action: 'workshop-request.telegram.create',
+      entityType: 'workshopRequest',
+      entityId: createdRequest._id,
+      entityName: createdRequest.text,
+      actor: {
+        type: 'telegram',
+        role: employee.role,
+        name: employee.fullName,
+        label: employee.fullName,
+      },
+      message: 'Цеховая заявка создана из Telegram.',
+      details: {
+        workshopRequestId: createdRequest._id,
+        employeeId: employee._id,
+        employeeName: employee.fullName,
+        telegramChatId: String(chatId),
+      },
+    });
+  } catch (activityLogError) {
+    console.error('Workshop request activity log error:', activityLogError.message);
+  }
+
+  await sendAuthorizedMessage(
+    token,
+    chatId,
+    `Заявка принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Все заявки".`,
+    updatedEmployee,
+  );
+  return true;
+}
+
 async function processTelegramMessage(token, message) {
   const text = typeof message?.text === 'string' ? message.text.trim() : '';
   const normalizedPinInput = normalizeTelegramPinInput(text);
@@ -226,19 +348,19 @@ async function processTelegramMessage(token, message) {
     }
     return Array.from(uniqueById.values());
   })();
-  const existingEmployee = EmployeeStore.findByTelegramUserId(from.id);
+  let existingEmployee = EmployeeStore.findByTelegramUserId(from.id);
   if (existingEmployee) {
     await syncTelegramMenuButton(token, chatId);
   } else {
     await clearTelegramMenuButton(token, chatId);
   }
   if (existingEmployee) {
-    EmployeeStore.touchTelegramUser(existingEmployee._id, {
+    existingEmployee = EmployeeStore.touchTelegramUser(existingEmployee._id, {
       telegramUsername: from.username ? `@${String(from.username).replace(/^@+/, '')}` : existingEmployee.telegramUsername || '',
       telegramFirstName: from.first_name || existingEmployee.telegramFirstName || '',
       telegramLastName: from.last_name || existingEmployee.telegramLastName || '',
       telegramChatId: String(chatId),
-    });
+    }) || existingEmployee;
   }
 
   if (!text) return;
@@ -249,7 +371,7 @@ async function processTelegramMessage(token, message) {
       await sendAuthorizedMessage(
         token,
         chatId,
-        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку меню "📷 Сканер QR".`,
+        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку меню "📷 Сканер QR" или кнопку "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
         existingEmployee
       );
       return;
@@ -307,10 +429,13 @@ async function processTelegramMessage(token, message) {
   }
 
   if (existingEmployee) {
+    if (await handleAuthorizedEmployeeMessage(token, chatId, text, existingEmployee)) {
+      return;
+    }
     await sendAuthorizedMessage(
       token,
       chatId,
-      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку меню "📷 Сканер QR".`,
+      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку меню "📷 Сканер QR" или кнопку "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
       existingEmployee
     );
     return;
@@ -410,7 +535,7 @@ async function processTelegramMessage(token, message) {
   await sendAuthorizedMessage(
     token,
     chatId,
-    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь используйте кнопку меню "📷 Сканер QR".`,
+    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь используйте кнопку меню "📷 Сканер QR" или кнопку "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
     linkedEmployee
   );
 }
