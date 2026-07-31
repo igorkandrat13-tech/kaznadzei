@@ -159,18 +159,6 @@
   background: rgba(15, 27, 42, 0.84);
 }
 
-.workshop-badge-source-workshop {
-  background: rgba(58, 89, 130, 0.95);
-}
-
-.workshop-badge-source-package {
-  background: rgba(36, 76, 122, 0.95);
-}
-
-.workshop-badge-source-material {
-  background: rgba(95, 70, 33, 0.95);
-}
-
 .workshop-check-cell {
   display: inline-flex;
   align-items: center;

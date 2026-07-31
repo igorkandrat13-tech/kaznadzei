@@ -145,6 +145,7 @@ function buildRequestRows(orders = [], workshopRequests = []) {
     requestId: String(request._id || '').trim(),
     toggleKind: 'workshop',
     canToggleStatus: true,
+    sortTimestamp: String(request.createdAt || '').trim(),
   }));
 
   const orderRows = [...(Array.isArray(orders) ? orders : [])]
@@ -171,6 +172,7 @@ function buildRequestRows(orders = [], workshopRequests = []) {
           requestId: '',
           toggleKind: '',
           canToggleStatus: false,
+          sortTimestamp: String(order.createdAt || '').trim(),
         }));
 
         const materialRows = normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests).map((requestItem) => {
@@ -197,6 +199,7 @@ function buildRequestRows(orders = [], workshopRequests = []) {
             materialRequestItemId: String(requestItem.id || '').trim(),
             toggleKind: 'material',
             canToggleStatus: true,
+            sortTimestamp: String(firstAttachment?.uploadedAt || order.createdAt || '').trim(),
           };
         });
 
@@ -205,9 +208,13 @@ function buildRequestRows(orders = [], workshopRequests = []) {
     });
 
   return [...workshopRows, ...orderRows].sort((left, right) => {
-    const leftTime = new Date(left.createdAt || left.updatedAt || 0).getTime();
-    const rightTime = new Date(right.createdAt || right.updatedAt || 0).getTime();
-    return rightTime - leftTime;
+    const leftTime = new Date(left.sortTimestamp || 0).getTime();
+    const rightTime = new Date(right.sortTimestamp || 0).getTime();
+    if (rightTime !== leftTime) return rightTime - leftTime;
+    return String(left.key || '').localeCompare(String(right.key || ''), 'ru', {
+      numeric: true,
+      sensitivity: 'base',
+    });
   });
 }
 
@@ -307,12 +314,6 @@ function WorkshopRequestsPage() {
     });
   }, [authorFilter, orderFilter, rows, search, sourceFilter]);
 
-  const summary = useMemo(() => ({
-    total: rows.length,
-    workshop: rows.filter((row) => row.source === 'workshop').length,
-    linkedToOrders: rows.filter((row) => row.source !== 'workshop').length,
-  }), [rows]);
-
   const handleToggleRequestStatus = useCallback(async (row) => {
     if (!row?.canToggleStatus) return;
     const nextStatus = row.status === 'completed' ? 'open' : 'completed';
@@ -370,21 +371,6 @@ function WorkshopRequestsPage() {
             >
               Обновить
             </Button>
-          </div>
-        </div>
-
-        <div className="overview-stats-grid" style={{ marginBottom: 16 }}>
-          <div className="overview-stat-card">
-            <strong>Всего строк</strong>
-            {summary.total}
-          </div>
-          <div className="overview-stat-card">
-            <strong>Цеховые</strong>
-            {summary.workshop}
-          </div>
-          <div className="overview-stat-card">
-            <strong>По заказам</strong>
-            {summary.linkedToOrders}
           </div>
         </div>
 
@@ -464,7 +450,7 @@ function WorkshopRequestsPage() {
                 return (
                   <tr key={row.key}>
                     <td>
-                      <span className={`workshop-badge workshop-badge-source workshop-badge-source-${row.source}`}>
+                      <span className="workshop-badge workshop-badge-source">
                         {row.sourceLabel}
                       </span>
                     </td>
