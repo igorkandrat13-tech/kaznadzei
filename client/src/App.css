@@ -418,6 +418,30 @@ body::before {
   pointer-events: auto;
 }
 
+.App-header-logo-centered .App-header-main {
+  position: relative;
+  justify-content: center;
+}
+
+.App-header-logo-centered .App-header-orders-zone {
+  display: flex;
+  justify-content: center;
+  flex: 1 1 100%;
+}
+
+.App-header-logo-centered .App-header-brand-link {
+  grid-column: auto;
+  width: min(100%, 820px);
+}
+
+.App-header-logo-centered .App-header-menu-anchor {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  margin-left: 0;
+  transform: translateY(-50%);
+}
+
 .App-header-center {
   grid-column: 3;
   flex: 1 1 0;

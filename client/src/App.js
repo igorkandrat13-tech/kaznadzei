@@ -85,6 +85,7 @@ function AppLayout() {
     const location = useLocation();
     const routeTelegramMode = location.pathname === '/telegram-app';
     const ordersRoute = location.pathname === '/orders';
+    const requestsRoute = location.pathname === '/requests';
     const telegramMode = detectTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
@@ -197,7 +198,7 @@ function AppLayout() {
         <>
             {!telegramMode && (
                 <div
-                    className={`App-header ${mobileMenuOpen ? 'App-header-mobile-open' : ''}`}
+                    className={`App-header ${mobileMenuOpen ? 'App-header-mobile-open' : ''} ${requestsRoute ? 'App-header-logo-centered' : ''}`}
                     style={{ '--header-logo-image': `url("${HEADER_LOGO_SRC}")` }}
                 >
                     <div className="App-header-main">
