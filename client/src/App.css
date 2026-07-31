@@ -153,10 +153,11 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.workshop-badge-source {
+.workshop-source-text {
   color: rgba(230, 238, 248, 0.96);
-  border: 1px solid rgba(139, 188, 231, 0.22);
-  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .workshop-check-cell {

@@ -450,7 +450,7 @@ function WorkshopRequestsPage() {
                 return (
                   <tr key={row.key}>
                     <td>
-                      <span className="workshop-badge workshop-badge-source">
+                      <span className="workshop-source-text">
                         {row.sourceLabel}
                       </span>
                     </td>
