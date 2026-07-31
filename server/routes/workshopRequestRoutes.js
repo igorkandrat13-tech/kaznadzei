@@ -59,4 +59,38 @@ router.patch('/workshop-requests/:id/status', requireManagerAccess(), (req, res)
   });
 });
 
+router.delete('/workshop-requests/:id', requireManagerAccess(), (req, res) => {
+  const requestId = String(req.params.id || '').trim();
+  if (!requestId) {
+    return res.status(400).json({ message: 'Не указана заявка.' });
+  }
+
+  const deletedItem = WorkshopRequestStore.delete(requestId);
+  if (deletedItem === null) {
+    return res.status(404).json({ message: 'Заявка не найдена.' });
+  }
+  if (deletedItem === false) {
+    return res.status(400).json({ message: 'Некорректная заявка.' });
+  }
+
+  addActivityLog({
+    action: 'workshop-request.delete',
+    entityType: 'workshopRequest',
+    entityId: deletedItem._id,
+    entityName: deletedItem.text,
+    actor: getRequestActor(req),
+    message: 'Цеховая заявка удалена.',
+    details: {
+      workshopRequestId: deletedItem._id,
+      employeeId: deletedItem.employeeId || '',
+      employeeName: deletedItem.employeeName || '',
+    },
+  });
+
+  return res.json({
+    ok: true,
+    item: deletedItem,
+  });
+});
+
 module.exports = router;

@@ -175,6 +175,37 @@
   accent-color: #64e6c2;
 }
 
+.workshop-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 120, 120, 0.28);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ff8f8f;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.workshop-delete-btn:hover:not(:disabled),
+.workshop-delete-btn:focus-visible {
+  background: rgba(255, 120, 120, 0.12);
+  border-color: rgba(255, 120, 120, 0.44);
+  outline: none;
+}
+
+.workshop-delete-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.workshop-delete-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 :root {
   --app-bg: #06101d;
   --app-bg-soft: #0b1727;

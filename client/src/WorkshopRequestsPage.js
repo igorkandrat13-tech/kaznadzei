@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch, parseJsonSafely, toUserErrorMessage } from './api';
+import ConfirmDialog from './ConfirmDialog';
 import { formatDateTimeDisplay } from './dateTime';
 import { useGlobalErrorEffect } from './globalErrors';
 import { Button } from './ui';
@@ -145,6 +146,7 @@ function buildRequestRows(orders = [], workshopRequests = []) {
     requestId: String(request._id || '').trim(),
     toggleKind: 'workshop',
     canToggleStatus: true,
+    canDelete: true,
     sortTimestamp: String(request.createdAt || '').trim(),
   }));
 
@@ -170,8 +172,10 @@ function buildRequestRows(orders = [], workshopRequests = []) {
           attachmentsCount: 0,
           openUrl: '',
           requestId: '',
+          packageItemId: String(packageItem.id || '').trim(),
           toggleKind: '',
           canToggleStatus: false,
+          canDelete: true,
           sortTimestamp: String(order.createdAt || '').trim(),
         }));
 
@@ -199,6 +203,7 @@ function buildRequestRows(orders = [], workshopRequests = []) {
             materialRequestItemId: String(requestItem.id || '').trim(),
             toggleKind: 'material',
             canToggleStatus: true,
+            canDelete: true,
             sortTimestamp: String(firstAttachment?.uploadedAt || order.createdAt || '').trim(),
           };
         });
@@ -228,6 +233,7 @@ function WorkshopRequestsPage() {
   const [authorFilter, setAuthorFilter] = useState('all');
   const [orderFilter, setOrderFilter] = useState('all');
   const [updatingKey, setUpdatingKey] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   useGlobalErrorEffect(error, 'Ошибка раздела заявок.');
 
@@ -352,6 +358,43 @@ function WorkshopRequestsPage() {
     }
   }, [fetchData]);
 
+  const handleDeleteRequest = useCallback(async () => {
+    if (!confirmDelete?.row) return;
+    const row = confirmDelete.row;
+    setUpdatingKey(row.key);
+    setError('');
+    try {
+      let res = null;
+      if (row.source === 'workshop') {
+        res = await apiFetch(`/api/workshop-requests/${row.requestId}`, {
+          method: 'DELETE',
+        });
+      } else if (row.source === 'material') {
+        res = await apiFetch(`/api/orders/${row.orderId}/material-request-items/${row.materialRequestItemId}?itemId=${encodeURIComponent(row.itemId)}`, {
+          method: 'DELETE',
+        });
+      } else if (row.source === 'package') {
+        res = await apiFetch(`/api/orders/${row.orderId}/package-items/${row.packageItemId}?itemId=${encodeURIComponent(row.itemId)}`, {
+          method: 'DELETE',
+        });
+      } else {
+        return;
+      }
+
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось удалить заявку.');
+      }
+
+      setConfirmDelete(null);
+      await fetchData({ showLoader: false });
+    } catch (deleteError) {
+      setError(toUserErrorMessage(deleteError, 'Не удалось удалить заявку.'));
+    } finally {
+      setUpdatingKey('');
+    }
+  }, [confirmDelete, fetchData]);
+
   return (
     <div className="workshop-requests-page">
       <div className="card orders-workspace-table-card">
@@ -434,7 +477,7 @@ function WorkshopRequestsPage() {
                 <th>Помещение / изделие</th>
                 <th>Автор</th>
                 <th>Дата</th>
-                <th>Вложения</th>
+                <th>Удалить</th>
               </tr>
             </thead>
             <tbody>
@@ -502,7 +545,28 @@ function WorkshopRequestsPage() {
                     </td>
                     <td>{row.author || '—'}</td>
                     <td>{formatDateTimeDisplay(row.createdAt || row.updatedAt) || '—'}</td>
-                    <td>{row.attachmentsCount > 0 ? row.attachmentsCount : '—'}</td>
+                    <td>
+                      {row.canDelete ? (
+                        <button
+                          type="button"
+                          className="workshop-delete-btn"
+                          onClick={() => setConfirmDelete({
+                            row,
+                            title: 'Удалить заявку?',
+                            message: row.source === 'package'
+                              ? `Позиция комплектации "${row.text}" будет удалена без возможности восстановления.`
+                              : `Заявка "${row.text}" будет удалена без возможности восстановления.`,
+                            confirmLabel: 'Удалить',
+                          })}
+                          disabled={isUpdating}
+                          aria-label={`Удалить ${row.text}`}
+                        >
+                          🗑
+                        </button>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -510,6 +574,16 @@ function WorkshopRequestsPage() {
           </table>
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete?.title || 'Удалить заявку?'}
+        message={confirmDelete?.message || ''}
+        confirmLabel={confirmDelete?.confirmLabel || 'Удалить'}
+        onConfirm={handleDeleteRequest}
+        onCancel={() => !updatingKey && setConfirmDelete(null)}
+        loading={Boolean(confirmDelete && updatingKey === confirmDelete.row?.key)}
+        variant="danger"
+      />
     </div>
   );
 }

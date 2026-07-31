@@ -108,6 +108,17 @@ const WorkshopRequestStore = {
     save();
     return item;
   },
+
+  delete(requestId) {
+    const db = load();
+    const normalizedRequestId = String(requestId || '').trim();
+    if (!normalizedRequestId) return false;
+    const itemIndex = db.workshopRequests.findIndex((entry) => entry._id === normalizedRequestId);
+    if (itemIndex === -1) return null;
+    const [deletedItem] = db.workshopRequests.splice(itemIndex, 1);
+    save();
+    return deletedItem || null;
+  },
 };
 
 module.exports = {

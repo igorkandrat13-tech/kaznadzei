@@ -1288,6 +1288,35 @@ const OrderStore = {
     return order;
   },
 
+  deletePackageItem(orderId, itemId, packageItemId) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return false;
+
+    const normalizedPackageItemId = String(packageItemId || '').trim();
+    if (!normalizedPackageItemId) return 'invalid';
+
+    const currentPackageItems = normalizePackageItems(item.packageItems, item.packageName);
+    const deletedPackageItem = currentPackageItems.find((packageItem) => packageItem.id === normalizedPackageItemId) || null;
+    if (!deletedPackageItem) return 'package_item_not_found';
+
+    const nextPackageItems = currentPackageItems.filter((packageItem) => packageItem.id !== normalizedPackageItemId);
+    if (!updateItemPackageState(item, nextPackageItems)) {
+      return order;
+    }
+
+    syncOrderStatus(order);
+    save();
+    return {
+      order,
+      item,
+      deletedPackageItem,
+    };
+  },
+
   addMaterialRequestItem(orderId, itemId, materialRequestItem = {}) {
     const db = load();
     ensureOrders(db);
@@ -1462,6 +1491,37 @@ const OrderStore = {
     syncOrderStatus(order);
     save();
     return order;
+  },
+
+  deleteMaterialRequestItem(orderId, itemId, materialRequestItemId) {
+    const db = load();
+    ensureOrders(db);
+    const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
+    if (!order) return null;
+    const item = getOrderItem(order, itemId);
+    if (!item) return false;
+
+    const normalizedMaterialRequestItemId = String(materialRequestItemId || '').trim();
+    if (!normalizedMaterialRequestItemId) return 'invalid';
+
+    const currentMaterialRequestItems = normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests);
+    const deletedMaterialRequestItem = currentMaterialRequestItems
+      .find((requestItem) => requestItem.id === normalizedMaterialRequestItemId) || null;
+    if (!deletedMaterialRequestItem) return 'material_request_item_not_found';
+
+    const nextMaterialRequestItems = currentMaterialRequestItems
+      .filter((requestItem) => requestItem.id !== normalizedMaterialRequestItemId);
+    if (!updateItemMaterialRequestState(item, nextMaterialRequestItems)) {
+      return order;
+    }
+
+    syncOrderStatus(order);
+    save();
+    return {
+      order,
+      item,
+      deletedMaterialRequestItem,
+    };
   },
 
   getArchiveEligibility(order) {

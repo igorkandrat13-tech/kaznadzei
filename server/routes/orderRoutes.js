@@ -1665,6 +1665,120 @@ router.patch('/orders/:id/material-request-items/:materialRequestItemId/toggle',
   }
 });
 
+router.delete('/orders/:id/package-items/:packageItemId', requireManagerAccess(), (req, res) => {
+  try {
+    const orderId = String(req.params.id || '').trim();
+    const itemId = String(req.body?.itemId || req.query?.itemId || '').trim();
+    const packageItemId = String(req.params.packageItemId || '').trim();
+
+    if (!orderId) {
+      return res.status(400).json({ message: 'Не указан заказ.' });
+    }
+    if (!itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+    if (!packageItemId) {
+      return res.status(400).json({ message: 'Не указана позиция комплектации.' });
+    }
+
+    const result = OrderStore.deletePackageItem(orderId, itemId, packageItemId);
+    if (result === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (result === false) {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+    if (result === 'invalid') {
+      return res.status(400).json({ message: 'Некорректная позиция комплектации.' });
+    }
+    if (result === 'package_item_not_found') {
+      return res.status(404).json({ message: 'Позиция комплектации не найдена.' });
+    }
+
+    addActivityLog({
+      action: 'order.package-item.manager.delete',
+      entityType: 'orderItem',
+      entityId: result.item.itemId,
+      entityName: result.deletedPackageItem?.name || result.item.name || '',
+      actor: getRequestActor(req),
+      message: 'Позиция комплектации удалена из сводной таблицы.',
+      details: {
+        orderId,
+        itemId: result.item.itemId,
+        packageItemId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      order: result.order,
+      item: result.item,
+      deletedItem: result.deletedPackageItem,
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({
+      message: error.message || 'Не удалось удалить позицию комплектации.',
+    });
+  }
+});
+
+router.delete('/orders/:id/material-request-items/:materialRequestItemId', requireManagerAccess(), (req, res) => {
+  try {
+    const orderId = String(req.params.id || '').trim();
+    const itemId = String(req.body?.itemId || req.query?.itemId || '').trim();
+    const materialRequestItemId = String(req.params.materialRequestItemId || '').trim();
+
+    if (!orderId) {
+      return res.status(400).json({ message: 'Не указан заказ.' });
+    }
+    if (!itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+    if (!materialRequestItemId) {
+      return res.status(400).json({ message: 'Не указана заявка на расходники.' });
+    }
+
+    const result = OrderStore.deleteMaterialRequestItem(orderId, itemId, materialRequestItemId);
+    if (result === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (result === false) {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+    if (result === 'invalid') {
+      return res.status(400).json({ message: 'Некорректная заявка на расходники.' });
+    }
+    if (result === 'material_request_item_not_found') {
+      return res.status(404).json({ message: 'Заявка на расходники не найдена.' });
+    }
+
+    addActivityLog({
+      action: 'order.material-request.manager.delete',
+      entityType: 'orderItem',
+      entityId: result.item.itemId,
+      entityName: result.deletedMaterialRequestItem?.name || result.item.name || '',
+      actor: getRequestActor(req),
+      message: 'Заявка на расходники удалена из сводной таблицы.',
+      details: {
+        orderId,
+        itemId: result.item.itemId,
+        materialRequestItemId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      order: result.order,
+      item: result.item,
+      deletedItem: result.deletedMaterialRequestItem,
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({
+      message: error.message || 'Не удалось удалить заявку на расходники.',
+    });
+  }
+});
+
 router.post('/orders/:id/telegram-material-request-items/:materialRequestItemId/name', (req, res) => {
   try {
     const token = String(SettingsStore.get().telegramBotToken || '').trim();
