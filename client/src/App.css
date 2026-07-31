@@ -63,43 +63,33 @@
 
 .workshop-requests-table th:nth-child(3),
 .workshop-requests-table td:nth-child(3) {
-  width: 96px;
+  width: 240px;
 }
 
 .workshop-requests-table th:nth-child(4),
 .workshop-requests-table td:nth-child(4) {
-  width: 240px;
+  width: 170px;
 }
 
 .workshop-requests-table th:nth-child(5),
 .workshop-requests-table td:nth-child(5) {
-  width: 170px;
+  width: 190px;
 }
 
 .workshop-requests-table th:nth-child(6),
 .workshop-requests-table td:nth-child(6) {
-  width: 190px;
+  width: 140px;
 }
 
 .workshop-requests-table th:nth-child(7),
 .workshop-requests-table td:nth-child(7) {
-  width: 140px;
+  width: 136px;
 }
 
 .workshop-requests-table th:nth-child(8),
 .workshop-requests-table td:nth-child(8) {
-  width: 136px;
-}
-
-.workshop-requests-table th:nth-child(9),
-.workshop-requests-table td:nth-child(9) {
   width: 82px;
   text-align: center;
-}
-
-.workshop-requests-table th:nth-child(10),
-.workshop-requests-table td:nth-child(10) {
-  width: 110px;
 }
 
 .workshop-request-main {
@@ -170,27 +160,15 @@
 }
 
 .workshop-badge-source-workshop {
-  background: rgba(36, 76, 122, 0.95);
+  background: rgba(58, 89, 130, 0.95);
 }
 
 .workshop-badge-source-package {
-  background: rgba(25, 112, 92, 0.95);
+  background: rgba(36, 76, 122, 0.95);
 }
 
 .workshop-badge-source-material {
   background: rgba(95, 70, 33, 0.95);
-}
-
-.workshop-badge-status-open {
-  color: #ffd891;
-  background: rgba(72, 54, 16, 0.92);
-  border: 1px solid rgba(139, 188, 231, 0.16);
-}
-
-.workshop-badge-status-completed {
-  color: #9ff3d7;
-  background: rgba(20, 70, 56, 0.92);
-  border: 1px solid rgba(139, 188, 231, 0.16);
 }
 
 .workshop-check-cell {

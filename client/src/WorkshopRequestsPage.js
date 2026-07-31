@@ -119,10 +119,6 @@ function getAttachmentOpenUrl(orderId, itemId, materialRequestItemId, attachment
   return `/api/orders/${orderId}/items/${itemId}/material-request-items/${materialRequestItemId}/attachments/${attachmentId}/file`;
 }
 
-function getUnifiedStatusLabel(status = '') {
-  return String(status || '').trim() === 'completed' ? 'Закрыта' : 'Открыта';
-}
-
 function getUnifiedSourceLabel(source = '') {
   if (source === 'package') return 'Комплектация';
   if (source === 'material') return 'Расходники';
@@ -135,7 +131,6 @@ function buildRequestRows(orders = [], workshopRequests = []) {
     source: 'workshop',
     sourceLabel: getUnifiedSourceLabel('workshop'),
     status: String(request.status || '').trim() === 'completed' ? 'completed' : 'open',
-    statusLabel: getUnifiedStatusLabel(String(request.status || '').trim() === 'completed' ? 'completed' : 'open'),
     text: String(request.text || '').trim(),
     orderNumber: '',
     customer: '',
@@ -162,7 +157,6 @@ function buildRequestRows(orders = [], workshopRequests = []) {
           source: 'package',
           sourceLabel: getUnifiedSourceLabel('package'),
           status: packageItem.isCompleted ? 'completed' : 'open',
-          statusLabel: getUnifiedStatusLabel(packageItem.isCompleted ? 'completed' : 'open'),
           text: packageItem.name,
           orderNumber: String(order.orderNumber || '').trim(),
           customer: String(order.customer || '').trim(),
@@ -186,7 +180,6 @@ function buildRequestRows(orders = [], workshopRequests = []) {
             source: 'material',
             sourceLabel: getUnifiedSourceLabel('material'),
             status: requestItem.isCompleted ? 'completed' : 'open',
-            statusLabel: getUnifiedStatusLabel(requestItem.isCompleted ? 'completed' : 'open'),
             text: getMaterialRequestItemDisplayName(requestItem),
             orderNumber: String(order.orderNumber || '').trim(),
             customer: String(order.customer || '').trim(),
@@ -225,7 +218,6 @@ function WorkshopRequestsPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [authorFilter, setAuthorFilter] = useState('all');
   const [orderFilter, setOrderFilter] = useState('all');
   const [updatingKey, setUpdatingKey] = useState('');
@@ -298,7 +290,6 @@ function WorkshopRequestsPage() {
     const query = String(search || '').trim().toLowerCase();
     return rows.filter((row) => {
       if (sourceFilter !== 'all' && row.source !== sourceFilter) return false;
-      if (statusFilter !== 'all' && row.status !== statusFilter) return false;
       if (authorFilter !== 'all' && row.author !== authorFilter) return false;
       if (orderFilter !== 'all' && row.orderNumber !== orderFilter) return false;
       if (!query) return true;
@@ -314,11 +305,10 @@ function WorkshopRequestsPage() {
       ].join(' ').toLowerCase();
       return haystack.includes(query);
     });
-  }, [authorFilter, orderFilter, rows, search, sourceFilter, statusFilter]);
+  }, [authorFilter, orderFilter, rows, search, sourceFilter]);
 
   const summary = useMemo(() => ({
     total: rows.length,
-    open: rows.filter((row) => row.status === 'open').length,
     workshop: rows.filter((row) => row.source === 'workshop').length,
     linkedToOrders: rows.filter((row) => row.source !== 'workshop').length,
   }), [rows]);
@@ -353,22 +343,13 @@ function WorkshopRequestsPage() {
       if (!res.ok) {
         throw new Error(data?.message || 'Не удалось изменить статус заявки.');
       }
-      if (row.toggleKind === 'workshop') {
-        setWorkshopRequests((current) => current.map((item) => (
-          item._id === row.requestId ? { ...item, ...data.item } : item
-        )));
-      }
-      if (row.toggleKind === 'material') {
-        setOrders((current) => current.map((item) => (
-          item._id === row.orderId ? (data.order || item) : item
-        )));
-      }
+      await fetchData({ showLoader: false });
     } catch (toggleError) {
       setError(toUserErrorMessage(toggleError, 'Не удалось изменить статус заявки.'));
     } finally {
       setUpdatingKey('');
     }
-  }, []);
+  }, [fetchData]);
 
   return (
     <div className="workshop-requests-page">
@@ -398,10 +379,6 @@ function WorkshopRequestsPage() {
             {summary.total}
           </div>
           <div className="overview-stat-card">
-            <strong>Открытые</strong>
-            {summary.open}
-          </div>
-          <div className="overview-stat-card">
             <strong>Цеховые</strong>
             {summary.workshop}
           </div>
@@ -428,14 +405,6 @@ function WorkshopRequestsPage() {
               <option value="workshop">Цех</option>
               <option value="package">Комплектация</option>
               <option value="material">Расходники</option>
-            </select>
-          </label>
-          <label className="workshop-filter-field">
-            <span className="workshop-filter-label">Статус</span>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">Все</option>
-              <option value="open">Открыта</option>
-              <option value="completed">Закрыта</option>
             </select>
           </label>
           <label className="workshop-filter-field">
@@ -474,20 +443,18 @@ function WorkshopRequestsPage() {
               <tr>
                 <th>Источник</th>
                 <th>Чек</th>
-                <th>Статус</th>
                 <th>Заявка</th>
                 <th>Заказ</th>
                 <th>Помещение / изделие</th>
                 <th>Автор</th>
                 <th>Дата</th>
                 <th>Вложения</th>
-                <th>Действие</th>
               </tr>
             </thead>
             <tbody>
               {!loading && filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10}>
+                  <td colSpan={8}>
                     <div className="order-card-empty">По текущим фильтрам заявки не найдены.</div>
                   </td>
                 </tr>
@@ -515,11 +482,6 @@ function WorkshopRequestsPage() {
                       ) : (
                         '—'
                       )}
-                    </td>
-                    <td>
-                      <span className={`workshop-badge workshop-badge-status workshop-badge-status-${row.status}`}>
-                        {row.statusLabel}
-                      </span>
                     </td>
                     <td>
                       <div className="workshop-request-main">
@@ -555,15 +517,6 @@ function WorkshopRequestsPage() {
                     <td>{row.author || '—'}</td>
                     <td>{formatDateTimeDisplay(row.createdAt || row.updatedAt) || '—'}</td>
                     <td>{row.attachmentsCount > 0 ? row.attachmentsCount : '—'}</td>
-                    <td>
-                      {row.canToggleStatus ? (
-                        <span className="filters-summary">
-                          {row.status === 'completed' ? 'Исполнено' : 'В работе'}
-                        </span>
-                      ) : (
-                        <span className="filters-summary">Из заказа</span>
-                      )}
-                    </td>
                   </tr>
                 );
               })}

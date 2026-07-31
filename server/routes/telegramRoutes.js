@@ -33,6 +33,7 @@ const {
 const { getRoleDefinitions, getRoleLabel } = require('../config/roles');
 
 const router = express.Router();
+const EMPLOYEE_QR_SCANNER_BUTTON_TEXT = 'Сканер QR';
 const EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT = 'Заявки';
 const EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT = 'Отмена заявки';
 const EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST = 'create_workshop_request';
@@ -125,26 +126,31 @@ function isCancelWorkshopRequestCommand(text = '') {
 
 function getAuthorizedMessageReplyMarkup(employee = {}) {
   const isWaitingForWorkshopRequest = getEmployeePendingAction(employee) === EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST;
+  const webAppUrl = getTelegramWebAppUrl();
+  const keyboardRow = [];
+
+  if (webAppUrl) {
+    keyboardRow.push({
+      text: EMPLOYEE_QR_SCANNER_BUTTON_TEXT,
+      web_app: {
+        url: webAppUrl,
+      },
+    });
+  }
+
+  keyboardRow.push({
+    text: isWaitingForWorkshopRequest
+      ? EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT
+      : EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT,
+  });
+
   return {
-    keyboard: [[{
-      text: isWaitingForWorkshopRequest
-        ? EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT
-        : EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT,
-    }]],
+    keyboard: [keyboardRow],
     resize_keyboard: true,
     one_time_keyboard: false,
     input_field_placeholder: isWaitingForWorkshopRequest
       ? 'Напишите заявку для цеха'
       : 'Выберите действие',
-  };
-}
-
-function getTelegramMenuButtonConfig() {
-  const webAppUrl = getTelegramWebAppUrl();
-  if (!webAppUrl) return null;
-  return {
-    text: '📷 Сканер QR',
-    url: webAppUrl,
   };
 }
 
@@ -176,13 +182,8 @@ async function clearTelegramMenuButton(token, chatId) {
 }
 
 async function syncTelegramMenuButton(token, chatId) {
-  const menuButton = getTelegramMenuButtonConfig();
-  if (!menuButton) {
-    await clearTelegramMenuButton(token, chatId);
-    return;
-  }
   if (chatId) {
-    await setChatMenuButton(token, { chatId, ...menuButton }).catch(() => null);
+    await clearTelegramMenuButton(token, chatId);
   }
 }
 
@@ -238,7 +239,7 @@ async function handleAuthorizedEmployeeMessage(token, chatId, text, employee) {
     await sendAuthorizedMessage(
       token,
       chatId,
-      'Напишите заявку одним сообщением.\nПримеры:\n- Закупить древесину\n- Сломалась вытяжка\n- Починить компрессор',
+      'Напишите заявку.',
       updatedEmployee,
     );
     return true;
@@ -371,7 +372,7 @@ async function processTelegramMessage(token, message) {
       await sendAuthorizedMessage(
         token,
         chatId,
-        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопку меню "📷 Сканер QR" или кнопку "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
+        `Здравствуйте, ${existingEmployee.fullName}. Вы уже авторизованы как ${getEmployeeRoleLabel(existingEmployee.role)}.\nИспользуйте кнопки "${EMPLOYEE_QR_SCANNER_BUTTON_TEXT}" и "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
         existingEmployee
       );
       return;
@@ -435,7 +436,7 @@ async function processTelegramMessage(token, message) {
     await sendAuthorizedMessage(
       token,
       chatId,
-      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопку меню "📷 Сканер QR" или кнопку "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
+      `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопки "${EMPLOYEE_QR_SCANNER_BUTTON_TEXT}" и "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
       existingEmployee
     );
     return;
@@ -535,7 +536,7 @@ async function processTelegramMessage(token, message) {
   await sendAuthorizedMessage(
     token,
     chatId,
-    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь используйте кнопку меню "📷 Сканер QR" или кнопку "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
+    `Авторизация прошла успешно.\nСотрудник: ${linkedEmployee.fullName}\nРоль: ${getEmployeeRoleLabel(linkedEmployee.role)}\nТеперь используйте кнопки "${EMPLOYEE_QR_SCANNER_BUTTON_TEXT}" и "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
     linkedEmployee
   );
 }
