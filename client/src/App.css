@@ -120,6 +120,33 @@
   overflow-wrap: anywhere;
 }
 
+.workshop-request-link-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.workshop-request-link-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(121, 222, 255, 0.1);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.workshop-request-link-indicator::before {
+  content: '🖼';
+  font-size: 11px;
+  line-height: 1;
+}
+
 .workshop-request-link:hover {
   color: var(--hover-link-text);
   border-color: var(--hover-link-border);
