@@ -382,10 +382,18 @@ function WorkshopRequestsPage() {
       } else if (row.source === 'material') {
         res = await apiFetch(`/api/orders/${row.orderId}/material-request-items/${row.materialRequestItemId}?itemId=${encodeURIComponent(row.itemId)}`, {
           method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ itemId: row.itemId }),
         });
       } else if (row.source === 'package') {
         res = await apiFetch(`/api/orders/${row.orderId}/package-items/${row.packageItemId}?itemId=${encodeURIComponent(row.itemId)}`, {
           method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ itemId: row.itemId }),
         });
       } else {
         return;

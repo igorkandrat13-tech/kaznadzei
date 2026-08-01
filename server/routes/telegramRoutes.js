@@ -150,6 +150,37 @@ function getTelegramMessagePhoto(message = {}) {
   return photoSizes[photoSizes.length - 1] || null;
 }
 
+function isTelegramImageDocument(document = {}) {
+  const mimeType = String(document?.mime_type || '').trim().toLowerCase();
+  const fileName = String(document?.file_name || '').trim().toLowerCase();
+  return mimeType.startsWith('image/')
+    || /\.(png|jpe?g|webp|gif|bmp)$/i.test(fileName);
+}
+
+function getTelegramMessageImageAttachment(message = {}) {
+  const photo = getTelegramMessagePhoto(message);
+  if (photo?.file_id) {
+    return {
+      fileId: String(photo.file_id || '').trim(),
+      filePathHint: '',
+      fileName: '',
+      mimeType: 'image/jpeg',
+    };
+  }
+
+  const document = message?.document;
+  if (document?.file_id && isTelegramImageDocument(document)) {
+    return {
+      fileId: String(document.file_id || '').trim(),
+      filePathHint: String(document.file_name || '').trim(),
+      fileName: String(document.file_name || '').trim(),
+      mimeType: String(document.mime_type || '').trim() || getTelegramPhotoMimeType(document.file_name),
+    };
+  }
+
+  return null;
+}
+
 function getTelegramPhotoMimeType(filePath = '') {
   const normalizedFilePath = String(filePath || '').trim().toLowerCase();
   if (normalizedFilePath.endsWith('.png')) return 'image/png';
@@ -264,8 +295,8 @@ async function refreshAuthorizedEmployeeAccess(token) {
 
 async function handleAuthorizedEmployeeMessage(token, chatId, message, employee) {
   const normalizedText = getTelegramMessageText(message);
-  const photo = getTelegramMessagePhoto(message);
-  if (!employee || !chatId || (!normalizedText && !photo)) return false;
+  const imageAttachment = getTelegramMessageImageAttachment(message);
+  if (!employee || !chatId || (!normalizedText && !imageAttachment)) return false;
 
   const pendingAction = getEmployeePendingAction(employee);
   if (isWorkshopRequestCommand(normalizedText)) {
@@ -301,8 +332,8 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
   }
 
   let attachments = [];
-  if (photo?.file_id) {
-    const telegramFile = await getFile(token, photo.file_id);
+  if (imageAttachment?.fileId) {
+    const telegramFile = await getFile(token, imageAttachment.fileId);
     const telegramFilePath = String(telegramFile?.file_path || '').trim();
     if (!telegramFilePath) {
       await sendAuthorizedMessage(token, chatId, 'Не удалось получить фото из Telegram. Попробуйте отправить его еще раз.', employee);
@@ -311,8 +342,8 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
 
     const photoBuffer = await downloadTelegramFile(token, telegramFilePath);
     attachments = [createWorkshopRequestAttachment({
-      originalName: `Фото заявки${String(telegramFilePath).match(/\.[a-z0-9]+$/i)?.[0] || ''}`,
-      mimeType: getTelegramPhotoMimeType(telegramFilePath),
+      originalName: imageAttachment.fileName || `Фото заявки${String(telegramFilePath).match(/\.[a-z0-9]+$/i)?.[0] || ''}`,
+      mimeType: imageAttachment.mimeType || getTelegramPhotoMimeType(telegramFilePath),
       buffer: photoBuffer,
       telegramFilePath,
       uploadedAt: new Date().toISOString(),
@@ -376,7 +407,7 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
 
 async function processTelegramMessage(token, message) {
   const text = getTelegramMessageText(message);
-  const hasPhoto = Boolean(getTelegramMessagePhoto(message));
+  const hasPhoto = Boolean(getTelegramMessageImageAttachment(message));
   const normalizedPinInput = normalizeTelegramPinInput(text);
   const chatId = message?.chat?.id;
   const from = message?.from;
