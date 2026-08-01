@@ -120,6 +120,12 @@ function getAttachmentOpenUrl(orderId, itemId, materialRequestItemId, attachment
   return `/api/orders/${orderId}/items/${itemId}/material-request-items/${materialRequestItemId}/attachments/${attachmentId}/file`;
 }
 
+function getWorkshopRequestAttachmentOpenUrl(requestId, attachment = {}) {
+  const attachmentId = String(attachment?.attachmentId || '').trim();
+  if (!requestId || !attachmentId) return '';
+  return `/api/workshop-requests/${requestId}/attachments/${attachmentId}/file`;
+}
+
 function getUnifiedSourceLabel(source = '') {
   if (source === 'package') return 'Комплектация';
   if (source === 'material') return 'Расходники';
@@ -127,28 +133,32 @@ function getUnifiedSourceLabel(source = '') {
 }
 
 function buildRequestRows(orders = [], workshopRequests = []) {
-  const workshopRows = (Array.isArray(workshopRequests) ? workshopRequests : []).map((request) => ({
-    key: `workshop:${request._id}`,
-    source: 'workshop',
-    sourceLabel: getUnifiedSourceLabel('workshop'),
-    status: String(request.status || '').trim() === 'completed' ? 'completed' : 'open',
-    text: String(request.text || '').trim(),
-    orderNumber: '',
-    customer: '',
-    room: '',
-    itemNumber: '',
-    itemName: '',
-    author: String(request.employeeName || '').trim(),
-    createdAt: String(request.createdAt || '').trim(),
-    updatedAt: String(request.updatedAt || '').trim(),
-    attachmentsCount: 0,
-    openUrl: '',
-    requestId: String(request._id || '').trim(),
-    toggleKind: 'workshop',
-    canToggleStatus: true,
-    canDelete: true,
-    sortTimestamp: String(request.createdAt || '').trim(),
-  }));
+  const workshopRows = (Array.isArray(workshopRequests) ? workshopRequests : []).map((request) => {
+    const attachments = normalizeItemAttachments(request.attachments);
+    const firstAttachment = attachments[0] || null;
+    return {
+      key: `workshop:${request._id}`,
+      source: 'workshop',
+      sourceLabel: getUnifiedSourceLabel('workshop'),
+      status: String(request.status || '').trim() === 'completed' ? 'completed' : 'open',
+      text: String(request.text || '').trim(),
+      orderNumber: '',
+      customer: '',
+      room: '',
+      itemNumber: '',
+      itemName: '',
+      author: String(request.employeeName || '').trim(),
+      createdAt: String(request.createdAt || '').trim(),
+      updatedAt: String(request.updatedAt || '').trim(),
+      attachmentsCount: attachments.length,
+      openUrl: firstAttachment ? getWorkshopRequestAttachmentOpenUrl(String(request._id || '').trim(), firstAttachment) : '',
+      requestId: String(request._id || '').trim(),
+      toggleKind: 'workshop',
+      canToggleStatus: true,
+      canDelete: true,
+      sortTimestamp: String(firstAttachment?.uploadedAt || request.createdAt || '').trim(),
+    };
+  });
 
   const orderRows = [...(Array.isArray(orders) ? orders : [])]
     .sort(compareOrderNumbersAsc)

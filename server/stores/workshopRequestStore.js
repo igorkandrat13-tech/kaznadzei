@@ -26,6 +26,46 @@ function normalizeActor(actor = {}) {
   };
 }
 
+function normalizeAttachments(attachments = []) {
+  return (Array.isArray(attachments) ? attachments : []).reduce((acc, attachment) => {
+    if (!attachment || typeof attachment !== 'object' || Array.isArray(attachment)) return acc;
+    const attachmentId = String(attachment.attachmentId || '').trim();
+    const name = String(attachment.name || '').trim();
+    if (!attachmentId || !name) return acc;
+    acc.push({
+      attachmentId,
+      name,
+      type: String(attachment.type || '').trim(),
+      size: Number(attachment.size) || 0,
+      uploadedAt: String(attachment.uploadedAt || '').trim(),
+      relativePath: String(attachment.relativePath || '').trim(),
+      url: String(attachment.url || '').trim(),
+    });
+    return acc;
+  }, []);
+}
+
+function normalizeWorkshopRequestItem(item = {}) {
+  return {
+    ...item,
+    text: normalizeText(item.text),
+    status: normalizeStatus(item.status),
+    employeeId: String(item.employeeId || '').trim(),
+    employeeName: String(item.employeeName || '').trim(),
+    employeeRole: String(item.employeeRole || '').trim(),
+    telegramChatId: String(item.telegramChatId || '').trim(),
+    createdAt: String(item.createdAt || '').trim(),
+    updatedAt: String(item.updatedAt || '').trim(),
+    resolvedAt: String(item.resolvedAt || '').trim(),
+    resolvedBy: {
+      employeeId: String(item?.resolvedBy?.employeeId || '').trim(),
+      employeeName: String(item?.resolvedBy?.employeeName || '').trim(),
+      role: String(item?.resolvedBy?.role || '').trim(),
+    },
+    attachments: normalizeAttachments(item.attachments),
+  };
+}
+
 function sortByCreatedAtDesc(left = {}, right = {}) {
   const leftTime = new Date(left.createdAt || 0).getTime();
   const rightTime = new Date(right.createdAt || 0).getTime();
@@ -36,13 +76,15 @@ const WorkshopRequestStore = {
   findAll() {
     return load().workshopRequests
       .slice()
+      .map((item) => normalizeWorkshopRequestItem(item))
       .sort(sortByCreatedAtDesc);
   },
 
   findById(requestId) {
     const normalizedRequestId = String(requestId || '').trim();
     if (!normalizedRequestId) return null;
-    return load().workshopRequests.find((item) => item._id === normalizedRequestId) || null;
+    const item = load().workshopRequests.find((entry) => entry._id === normalizedRequestId) || null;
+    return item ? normalizeWorkshopRequestItem(item) : null;
   },
 
   create(data = {}) {
@@ -69,6 +111,7 @@ const WorkshopRequestStore = {
       },
       createdAt: now,
       updatedAt: now,
+      attachments: normalizeAttachments(data.attachments),
     };
     db.workshopRequests.push(nextItem);
     save();

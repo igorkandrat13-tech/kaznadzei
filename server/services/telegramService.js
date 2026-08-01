@@ -67,6 +67,49 @@ async function answerCallbackQuery(token, callbackQueryId, text = '') {
   });
 }
 
+async function getFile(token, fileId) {
+  return telegramRequest(token, 'getFile', {
+    file_id: fileId,
+  });
+}
+
+async function downloadTelegramFile(token, filePath) {
+  return new Promise((resolve, reject) => {
+    const normalizedFilePath = String(filePath || '').trim().replace(/^\/+/, '');
+    if (!normalizedFilePath) {
+      reject(new Error('Не указан путь к файлу Telegram.'));
+      return;
+    }
+
+    const encodedFilePath = normalizedFilePath
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+
+    const req = https.request({
+      hostname: 'api.telegram.org',
+      path: `/file/bot${encodeURIComponent(token)}/${encodedFilePath}`,
+      method: 'GET',
+    }, (res) => {
+      if ((res.statusCode || 0) >= 400) {
+        reject(new Error('Не удалось скачать файл из Telegram.'));
+        return;
+      }
+
+      const chunks = [];
+      res.on('data', (chunk) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      res.on('end', () => {
+        resolve(Buffer.concat(chunks));
+      });
+    });
+
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function setChatMenuButton(token, { chatId, text, url, type } = {}) {
   const payload = {};
   if (chatId) {
@@ -91,4 +134,6 @@ module.exports = {
   setChatMenuButton,
   sendMessage,
   answerCallbackQuery,
+  getFile,
+  downloadTelegramFile,
 };

@@ -4,13 +4,23 @@ const EmployeeStore = require('../stores/employeeStore');
 const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
 const { WorkshopRequestStore } = require('../stores/workshopRequestStore');
 const { requireAdminAccess } = require('../middleware/security');
-const { getBotInfo, getWebhookInfo, setWebhook, setChatMenuButton, sendMessage, answerCallbackQuery } = require('../services/telegramService');
+const {
+  getBotInfo,
+  getWebhookInfo,
+  setWebhook,
+  setChatMenuButton,
+  sendMessage,
+  answerCallbackQuery,
+  getFile,
+  downloadTelegramFile,
+} = require('../services/telegramService');
 const { addActivityLog } = require('../services/activityLog');
 const {
   addTelegramDiagnosticLog,
   clearTelegramDiagnosticLogs,
   getTelegramDiagnosticLogs,
 } = require('../services/telegramDiagnostics');
+const { createWorkshopRequestAttachment } = require('../services/workshopRequestAttachments');
 const {
   createTelegramEmployeeSessionToken,
   resolveTelegramWebAppUser,
@@ -124,6 +134,31 @@ function isCancelWorkshopRequestCommand(text = '') {
     || normalizedText === 'отменить';
 }
 
+function getTelegramMessageText(message = {}) {
+  if (typeof message?.text === 'string') {
+    return message.text.trim();
+  }
+  if (typeof message?.caption === 'string') {
+    return message.caption.trim();
+  }
+  return '';
+}
+
+function getTelegramMessagePhoto(message = {}) {
+  const photoSizes = Array.isArray(message?.photo) ? message.photo : [];
+  if (photoSizes.length === 0) return null;
+  return photoSizes[photoSizes.length - 1] || null;
+}
+
+function getTelegramPhotoMimeType(filePath = '') {
+  const normalizedFilePath = String(filePath || '').trim().toLowerCase();
+  if (normalizedFilePath.endsWith('.png')) return 'image/png';
+  if (normalizedFilePath.endsWith('.webp')) return 'image/webp';
+  if (normalizedFilePath.endsWith('.gif')) return 'image/gif';
+  if (normalizedFilePath.endsWith('.bmp')) return 'image/bmp';
+  return 'image/jpeg';
+}
+
 function getAuthorizedMessageReplyMarkup(employee = {}) {
   const isWaitingForWorkshopRequest = getEmployeePendingAction(employee) === EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST;
   const webAppUrl = getTelegramWebAppUrl();
@@ -227,9 +262,10 @@ async function refreshAuthorizedEmployeeAccess(token) {
   };
 }
 
-async function handleAuthorizedEmployeeMessage(token, chatId, text, employee) {
-  const normalizedText = String(text || '').trim();
-  if (!employee || !chatId || !normalizedText) return false;
+async function handleAuthorizedEmployeeMessage(token, chatId, message, employee) {
+  const normalizedText = getTelegramMessageText(message);
+  const photo = getTelegramMessagePhoto(message);
+  if (!employee || !chatId || (!normalizedText && !photo)) return false;
 
   const pendingAction = getEmployeePendingAction(employee);
   if (isWorkshopRequestCommand(normalizedText)) {
@@ -264,8 +300,28 @@ async function handleAuthorizedEmployeeMessage(token, chatId, text, employee) {
     return false;
   }
 
+  let attachments = [];
+  if (photo?.file_id) {
+    const telegramFile = await getFile(token, photo.file_id);
+    const telegramFilePath = String(telegramFile?.file_path || '').trim();
+    if (!telegramFilePath) {
+      await sendAuthorizedMessage(token, chatId, 'Не удалось получить фото из Telegram. Попробуйте отправить его еще раз.', employee);
+      return true;
+    }
+
+    const photoBuffer = await downloadTelegramFile(token, telegramFilePath);
+    attachments = [createWorkshopRequestAttachment({
+      originalName: `Фото заявки${String(telegramFilePath).match(/\.[a-z0-9]+$/i)?.[0] || ''}`,
+      mimeType: getTelegramPhotoMimeType(telegramFilePath),
+      buffer: photoBuffer,
+      telegramFilePath,
+      uploadedAt: new Date().toISOString(),
+    })];
+  }
+
   const createdRequest = WorkshopRequestStore.create({
-    text: normalizedText,
+    text: normalizedText || 'Фото заявки',
+    attachments,
     actor: {
       employeeId: employee._id,
       employeeName: employee.fullName,
@@ -300,6 +356,7 @@ async function handleAuthorizedEmployeeMessage(token, chatId, text, employee) {
         employeeId: employee._id,
         employeeName: employee.fullName,
         telegramChatId: String(chatId),
+        attachmentCount: attachments.length,
       },
     });
   } catch (activityLogError) {
@@ -309,14 +366,17 @@ async function handleAuthorizedEmployeeMessage(token, chatId, text, employee) {
   await sendAuthorizedMessage(
     token,
     chatId,
-    `Заявка принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Все заявки".`,
+    attachments.length > 0
+      ? `Заявка с фото принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Все заявки".`
+      : `Заявка принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Все заявки".`,
     updatedEmployee,
   );
   return true;
 }
 
 async function processTelegramMessage(token, message) {
-  const text = typeof message?.text === 'string' ? message.text.trim() : '';
+  const text = getTelegramMessageText(message);
+  const hasPhoto = Boolean(getTelegramMessagePhoto(message));
   const normalizedPinInput = normalizeTelegramPinInput(text);
   const chatId = message?.chat?.id;
   const from = message?.from;
@@ -327,6 +387,7 @@ async function processTelegramMessage(token, message) {
     telegramUserId: String(from.id || ''),
     text,
     hasText: Boolean(text),
+    hasPhoto,
   });
 
   const touchedCustomerAccesses = CustomerTelegramAccessStore.touchLinkedByTelegramContext({
@@ -364,7 +425,7 @@ async function processTelegramMessage(token, message) {
     }) || existingEmployee;
   }
 
-  if (!text) return;
+  if (!text && !hasPhoto) return;
 
   if (text.startsWith('/start')) {
     const customerAccessToken = extractCustomerAccessTokenFromStartText(text);
@@ -430,7 +491,7 @@ async function processTelegramMessage(token, message) {
   }
 
   if (existingEmployee) {
-    if (await handleAuthorizedEmployeeMessage(token, chatId, text, existingEmployee)) {
+    if (await handleAuthorizedEmployeeMessage(token, chatId, message, existingEmployee)) {
       return;
     }
     await sendAuthorizedMessage(
