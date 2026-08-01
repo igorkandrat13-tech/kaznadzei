@@ -117,11 +117,33 @@ async function ensureOrderSupergroupTopic(orderInput = {}, { sendStarterMessage 
 
   if (String(topic.chatId || '').trim() !== config.chatId || !(Number(topic.messageThreadId) > 0)) {
     const title = buildOrderTopicTitle(order);
-    const createdTopic = await createForumTopic(token, config.chatId, title);
+    let createdTopic = null;
+    try {
+      createdTopic = await createForumTopic(token, config.chatId, title);
+    } catch (error) {
+      addTelegramDiagnosticLog('telegram-supergroup', 'topic.create.failed', {
+        orderId: order._id,
+        orderNumber: order.orderNumber || '',
+        topicTitle: title,
+        chatId: config.chatId,
+        message: error.message || 'Не удалось создать topic в Telegram.',
+      });
+      throw new Error(`Не удалось создать topic в Telegram: ${error.message || 'ошибка Telegram API.'}`);
+    }
+    const messageThreadId = Number(createdTopic?.message_thread_id) || 0;
+    if (!messageThreadId) {
+      addTelegramDiagnosticLog('telegram-supergroup', 'topic.create.invalid-response', {
+        orderId: order._id,
+        orderNumber: order.orderNumber || '',
+        topicTitle: title,
+        chatId: config.chatId,
+      });
+      throw new Error('Telegram не вернул идентификатор созданного topic.');
+    }
     order = OrderStore.update(order._id, {
       telegramTopic: {
         chatId: config.chatId,
-        messageThreadId: Number(createdTopic?.message_thread_id) || 0,
+        messageThreadId,
         title: title,
         createdAt: new Date().toISOString(),
         starterMessageId: 0,
@@ -139,17 +161,28 @@ async function ensureOrderSupergroupTopic(orderInput = {}, { sendStarterMessage 
   }
 
   if (sendStarterMessage && Number(topic.messageThreadId) > 0 && !Number(topic.starterMessageId)) {
-    const starterMessage = await sendMessage(token, config.chatId, buildOrderTopicStartText(order), {
-      message_thread_id: Number(topic.messageThreadId),
-      disable_web_page_preview: true,
-    });
-    order = OrderStore.update(order._id, {
-      telegramTopic: {
-        ...topic,
-        starterMessageId: Number(starterMessage?.message_id) || 0,
-      },
-    }) || order;
-    topic = order.telegramTopic || topic;
+    try {
+      const starterMessage = await sendMessage(token, config.chatId, buildOrderTopicStartText(order), {
+        message_thread_id: Number(topic.messageThreadId),
+        disable_web_page_preview: true,
+      });
+      order = OrderStore.update(order._id, {
+        telegramTopic: {
+          ...topic,
+          starterMessageId: Number(starterMessage?.message_id) || 0,
+        },
+      }) || order;
+      topic = order.telegramTopic || topic;
+    } catch (error) {
+      addTelegramDiagnosticLog('telegram-supergroup', 'topic.starter-message.failed', {
+        orderId: order._id,
+        orderNumber: order.orderNumber || '',
+        topicThreadId: Number(topic.messageThreadId) || 0,
+        chatId: config.chatId,
+        created,
+        message: error.message || 'Не удалось отправить служебную карточку старта.',
+      });
+    }
   }
 
   return {
