@@ -331,9 +331,12 @@ function UpdatesOverview({
           {!updateError && updateStatus?.message && <SettingsHint>{updateStatus.message}</SettingsHint>}
           {updateStatus?.workingTreeDirty ? (
             <SettingsHint>
-              На тестовой ВМ есть локальные изменения в tracked-файлах. При установке обновлений они будут автоматически сохранены в <strong>git stash</strong>, чтобы <strong>git pull</strong> не падал.
+              На машине есть локальные изменения. При установке обновлений updater автоматически сохранит в <strong>git stash</strong> и tracked-, и untracked-файлы, чтобы <strong>git pull</strong> не падал.
               {Array.isArray(updateStatus?.dirtyTrackedFiles) && updateStatus.dirtyTrackedFiles.length > 0
                 ? ` Файлы: ${updateStatus.dirtyTrackedFiles.join(', ')}.`
+                : ''}
+              {Array.isArray(updateStatus?.dirtyUntrackedFiles) && updateStatus.dirtyUntrackedFiles.length > 0
+                ? ` Untracked: ${updateStatus.dirtyUntrackedFiles.join(', ')}.`
                 : ''}
             </SettingsHint>
           ) : null}

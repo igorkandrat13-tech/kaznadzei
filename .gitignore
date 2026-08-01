@@ -4,3 +4,5 @@ client/build/
 .env
 db.json
 server/uploads/
+.runtime/
+telegram-logs.json

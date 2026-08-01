@@ -317,24 +317,47 @@ async function getTrackedGitChanges() {
     .filter(Boolean);
 }
 
-async function stashTrackedGitChanges() {
-  const dirtyFiles = await getTrackedGitChanges();
+async function getUntrackedGitChanges() {
+  const statusResult = await tryGit(['status', '--porcelain', '--untracked-files=all'], PROJECT_ROOT);
+  if (!statusResult?.stdout) {
+    return [];
+  }
+  return statusResult.stdout
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('?? '))
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean);
+}
+
+async function stashWorkingTreeChanges() {
+  const trackedFiles = await getTrackedGitChanges();
+  const untrackedFiles = await getUntrackedGitChanges();
+  const dirtyFiles = [...trackedFiles, ...untrackedFiles];
   if (!dirtyFiles.length) {
     return {
       created: false,
       stashEntry: '',
       dirtyFiles: [],
+      trackedFiles: [],
+      untrackedFiles: [],
       error: '',
     };
   }
 
   const stashMessage = `kaznadzei-auto-update-${new Date().toISOString()}`;
-  const stashResult = await tryGitDetailed(['stash', 'push', '-m', stashMessage], PROJECT_ROOT);
+  const stashArgs = ['stash', 'push'];
+  if (untrackedFiles.length) {
+    stashArgs.push('--include-untracked');
+  }
+  stashArgs.push('-m', stashMessage);
+  const stashResult = await tryGitDetailed(stashArgs, PROJECT_ROOT);
   if (!stashResult.ok) {
     return {
       created: false,
       stashEntry: '',
       dirtyFiles,
+      trackedFiles,
+      untrackedFiles,
       error: stashResult.errorText || 'Не удалось временно сохранить локальные изменения перед обновлением.',
     };
   }
@@ -344,6 +367,8 @@ async function stashTrackedGitChanges() {
     created: true,
     stashEntry,
     dirtyFiles,
+    trackedFiles,
+    untrackedFiles,
     error: '',
   };
 }
@@ -397,6 +422,7 @@ async function getUpdateStatus() {
     behind: 0,
     workingTreeDirty: false,
     dirtyTrackedFiles: [],
+    dirtyUntrackedFiles: [],
     canInstall: false,
     installInProgress,
     installJob: getInstallJobSnapshot(installJob),
@@ -469,7 +495,8 @@ async function getUpdateStatus() {
   }
 
   status.dirtyTrackedFiles = await getTrackedGitChanges();
-  status.workingTreeDirty = status.dirtyTrackedFiles.length > 0;
+  status.dirtyUntrackedFiles = await getUntrackedGitChanges();
+  status.workingTreeDirty = status.dirtyTrackedFiles.length > 0 || status.dirtyUntrackedFiles.length > 0;
   status.canInstall = !installInProgress && status.hasRemote && Boolean(status.targetRef);
   status.message = status.updatesAvailable
     ? `Доступно обновлений: ${status.behind}`
@@ -509,7 +536,7 @@ async function runInstallJob(jobId) {
       return;
     }
 
-    const stashResult = await stashTrackedGitChanges();
+    const stashResult = await stashWorkingTreeChanges();
     if (stashResult.error) {
       finishInstallJob(jobId, {
         status: 'failed',
@@ -520,7 +547,12 @@ async function runInstallJob(jobId) {
       return;
     }
     if (stashResult.created) {
-      appendInstallJobLog(jobId, `git stash push -m "${stashResult.stashEntry}"`);
+      appendInstallJobLog(
+        jobId,
+        stashResult.untrackedFiles.length > 0
+          ? 'git stash push --include-untracked -m "<auto-update>"'
+          : 'git stash push -m "<auto-update>"',
+      );
       appendInstallJobLog(jobId, `Временно сохранены локальные изменения: ${stashResult.dirtyFiles.join(', ')}`);
     }
 
