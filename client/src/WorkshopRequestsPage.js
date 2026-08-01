@@ -3,7 +3,7 @@ import { apiFetch, parseJsonSafely, toUserErrorMessage } from './api';
 import ConfirmDialog from './ConfirmDialog';
 import { formatDateTimeDisplay } from './dateTime';
 import { useGlobalErrorEffect } from './globalErrors';
-import { Button } from './ui';
+import { Button, Modal, ModalHeader } from './ui';
 
 function createChecklistItemId() {
   return `check-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -244,6 +244,7 @@ function WorkshopRequestsPage() {
   const [orderFilter, setOrderFilter] = useState('all');
   const [updatingKey, setUpdatingKey] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
 
   useGlobalErrorEffect(error, 'Ошибка раздела заявок.');
 
@@ -295,6 +296,12 @@ function WorkshopRequestsPage() {
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [fetchData, updatingKey]);
+
+  useEffect(() => () => {
+    if (attachmentPreview?.url) {
+      window.URL.revokeObjectURL(attachmentPreview.url);
+    }
+  }, [attachmentPreview]);
 
   const rows = useMemo(
     () => buildRequestRows(orders, workshopRequests),
@@ -412,6 +419,46 @@ function WorkshopRequestsPage() {
       setUpdatingKey('');
     }
   }, [confirmDelete, fetchData]);
+
+  const closeAttachmentPreview = useCallback(() => {
+    setAttachmentPreview((current) => {
+      if (current?.url) {
+        window.URL.revokeObjectURL(current.url);
+      }
+      return null;
+    });
+  }, []);
+
+  const handleOpenRequestAttachmentPreview = useCallback(async (row) => {
+    if (!row?.openUrl) return;
+    setUpdatingKey(row.key);
+    setError('');
+    try {
+      const res = await apiFetch(row.openUrl);
+      if (!res.ok) {
+        const data = await parseJsonSafely(res);
+        throw new Error(data?.message || 'Не удалось открыть фото заявки.');
+      }
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      setAttachmentPreview((current) => {
+        if (current?.url) {
+          window.URL.revokeObjectURL(current.url);
+        }
+        return {
+          key: row.key,
+          name: row.text || 'Фото заявки',
+          kindLabel: 'Изображение',
+          url: blobUrl,
+        };
+      });
+    } catch (openError) {
+      setError(toUserErrorMessage(openError, 'Не удалось открыть фото заявки.'));
+    } finally {
+      setUpdatingKey('');
+    }
+  }, []);
 
   return (
     <div className="workshop-requests-page">
@@ -533,9 +580,14 @@ function WorkshopRequestsPage() {
                     <td>
                       <div className="workshop-request-main">
                         {row.openUrl ? (
-                          <a href={row.openUrl} target="_blank" rel="noreferrer" className="workshop-request-link">
+                          <button
+                            type="button"
+                            className="workshop-request-link"
+                            onClick={() => handleOpenRequestAttachmentPreview(row)}
+                            disabled={isUpdating}
+                          >
                             {row.text}
-                          </a>
+                          </button>
                         ) : (
                           <span>{row.text}</span>
                         )}
@@ -602,6 +654,25 @@ function WorkshopRequestsPage() {
         loading={Boolean(confirmDelete && updatingKey === confirmDelete.row?.key)}
         variant="danger"
       />
+      {attachmentPreview ? (
+        <Modal open={Boolean(attachmentPreview)} onClose={closeAttachmentPreview} size="xl" className="order-form-modal">
+          <ModalHeader
+            title={attachmentPreview.name || 'Просмотр фото'}
+            subtitle={attachmentPreview.kindLabel || 'Изображение'}
+            onClose={closeAttachmentPreview}
+          />
+          <div className="attachment-preview-panel">
+            <div className="attachment-preview-toolbar">
+              <div className="attachment-preview-toolbar-meta">
+                <span className="attachment-preview-toolbar-kind">{attachmentPreview.kindLabel || 'Файл'}</span>
+              </div>
+            </div>
+            <div className="attachment-preview-wrap attachment-preview-wrap-image">
+              <img src={attachmentPreview.url} alt={attachmentPreview.name || 'Изображение'} className="attachment-preview-image" />
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }
