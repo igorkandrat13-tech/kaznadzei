@@ -60,6 +60,13 @@ async function sendMessage(token, chatId, text, extra = {}) {
   });
 }
 
+async function createForumTopic(token, chatId, name) {
+  return telegramRequest(token, 'createForumTopic', {
+    chat_id: chatId,
+    name,
+  });
+}
+
 async function answerCallbackQuery(token, callbackQueryId, text = '') {
   return telegramRequest(token, 'answerCallbackQuery', {
     callback_query_id: callbackQueryId,
@@ -133,6 +140,7 @@ module.exports = {
   setWebhook,
   setChatMenuButton,
   sendMessage,
+  createForumTopic,
   answerCallbackQuery,
   getFile,
   downloadTelegramFile,

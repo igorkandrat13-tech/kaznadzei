@@ -102,6 +102,30 @@ function sortOrderItemsByRoomNumber(items = []) {
   return (Array.isArray(items) ? items : []).slice().sort(compareOrderItemsByRoomNumberAsc);
 }
 
+function normalizeTelegramTopic(topic = {}) {
+  if (!topic || typeof topic !== 'object' || Array.isArray(topic)) {
+    return {
+      chatId: '',
+      messageThreadId: 0,
+      title: '',
+      createdAt: '',
+      starterMessageId: 0,
+    };
+  }
+
+  return {
+    chatId: String(topic.chatId || '').trim(),
+    messageThreadId: Number.isInteger(Number(topic.messageThreadId)) && Number(topic.messageThreadId) > 0
+      ? Number(topic.messageThreadId)
+      : 0,
+    title: String(topic.title || '').trim(),
+    createdAt: String(topic.createdAt || '').trim(),
+    starterMessageId: Number.isInteger(Number(topic.starterMessageId)) && Number(topic.starterMessageId) > 0
+      ? Number(topic.starterMessageId)
+      : 0,
+  };
+}
+
 function normalizeWorkerAssignments(source = {}) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
 
@@ -860,6 +884,12 @@ function ensureOrderShape(order) {
   if (!order || typeof order !== 'object') return false;
   let changed = false;
 
+  const normalizedTelegramTopic = normalizeTelegramTopic(order.telegramTopic);
+  if (JSON.stringify(order.telegramTopic || {}) !== JSON.stringify(normalizedTelegramTopic)) {
+    order.telegramTopic = normalizedTelegramTopic;
+    changed = true;
+  }
+
   const normalizedManualDateOverrides = normalizeOrderManualDateOverrides(order.manualDateOverrides);
   if (JSON.stringify(order.manualDateOverrides || {}) !== JSON.stringify(normalizedManualDateOverrides)) {
     order.manualDateOverrides = normalizedManualDateOverrides;
@@ -1040,6 +1070,7 @@ const OrderStore = {
       archivedAt: '',
       archivedBy: { role: '', name: '' },
       createdAt,
+      telegramTopic: normalizeTelegramTopic(data.telegramTopic),
       attachments: [],
       items,
     };
@@ -1177,6 +1208,9 @@ const OrderStore = {
     if (updates.customer !== undefined) order.customer = updates.customer;
     if (updates.customerId !== undefined) order.customerId = String(updates.customerId || '').trim();
     if (updates.orderDate !== undefined) order.orderDate = updates.orderDate;
+    if (updates.telegramTopic !== undefined) {
+      order.telegramTopic = normalizeTelegramTopic(updates.telegramTopic);
+    }
     if (updates.manualDateOverrides !== undefined) {
       order.manualDateOverrides = normalizeOrderManualDateOverrides(updates.manualDateOverrides);
     }

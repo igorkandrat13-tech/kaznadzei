@@ -1131,6 +1131,7 @@ module.exports = {
   parseCustomerCallbackData,
   resolveCustomerBackToItemsFromText,
   resolveCustomerItemSelectionFromText,
+  resolveRememberedCustomerAccess,
   getCustomerAlreadyLinkedText,
   getCustomerSubscriptionReadyText,
   getCustomerOrderShare,

@@ -38,8 +38,15 @@ const {
   parseCustomerCallbackData,
   resolveCustomerBackToItemsFromText,
   resolveCustomerItemSelectionFromText,
+  resolveRememberedCustomerAccess,
   sendCustomerTelegramMessage,
 } = require('../services/customerTelegramService');
+const {
+  ensureOrderSupergroupTopic,
+  isInternalSupergroupMessage,
+  relayCustomerMessageToSupergroup,
+  relaySupergroupReplyToCustomer,
+} = require('../services/telegramSupergroupService');
 const { getRoleDefinitions, getRoleLabel } = require('../config/roles');
 
 const router = express.Router();
@@ -293,6 +300,95 @@ async function refreshAuthorizedEmployeeAccess(token) {
   };
 }
 
+function resolveCustomerBridgeAccess(accesses = [], chatId = '') {
+  const rememberedAccess = resolveRememberedCustomerAccess(accesses, chatId);
+  if (rememberedAccess) return rememberedAccess;
+  return Array.isArray(accesses) && accesses.length === 1 ? accesses[0] : null;
+}
+
+async function handleInternalSupergroupReply(message = {}) {
+  if (!isInternalSupergroupMessage(message)) return false;
+  if (message?.from?.is_bot) return true;
+  const replyResult = await relaySupergroupReplyToCustomer(message);
+  return Boolean(replyResult?.ok || replyResult?.reason);
+}
+
+async function handleCustomerBridgeMessage(token, message, accesses = []) {
+  const text = getTelegramMessageText(message);
+  const chatId = String(message?.chat?.id || '').trim();
+  const telegramUserId = String(message?.from?.id || '').trim();
+  if (!chatId || !telegramUserId || !Array.isArray(accesses) || accesses.length === 0) {
+    return false;
+  }
+
+  const access = resolveCustomerBridgeAccess(accesses, chatId);
+  if (getTelegramMessageImageAttachment(message)) {
+    await sendCustomerTelegramMessage({
+      access: access || accesses[0],
+      chatId,
+      telegramUserId,
+      type: 'customer.bridge.image-not-supported',
+      text: 'Пока в чате с заказчиком поддерживаются только текстовые сообщения. Фото и файлы добавим следующим этапом.',
+      meta: { event: 'bridge-image-not-supported' },
+      extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
+    });
+    return true;
+  }
+
+  if (!text || text.startsWith('/')) {
+    return false;
+  }
+
+  if (!access) {
+    await sendCustomerTelegramMessage({
+      access: accesses[0],
+      chatId,
+      telegramUserId,
+      type: 'customer.bridge.order-not-selected',
+      text: 'У вас подключено несколько заказов. Сначала откройте нужный заказ кнопкой "Весь заказ", затем отправьте сообщение еще раз.',
+      meta: { event: 'bridge-order-not-selected' },
+      extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
+    });
+    return true;
+  }
+
+  const relayResult = await relayCustomerMessageToSupergroup({
+    access,
+    text,
+    customerChatId: chatId,
+    customerTelegramUserId: telegramUserId,
+    customerMessageId: Number(message?.message_id) || 0,
+  });
+
+  if (!relayResult?.ok) {
+    await sendCustomerTelegramMessage({
+      access,
+      chatId,
+      telegramUserId,
+      type: 'customer.bridge.failed',
+      text: 'Не удалось передать сообщение в тему заказа. Попробуйте чуть позже.',
+      meta: { event: 'bridge-forward-failed', reason: relayResult?.reason || '' },
+      extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
+    });
+    return true;
+  }
+
+  await sendCustomerTelegramMessage({
+    access,
+    chatId,
+    telegramUserId,
+    type: 'customer.bridge.ack',
+    text: 'Сообщение передано сотрудникам по вашему заказу. Ответ придет сюда.',
+    meta: {
+      event: 'bridge-forwarded',
+      orderId: relayResult?.order?._id || '',
+      topicThreadId: relayResult?.topic?.messageThreadId || 0,
+    },
+    extra: { reply_markup: getCustomerKeyboardReplyMarkup() },
+  });
+  return true;
+}
+
 async function handleAuthorizedEmployeeMessage(token, chatId, message, employee) {
   const normalizedText = getTelegramMessageText(message);
   const imageAttachment = getTelegramMessageImageAttachment(message);
@@ -413,6 +509,9 @@ async function processTelegramMessage(token, message) {
   const from = message?.from;
 
   if (!chatId || !from) return;
+  if (await handleInternalSupergroupReply(message)) {
+    return;
+  }
   logCustomerTelegramDebug('message.received', {
     chatId: String(chatId),
     telegramUserId: String(from.id || ''),
@@ -589,6 +688,12 @@ async function processTelegramMessage(token, message) {
         meta: { event: 'item-card-by-text', itemId: itemSelection.itemId },
         extra: itemCardMessage.extra,
       });
+      return;
+    }
+  }
+
+  if (linkedCustomerAccesses.length > 0) {
+    if (await handleCustomerBridgeMessage(token, message, linkedCustomerAccesses)) {
       return;
     }
   }

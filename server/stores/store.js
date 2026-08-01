@@ -16,6 +16,7 @@ function normalizeDb(source = {}) {
     activityLogs: Array.isArray(source.activityLogs) ? source.activityLogs : [],
     customerTelegramAccesses: Array.isArray(source.customerTelegramAccesses) ? source.customerTelegramAccesses : [],
     customerTelegramLogs: Array.isArray(source.customerTelegramLogs) ? source.customerTelegramLogs : [],
+    customerTelegramBridgeMessages: Array.isArray(source.customerTelegramBridgeMessages) ? source.customerTelegramBridgeMessages : [],
     workshopRequests: Array.isArray(source.workshopRequests) ? source.workshopRequests : [],
   };
 }

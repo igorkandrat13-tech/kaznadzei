@@ -78,6 +78,8 @@ function Admin() {
   const [appSettings, setAppSettings] = useState({
     publicBaseUrl: '',
     telegramBotToken: '',
+    telegramSupergroupChatId: '',
+    telegramSupergroupEnabled: false,
     selfUpdateEnabled: false,
     updateBranch: 'main',
     updateRepositoryUrl: '',
@@ -462,6 +464,8 @@ function Admin() {
     setAppSettings({
       publicBaseUrl: data?.publicBaseUrl || '',
       telegramBotToken: data?.telegramBotToken || '',
+      telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
+      telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
       selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
       updateBranch: data?.updateBranch || 'main',
       updateRepositoryUrl: data?.updateRepositoryUrl || '',
@@ -637,6 +641,8 @@ function Admin() {
       setAppSettings({
         publicBaseUrl: data?.publicBaseUrl || '',
         telegramBotToken: data?.telegramBotToken || '',
+        telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
+        telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
         selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
         updateBranch: data?.updateBranch || 'main',
         updateRepositoryUrl: data?.updateRepositoryUrl || '',
@@ -707,6 +713,8 @@ function Admin() {
       setAppSettings({
         publicBaseUrl: data?.publicBaseUrl || '',
         telegramBotToken: data?.telegramBotToken || '',
+        telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
+        telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
         selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
         updateBranch: data?.updateBranch || 'main',
         updateRepositoryUrl: data?.updateRepositoryUrl || '',
@@ -1631,6 +1639,29 @@ function Admin() {
                 onChange={e => setAppSettings({ ...appSettings, telegramBotToken: e.target.value })}
                 placeholder="Например: 123456789:AA..."
               />
+            </div>
+
+            <div className="form-group">
+              <label className="helper-label">
+                ID супергруппы Telegram
+                <HelpTooltip text="Укажите chat id супергруппы с темами, например -1001234567890. В эту группу бот будет автоматически создавать topic для каждого нового заказа." />
+              </label>
+              <input
+                value={appSettings.telegramSupergroupChatId}
+                onChange={e => setAppSettings({ ...appSettings, telegramSupergroupChatId: e.target.value })}
+                placeholder="Например: -1001234567890"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(appSettings.telegramSupergroupEnabled)}
+                  onChange={e => setAppSettings({ ...appSettings, telegramSupergroupEnabled: e.target.checked })}
+                />
+                <span>Включить мост заказчик ↔ супергруппа Telegram</span>
+              </label>
             </div>
 
             <SettingsActions>

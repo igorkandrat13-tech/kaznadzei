@@ -478,6 +478,12 @@ function sanitizeSettingsInput(payload, options = {}) {
   if (!partial || payload.telegramBotToken !== undefined) {
     data.telegramBotToken = normalizeString(payload.telegramBotToken, 'telegramBotToken', { maxLength: 200 });
   }
+  if (!partial || payload.telegramSupergroupChatId !== undefined) {
+    data.telegramSupergroupChatId = normalizeString(payload.telegramSupergroupChatId, 'telegramSupergroupChatId', { maxLength: 40 });
+  }
+  if (!partial || payload.telegramSupergroupEnabled !== undefined) {
+    data.telegramSupergroupEnabled = normalizeBoolean(payload.telegramSupergroupEnabled, 'telegramSupergroupEnabled');
+  }
   if (!partial || payload.selfUpdateEnabled !== undefined) {
     data.selfUpdateEnabled = normalizeBoolean(payload.selfUpdateEnabled, 'selfUpdateEnabled');
   }

@@ -7,6 +7,8 @@ function getDefaultSettings() {
   return {
     publicBaseUrl: (process.env.PUBLIC_BASE_URL || '').trim() || `http://localhost:${process.env.PORT || 5000}`,
     telegramBotToken: '',
+    telegramSupergroupChatId: (process.env.TELEGRAM_SUPERGROUP_CHAT_ID || '').trim(),
+    telegramSupergroupEnabled: String(process.env.TELEGRAM_SUPERGROUP_ENABLED || '').toLowerCase() === 'true',
     selfUpdateEnabled: String(process.env.ENABLE_SELF_UPDATE || '').toLowerCase() === 'true',
     updateBranch: (process.env.UPDATE_BRANCH || '').trim() || 'main',
     updateRepositoryUrl: (process.env.UPDATE_REPOSITORY_URL || process.env.GIT_REMOTE_URL || '').trim(),
@@ -25,6 +27,8 @@ function normalizeSettings(source = {}) {
   return {
     publicBaseUrl: source.publicBaseUrl ?? defaults.publicBaseUrl,
     telegramBotToken: source.telegramBotToken ?? defaults.telegramBotToken,
+    telegramSupergroupChatId: source.telegramSupergroupChatId ?? defaults.telegramSupergroupChatId,
+    telegramSupergroupEnabled: source.telegramSupergroupEnabled ?? defaults.telegramSupergroupEnabled,
     selfUpdateEnabled: source.selfUpdateEnabled ?? defaults.selfUpdateEnabled,
     updateBranch: source.updateBranch ?? defaults.updateBranch,
     updateRepositoryUrl: source.updateRepositoryUrl ?? defaults.updateRepositoryUrl,
@@ -44,6 +48,8 @@ function toPublicSettings(source = {}) {
   return {
     publicBaseUrl: source.publicBaseUrl || '',
     telegramBotToken: source.telegramBotToken || '',
+    telegramSupergroupChatId: source.telegramSupergroupChatId || '',
+    telegramSupergroupEnabled: Boolean(source.telegramSupergroupEnabled),
     selfUpdateEnabled: Boolean(source.selfUpdateEnabled),
     updateBranch: source.updateBranch || 'main',
     updateRepositoryUrl: source.updateRepositoryUrl || '',

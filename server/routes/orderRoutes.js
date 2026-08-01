@@ -27,6 +27,7 @@ const {
   notifyCustomerOrderRestored,
   notifyCustomerOrderStatusText,
 } = require('../services/customerTelegramService');
+const { ensureOrderSupergroupTopic } = require('../services/telegramSupergroupService');
 const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
@@ -2178,7 +2179,7 @@ router.delete('/orders/:id/comments/:role', requireWriteAccess, (req, res) => {
   }
 });
 
-router.post('/orders', requireManagerAccess(), (req, res) => {
+router.post('/orders', requireManagerAccess(), async (req, res) => {
   try {
     const {
       orderNumber,
@@ -2217,9 +2218,71 @@ router.post('/orders', requireManagerAccess(), (req, res) => {
     });
     notifyOrderCreated(order).catch(() => {});
     notifyCustomerOrderCreated(order).catch(() => {});
+    ensureOrderSupergroupTopic(order, { sendStarterMessage: true }).catch((error) => {
+      addTelegramDiagnosticLog('telegram-supergroup', 'topic.create.failed', {
+        orderId: order._id,
+        orderNumber: order.orderNumber || '',
+        message: error.message || 'Не удалось создать topic для заказа.',
+      });
+      console.error('Telegram supergroup topic creation error:', error.message);
+    });
     res.status(201).json(order);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+router.post('/orders/:id/telegram-topic/ensure', requireManagerAccess(), async (req, res) => {
+  const order = OrderStore.findById(req.params.id);
+  if (!order) {
+    return res.status(404).json({ message: 'Заказ не найден.' });
+  }
+
+  try {
+    const result = await ensureOrderSupergroupTopic(order, { sendStarterMessage: true });
+    if (!result?.ok) {
+      const reason = String(result?.reason || '').trim();
+      const message = reason === 'SUPERGROUP_NOT_CONFIGURED'
+        ? 'Супергруппа Telegram не настроена. Проверьте chat id и включение моста в настройках.'
+        : reason === 'BOT_TOKEN_NOT_CONFIGURED'
+          ? 'Токен Telegram-бота не настроен.'
+          : 'Не удалось подготовить topic для заказа.';
+      return res.status(400).json({ message, reason });
+    }
+
+    addActivityLog({
+      action: result.created ? 'order.telegram-topic.create' : 'order.telegram-topic.ensure',
+      entityType: 'order',
+      entityId: result.order._id,
+      entityName: OrderStore.getOrderPrimaryName(result.order) || '',
+      actor: getRequestActor(req),
+      message: result.created
+        ? 'Для заказа создан topic в супергруппе Telegram.'
+        : 'Проверена привязка topic в супергруппе Telegram.',
+      details: {
+        orderNumber: result.order.orderNumber || '',
+        topicChatId: result.topic?.chatId || '',
+        topicThreadId: result.topic?.messageThreadId || 0,
+        topicTitle: result.topic?.title || '',
+      },
+    });
+
+    return res.json({
+      ok: true,
+      created: Boolean(result.created),
+      message: result.created
+        ? 'Topic для заказа создан в супергруппе Telegram.'
+        : 'Topic для заказа уже подключен.',
+      order: result.order,
+      topic: result.topic,
+    });
+  } catch (error) {
+    addTelegramDiagnosticLog('telegram-supergroup', 'topic.ensure.failed', {
+      orderId: order._id,
+      orderNumber: order.orderNumber || '',
+      message: error.message || 'Не удалось подготовить topic для заказа.',
+    });
+    return res.status(400).json({ message: error.message || 'Не удалось подготовить topic для заказа.' });
   }
 });
 

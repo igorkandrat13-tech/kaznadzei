@@ -910,6 +910,8 @@ function OrdersWorkspace() {
   const [qrPreview, setQrPreview] = useState(null);
   const [orderPreview, setOrderPreview] = useState(null);
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
+  const [ensuringTelegramTopicOrderId, setEnsuringTelegramTopicOrderId] = useState('');
+  const [telegramTopicNotice, setTelegramTopicNotice] = useState({ orderId: '', message: '' });
   const [hoveredOrderId, setHoveredOrderId] = useState('');
   const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
   const [roomEditor, setRoomEditor] = useState(null);
@@ -969,6 +971,44 @@ function OrdersWorkspace() {
       }
     }
   }, []);
+
+  const applyUpdatedOrderState = useCallback((nextOrder) => {
+    if (!nextOrder?._id) return;
+    setOrders((current) => current.map((order) => (order._id === nextOrder._id ? nextOrder : order)));
+    setOrderPreview((current) => (current && current._id === nextOrder._id ? nextOrder : current));
+    setOrderActionsOrder((current) => (current && current._id === nextOrder._id ? nextOrder : current));
+  }, []);
+
+  const ensureTelegramTopicForOrder = useCallback(async (order) => {
+    const orderId = String(order?._id || '').trim();
+    if (!orderId || ensuringTelegramTopicOrderId) return;
+
+    setEnsuringTelegramTopicOrderId(orderId);
+    setTelegramTopicNotice({ orderId: '', message: '' });
+    setError('');
+    try {
+      const res = await apiFetch(`/api/orders/${orderId}/telegram-topic/ensure`, {
+        method: 'POST',
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        setError(toUserErrorMessage(data?.message, 'Не удалось подготовить topic для заказа.'));
+        return;
+      }
+
+      if (data?.order?._id) {
+        applyUpdatedOrderState(data.order);
+      }
+      setTelegramTopicNotice({
+        orderId,
+        message: data?.message || 'Topic для заказа проверен.',
+      });
+    } catch (topicError) {
+      setError(toUserErrorMessage(topicError, 'Не удалось подготовить topic для заказа.'));
+    } finally {
+      setEnsuringTelegramTopicOrderId('');
+    }
+  }, [applyUpdatedOrderState, ensuringTelegramTopicOrderId]);
 
   const fetchOrderStageLegendConfig = useCallback(async () => {
     try {
@@ -4893,6 +4933,14 @@ function OrdersWorkspace() {
                 <div className="detail-label">Время изготовления</div>
                 <div className="detail-value">{formatManufacturingTime(orderPreviewMeta?.startDate, orderPreviewMeta?.endDate)}</div>
               </div>
+              <div className="detail-block detail-block-wide">
+                <div className="detail-label">Topic в супергруппе Telegram</div>
+                <div className="detail-value detail-value-multiline">
+                  {Number(orderPreview?.telegramTopic?.messageThreadId || 0) > 0
+                    ? `${orderPreview?.telegramTopic?.title || 'Подключен'}${orderPreview?.telegramTopic?.messageThreadId ? ` · topic ${orderPreview.telegramTopic.messageThreadId}` : ''}`
+                    : 'Не создан'}
+                </div>
+              </div>
             </div>
             {linkedOrderPreviewCustomer ? (
               <div className="panel-info-text">
@@ -5005,8 +5053,24 @@ function OrdersWorkspace() {
           </div>
 
           <div className="modal-actions">
+            <Button
+              variant="secondary"
+              onClick={() => ensureTelegramTopicForOrder(orderPreview)}
+              disabled={ensuringTelegramTopicOrderId === orderPreview._id}
+            >
+              {ensuringTelegramTopicOrderId === orderPreview._id
+                ? 'Проверка topic...'
+                : (Number(orderPreview?.telegramTopic?.messageThreadId || 0) > 0
+                  ? 'Проверить topic в Telegram'
+                  : 'Создать topic в Telegram')}
+            </Button>
             <Button variant="secondary" onClick={() => setOrderPreview(null)}>Закрыть</Button>
           </div>
+          {telegramTopicNotice.orderId === orderPreview._id && telegramTopicNotice.message ? (
+            <div className="settings-hint" style={{ marginTop: 12 }}>
+              {telegramTopicNotice.message}
+            </div>
+          ) : null}
         </Modal>
       ) : null}
 
