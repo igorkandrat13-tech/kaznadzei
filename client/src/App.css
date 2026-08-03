@@ -9165,23 +9165,20 @@ body .home-auth-status-pending {
     justify-content: stretch;
   }
   .App-header-orders-primary-slot,
-  .orders-header-primary-actions {
   .App-header-orders-left-slot-inner,
   .orders-header-primary-actions {
+    width: 100%;
   }
   .orders-header-primary-actions {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
   }
-  .orders-header-toolbar-btn {
-
   .orders-header-nav-actions {
     grid-template-columns: 1fr;
   }
+  .orders-header-toolbar-btn {
     width: 100%;
-    min-width: 0;
-    padding: 0 10px;
     min-width: 0;
     padding: 0 10px;
   }
