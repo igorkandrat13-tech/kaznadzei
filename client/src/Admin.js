@@ -705,6 +705,14 @@ function Admin() {
     new Set(telegramReadyEmployees.map((employee) => String(employee._id || '').trim()).filter(Boolean))
   ), [telegramReadyEmployees]);
 
+  const telegramNotificationEmployeeIdsSet = useMemo(() => (
+    new Set(
+      (Array.isArray(appSettings.telegramRequestNotificationEmployeeIds) ? appSettings.telegramRequestNotificationEmployeeIds : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean),
+    )
+  ), [appSettings.telegramRequestNotificationEmployeeIds]);
+
   const openTelegramNotificationModal = () => {
     setTelegramNotificationDraftIds(
       (Array.isArray(appSettings.telegramRequestNotificationEmployeeIds) ? appSettings.telegramRequestNotificationEmployeeIds : [])
@@ -1817,13 +1825,23 @@ function Admin() {
             </div>
 
             <div className="form-group">
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={Boolean(appSettings.telegramSupergroupEnabled)}
-                  onChange={e => setAppSettings({ ...appSettings, telegramSupergroupEnabled: e.target.checked })}
-                />
-                <span>Включить мост заказчик ↔ супергруппа Telegram</span>
+              <label className="settings-switch">
+                <div className="settings-switch-copy">
+                  <span className="settings-switch-title">Мост заказчик ↔ супергруппа Telegram</span>
+                  <span className="settings-switch-subtitle">
+                    {appSettings.telegramSupergroupEnabled ? 'On' : 'Off'}
+                  </span>
+                </div>
+                <span className={`settings-switch-control ${appSettings.telegramSupergroupEnabled ? 'settings-switch-control-on' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(appSettings.telegramSupergroupEnabled)}
+                    onChange={e => setAppSettings({ ...appSettings, telegramSupergroupEnabled: e.target.checked })}
+                  />
+                  <span className="settings-switch-track" aria-hidden="true">
+                    <span className="settings-switch-thumb" />
+                  </span>
+                </span>
               </label>
             </div>
 
@@ -1998,7 +2016,14 @@ function Admin() {
                 <tbody>
                   {employees.map(employee => (
                     <tr key={employee._id}>
-                      <td>{employee.fullName}</td>
+                      <td>
+                        <div className="employee-name-cell">
+                          <span>{employee.fullName}</span>
+                          {telegramNotificationEmployeeIdsSet.has(String(employee._id || '').trim()) ? (
+                            <span className="badge badge-success employee-telegram-notice-badge">Уведомления ТГ</span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td>{getRoleLabel(employee.role) || '—'}</td>
                       <td>{renderAllowedColumnsMarkers(employee, { compact: true, ownOnly: true, optionsByKey: employeeColumnOptionsByKey })}</td>
                       <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
@@ -2020,7 +2045,14 @@ function Admin() {
               {employees.map(employee => (
                 <div key={employee._id} className="mobile-settings-card">
                   <div className="mobile-settings-card-header">
-                    <div className="mobile-order-card-title">{employee.fullName}</div>
+                    <div>
+                      <div className="mobile-order-card-title">{employee.fullName}</div>
+                      {telegramNotificationEmployeeIdsSet.has(String(employee._id || '').trim()) ? (
+                        <div style={{ marginTop: 8 }}>
+                          <span className="badge badge-success employee-telegram-notice-badge">Уведомления ТГ</span>
+                        </div>
+                      ) : null}
+                    </div>
                     <div className="mobile-order-card-subtitle">{getRoleLabel(employee.role) || 'Должность не указана'}</div>
                   </div>
                   <div className="mobile-settings-card-meta">
