@@ -1562,16 +1562,26 @@ body .order-primary-title-button-badge {
   align-items: flex-start;
   padding: 14px;
   border-radius: 14px;
-  background: rgba(11, 24, 40, 0.8);
-  border: 1px solid rgba(135, 186, 255, 0.12);
+  background: linear-gradient(180deg, rgba(18, 34, 54, 0.9), rgba(12, 25, 42, 0.86));
+  border: 1px solid rgba(135, 186, 255, 0.14);
+  box-shadow: 0 12px 28px rgba(2, 8, 16, 0.16);
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.telegram-notification-row:hover {
+  border-color: rgba(146, 204, 255, 0.24);
+  box-shadow: 0 16px 34px rgba(2, 8, 16, 0.22);
 }
 
 .telegram-notification-row input[type='checkbox'] {
   margin-top: 4px;
+  accent-color: #34bf8e;
 }
 
 .telegram-notification-row-disabled {
   opacity: 0.72;
+  background: linear-gradient(180deg, rgba(16, 29, 46, 0.72), rgba(10, 21, 36, 0.68));
+  border-color: rgba(116, 145, 177, 0.12);
 }
 
 .telegram-notification-row-body {
@@ -1595,6 +1605,12 @@ body .order-primary-title-button-badge {
   margin-top: 6px;
   color: var(--text-soft);
   line-height: 1.5;
+}
+
+.telegram-notification-row-meta .text-small,
+.telegram-notification-row-meta .text-subtle,
+.telegram-notification-row-meta div {
+  color: inherit;
 }
 
 .employee-name-cell {
@@ -7786,6 +7802,7 @@ body .service-details-title {
 body .card,
 body .mobile-order-card,
 body .mobile-settings-card,
+body .telegram-notification-row,
 body .overview-stat-card,
 body .telegram-stage-card,
 body .detail-block,
@@ -8527,6 +8544,34 @@ body .badge-success {
   background: rgba(218, 248, 236, 0.98);
   color: #115642;
   border-color: rgba(83, 195, 153, 0.32);
+}
+
+body .telegram-notification-row {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 250, 255, 0.9));
+  border-color: rgba(113, 158, 207, 0.22);
+  box-shadow: 0 16px 34px rgba(40, 76, 114, 0.1);
+}
+
+body .telegram-notification-row:hover {
+  border-color: rgba(84, 145, 212, 0.3);
+  box-shadow: 0 18px 38px rgba(40, 76, 114, 0.14);
+}
+
+body .telegram-notification-row-disabled {
+  background: linear-gradient(180deg, rgba(244, 248, 252, 0.96), rgba(236, 242, 248, 0.94));
+  border-color: rgba(148, 170, 194, 0.2);
+}
+
+body .telegram-notification-row-title {
+  color: #173857;
+}
+
+body .telegram-notification-row-title span,
+body .telegram-notification-row-meta,
+body .telegram-notification-row-meta .text-small,
+body .telegram-notification-row-meta .text-subtle,
+body .telegram-notification-row-meta div {
+  color: #55708d;
 }
 
 body .color-chip {
