@@ -18,7 +18,7 @@ const {
 } = require('../utils/validators');
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
-const { notifyOrderCreated } = require('../services/orderNotifications');
+const { notifyMaterialRequestWatchers, notifyOrderCreated } = require('../services/orderNotifications');
 const {
   getCustomerOrderChangedItemsText,
   getCustomerOrderUpdateItemText,
@@ -1161,6 +1161,15 @@ router.post('/orders/:id/telegram-package-items', (req, res) => {
       },
     });
 
+    notifyMaterialRequestWatchers([
+      'Новая заявка: Комплектация заказа',
+      `Заказ: ${updatedOrder.orderNumber || 'не указан'}`,
+      `Заказчик: ${updatedOrder.customer || 'не указан'}`,
+      `Помещение / изделие: ${[updatedItem.room, updatedItem.itemNumber ? `изд. ${updatedItem.itemNumber}` : '', updatedItem.name].filter(Boolean).join(' • ') || 'не указано'}`,
+      `Позиция: ${itemName}`,
+      `Добавил: ${employee.fullName || 'Сотрудник'}`,
+    ].join('\n')).catch(() => {});
+
     res.status(201).json({
       ok: true,
       order: updatedOrder,
@@ -1351,6 +1360,15 @@ router.post('/orders/:id/telegram-material-request-items', (req, res) => {
       });
     }
 
+    notifyMaterialRequestWatchers([
+      'Новая заявка: Заявки на расходники',
+      `Заказ: ${updatedOrder.orderNumber || 'не указан'}`,
+      `Заказчик: ${updatedOrder.customer || 'не указан'}`,
+      `Помещение / изделие: ${[updatedItem.room, updatedItem.itemNumber ? `изд. ${updatedItem.itemNumber}` : '', updatedItem.name].filter(Boolean).join(' • ') || 'не указано'}`,
+      `Заявка: ${itemName}`,
+      `Добавил: ${employee.fullName || 'Сотрудник'}`,
+    ].join('\n')).catch(() => {});
+
     res.status(201).json({
       ok: true,
       order: updatedOrder,
@@ -1484,6 +1502,16 @@ router.post('/orders/:id/telegram-material-request-photo-items', (req, res) => {
           fileName: attachment.name || normalizedFileName,
         },
       });
+
+      notifyMaterialRequestWatchers([
+        'Новая заявка: Заявки на расходники',
+        `Заказ: ${updatedOrder.orderNumber || 'не указан'}`,
+        `Заказчик: ${updatedOrder.customer || 'не указан'}`,
+        `Помещение / изделие: ${[updatedItem.room, updatedItem.itemNumber ? `изд. ${updatedItem.itemNumber}` : '', updatedItem.name].filter(Boolean).join(' • ') || 'не указано'}`,
+        `Заявка: ${createdPhotoItem?.name || attachment.name || normalizedFileName || 'Фото'}`,
+        'Тип: Фото',
+        `Добавил: ${employee.fullName || 'Сотрудник'}`,
+      ].join('\n')).catch(() => {});
 
       return res.status(201).json({
         ok: true,
@@ -2239,11 +2267,16 @@ router.post('/orders/:id/telegram-topic/ensure', requireManagerAccess(), async (
   }
 
   try {
-    const result = await ensureOrderSupergroupTopic(order, { sendStarterMessage: true });
+    const result = await ensureOrderSupergroupTopic(order, {
+      sendStarterMessage: true,
+      requireEnabled: false,
+    });
     if (!result?.ok) {
       const reason = String(result?.reason || '').trim();
-      const message = reason === 'SUPERGROUP_NOT_CONFIGURED'
-        ? 'Супергруппа Telegram не настроена. Проверьте chat id и включение моста в настройках.'
+      const message = reason === 'SUPERGROUP_CHAT_ID_NOT_CONFIGURED'
+        ? 'Не указан chat id супергруппы Telegram в настройках.'
+        : reason === 'SUPERGROUP_BRIDGE_DISABLED'
+          ? 'Мост супергруппы Telegram выключен в настройках.'
         : reason === 'BOT_TOKEN_NOT_CONFIGURED'
           ? 'Токен Telegram-бота не настроен.'
           : 'Не удалось подготовить topic для заказа.';

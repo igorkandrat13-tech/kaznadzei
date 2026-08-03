@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { apiFetch, parseJsonSafely, toUserErrorMessage } from './api';
 import ConfirmDialog from './ConfirmDialog';
 import { formatDateTimeDisplay } from './dateTime';
@@ -130,6 +131,48 @@ function getUnifiedSourceLabel(source = '') {
   if (source === 'package') return 'Комплектация';
   if (source === 'material') return 'Расходники';
   return 'Цех';
+}
+
+function buildExcelExportRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    Источник: row.sourceLabel || '',
+    Статус: row.status === 'completed' ? 'Выполнено' : 'Открыто',
+    Заявка: row.text || '',
+    Заказ: row.orderNumber ? `№ ${row.orderNumber}` : '',
+    Заказчик: row.customer || '',
+    Помещение: row.room || '',
+    '№ изделия': row.itemNumber || '',
+    Изделие: row.itemName || '',
+    Автор: row.author || '',
+    Дата: formatDateTimeDisplay(row.createdAt || row.updatedAt) || '',
+    Фото: row.attachmentsCount > 0 ? `Да (${row.attachmentsCount})` : 'Нет',
+  }));
+}
+
+function downloadMaterialRequestsWorkbook(rows = []) {
+  const exportRows = buildExcelExportRows(rows);
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  worksheet['!cols'] = [
+    { wch: 16 },
+    { wch: 12 },
+    { wch: 42 },
+    { wch: 12 },
+    { wch: 22 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 24 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 12 },
+  ];
+  if (worksheet['!ref']) {
+    worksheet['!autofilter'] = { ref: worksheet['!ref'] };
+  }
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Заявки');
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  XLSX.writeFile(workbook, `zayavki-na-materialy-${timestamp}.xlsx`);
 }
 
 function buildRequestRows(orders = [], workshopRequests = []) {
@@ -337,6 +380,15 @@ function WorkshopRequestsPage() {
     });
   }, [authorFilter, orderFilter, rows, search, sourceFilter]);
 
+  const handleDownloadExcel = useCallback(() => {
+    setError('');
+    try {
+      downloadMaterialRequestsWorkbook(filteredRows);
+    } catch (downloadError) {
+      setError(toUserErrorMessage(downloadError, 'Не удалось скачать Excel-файл заявок.'));
+    }
+  }, [filteredRows]);
+
   const handleToggleRequestStatus = useCallback(async (row) => {
     if (!row?.canToggleStatus) return;
     const nextStatus = row.status === 'completed' ? 'open' : 'completed';
@@ -465,19 +517,19 @@ function WorkshopRequestsPage() {
       <div className="card orders-workspace-table-card">
         <div className="section-header">
           <div>
-            <h2 style={{ margin: 0 }}>Все заявки</h2>
+            <h2 style={{ margin: 0 }}>Заявки на материалы</h2>
             <div className="filters-summary">
               Общий реестр цеховых заявок, комплектации заказа и заявок на расходники.
             </div>
           </div>
           <div className="table-action-group">
             <Button
-              variant="secondary"
+              variant="success"
               className="section-toolbar-btn"
-              onClick={() => fetchData({ showLoader: false })}
-              disabled={loading || Boolean(updatingKey)}
+              onClick={handleDownloadExcel}
+              disabled={loading || Boolean(updatingKey) || filteredRows.length === 0}
             >
-              Обновить
+              Скачать Excel
             </Button>
           </div>
         </div>

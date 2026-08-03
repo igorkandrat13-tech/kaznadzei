@@ -80,6 +80,7 @@ function Admin() {
     telegramBotToken: '',
     telegramSupergroupChatId: '',
     telegramSupergroupEnabled: false,
+    telegramRequestNotificationEmployeeIds: [],
     selfUpdateEnabled: false,
     updateBranch: 'main',
     updateRepositoryUrl: '',
@@ -99,12 +100,15 @@ function Admin() {
   const [exportingBackup, setExportingBackup] = useState(false);
   const [importingBackup, setImportingBackup] = useState(false);
   const [employees, setEmployees] = useState([]);
+  const [showTelegramNotificationModal, setShowTelegramNotificationModal] = useState(false);
+  const [telegramNotificationDraftIds, setTelegramNotificationDraftIds] = useState([]);
   const [employeeModalMode, setEmployeeModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
   const [showLegendColorModal, setShowLegendColorModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [savingEmployee, setSavingEmployee] = useState(false);
+  const [savingTelegramNotifications, setSavingTelegramNotifications] = useState(false);
   const [savingStep, setSavingStep] = useState(false);
   const [savingLegendColors, setSavingLegendColors] = useState(false);
   const [orderStageLegendConfig, setOrderStageLegendConfig] = useState(() => buildOrderStageLegendConfig());
@@ -164,7 +168,14 @@ function Admin() {
     ));
   }, [orderStageLegendConfig.secondaryHeaders, stageLegendMap]);
   const hasModalWindowOpen = Boolean(
-    employeeModalMode || stepModalMode || showLegendColorModal || stageManagerRoleKey || showTelegramLogs || showActivityLogs || confirmAction,
+    employeeModalMode
+    || stepModalMode
+    || showLegendColorModal
+    || stageManagerRoleKey
+    || showTelegramLogs
+    || showActivityLogs
+    || showTelegramNotificationModal
+    || confirmAction,
   );
   const hasSettingsAccess = !settingsPinStatus.loading && (!settingsPinStatus.configured || settingsPinStatus.accessGranted);
   const setEmployeeForm = (nextValue) => {
@@ -466,6 +477,7 @@ function Admin() {
       telegramBotToken: data?.telegramBotToken || '',
       telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
       telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
+      telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
       selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
       updateBranch: data?.updateBranch || 'main',
       updateRepositoryUrl: data?.updateRepositoryUrl || '',
@@ -643,6 +655,7 @@ function Admin() {
         telegramBotToken: data?.telegramBotToken || '',
         telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
         telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
+        telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
         selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
         updateBranch: data?.updateBranch || 'main',
         updateRepositoryUrl: data?.updateRepositoryUrl || '',
@@ -684,6 +697,85 @@ function Admin() {
     );
   };
 
+  const telegramReadyEmployees = useMemo(() => (
+    employees.filter((employee) => String(employee.telegramChatId || '').trim())
+  ), [employees]);
+
+  const telegramReadyEmployeeIds = useMemo(() => (
+    new Set(telegramReadyEmployees.map((employee) => String(employee._id || '').trim()).filter(Boolean))
+  ), [telegramReadyEmployees]);
+
+  const openTelegramNotificationModal = () => {
+    setTelegramNotificationDraftIds(
+      (Array.isArray(appSettings.telegramRequestNotificationEmployeeIds) ? appSettings.telegramRequestNotificationEmployeeIds : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean),
+    );
+    setShowTelegramNotificationModal(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+  };
+
+  const closeTelegramNotificationModal = () => {
+    if (savingTelegramNotifications) return;
+    setShowTelegramNotificationModal(false);
+  };
+
+  const toggleTelegramNotificationEmployee = (employeeId, enabled) => {
+    const normalizedEmployeeId = String(employeeId || '').trim();
+    if (!normalizedEmployeeId) return;
+    setTelegramNotificationDraftIds((current) => {
+      const next = new Set((Array.isArray(current) ? current : []).map((item) => String(item || '').trim()).filter(Boolean));
+      if (enabled) {
+        next.add(normalizedEmployeeId);
+      } else {
+        next.delete(normalizedEmployeeId);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const saveTelegramNotificationSettings = async () => {
+    if (savingTelegramNotifications) return;
+    setSavingTelegramNotifications(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const filteredIds = telegramNotificationDraftIds.filter((employeeId) => telegramReadyEmployeeIds.has(String(employeeId || '').trim()));
+      const res = await apiFetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...appSettings,
+          telegramRequestNotificationEmployeeIds: filteredIds,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось сохранить получателей Telegram-уведомлений.');
+      }
+
+      setAppSettings({
+        publicBaseUrl: data?.publicBaseUrl || '',
+        telegramBotToken: data?.telegramBotToken || '',
+        telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
+        telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
+        telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
+        selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
+        updateBranch: data?.updateBranch || 'main',
+        updateRepositoryUrl: data?.updateRepositoryUrl || '',
+        roleLabels: data?.roleLabels || {},
+      });
+      setTelegramNotificationDraftIds(Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : []);
+      setShowTelegramNotificationModal(false);
+      setSettingsSuccess('Получатели уведомлений в Telegram сохранены.');
+    } catch (error) {
+      setSettingsError(toUserErrorMessage(error, 'Не удалось сохранить получателей Telegram-уведомлений.'));
+    } finally {
+      setSavingTelegramNotifications(false);
+    }
+  };
+
   const formatActivityLogEntry = (entry) => {
     const timestamp = entry?.createdAt ? formatDateTimeDisplay(entry.createdAt) : 'Без времени';
     const actor = entry?.actor?.label || 'Система';
@@ -715,6 +807,7 @@ function Admin() {
         telegramBotToken: data?.telegramBotToken || '',
         telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
         telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
+        telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
         selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
         updateBranch: data?.updateBranch || 'main',
         updateRepositoryUrl: data?.updateRepositoryUrl || '',
@@ -1038,6 +1131,10 @@ function Admin() {
       setShowTelegramLogs(false);
       return;
     }
+    if (showTelegramNotificationModal) {
+      closeTelegramNotificationModal();
+      return;
+    }
     if (showLegendColorModal && !savingLegendColors) {
       closeLegendColorModal();
       return;
@@ -1045,7 +1142,14 @@ function Admin() {
     if (stageManagerRoleKey && !savingStep) {
       closeStageManager();
     }
-  }, Boolean(confirmAction || showActivityLogs || showTelegramLogs || showLegendColorModal || stageManagerRoleKey));
+  }, Boolean(
+    confirmAction
+    || showActivityLogs
+    || showTelegramLogs
+    || showTelegramNotificationModal
+    || showLegendColorModal
+    || stageManagerRoleKey
+  ));
 
   const requestDeleteAction = (action) => {
     setSettingsError('');
@@ -1187,6 +1291,15 @@ function Admin() {
         resetEmployeeForm();
       }
       await fetchEmployees();
+      setTelegramNotificationDraftIds((current) => current.filter((item) => item !== id));
+      setAppSettings((current) => ({
+        ...current,
+        telegramRequestNotificationEmployeeIds: (
+          Array.isArray(current.telegramRequestNotificationEmployeeIds)
+            ? current.telegramRequestNotificationEmployeeIds
+            : []
+        ).filter((item) => item !== id),
+      }));
       setSettingsSuccess(data?.warning || data?.message || 'Сотрудник удален.');
       return true;
     } catch (error) {
@@ -1502,6 +1615,56 @@ function Admin() {
             </div>
           </>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={showTelegramNotificationModal}
+        onClose={closeTelegramNotificationModal}
+        closeDisabled={savingTelegramNotifications}
+        size="lg"
+      >
+        <ModalHeader
+          title="Уведомления в ТГ"
+          subtitle="Выберите сотрудников, которым будут приходить уведомления о новых заявках из комплектации, расходников и ТГ-бота сотрудников."
+          onClose={closeTelegramNotificationModal}
+          closeDisabled={savingTelegramNotifications}
+        />
+        <div className="telegram-notification-list">
+          {employees.length > 0 ? employees.map((employee) => {
+            const employeeId = String(employee._id || '').trim();
+            const isTelegramReady = telegramReadyEmployeeIds.has(employeeId);
+            const checked = telegramNotificationDraftIds.includes(employeeId);
+            return (
+              <label key={employeeId} className={`telegram-notification-row ${!isTelegramReady ? 'telegram-notification-row-disabled' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={!isTelegramReady || savingTelegramNotifications}
+                  onChange={(event) => toggleTelegramNotificationEmployee(employeeId, event.target.checked)}
+                />
+                <div className="telegram-notification-row-body">
+                  <div className="telegram-notification-row-title">
+                    <strong>{employee.fullName || 'Без имени'}</strong>
+                    <span>{getRoleLabel(employee.role) || 'Без должности'}</span>
+                  </div>
+                  <div className="telegram-notification-row-meta">
+                    {isTelegramReady
+                      ? getEmployeeTelegramSummary(employee)
+                      : 'Сотрудник ещё не привязан к Telegram-боту, поэтому уведомления ему недоступны.'}
+                  </div>
+                </div>
+              </label>
+            );
+          }) : (
+            <div className="mobile-empty-state">Сотрудники пока не добавлены.</div>
+          )}
+        </div>
+        <div className="modal-actions">
+          <Button variant="success" onClick={saveTelegramNotificationSettings} disabled={savingTelegramNotifications}>
+            {savingTelegramNotifications ? 'Сохранение...' : 'Сохранить'}
+          </Button>
+          <Button onClick={closeTelegramNotificationModal} disabled={savingTelegramNotifications}>Отмена</Button>
+        </div>
       </Modal>
 
       <ConfirmDialog
@@ -1826,7 +1989,7 @@ function Admin() {
 
             <SettingsActions>
               <button className="btn btn-success" onClick={openCreateEmployeeModal}>Добавить сотрудника</button>
-              <button className="btn" onClick={fetchEmployees}>Обновить список</button>
+              <button className="btn" onClick={openTelegramNotificationModal}>Уведомления в ТГ</button>
             </SettingsActions>
 
             <div className="table-scroll desktop-table-only">

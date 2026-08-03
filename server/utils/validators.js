@@ -484,6 +484,16 @@ function sanitizeSettingsInput(payload, options = {}) {
   if (!partial || payload.telegramSupergroupEnabled !== undefined) {
     data.telegramSupergroupEnabled = normalizeBoolean(payload.telegramSupergroupEnabled, 'telegramSupergroupEnabled');
   }
+  if (!partial || payload.telegramRequestNotificationEmployeeIds !== undefined) {
+    const employeeIds = normalizeStringArray(payload.telegramRequestNotificationEmployeeIds, 'telegramRequestNotificationEmployeeIds', {
+      allowUndefined: partial,
+      maxItems: 200,
+      maxLength: 80,
+    });
+    if (employeeIds !== undefined) {
+      data.telegramRequestNotificationEmployeeIds = Array.from(new Set(employeeIds.filter(Boolean)));
+    }
+  }
   if (!partial || payload.selfUpdateEnabled !== undefined) {
     data.selfUpdateEnabled = normalizeBoolean(payload.selfUpdateEnabled, 'selfUpdateEnabled');
   }

@@ -203,6 +203,11 @@ function AppLayout() {
                 >
                     <div className="App-header-main">
                         <div className="App-header-orders-zone">
+                            {canAccessOrders && ordersRoute ? (
+                                <div className="App-header-orders-left-slot">
+                                    <div id="orders-header-left-actions" className="App-header-orders-left-slot-inner" />
+                                </div>
+                            ) : null}
                             <Link
                                 to={canAccessOrders ? '/orders' : '/'}
                                 className="App-header-brand-link"
@@ -231,7 +236,7 @@ function AppLayout() {
                             <div className={`App-header-actions ${mobileMenuOpen ? 'App-header-actions-open' : ''}`}>
                                 <nav className="App-header-nav App-header-nav-primary">
                                     {canAccessOrders && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
-                                    {canAccessOrders && <Link to="/requests" onClick={() => setMobileMenuOpen(false)}>Все заявки</Link>}
+                                    {canAccessOrders && <Link to="/requests" onClick={() => setMobileMenuOpen(false)}>Заявки</Link>}
                                     {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
                                     {canAccessOrders && <Link to="/customers" onClick={() => setMobileMenuOpen(false)}>Заказчики 🔒</Link>}
                                     {canAccessRole('admin', authRole) && <Link to="/settings?tab=employees" onClick={() => setMobileMenuOpen(false)}>Сотрудники 🔒</Link>}

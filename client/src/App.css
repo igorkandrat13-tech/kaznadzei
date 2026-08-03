@@ -381,10 +381,29 @@ body::before {
   flex: 1 1 auto;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 820px) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 820px) minmax(0, 1fr);
   align-items: center;
   justify-content: stretch;
   gap: 12px;
+  pointer-events: none;
+}
+
+.App-header-orders-left-slot {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  width: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.App-header-orders-left-slot-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
   pointer-events: none;
 }
 
@@ -550,6 +569,14 @@ body::before {
   gap: 6px;
   flex-wrap: nowrap;
   pointer-events: auto;
+}
+
+.orders-header-nav-actions {
+  justify-content: flex-start;
+}
+
+.orders-header-create-actions {
+  justify-content: flex-end;
 }
 
 .orders-header-toolbar-btn {
@@ -1517,6 +1544,57 @@ body .order-primary-title-button-badge {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-top: 12px;
+}
+
+.telegram-notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.telegram-notification-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(11, 24, 40, 0.8);
+  border: 1px solid rgba(135, 186, 255, 0.12);
+}
+
+.telegram-notification-row input[type='checkbox'] {
+  margin-top: 4px;
+}
+
+.telegram-notification-row-disabled {
+  opacity: 0.72;
+}
+
+.telegram-notification-row-body {
+  min-width: 0;
+}
+
+.telegram-notification-row-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-main);
+}
+
+.telegram-notification-row-title span {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.telegram-notification-row-meta {
+  margin-top: 6px;
+  color: var(--text-soft);
+  line-height: 1.5;
 }
 
 .mobile-settings-color-row {
@@ -5639,6 +5717,15 @@ body .attachment-preview-table td {
   background: linear-gradient(135deg, #2495da, #58cbff);
 }
 
+.section-toolbar-btn.btn-success {
+  background: linear-gradient(135deg, #1a9c6c, #49c48b);
+  border-color: rgba(110, 232, 178, 0.26);
+}
+
+.section-toolbar-btn.btn-success:hover {
+  background: linear-gradient(135deg, #1ea776, #55ce96);
+}
+
 .section-toolbar-btn.btn-secondary {
   background: var(--secondary-control-bg);
   border-color: var(--secondary-control-border);
@@ -8748,7 +8835,7 @@ body .home-auth-status-pending {
 
 @media (max-width: 1366px) {
   .App-header-orders-zone {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 640px) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 640px) minmax(0, 1fr);
     gap: 10px;
   }
 
@@ -8762,6 +8849,10 @@ body .home-auth-status-pending {
 
   .App-header-orders-primary-slot {
     justify-content: flex-end;
+  }
+
+  .App-header-orders-left-slot {
+    justify-content: flex-start;
   }
 
   .orders-header-primary-actions {
@@ -8858,10 +8949,26 @@ body .home-auth-status-pending {
     grid-column: 1;
     width: 100%;
     justify-content: center;
+    order: 3;
   }
 
   .App-header-orders-primary-slot {
     justify-content: center;
+  }
+
+  .App-header-orders-left-slot {
+    grid-column: 1;
+    width: 100%;
+    justify-content: center;
+    order: 2;
+  }
+
+  .App-header-orders-left-slot-inner {
+    justify-content: center;
+  }
+
+  .App-header-brand-link {
+    order: 1;
   }
 
   .orders-header-primary-actions {
@@ -8962,9 +9069,15 @@ body .home-auth-status-pending {
     justify-content: stretch;
     padding-top: 0;
   }
+
+  .App-header-orders-left-slot {
+    width: 100%;
+    justify-content: stretch;
+  }
   .App-header-orders-primary-slot,
   .orders-header-primary-actions {
-    width: 100%;
+  .App-header-orders-left-slot-inner,
+  .orders-header-primary-actions {
   }
   .orders-header-primary-actions {
     display: grid;
@@ -8972,7 +9085,13 @@ body .home-auth-status-pending {
     gap: 8px;
   }
   .orders-header-toolbar-btn {
+
+  .orders-header-nav-actions {
+    grid-template-columns: 1fr;
+  }
     width: 100%;
+    min-width: 0;
+    padding: 0 10px;
     min-width: 0;
     padding: 0 10px;
   }
@@ -9085,6 +9204,10 @@ body .home-auth-status-pending {
     grid-template-columns: 1fr;
     gap: 10px;
     align-items: stretch;
+  }
+  .telegram-notification-row-title {
+    flex-direction: column;
+    align-items: flex-start;
   }
   .comments-modal-layout {
     grid-template-columns: 1fr;

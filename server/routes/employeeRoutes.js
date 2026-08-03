@@ -78,6 +78,15 @@ router.delete('/employees/:id', requireAdminAccess(), (req, res) => {
     details: { role: employee.role || '' },
   });
 
+  const selectedNotificationEmployeeIds = Array.isArray(SettingsStore.get().telegramRequestNotificationEmployeeIds)
+    ? SettingsStore.get().telegramRequestNotificationEmployeeIds
+    : [];
+  if (selectedNotificationEmployeeIds.includes(String(employee._id || '').trim())) {
+    SettingsStore.update({
+      telegramRequestNotificationEmployeeIds: selectedNotificationEmployeeIds.filter((item) => item !== String(employee._id || '').trim()),
+    });
+  }
+
   const token = String(SettingsStore.get().telegramBotToken || '').trim();
   const chatId = String(employee.telegramChatId || '').trim();
 

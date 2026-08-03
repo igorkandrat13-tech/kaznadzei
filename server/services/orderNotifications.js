@@ -10,6 +10,21 @@ function getTelegramReadyEmployeesByRole(role) {
   ));
 }
 
+function getTelegramReadyEmployeesByIds(employeeIds = []) {
+  const normalizedIds = new Set(
+    (Array.isArray(employeeIds) ? employeeIds : [])
+      .map((item) => String(item || '').trim())
+      .filter(Boolean),
+  );
+  if (!normalizedIds.size) {
+    return [];
+  }
+  return EmployeeStore.findAll().filter((employee) => (
+    normalizedIds.has(String(employee._id || '').trim())
+    && String(employee.telegramChatId || '').trim()
+  ));
+}
+
 async function notifyEmployeesByRole(role, text) {
   const token = String(SettingsStore.get().telegramBotToken || '').trim();
   if (!token || !role || !text) return;
@@ -18,6 +33,24 @@ async function notifyEmployeesByRole(role, text) {
   await Promise.allSettled(
     employees.map(employee => sendMessage(token, employee.telegramChatId, text))
   );
+}
+
+async function notifyEmployeesByIds(employeeIds = [], text = '') {
+  const token = String(SettingsStore.get().telegramBotToken || '').trim();
+  const normalizedText = String(text || '').trim();
+  if (!token || !normalizedText) return;
+
+  const employees = getTelegramReadyEmployeesByIds(employeeIds);
+  if (!employees.length) return;
+
+  await Promise.allSettled(
+    employees.map((employee) => sendMessage(token, employee.telegramChatId, normalizedText))
+  );
+}
+
+async function notifyMaterialRequestWatchers(text = '') {
+  const recipientIds = SettingsStore.get().telegramRequestNotificationEmployeeIds || [];
+  await notifyEmployeesByIds(recipientIds, text);
 }
 
 async function notifyOrderCreated(order) {
@@ -42,5 +75,7 @@ async function notifyOrderCreated(order) {
 
 module.exports = {
   notifyEmployeesByRole,
+  notifyEmployeesByIds,
+  notifyMaterialRequestWatchers,
   notifyOrderCreated,
 };

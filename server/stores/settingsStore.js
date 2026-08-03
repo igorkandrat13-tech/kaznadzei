@@ -9,6 +9,7 @@ function getDefaultSettings() {
     telegramBotToken: '',
     telegramSupergroupChatId: (process.env.TELEGRAM_SUPERGROUP_CHAT_ID || '').trim(),
     telegramSupergroupEnabled: String(process.env.TELEGRAM_SUPERGROUP_ENABLED || '').toLowerCase() === 'true',
+    telegramRequestNotificationEmployeeIds: [],
     selfUpdateEnabled: String(process.env.ENABLE_SELF_UPDATE || '').toLowerCase() === 'true',
     updateBranch: (process.env.UPDATE_BRANCH || '').trim() || 'main',
     updateRepositoryUrl: (process.env.UPDATE_REPOSITORY_URL || process.env.GIT_REMOTE_URL || '').trim(),
@@ -29,6 +30,11 @@ function normalizeSettings(source = {}) {
     telegramBotToken: source.telegramBotToken ?? defaults.telegramBotToken,
     telegramSupergroupChatId: source.telegramSupergroupChatId ?? defaults.telegramSupergroupChatId,
     telegramSupergroupEnabled: source.telegramSupergroupEnabled ?? defaults.telegramSupergroupEnabled,
+    telegramRequestNotificationEmployeeIds: Array.isArray(source.telegramRequestNotificationEmployeeIds)
+      ? source.telegramRequestNotificationEmployeeIds
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+      : defaults.telegramRequestNotificationEmployeeIds,
     selfUpdateEnabled: source.selfUpdateEnabled ?? defaults.selfUpdateEnabled,
     updateBranch: source.updateBranch ?? defaults.updateBranch,
     updateRepositoryUrl: source.updateRepositoryUrl ?? defaults.updateRepositoryUrl,
@@ -50,6 +56,9 @@ function toPublicSettings(source = {}) {
     telegramBotToken: source.telegramBotToken || '',
     telegramSupergroupChatId: source.telegramSupergroupChatId || '',
     telegramSupergroupEnabled: Boolean(source.telegramSupergroupEnabled),
+    telegramRequestNotificationEmployeeIds: Array.isArray(source.telegramRequestNotificationEmployeeIds)
+      ? source.telegramRequestNotificationEmployeeIds.map((item) => String(item || '').trim()).filter(Boolean)
+      : [],
     selfUpdateEnabled: Boolean(source.selfUpdateEnabled),
     updateBranch: source.updateBranch || 'main',
     updateRepositoryUrl: source.updateRepositoryUrl || '',

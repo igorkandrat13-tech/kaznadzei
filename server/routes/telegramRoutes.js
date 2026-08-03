@@ -20,6 +20,7 @@ const {
   clearTelegramDiagnosticLogs,
   getTelegramDiagnosticLogs,
 } = require('../services/telegramDiagnostics');
+const { notifyMaterialRequestWatchers } = require('../services/orderNotifications');
 const { createWorkshopRequestAttachment } = require('../services/workshopRequestAttachments');
 const {
   createTelegramEmployeeSessionToken,
@@ -490,12 +491,19 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
     console.error('Workshop request activity log error:', activityLogError.message);
   }
 
+  notifyMaterialRequestWatchers([
+    'Новая заявка: ТГ бот сотрудников',
+    `Сотрудник: ${employee.fullName || 'Сотрудник'}`,
+    attachments.length > 0 ? 'Тип: С фото' : 'Тип: Текст',
+    `Текст: ${createdRequest.text || 'без текста'}`,
+  ].join('\n')).catch(() => {});
+
   await sendAuthorizedMessage(
     token,
     chatId,
     attachments.length > 0
-      ? `Заявка с фото принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Все заявки".`
-      : `Заявка принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Все заявки".`,
+      ? `Заявка с фото принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Заявки на материалы".`
+      : `Заявка принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Заявки на материалы".`,
     updatedEmployee,
   );
   return true;

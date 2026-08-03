@@ -3608,9 +3608,12 @@ function OrdersWorkspace() {
   const headerPrimaryActionsTarget = typeof document !== 'undefined'
     ? document.getElementById('orders-header-primary-actions')
     : null;
+  const headerLeftActionsTarget = typeof document !== 'undefined'
+    ? document.getElementById('orders-header-left-actions')
+    : null;
 
-  const headerPrimaryActions = headerPrimaryActionsTarget ? createPortal(
-    <div className="orders-header-primary-actions">
+  const headerLeftActions = headerLeftActionsTarget ? createPortal(
+    <div className="orders-header-primary-actions orders-header-nav-actions">
       <Button
         variant="primary"
         className="section-toolbar-btn orders-header-toolbar-btn"
@@ -3618,10 +3621,16 @@ function OrdersWorkspace() {
           navigate('/requests');
         }}
       >
-        Все заявки
+        Заявки
       </Button>
+    </div>,
+    headerLeftActionsTarget,
+  ) : null;
+
+  const headerPrimaryActions = headerPrimaryActionsTarget ? createPortal(
+    <div className="orders-header-primary-actions orders-header-create-actions">
       <Button
-        variant="primary"
+        variant="success"
         className="section-toolbar-btn orders-header-toolbar-btn"
         onClick={() => {
           openCreateForm();
@@ -3630,7 +3639,7 @@ function OrdersWorkspace() {
         Новый заказ
       </Button>
       <Button
-        variant="primary"
+        variant="success"
         className="section-toolbar-btn orders-header-toolbar-btn"
         onClick={() => {
           openCreateRoomEditor();
@@ -3639,7 +3648,7 @@ function OrdersWorkspace() {
         Новое помещение
       </Button>
       <Button
-        variant="primary"
+        variant="success"
         className="section-toolbar-btn orders-header-toolbar-btn"
         onClick={() => {
           openCreateItemEditor();
@@ -3653,6 +3662,7 @@ function OrdersWorkspace() {
 
   return (
     <div>
+      {headerLeftActions}
       {headerPrimaryActions}
 
       <div className="card orders-workspace-table-card">

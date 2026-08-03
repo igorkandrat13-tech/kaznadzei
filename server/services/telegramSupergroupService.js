@@ -96,7 +96,7 @@ function buildEmployeeSignature(message = {}) {
   return `Сотрудник: ${fallbackName}`;
 }
 
-async function ensureOrderSupergroupTopic(orderInput = {}, { sendStarterMessage = false } = {}) {
+async function ensureOrderSupergroupTopic(orderInput = {}, { sendStarterMessage = false, requireEnabled = true } = {}) {
   const token = getConfiguredBotToken();
   const config = getInternalSupergroupConfig();
   const orderId = String(orderInput?._id || '').trim();
@@ -104,8 +104,11 @@ async function ensureOrderSupergroupTopic(orderInput = {}, { sendStarterMessage 
   if (!sourceOrder?._id) {
     return { ok: false, reason: 'ORDER_NOT_FOUND' };
   }
-  if (!config.enabled || !config.chatId) {
-    return { ok: false, reason: 'SUPERGROUP_NOT_CONFIGURED', order: sourceOrder };
+  if (!config.chatId) {
+    return { ok: false, reason: 'SUPERGROUP_CHAT_ID_NOT_CONFIGURED', order: sourceOrder };
+  }
+  if (requireEnabled && !config.enabled) {
+    return { ok: false, reason: 'SUPERGROUP_BRIDGE_DISABLED', order: sourceOrder };
   }
   if (!token) {
     return { ok: false, reason: 'BOT_TOKEN_NOT_CONFIGURED', order: sourceOrder };
