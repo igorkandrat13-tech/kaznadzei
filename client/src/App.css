@@ -1633,9 +1633,16 @@ body .order-primary-title-button-badge {
   gap: 16px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(14, 27, 46, 0.72);
-  border: 1px solid rgba(133, 186, 247, 0.1);
+  background: linear-gradient(180deg, rgba(18, 34, 54, 0.88), rgba(12, 24, 40, 0.82));
+  border: 1px solid rgba(133, 186, 247, 0.14);
+  box-shadow: 0 12px 28px rgba(2, 8, 16, 0.16);
   cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.settings-switch:hover {
+  border-color: rgba(153, 208, 255, 0.24);
+  box-shadow: 0 16px 34px rgba(2, 8, 16, 0.2);
 }
 
 .settings-switch-copy {
@@ -1653,6 +1660,7 @@ body .order-primary-title-button-badge {
 .settings-switch-subtitle {
   color: var(--text-soft);
   font-size: 13px;
+  font-weight: 600;
 }
 
 .settings-switch-control {
@@ -8572,6 +8580,44 @@ body .telegram-notification-row-meta .text-small,
 body .telegram-notification-row-meta .text-subtle,
 body .telegram-notification-row-meta div {
   color: #55708d;
+}
+
+body .settings-switch {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 249, 255, 0.94));
+  border-color: rgba(113, 158, 207, 0.22);
+  box-shadow: 0 16px 34px rgba(40, 76, 114, 0.1);
+}
+
+body .settings-switch:hover {
+  border-color: rgba(84, 145, 212, 0.3);
+  box-shadow: 0 18px 38px rgba(40, 76, 114, 0.14);
+}
+
+body .settings-switch-title {
+  color: #173857;
+}
+
+body .settings-switch-subtitle {
+  color: #55708d;
+}
+
+body .settings-switch-track {
+  background: rgba(216, 227, 239, 0.95);
+  border-color: rgba(131, 157, 186, 0.24);
+}
+
+body .settings-switch-thumb {
+  background: #ffffff;
+  box-shadow: 0 5px 12px rgba(56, 86, 120, 0.18);
+}
+
+body .settings-switch-control-on .settings-switch-track {
+  background: linear-gradient(135deg, #2da875, #52c890);
+  border-color: rgba(74, 190, 142, 0.34);
+}
+
+body .settings-switch-control input:focus-visible + .settings-switch-track {
+  box-shadow: 0 0 0 3px rgba(74, 190, 142, 0.18);
 }
 
 body .color-chip {
