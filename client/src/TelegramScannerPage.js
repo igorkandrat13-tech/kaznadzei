@@ -41,7 +41,14 @@ function TelegramScannerPage() {
   const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
   const [openingScanner, setOpeningScanner] = useState(false);
+  const [bootstrapProgress, setBootstrapProgress] = useState({ step: 0, total: 12, ready: false, note: '' });
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
+
+  const isReadyForScan = Boolean(
+    bootstrapProgress.ready
+      || getTelegramEmployeeDirectLink()
+      || getTelegramEmployeeSessionToken()
+  );
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 12 } = {}) => {
     markTelegramWebAppSession();
@@ -49,6 +56,14 @@ function TelegramScannerPage() {
     let currentSessionToken = getTelegramEmployeeSessionToken();
     let currentEmployeeLink = getTelegramEmployeeDirectLink();
     const waitForTelegramAuth = (delayMs = 500) => new Promise(resolve => window.setTimeout(resolve, delayMs));
+    if (currentEmployeeLink || currentSessionToken) {
+      setBootstrapProgress({ step: retries, total: retries, ready: true, note: 'Использую сохранённый доступ.' });
+      writeClientTelegramDiagnosticsLog('scanner.bootstrap.from-storage', {
+        hasEmployeeLink: Boolean(currentEmployeeLink),
+        hasSessionToken: Boolean(currentSessionToken),
+      }, 'telegram-scanner');
+      return true;
+    }
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
@@ -60,6 +75,13 @@ function TelegramScannerPage() {
       const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
       const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
       const employeeLink = currentEmployeeLink || getTelegramEmployeeDirectLink();
+
+      setBootstrapProgress({
+        step: attempt + 1,
+        total: retries,
+        ready: Boolean(employeeLink || sessionToken),
+        note: hasTelegramAuthPayload ? 'Telegram данные подгрузились — получаю стабильную ссылку...' : 'Жду Telegram auth данные...',
+      });
 
       writeClientTelegramDiagnosticsLog('scanner.bootstrap.attempt', {
         attempt,
@@ -97,6 +119,7 @@ function TelegramScannerPage() {
               const stableNow = currentEmployeeLink || getTelegramEmployeeDirectLink();
               const sessionNow = currentSessionToken || getTelegramEmployeeSessionToken();
               if (stableNow || sessionNow) {
+                setBootstrapProgress({ step: retries, total: retries, ready: true, note: 'Доступ получен. Можно сканировать.' });
                 writeClientTelegramDiagnosticsLog('scanner.bootstrap.success', {
                   attempt,
                   hasEmployeeLink: Boolean(stableNow),
@@ -112,6 +135,7 @@ function TelegramScannerPage() {
                 attempt,
                 message: (bootstrapData.message || '').slice(0, 255),
               }, 'telegram-scanner');
+              setBootstrapProgress(prev => ({ ...prev, note: 'Жду инициализацию Telegram...' }));
               await waitForTelegramAuth(attempt === 0 ? 300 : 700);
               continue;
             }
@@ -174,7 +198,7 @@ function TelegramScannerPage() {
         currentSessionToken = data?.sessionToken || '';
         setTelegramEmployeeSessionToken(currentSessionToken);
         if (!currentEmployeeLink && data?.employeeLink && typeof setTelegramEmployeeDirectLink === 'function') {
-          try { setTelegramEmployeeDirectLink(String(data.employeeLink || '')); } catch { /* ignore */ }
+          try { setTelegramEmployeeDirectLink(String(data.employeeLink || '')); currentEmployeeLink = String(data.employeeLink || ''); } catch { /* ignore */ }
         }
         writeClientTelegramDiagnosticsLog('scanner.session.success', {
           attempt,
@@ -185,7 +209,10 @@ function TelegramScannerPage() {
           employeeId: data?.employee?._id ? String(data.employee._id).slice(-6) : '',
           employeeRole: data?.employee?.role ? String(data.employee.role).slice(0, 80) : '',
         }, 'telegram-scanner');
-        return Boolean(currentSessionToken || employeeLink || data?.employeeLink);
+        if (currentSessionToken || currentEmployeeLink || data?.employeeLink) {
+          setBootstrapProgress({ step: retries, total: retries, ready: true, note: 'Доступ готов. Можно сканировать.' });
+          return true;
+        }
       } catch (sessionError) {
         lastError = sessionError;
         writeClientTelegramDiagnosticsLog('scanner.session.error', {
@@ -196,13 +223,31 @@ function TelegramScannerPage() {
       }
     }
 
+    setBootstrapProgress(prev => ({
+      ...prev,
+      step: retries,
+      total: retries,
+      ready: Boolean(getTelegramEmployeeDirectLink() || getTelegramEmployeeSessionToken()),
+      note: lastError ? `Не удалось автоматически получить доступ: ${(lastError.message || '').slice(0, 60)}` : 'Telegram auth данные не пришли. Нажмите Повторить или откройте заново через кнопку в боте.',
+    }));
+
     if (lastError) {
       setError(lastError.message || 'Не удалось подготовить доступ к заказу.');
     }
-    return false;
+    return Boolean(getTelegramEmployeeDirectLink() || getTelegramEmployeeSessionToken());
   }, []);
 
   const openScanner = useCallback(() => {
+    if (!isReadyForScan) {
+      setError('Дождитесь завершения подготовки доступа (прогресс ниже). Если долго не готово — нажмите Повторить попытку или переоткройте webapp через кнопку в боте.');
+      writeClientTelegramDiagnosticsLog('scanner.open.blocked-not-ready', {
+        bootstrappingSession,
+        bootstrapProgress,
+        hasEmployeeLinkDirect: Boolean(getTelegramEmployeeDirectLink()),
+        hasSessionTokenDirect: Boolean(getTelegramEmployeeSessionToken()),
+      }, 'telegram-scanner');
+      return;
+    }
     if (bootstrappingSession || openingScanner) return;
     setError('');
     setOpeningScanner(true);
@@ -227,7 +272,14 @@ function TelegramScannerPage() {
       setError(scannerError.message || 'Не удалось открыть камеру.');
       setOpeningScanner(false);
     }
-  }, [bootstrappingSession, navigate, openingScanner]);
+  }, [bootstrappingSession, bootstrapProgress, isReadyForScan, navigate, openingScanner]);
+
+  const retryBootstrap = useCallback(() => {
+    setError('');
+    setBootstrappingSession(true);
+    setBootstrapProgress({ step: 0, total: 12, ready: false, note: '' });
+    bootstrapTelegramSession({ retries: 12 }).finally(() => setBootstrappingSession(false));
+  }, [bootstrapTelegramSession]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -257,11 +309,14 @@ function TelegramScannerPage() {
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
-    if (!webApp || autoOpenedRef.current || bootstrappingSession) return;
+    if (!webApp || autoOpenedRef.current || bootstrappingSession || !isReadyForScan) return;
 
     autoOpenedRef.current = true;
     openScanner();
-  }, [bootstrappingSession, openScanner]);
+  }, [bootstrappingSession, isReadyForScan, openScanner]);
+
+  const percent = Math.round(Math.min(100, Math.max(0, (bootstrapProgress.step / Math.max(1, bootstrapProgress.total)) * 100)));
+  const readyBadge = isReadyForScan ? 'status-ready' : (bootstrappingSession ? 'status-wait' : 'status-stuck');
 
   return (
     <div className="card scanner-card">
@@ -270,8 +325,41 @@ function TelegramScannerPage() {
         После сканирования откроется страница заказа.
       </p>
 
-      <div className="scanner-status-box">
-        {bootstrappingSession ? 'Подготавливаю доступ...' : status}
+      <div className={`scanner-status-box scanner-status-${readyBadge}`}>
+        {isReadyForScan ? (
+          <div>
+            <div style={{ fontWeight: 700, color: 'var(--success,#2d7a4a)', marginBottom: 6 }}>
+              ✅ Доступ готов. Можно сканировать QR.
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted,#666)' }}>
+              {bootstrapProgress.note || status}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>
+              Подготовка доступа… {percent}% ({bootstrapProgress.step}/{bootstrapProgress.total})
+            </div>
+            <div style={{
+              width: '100%',
+              height: 10,
+              background: '#eee',
+              borderRadius: 5,
+              overflow: 'hidden',
+              margin: '4px 0 8px',
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${percent}%`,
+                background: percent > 60 ? 'linear-gradient(90deg,#4a6991,#6da17a)' : '#4a6991',
+                transition: 'width 200ms ease',
+              }} />
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted,#666)' }}>
+              {bootstrapProgress.note || 'Подождите несколько секунд — Telegram передаёт данные сотрудника.'}
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -281,8 +369,24 @@ function TelegramScannerPage() {
       )}
 
       <div className="inline-actions-centered">
-        <button className="btn btn-primary" onClick={openScanner} disabled={bootstrappingSession || openingScanner}>
-          {bootstrappingSession ? 'Подготовка...' : openingScanner ? 'Открываю...' : 'Открыть камеру'}
+        <button
+          className="btn btn-primary"
+          onClick={openScanner}
+          disabled={bootstrappingSession || openingScanner || !isReadyForScan}
+        >
+          {openingScanner
+            ? 'Открываю...'
+            : !isReadyForScan
+              ? 'Дождитесь подготовки...'
+              : 'Открыть камеру'}
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={retryBootstrap}
+          disabled={bootstrappingSession && bootstrapProgress.step < bootstrapProgress.total - 1}
+          title="Если Telegram auth данные не пришли — попытаться ещё раз"
+        >
+          Повторить
         </button>
         <button className="btn btn-secondary" onClick={() => closeTelegramWebApp() || navigate('/')}>
           Закрыть
