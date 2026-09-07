@@ -100,6 +100,99 @@ export function getTelegramWebApp() {
   return window.Telegram?.WebApp || null;
 }
 
+function maskTelegramValueForClientLog(raw, tail = 4) {
+  if (raw == null || raw === '') return raw;
+  const s = typeof raw === 'string' ? raw : String(raw);
+  if (s.length <= tail) return '***';
+  return `••••${s.slice(-tail)}`;
+}
+
+function getClientApiFetch() {
+  try {
+    if (typeof window !== 'undefined' && typeof window.__telegramDiagFetch === 'function') {
+      return window.__telegramDiagFetch;
+    }
+  } catch (error) {
+    // ignore
+  }
+  try {
+    return (url, options) => fetch(url, options);
+  } catch (error) {
+    return null;
+  }
+}
+
+function getTelegramClientDiagnosticsContext() {
+  const webApp = typeof getTelegramWebApp === 'function' ? getTelegramWebApp() : null;
+  const ua = typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 300) : '';
+  return {
+    clientTimestamp: new Date().toISOString(),
+    hasWebApp: Boolean(webApp),
+    webAppReadyState: typeof webApp !== 'undefined' && webApp && typeof webApp.isVersionAtLeast === 'function' ? 'ok' : (webApp ? 'minimal' : 'missing'),
+    webAppHasInitData: Boolean(webApp && webApp.initData),
+    webAppInitDataLength: webApp && webApp.initData ? String(webApp.initData).length : 0,
+    webAppHasUnsafeUser: Boolean(webApp && webApp.initDataUnsafe && webApp.initDataUnsafe.user && webApp.initDataUnsafe.user.id),
+    webAppUnsafeUserIdTail: maskTelegramValueForClientLog(webApp && webApp.initDataUnsafe && webApp.initDataUnsafe.user && webApp.initDataUnsafe.user.id, 4),
+    platform: typeof webApp !== 'undefined' && webApp && webApp.platform ? String(webApp.platform) : '',
+    version: typeof webApp !== 'undefined' && webApp && webApp.version ? String(webApp.version) : '',
+    userAgent: ua,
+    href: typeof location !== 'undefined' ? String(location.pathname || '').slice(0, 200) + (String(location.search || '').length > 0 ? '?…' : '') : '',
+  };
+}
+
+export async function writeClientTelegramDiagnosticsLog(event, details = {}, scope = 'telegram-webapp') {
+  const fallbackEvent = event || 'client.event';
+  const normalizedScope = String(scope || 'telegram-webapp').toLowerCase().trim();
+  try {
+    const fetch = getClientApiFetch();
+    if (!fetch) return false;
+    const context = getTelegramClientDiagnosticsContext();
+    const safeDetails = (() => {
+      const out = {};
+      const raw = details && typeof details === 'object' && !Array.isArray(details) ? details : { raw: details };
+      Object.keys(raw).forEach((key) => {
+        const normalizedKey = String(key || '').toLowerCase();
+        const value = raw[key];
+        const sensitive = normalizedKey.includes('token') || /(password|secret|key$|hash|signature|session|auth_date|initdata|bot.?token|telegramuserid|telegramchatid)/i.test(normalizedKey);
+        if (sensitive) {
+          if (value == null || value === '') {
+            out[key] = value;
+          } else if (typeof value === 'object') {
+            out[key] = '[redacted object]';
+          } else {
+            out[key] = maskTelegramValueForClientLog(value, 4);
+          }
+          return;
+        }
+        if (typeof value === 'string' && value.length > 3000) {
+          out[key] = `${value.slice(0, 3000)}… [truncated ${value.length - 3000} chars]`;
+          return;
+        }
+        out[key] = value;
+      });
+      return out;
+    })();
+    const response = await fetch('/api/telegram/client-diagnostics-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scope: normalizedScope,
+        event: String(fallbackEvent).slice(0, 128),
+        details: {
+          ...safeDetails,
+          clientContext: context,
+        },
+      }),
+    });
+    return Boolean(response && response.ok);
+  } catch (error) {
+    if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+      console.warn('[telegram-diag] client log failed:', error && error.message ? error.message : String(error));
+    }
+    return false;
+  }
+}
+
 export function markTelegramWebAppSession() {
   storageSet(TELEGRAM_SESSION_STORAGE_KEY, '1');
 }

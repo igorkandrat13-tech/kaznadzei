@@ -185,6 +185,43 @@ router.get('/telegram/auth-diagnostics', requireAdminAccess(), (req, res) => {
   }
 });
 
+router.post('/telegram/client-diagnostics-log', express.json({ limit: '256kb' }), (req, res) => {
+  try {
+    const payload = req && req.body ? req.body : {};
+    const rawScope = String(payload.scope || 'telegram-webapp').toLowerCase().trim().slice(0, 64);
+    const allowedScopes = ['telegram-webapp', 'telegram-order', 'telegram-scanner', 'customer-telegram', 'telegram-supergroup'];
+    const scope = allowedScopes.includes(rawScope) ? rawScope : 'telegram-webapp';
+    const event = String(payload.event || 'client.event').slice(0, 128);
+    const details = payload.details && typeof payload.details === 'object' && !Array.isArray(payload.details)
+      ? payload.details
+      : { raw: typeof payload.details === 'object' ? payload.details : String(payload.details || '').slice(0, 2000) };
+    const cappedDetails = {};
+    Object.keys(details).forEach((key) => {
+      const raw = details[key];
+      const normalizedKey = String(key || '').toLowerCase();
+      const sensitive = normalizedKey.includes('token') || /(password|secret|key$|hash|signature|session|auth_date|initdata|bot.?token|telegramuserid|telegramchatid)/i.test(normalizedKey);
+      if (sensitive) {
+        if (raw == null || raw === '') cappedDetails[key] = raw;
+        else if (typeof raw === 'object') cappedDetails[key] = '[redacted object]';
+        else {
+          const s = String(raw);
+          cappedDetails[key] = s.length > 4 ? `••••${s.slice(-4)}` : '***';
+        }
+        return;
+      }
+      if (typeof raw === 'string' && raw.length > 3500) {
+        cappedDetails[key] = `${raw.slice(0, 3500)}… [truncated ${raw.length - 3500} chars]`;
+        return;
+      }
+      cappedDetails[key] = raw;
+    });
+    addTelegramDiagnosticLog(scope, event, cappedDetails);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(error.status || 400).json({ ok: false, message: error.message || 'Не удалось сохранить клиентское диагностическое событие.' });
+  }
+});
+
 function getConfiguredBotToken() {
   return String(SettingsStore.get().telegramBotToken || '').trim();
 }
