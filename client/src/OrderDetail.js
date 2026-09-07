@@ -479,7 +479,9 @@ function OrderDetail() {
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
 
-    const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
+    const freshInitData = telegramInitData || getTelegramInitData();
+    const freshUnsafeUser = telegramUnsafeUser || getTelegramUnsafeUser();
+    const hasTelegramAuthPayload = Boolean(freshInitData || freshUnsafeUser?.id);
     const currentSessionToken = getActiveTelegramSessionToken();
     const canAttemptServerCall = Boolean(hasTelegramAuthPayload || currentSessionToken);
 
@@ -487,6 +489,7 @@ function OrderDetail() {
       setSessionLoading(true);
       setSessionError('');
       const retryTimer = window.setTimeout(() => {
+        refreshTelegramAuth();
         setTelegramSessionBootstrapKey(current => current + 1);
       }, 500);
       return () => window.clearTimeout(retryTimer);
@@ -494,11 +497,11 @@ function OrderDetail() {
 
     if (!canAttemptServerCall && telegramAuthResolved) {
       refreshTelegramAuth();
-      const freshInitData = getTelegramInitData();
-      const freshUnsafeUser = getTelegramUnsafeUser();
-      const freshHasPayload = Boolean(freshInitData || freshUnsafeUser?.id);
-      const freshSession = getActiveTelegramSessionToken();
-      if (!freshHasPayload && !freshSession) {
+      const finalInitData = getTelegramInitData();
+      const finalUnsafeUser = getTelegramUnsafeUser();
+      const finalHasPayload = Boolean(finalInitData || finalUnsafeUser?.id);
+      const finalSession = getActiveTelegramSessionToken();
+      if (!finalHasPayload && !finalSession) {
         setTelegramEmployee(null);
         setSessionLoading(false);
         setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте.');
@@ -516,8 +519,8 @@ function OrderDetail() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          initData: telegramInitData || getTelegramInitData(),
-          unsafeUser: telegramUnsafeUser || getTelegramUnsafeUser(),
+          initData: freshInitData,
+          unsafeUser: freshUnsafeUser,
           sessionToken: sessionTokenOverride,
         }),
       });
@@ -530,8 +533,10 @@ function OrderDetail() {
 
     const promise = resolveSession()
       .catch(async (error) => {
+        const storedInitData = getTelegramInitData();
+        const storedUnsafeUser = getTelegramUnsafeUser();
         const canRetryWithoutToken = currentSessionToken
-          && (Boolean(telegramInitData || getTelegramInitData() || telegramUnsafeUser?.id || getTelegramUnsafeUser()?.id))
+          && (Boolean(freshInitData || storedInitData || freshUnsafeUser?.id || storedUnsafeUser?.id))
           && isRecoverableTelegramSessionMessage(error.message);
         if (!canRetryWithoutToken) {
           throw error;
@@ -594,12 +599,12 @@ function OrderDetail() {
       webApp.expand();
     }
 
-    const retryTimers = [100, 400, 900, 1800, 3200].map(delay => window.setTimeout(refreshTelegramAuth, delay));
+    const retryTimers = [100, 400, 900, 1800, 3200, 4800].map(delay => window.setTimeout(refreshTelegramAuth, delay));
     const finishTimer = window.setTimeout(() => {
       refreshTelegramAuth();
       setTelegramAuthResolved(true);
       setTelegramSessionBootstrapKey(current => current + 1);
-    }, 4500);
+    }, 6500);
 
     return () => {
       retryTimers.forEach(timerId => window.clearTimeout(timerId));

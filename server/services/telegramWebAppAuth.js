@@ -2,8 +2,23 @@ const crypto = require('crypto');
 
 const TELEGRAM_EMPLOYEE_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const TELEGRAM_EMPLOYEE_SESSION_EXPIRATION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+const TELEGRAM_INIT_DATA_STRICT_TTL_SEC = 24 * 60 * 60;
+const TELEGRAM_INIT_DATA_STALE_TTL_SEC = 180 * 24 * 60 * 60;
 
-function getTelegramWebAppUser(token, initData) {
+function extractTelegramInitDataUser(initData) {
+  const normalizedInitData = String(initData || '').trim();
+  if (!normalizedInitData) return null;
+  const params = new URLSearchParams(normalizedInitData);
+  const userJson = params.get('user');
+  if (!userJson) return null;
+  try {
+    return JSON.parse(userJson);
+  } catch (error) {
+    return null;
+  }
+}
+
+function getTelegramWebAppUser(token, initData, { allowStaleSignature = false } = {}) {
   const normalizedToken = String(token || '').trim();
   const normalizedInitData = String(initData || '').trim();
 
@@ -60,7 +75,35 @@ function getTelegramWebAppUser(token, initData) {
     throw new Error('Некорректные данные пользователя Telegram.');
   }
 
-  return user;
+  const authDateRaw = Number(params.get('auth_date') || 0);
+  const authDateSec = Number.isFinite(authDateRaw) ? authDateRaw : 0;
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  if (authDateSec <= 0) {
+    throw new Error('Отсутствует дата авторизации в initData Telegram Web App.');
+  }
+
+  const ageSec = Math.max(0, nowSec - authDateSec);
+  if (ageSec <= TELEGRAM_INIT_DATA_STRICT_TTL_SEC) {
+    return {
+      ...user,
+      signatureStale: false,
+      authDateSec,
+      ageSec,
+    };
+  }
+
+  const staleLimit = Math.max(TELEGRAM_INIT_DATA_STRICT_TTL_SEC, Number(TELEGRAM_INIT_DATA_STALE_TTL_SEC || 0));
+  if (!allowStaleSignature || ageSec > staleLimit) {
+    throw new Error('Подпись Telegram Web App устарела. Для продолжения откройте web app заново через кнопку в боте.');
+  }
+
+  return {
+    ...user,
+    signatureStale: true,
+    authDateSec,
+    ageSec,
+  };
 }
 
 function getTelegramWebAppUserFallback(payload) {
@@ -80,7 +123,22 @@ function getTelegramWebAppUserFallback(payload) {
 function resolveTelegramWebAppUser(token, payload) {
   const initData = String(payload?.initData || '').trim();
   if (initData) {
-    return getTelegramWebAppUser(token, initData);
+    try {
+      return getTelegramWebAppUser(token, initData, { allowStaleSignature: true });
+    } catch (error) {
+      const staleFallbackUser = extractTelegramInitDataUser(initData);
+      if (staleFallbackUser && staleFallbackUser.id) {
+        return {
+          ...staleFallbackUser,
+          signatureInvalid: true,
+          initDataFallback: true,
+        };
+      }
+      const unsafeUser = payload?.unsafeUser;
+      if (!unsafeUser || !unsafeUser.id) {
+        throw error;
+      }
+    }
   }
 
   return getTelegramWebAppUserFallback(payload);

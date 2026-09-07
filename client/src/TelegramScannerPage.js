@@ -40,11 +40,11 @@ function TelegramScannerPage() {
   const [openingScanner, setOpeningScanner] = useState(false);
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
-  const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
+  const bootstrapTelegramSession = useCallback(async ({ retries = 6 } = {}) => {
     markTelegramWebAppSession();
     let lastError = null;
     let currentSessionToken = getTelegramEmployeeSessionToken();
-    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 350));
+    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 500));
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
@@ -65,6 +65,9 @@ function TelegramScannerPage() {
       }
 
       if (!hasTelegramAuthPayload && !sessionToken) {
+        if (attempt < retries - 1) {
+          await waitForTelegramAuth();
+        }
         continue;
       }
 
@@ -87,6 +90,12 @@ function TelegramScannerPage() {
             if (attempt < retries - 1) {
               await waitForTelegramAuth();
             }
+            continue;
+          }
+          if (hasTelegramAuthPayload && attempt < retries - 1) {
+            currentSessionToken = '';
+            setTelegramEmployeeSessionToken('');
+            await waitForTelegramAuth();
             continue;
           }
           throw new Error(errorMessage);
@@ -138,9 +147,8 @@ function TelegramScannerPage() {
     const sessionTokenFromUrl = params.get('employeeSessionToken');
     if (!sessionTokenFromUrl) return;
 
-    if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
-      setTelegramEmployeeSessionToken(sessionTokenFromUrl);
-    }
+    const normalizedToken = String(sessionTokenFromUrl || '').trim();
+    setTelegramEmployeeSessionToken(normalizedToken);
     navigate('/telegram-app', { replace: true });
   }, [location.search, navigate]);
 
