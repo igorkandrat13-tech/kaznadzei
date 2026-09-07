@@ -4,6 +4,116 @@ const TELEGRAM_EMPLOYEE_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const TELEGRAM_EMPLOYEE_SESSION_EXPIRATION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 const TELEGRAM_INIT_DATA_STRICT_TTL_SEC = 24 * 60 * 60;
 const TELEGRAM_INIT_DATA_STALE_TTL_SEC = 180 * 24 * 60 * 60;
+const TELEGRAM_STABLE_EMPLOYEE_LINK_TTL_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+
+function base64urlEncode(input) {
+  const raw = Buffer.isBuffer(input) ? input : Buffer.from(String(input == null ? '' : input));
+  return raw.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function base64urlDecode(input) {
+  const normalized = String(input || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  return Buffer.from(padded, 'base64');
+}
+
+function createTelegramStableEmployeeLinkSignature(token, payload) {
+  const key = String(token || '');
+  if (!key) {
+    throw new Error('Токен Telegram-бота не настроен.');
+  }
+  const normalized = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload
+    : { value: String(payload || '') };
+  const material = Object.keys(normalized)
+    .filter((k) => typeof k === 'string' && k.length > 0)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(
+      normalized[k] == null ? '' : (typeof normalized[k] === 'string' ? normalized[k] : JSON.stringify(normalized[k]))
+    )}`)
+    .join('&');
+  const secretKey = crypto
+    .createHmac('sha256', 'WebAppData')
+    .update(key)
+    .digest();
+  return crypto
+    .createHmac('sha256', secretKey)
+    .update(material)
+    .digest('hex');
+}
+
+function signTelegramEmployeeDirectLink(token, employeeId, options = {}) {
+  const employee = String(employeeId || '').trim();
+  if (!employee) {
+    throw new Error('Не передан идентификатор сотрудника.');
+  }
+  const orderId = String(options.orderId || '').trim();
+  const scope = String(options.scope || 'qr-item').trim().slice(0, 80);
+  const issuedAt = Number(options.issuedAt || Date.now());
+  const expiresAt = Number(options.expiresAt || (issuedAt + TELEGRAM_STABLE_EMPLOYEE_LINK_TTL_MS));
+  const payload = {
+    employeeId: employee,
+    orderId,
+    scope,
+    iat: Math.floor(issuedAt / 1000),
+    exp: Math.floor(expiresAt / 1000),
+    v: '1',
+  };
+  const encodedPayload = base64urlEncode(JSON.stringify(payload));
+  const signature = createTelegramStableEmployeeLinkSignature(token, payload);
+  return `${encodedPayload}.${signature}`;
+}
+
+function verifyTelegramEmployeeDirectLink(token, rawLink, { allowGracePeriod = true } = {}) {
+  const normalized = String(rawLink || '').trim();
+  if (!normalized) {
+    throw new Error('Не передан прямой идентификатор сотрудника из QR.');
+  }
+  const parts = normalized.split('.');
+  if (parts.length !== 2) {
+    throw new Error('Некорректный формат прямой ссылки сотрудника.');
+  }
+  const [encodedPayload, providedSignature] = parts;
+  let payload;
+  try {
+    const json = base64urlDecode(encodedPayload).toString('utf8');
+    payload = JSON.parse(json);
+  } catch (error) {
+    throw new Error('Не удалось разобрать данные сотрудника из QR.');
+  }
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Некорректные данные сотрудника в QR.');
+  }
+  const expected = createTelegramStableEmployeeLinkSignature(token, payload);
+  const a = Buffer.from(expected || '', 'hex');
+  const b = Buffer.from(providedSignature || '', 'hex');
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    throw new Error('Подпись прямой ссылки сотрудника не совпала.');
+  }
+  if (!payload.employeeId || !String(payload.employeeId).trim()) {
+    throw new Error('В прямой ссылке сотрудника отсутствует идентификатор.');
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  const expSec = Number(payload.exp) || 0;
+  const iatSec = Number(payload.iat) || 0;
+  const graceSec = allowGracePeriod ? Math.floor(TELEGRAM_EMPLOYEE_SESSION_EXPIRATION_GRACE_MS / 1000) : 0;
+  const expired = Boolean(expSec > 0 && nowSec > expSec);
+  if (expSec > 0 && nowSec > expSec + graceSec) {
+    throw new Error('Срок действия прямой ссылки сотрудника истёк. Откройте заказ заново через кнопку в боте.');
+  }
+  return {
+    employeeId: String(payload.employeeId),
+    orderId: String(payload.orderId || ''),
+    scope: String(payload.scope || ''),
+    issuedAt: iatSec ? new Date(iatSec * 1000).toISOString() : null,
+    expiresAt: expSec ? new Date(expSec * 1000).toISOString() : null,
+    expired,
+    graceAllowed: Boolean(allowGracePeriod && expired),
+  };
+}
 
 function extractTelegramInitDataUser(initData) {
   const normalizedInitData = String(initData || '').trim();
@@ -246,4 +356,6 @@ module.exports = {
   getTelegramWebAppUser,
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
+  signTelegramEmployeeDirectLink,
+  verifyTelegramEmployeeDirectLink,
 };

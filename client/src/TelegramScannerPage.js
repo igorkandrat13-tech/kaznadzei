@@ -6,6 +6,7 @@ import {
   closeTelegramWebApp,
   getTelegramEmployeeSessionToken,
   getTelegramInitData,
+  getTelegramEmployeeDirectLink,
   getTelegramUnsafeUser,
   getTelegramWebApp,
   isTelegramEmployeeSessionTokenExpired,
@@ -13,7 +14,9 @@ import {
   openTelegramQrScanner,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
+  setTelegramEmployeeDirectLink,
   setTelegramEmployeeSessionToken,
+  writeClientTelegramDiagnosticsLog,
 } from './telegramWebApp';
 import { useGlobalErrorEffect } from './globalErrors';
 
@@ -44,27 +47,68 @@ function TelegramScannerPage() {
     markTelegramWebAppSession();
     let lastError = null;
     let currentSessionToken = getTelegramEmployeeSessionToken();
+    let currentEmployeeLink = getTelegramEmployeeDirectLink();
     const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 500));
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
       persistTelegramUnsafeUser();
 
-      const initData = getTelegramInitData();
-      const unsafeUser = getTelegramUnsafeUser();
+      const initData = getTelegramInitData() || (getTelegramWebApp()?.initData || '');
+      const unsafeUser = getTelegramUnsafeUser() || (getTelegramWebApp()?.initDataUnsafe?.user || null);
       const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
       const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
+      const employeeLink = currentEmployeeLink || getTelegramEmployeeDirectLink();
 
-      // In Telegram Web App the signed auth payload may appear a bit later than the
-      // URL query token. Give it a chance to arrive before trusting a stale token.
-      if (!hasTelegramAuthPayload) {
+      if (!hasTelegramAuthPayload && !sessionToken && !employeeLink) {
         if (attempt < retries - 1) {
           await waitForTelegramAuth();
           continue;
         }
       }
 
-      if (!hasTelegramAuthPayload && !sessionToken) {
+      if ((attempt === 0 || attempt === 3) && hasTelegramAuthPayload && !employeeLink) {
+        try {
+          const bootstrapRes = await apiFetch('/api/telegram/webapp/bootstrap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData, unsafeUser, scope: 'scanner-bootstrap' }),
+          });
+          if (bootstrapRes.ok) {
+            const bootstrapData = await parseJsonSafely(bootstrapRes);
+            if (bootstrapData?.employeeLink) {
+              currentEmployeeLink = String(bootstrapData.employeeLink || '');
+              setTelegramEmployeeDirectLink(currentEmployeeLink);
+            }
+            if (bootstrapData?.sessionToken) {
+              currentSessionToken = String(bootstrapData.sessionToken || '');
+              setTelegramEmployeeSessionToken(currentSessionToken);
+            }
+            if (bootstrapData?.employee) {
+              const stableNow = currentEmployeeLink || getTelegramEmployeeDirectLink();
+              const sessionNow = currentSessionToken || getTelegramEmployeeSessionToken();
+              if (stableNow || sessionNow) {
+                writeClientTelegramDiagnosticsLog('scanner.bootstrap.success', {
+                  attempt,
+                  hasEmployeeLink: Boolean(stableNow),
+                  hasSessionToken: Boolean(sessionNow),
+                  employeeId: bootstrapData.employee._id ? String(bootstrapData.employee._id).slice(-6) : '',
+                  employeeRole: String(bootstrapData.employee.role || '').slice(0, 80),
+                }, 'telegram-scanner');
+                return true;
+              }
+            }
+          }
+        } catch (bootstrapError) {
+          lastError = bootstrapError;
+          writeClientTelegramDiagnosticsLog('scanner.bootstrap.webapp-failed', {
+            attempt,
+            message: bootstrapError.message || '',
+          }, 'telegram-scanner');
+        }
+      }
+
+      if (!hasTelegramAuthPayload && !sessionToken && !employeeLink) {
         if (attempt < retries - 1) {
           await waitForTelegramAuth();
         }
@@ -79,12 +123,22 @@ function TelegramScannerPage() {
             initData,
             unsafeUser,
             sessionToken,
+            employeeLink,
           }),
         });
         const data = await parseJsonSafely(res);
         if (!res.ok) {
           const errorMessage = data?.message || 'Не удалось подготовить доступ к заказу.';
-          if (sessionToken && isRecoverableTelegramSessionMessage(errorMessage)) {
+          if (employeeLink) {
+            writeClientTelegramDiagnosticsLog('scanner.session.direct-link-failed', {
+              attempt,
+              hasInitData: Boolean(initData),
+              hasUnsafeUser: Boolean(unsafeUser?.id),
+              hasSessionToken: Boolean(sessionToken),
+              message: errorMessage.slice(0, 255),
+            }, 'telegram-scanner');
+          }
+          if ((sessionToken || employeeLink) && isRecoverableTelegramSessionMessage(errorMessage)) {
             currentSessionToken = '';
             setTelegramEmployeeSessionToken('');
             if (attempt < retries - 1) {
@@ -102,9 +156,20 @@ function TelegramScannerPage() {
         }
         currentSessionToken = data?.sessionToken || '';
         setTelegramEmployeeSessionToken(currentSessionToken);
-        return Boolean(currentSessionToken);
+        writeClientTelegramDiagnosticsLog('scanner.session.success', {
+          attempt,
+          hasSessionToken: Boolean(currentSessionToken),
+          hasDirectLink: Boolean(employeeLink),
+          employeeId: data?.employee?._id ? String(data.employee._id).slice(-6) : '',
+          employeeRole: data?.employee?.role ? String(data.employee.role).slice(0, 80) : '',
+        }, 'telegram-scanner');
+        return Boolean(currentSessionToken || employeeLink);
       } catch (sessionError) {
         lastError = sessionError;
+        writeClientTelegramDiagnosticsLog('scanner.session.error', {
+          attempt,
+          message: sessionError.message || '',
+        }, 'telegram-scanner');
         await waitForTelegramAuth();
       }
     }

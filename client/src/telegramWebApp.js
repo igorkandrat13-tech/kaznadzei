@@ -2,6 +2,7 @@ const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
 const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
 const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
+const TELEGRAM_EMPLOYEE_DIRECT_LINK_KEY = 'kaznadzei.telegram_employee_direct_link';
 
 function getStorageBackends() {
   const backends = [];
@@ -264,6 +265,14 @@ export function getTelegramEmployeeSessionToken() {
   return storedToken;
 }
 
+export function setTelegramEmployeeDirectLink(value) {
+  storageSet(TELEGRAM_EMPLOYEE_DIRECT_LINK_KEY, value == null ? '' : String(value));
+}
+
+export function getTelegramEmployeeDirectLink() {
+  return storageGet(TELEGRAM_EMPLOYEE_DIRECT_LINK_KEY) || '';
+}
+
 export function getOrderPathFromQr(rawValue) {
   const value = String(rawValue || '').trim();
   if (!value) return '';
@@ -285,13 +294,16 @@ export function getOrderPathFromQr(rawValue) {
   return '';
 }
 
-export function buildTelegramOrderPath(orderPath, sessionToken = getTelegramEmployeeSessionToken()) {
+export function buildTelegramOrderPath(orderPath, sessionToken = getTelegramEmployeeSessionToken(), employeeLink = getTelegramEmployeeDirectLink()) {
   const normalizedPath = String(orderPath || '').trim();
   if (!normalizedPath) return '';
 
   const [pathWithoutHash, hashPart = ''] = normalizedPath.split('#', 2);
   const url = new URL(pathWithoutHash, window.location.origin);
-  if (sessionToken) {
+  if (employeeLink) {
+    url.searchParams.set('employeeLink', String(employeeLink));
+  }
+  if (sessionToken && !url.searchParams.get('employeeLink')) {
     url.searchParams.set('employeeSessionToken', String(sessionToken));
   }
 

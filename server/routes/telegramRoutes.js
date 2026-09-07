@@ -26,6 +26,8 @@ const {
   createTelegramEmployeeSessionToken,
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
+  signTelegramEmployeeDirectLink,
+  verifyTelegramEmployeeDirectLink,
 } = require('../services/telegramWebAppAuth');
 const {
   CUSTOMER_FULL_ORDER_BUTTON_TEXT,
@@ -219,6 +221,82 @@ router.post('/telegram/client-diagnostics-log', express.json({ limit: '256kb' })
     res.json({ ok: true });
   } catch (error) {
     res.status(error.status || 400).json({ ok: false, message: error.message || 'Не удалось сохранить клиентское диагностическое событие.' });
+  }
+});
+
+router.get('/telegram/stable-employee-link', requireAdminAccess(), (req, res) => {
+  const token = getConfiguredBotToken();
+  if (!token) {
+    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
+  }
+  try {
+    const employeeId = String((req.query.employeeId) || '').trim() || String((req.user && req.user._id) || '').trim();
+    if (!employeeId) {
+      return res.status(400).json({ message: 'Не передан идентификатор сотрудника.' });
+    }
+    const employee = EmployeeStore.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: 'Сотрудник не найден.' });
+    }
+    const scope = String(req.query.scope || 'qr-item').trim().slice(0, 80);
+    const orderId = String(req.query.orderId || '').trim();
+    const link = signTelegramEmployeeDirectLink(token, employee._id.toString(), { orderId, scope });
+    res.json({ ok: true, employeeId: employee._id.toString(), scope, orderId, employeeLink: link, expiresInDays: 5 * 365 });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось сгенерировать стабильную ссылку сотрудника.' });
+  }
+});
+
+router.post('/telegram/webapp/bootstrap', (req, res) => {
+  const token = getConfiguredBotToken();
+  if (!token) {
+    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
+  }
+  try {
+    const payload = req && req.body ? req.body : {};
+    const initData = String(payload.initData || '').trim();
+    const unsafeUser = payload.unsafeUser && typeof payload.unsafeUser === 'object' ? payload.unsafeUser : null;
+    let resolvedTelegramUserId = '';
+    if (initData) {
+      try {
+        const parsed = extractTelegramInitDataUser(initData);
+        if (parsed?.id) resolvedTelegramUserId = String(parsed.id);
+      } catch { /* ignore */ }
+    }
+    if (!resolvedTelegramUserId && unsafeUser?.id) {
+      resolvedTelegramUserId = String(unsafeUser.id);
+    }
+    if (!resolvedTelegramUserId) {
+      return res.status(400).json({ message: 'Не удалось определить пользователя Telegram.' });
+    }
+    const employee = EmployeeStore.findByTelegramUserId(resolvedTelegramUserId);
+    if (!employee) {
+      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+    }
+    const scope = String(payload.scope || 'webapp-bootstrap').trim().slice(0, 80);
+    const orderId = String(payload.orderId || '').trim();
+    const employeeLink = signTelegramEmployeeDirectLink(token, employee._id.toString(), { orderId, scope });
+    const nextSessionToken = createTelegramEmployeeSessionToken(token, employee);
+    EmployeeStore.touchTelegramUser(employee._id, {
+      telegramUsername: unsafeUser?.username ? `@${String(unsafeUser.username).replace(/^@+/, '')}` : employee.telegramUsername || '',
+      telegramFirstName: unsafeUser?.first_name || employee.telegramFirstName || '',
+      telegramLastName: unsafeUser?.last_name || employee.telegramLastName || '',
+    });
+    res.json({
+      ok: true,
+      employee: {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+        telegramUsername: employee.telegramUsername || '',
+        telegramUserId: employee.telegramUserId || '',
+      },
+      employeeLink,
+      sessionToken: nextSessionToken,
+      expiresInDays: { employeeLink: 5 * 365, sessionToken: 365 },
+    });
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось сгенерировать bootstrap-данные Web App.' });
   }
 });
 
@@ -1107,11 +1185,61 @@ router.post('/telegram/webapp/session', async (req, res) => {
   try {
     let employee = null;
     let telegramUser = null;
+    let authPath = 'unknown';
+    let authMeta = {};
     const payload = req.body || {};
     const payloadDebug = getTelegramPayloadDebug(payload);
     logTelegramWebAppDebug('session.request', payloadDebug);
 
-    if (payload.sessionToken) {
+    if (payload.employeeLink) {
+      try {
+        const directLinkPayload = verifyTelegramEmployeeDirectLink(token, payload.employeeLink, { allowGracePeriod: true });
+        employee = EmployeeStore.findById(directLinkPayload.employeeId);
+        if (!employee) {
+          logTelegramWebAppDebug('session.reject.direct-link-employee-not-found', {
+            ...payloadDebug,
+            employeeId: directLinkPayload.employeeId,
+            orderId: directLinkPayload.orderId || '',
+            scope: directLinkPayload.scope || '',
+          });
+          return res.status(403).json({ message: 'Сотрудник по QR не найден. Обновите QR-код через кнопку в боте.' });
+        }
+        authPath = 'direct-link';
+        authMeta = {
+          expired: Boolean(directLinkPayload.expired),
+          graceAllowed: Boolean(directLinkPayload.graceAllowed),
+          scope: directLinkPayload.scope || '',
+          orderId: directLinkPayload.orderId || '',
+          issuedAt: directLinkPayload.issuedAt || '',
+          expiresAt: directLinkPayload.expiresAt || '',
+        };
+        logTelegramWebAppDebug(authMeta.graceAllowed ? 'session.auth.direct-link-grace' : 'session.auth.direct-link-ok', {
+          ...payloadDebug,
+          employeeId: employee._id,
+          employeeRole: employee.role,
+          ...authMeta,
+        });
+        telegramUser = {
+          id: employee.telegramUserId || '',
+          username: employee.telegramUsername || '',
+          first_name: employee.telegramFirstName || '',
+          last_name: employee.telegramLastName || '',
+        };
+      } catch (directLinkError) {
+        logTelegramWebAppDebug('session.auth.direct-link-failed', {
+          ...payloadDebug,
+          message: directLinkError.message || 'Direct link validation failed.',
+          hasSessionToken: Boolean(payload.sessionToken),
+          hasInitData: Boolean(String(payload.initData || '').trim()),
+          hasUnsafeUserId: Boolean(payload.unsafeUser?.id),
+        });
+        if (!payload.sessionToken && !String(payload.initData || '').trim() && !payload.unsafeUser?.id) {
+          throw directLinkError;
+        }
+      }
+    }
+
+    if (!employee && payload.sessionToken) {
       try {
         const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken, { allowGracePeriod: true });
         employee = EmployeeStore.findById(sessionPayload.employeeId);
@@ -1125,13 +1253,17 @@ router.post('/telegram/webapp/session', async (req, res) => {
           });
           return res.status(403).json({ message: 'Сотрудник Telegram не найден или session token устарел.' });
         }
+        authPath = 'session-token';
+        authMeta = {
+          expired: Boolean(sessionPayload.expired),
+          graceAllowed: Boolean(sessionPayload.graceAllowed),
+        };
         logTelegramWebAppDebug(sessionPayload.graceAllowed ? 'session.auth.session-token-grace' : 'session.auth.session-token-ok', {
           ...payloadDebug,
           employeeId: employee._id,
           employeeRole: employee.role,
           telegramUserId: String(sessionPayload.telegramUserId || ''),
-          expired: Boolean(sessionPayload.expired),
-          graceAllowed: Boolean(sessionPayload.graceAllowed),
+          ...authMeta,
         });
         telegramUser = {
           id: sessionPayload.telegramUserId,
@@ -1151,15 +1283,17 @@ router.post('/telegram/webapp/session', async (req, res) => {
         }
         telegramUser = resolveTelegramWebAppUser(token, payload);
         employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+        authPath = 'payload-fallback';
         logTelegramWebAppDebug('session.auth.payload-fallback', {
           ...payloadDebug,
           resolvedTelegramUserId: String(telegramUser?.id || ''),
           employeeFound: Boolean(employee),
         });
       }
-    } else {
+    } else if (!employee) {
       telegramUser = resolveTelegramWebAppUser(token, payload);
       employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+      authPath = 'payload-only';
       logTelegramWebAppDebug('session.auth.payload-only', {
         ...payloadDebug,
         resolvedTelegramUserId: String(telegramUser?.id || ''),
@@ -1171,6 +1305,7 @@ router.post('/telegram/webapp/session', async (req, res) => {
       logTelegramWebAppDebug('session.reject.employee-not-found', {
         ...payloadDebug,
         resolvedTelegramUserId: String(telegramUser?.id || ''),
+        authPath,
       });
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
     }
@@ -1184,10 +1319,12 @@ router.post('/telegram/webapp/session', async (req, res) => {
     const nextSessionToken = createTelegramEmployeeSessionToken(token, employee);
     logTelegramWebAppDebug('session.success', {
       ...payloadDebug,
+      authPath,
       employeeId: employee._id,
       employeeRole: employee.role,
       telegramUserId: String(telegramUser?.id || ''),
       issuedSessionTokenTail: maskTelegramValue(nextSessionToken),
+      ...authMeta,
     });
 
     res.json({
@@ -1198,15 +1335,14 @@ router.post('/telegram/webapp/session', async (req, res) => {
         fullName: employee.fullName,
         role: employee.role,
         telegramUsername: employee.telegramUsername || '',
-        allowedColumns: getEmployeeAllowedColumns(employee),
+        telegramUserId: employee.telegramUserId || '',
       },
     });
   } catch (error) {
     logTelegramWebAppDebug('session.error', {
-      ...getTelegramPayloadDebug(req.body || {}),
-      message: error.message || 'Не удалось авторизовать Telegram Web App.',
+      error: error.message || 'Unknown session resolution error.',
     });
-    res.status(401).json({ message: error.message || 'Не удалось авторизовать Telegram Web App.' });
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось определить сотрудника.' });
   }
 });
 

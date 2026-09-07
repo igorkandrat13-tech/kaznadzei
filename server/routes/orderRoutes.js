@@ -31,6 +31,7 @@ const { ensureOrderSupergroupTopic } = require('../services/telegramSupergroupSe
 const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
+  verifyTelegramEmployeeDirectLink,
 } = require('../services/telegramWebAppAuth');
 const { getRoleDefinitions } = require('../config/roles');
 const router = express.Router();
@@ -449,6 +450,59 @@ function getEmployeeAllowedColumns(employee = {}) {
 
 function resolveTelegramEmployee(token, payload, context = {}) {
   const payloadDebug = getTelegramPayloadDebug(payload);
+
+  if (payload?.employeeLink) {
+    try {
+      const directLinkPayload = verifyTelegramEmployeeDirectLink(token, payload.employeeLink, { allowGracePeriod: true });
+      const employeeByDirect = EmployeeStore.findById(directLinkPayload.employeeId);
+      if (!employeeByDirect) {
+        logTelegramOrderDebug('resolve.direct-link-employee-not-found', {
+          ...context,
+          ...payloadDebug,
+          employeeId: directLinkPayload.employeeId,
+          orderId: directLinkPayload.orderId || '',
+          scope: directLinkPayload.scope || '',
+        });
+        throw new Error('Сотрудник по QR не найден. Обновите QR через кнопку в боте.');
+      }
+      logTelegramOrderDebug(directLinkPayload.graceAllowed ? 'resolve.direct-link-grace' : 'resolve.direct-link-ok', {
+        ...context,
+        ...payloadDebug,
+        employeeId: employeeByDirect._id,
+        employeeRole: employeeByDirect.role,
+        expired: Boolean(directLinkPayload.expired),
+        graceAllowed: Boolean(directLinkPayload.graceAllowed),
+        scope: directLinkPayload.scope || '',
+        orderId: directLinkPayload.orderId || '',
+      });
+      return {
+        ...employeeByDirect,
+        fullName: getTelegramEmployeeDisplayName(employeeByDirect),
+        _telegramSessionMeta: {
+          directLink: true,
+          expired: Boolean(directLinkPayload.expired),
+          graceAllowed: Boolean(directLinkPayload.graceAllowed),
+          employeeId: employeeByDirect._id,
+          scope: directLinkPayload.scope || '',
+          orderId: directLinkPayload.orderId || '',
+          issuedAt: directLinkPayload.issuedAt || '',
+          expiresAt: directLinkPayload.expiresAt || '',
+        },
+      };
+    } catch (directLinkError) {
+      const hasFallback = Boolean(String(payload?.initData || '').trim() || payload?.unsafeUser?.id || payload?.sessionToken);
+      logTelegramOrderDebug('resolve.direct-link-failed', {
+        ...context,
+        ...payloadDebug,
+        hasFallback,
+        message: directLinkError.message || 'Direct link failed.',
+      });
+      if (!hasFallback) {
+        throw directLinkError;
+      }
+    }
+  }
+
   if (payload?.sessionToken) {
     try {
       const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken, { allowGracePeriod: true });
