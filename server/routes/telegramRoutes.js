@@ -14,7 +14,7 @@ const {
   getFile,
   downloadTelegramFile,
 } = require('../services/telegramService');
-const { addActivityLog } = require('../services/activityLog');
+const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const {
   addTelegramDiagnosticLog,
   clearTelegramDiagnosticLogs,
@@ -55,6 +55,135 @@ const EMPLOYEE_QR_SCANNER_BUTTON_TEXT = 'Сканер QR';
 const EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT = 'Заявки';
 const EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT = 'Отмена заявки';
 const EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST = 'create_workshop_request';
+
+function maskTelegramObjectDeep(value, depth = 0) {
+  if (!value) return value;
+  if (depth > 4) return '[truncated]';
+  if (Array.isArray(value)) {
+    return value.map((item) => maskTelegramObjectDeep(item, depth + 1));
+  }
+  if (typeof value === 'object') {
+    const next = {};
+    Object.keys(value).forEach((key) => {
+      const normalizedKey = String(key || '').toLowerCase();
+      const raw = value[key];
+      if (normalizedKey.includes('token') || /(password|secret|key$|hash|signature|session|auth_date|initdata|bot.?token)/i.test(normalizedKey)) {
+        if (raw == null || raw === '') {
+          next[key] = raw;
+        } else if (typeof raw === 'object') {
+          next[key] = '[redacted object]';
+        } else {
+          next[key] = maskTelegramValue(raw, { tail: 4 });
+        }
+        return;
+      }
+      next[key] = maskTelegramObjectDeep(raw, depth + 1);
+    });
+    return next;
+  }
+  return value;
+}
+
+function buildTelegramAuthDiagnosticsSnapshot() {
+  const settings = SettingsStore.get() || {};
+  const employees = EmployeeStore ? EmployeeStore.findAll() : [];
+  const accesses = CustomerTelegramAccessStore ? CustomerTelegramAccessStore.findAll() : [];
+  const workshopRequests = WorkshopRequestStore && typeof WorkshopRequestStore.findAll === 'function'
+    ? WorkshopRequestStore.findAll()
+    : [];
+  const telegramLogs = getTelegramDiagnosticLogs({ limit: 400 });
+  const authRelatedLogs = telegramLogs.filter((entry) => {
+    const event = String(entry?.event || '').toLowerCase();
+    const scope = String(entry?.scope || '').toLowerCase();
+    if (scope.includes('webapp')) return true;
+    return /session\.|auth|payload|signature|stale|grace|employee|item-scan|stage-mark|qr/.test(event);
+  }).slice(-200);
+  const packageInfo = {
+    nodeVersion: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    uptimeSeconds: Math.floor(process.uptime()),
+    envProduction: Boolean(process.env.NODE_ENV),
+    pid: process.pid,
+  };
+  const botInfo = {
+    botTokenConfigured: Boolean(String(settings.telegramBotToken || '').length > 0),
+    botTokenTail: maskTelegramValue(settings.telegramBotToken, { tail: 4 }),
+    publicBaseUrl: String(settings.publicBaseUrl || '').trim(),
+    webAppUrl: getTelegramWebAppUrl(),
+    supergroupChatIdConfigured: Boolean(String(settings.telegramSupergroupChatId || '').length > 0),
+    supergroupEnabled: Boolean(settings.telegramSupergroupEnabled),
+  };
+  const employeeRows = employees.map((employee) => ({
+    _id: String(employee._id || ''),
+    role: String(employee.role || ''),
+    fullName: String(employee.fullName || ''),
+    telegramUserId: maskTelegramValue(employee.telegramUserId, { tail: 4 }),
+    telegramChatId: maskTelegramValue(employee.telegramChatId, { tail: 4 }),
+    hasTelegramUserId: Boolean(String(employee.telegramUserId || '').length > 0),
+    hasTelegramChatId: Boolean(String(employee.telegramChatId || '').length > 0),
+    pinEnabled: Boolean(String(employee.pinHash || '').length > 0),
+    allowedColumns: Array.isArray(employee.allowedColumns) ? [...employee.allowedColumns] : [],
+  }));
+  return {
+    generatedAt: new Date().toISOString(),
+    packageInfo,
+    bot: botInfo,
+    constants: {
+      TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS: 365,
+      TELEGRAM_EMPLOYEE_SESSION_EXPIRATION_GRACE_DAYS: 7,
+      TELEGRAM_INIT_DATA_STRICT_TTL_HOURS: 24,
+      TELEGRAM_INIT_DATA_STALE_TTL_DAYS: 180,
+    },
+    employees: employeeRows,
+    customerTelegramAccesses: accesses.map((access) => ({
+      _id: String(access._id || ''),
+      customerName: String(access.customerName || ''),
+      telegramUserId: maskTelegramValue(access.telegramUserId, { tail: 4 }),
+      telegramChatId: maskTelegramValue(access.telegramChatId, { tail: 4 }),
+      linked: Boolean(access.telegramUserId || access.telegramChatId),
+      orderIds: Array.isArray(access.orderIds) ? access.orderIds.map(String) : [],
+      updatedAt: String(access.updatedAt || ''),
+    })),
+    lastWorkshopRequests: workshopRequests.slice(-20).map((req) => ({
+      _id: String(req._id || ''),
+      status: String(req.status || ''),
+      orderId: String(req.orderId || ''),
+      createdAt: String(req.createdAt || ''),
+      updatedAt: String(req.updatedAt || ''),
+    })),
+    logs: maskTelegramObjectDeep(authRelatedLogs),
+    diagnosticsHints: {
+      staleInitData: telegramLogs.filter((entry) => /signatureStale|stale-signature|stale-initdata|graceAllowed/i.test(`${String(entry?.event || '')} ${JSON.stringify(entry?.details || {})}`)).length,
+      expiredSessions: telegramLogs.filter((entry) => /(expired|истек|истёк|session-token-expired|session\.token\.ист)/i.test(`${String(entry?.event || '')} ${JSON.stringify(entry?.details || {})}`)).length,
+      employeeNotFound: telegramLogs.filter((entry) => /employee-not-found|employee\.missing/i.test(String(entry?.event || ''))).length,
+      payloadFallbacks: telegramLogs.filter((entry) => /payload-fallback|payload-only|session-token-failed/i.test(String(entry?.event || ''))).length,
+    },
+  };
+}
+
+router.get('/telegram/auth-diagnostics', requireAdminAccess(), (req, res) => {
+  try {
+    const snapshot = buildTelegramAuthDiagnosticsSnapshot();
+    const fileName = `kaznadzei-telegram-auth-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    addActivityLog({
+      action: 'settings.telegram-auth-diagnostics.export',
+      entityType: 'settings',
+      entityName: fileName,
+      actor: getRequestActor(req),
+      message: 'Выгружен диагностический пакет по авторизации Telegram Web App.',
+      details: {
+        logsCount: snapshot.logs.length,
+        employeesCount: snapshot.employees.length,
+      },
+    });
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(`${JSON.stringify(snapshot, null, 2)}\n`);
+  } catch (error) {
+    res.status(error.status || 400).json({ message: error.message || 'Не удалось сформировать диагностический файл.' });
+  }
+});
 
 function getConfiguredBotToken() {
   return String(SettingsStore.get().telegramBotToken || '').trim();

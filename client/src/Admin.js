@@ -99,6 +99,7 @@ function Admin() {
   const [clearingActivityLogs, setClearingActivityLogs] = useState(false);
   const [exportingBackup, setExportingBackup] = useState(false);
   const [importingBackup, setImportingBackup] = useState(false);
+  const [exportingTelegramAuthDiagnostics, setExportingTelegramAuthDiagnostics] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [showTelegramNotificationModal, setShowTelegramNotificationModal] = useState(false);
   const [telegramNotificationDraftIds, setTelegramNotificationDraftIds] = useState([]);
@@ -992,6 +993,36 @@ function Admin() {
     }
   };
 
+  const exportTelegramAuthDiagnostics = async () => {
+    if (exportingTelegramAuthDiagnostics) return;
+    setExportingTelegramAuthDiagnostics(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/auth-diagnostics');
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, 'Не удалось экспортировать диагностику Telegram авторизации.'));
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition') || '';
+      const fileNameMatch = disposition.match(/filename="([^"]+)"/i);
+      const fileName = fileNameMatch?.[1] || `kaznadzei-telegram-auth-diagnostics-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setSettingsSuccess('Диагностика Telegram авторизации экспортирована.');
+    } catch (error) {
+      setSettingsError(toUserErrorMessage(error, 'Не удалось экспортировать диагностику Telegram авторизации.'));
+    } finally {
+      setExportingTelegramAuthDiagnostics(false);
+    }
+  };
+
   const openBackupImportPicker = () => {
     if (importingBackup) return;
     backupImportInputRef.current?.click();
@@ -1854,6 +1885,9 @@ function Admin() {
               </button>
               <button className="btn" onClick={setupTelegramWebhook} disabled={settingTelegramWebhook || savingAppSettings}>
                 {settingTelegramWebhook ? 'Установка...' : 'Установить webhook'}
+              </button>
+              <button className="btn btn-secondary" onClick={exportTelegramAuthDiagnostics} disabled={exportingTelegramAuthDiagnostics}>
+                {exportingTelegramAuthDiagnostics ? 'Экспорт...' : 'Диагностика Telegram'}
               </button>
               <button className="btn btn-secondary" onClick={() => fetchTelegramLogs({ openModal: true })} disabled={telegramLogsLoading}>
                 {telegramLogsLoading ? 'Загрузка логов...' : 'Логи ТГ бота'}
