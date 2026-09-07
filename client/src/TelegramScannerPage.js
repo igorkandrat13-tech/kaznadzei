@@ -156,14 +156,19 @@ function TelegramScannerPage() {
         }
         currentSessionToken = data?.sessionToken || '';
         setTelegramEmployeeSessionToken(currentSessionToken);
+        if (!currentEmployeeLink && data?.employeeLink && typeof setTelegramEmployeeDirectLink === 'function') {
+          try { setTelegramEmployeeDirectLink(String(data.employeeLink || '')); } catch { /* ignore */ }
+        }
         writeClientTelegramDiagnosticsLog('scanner.session.success', {
           attempt,
           hasSessionToken: Boolean(currentSessionToken),
-          hasDirectLink: Boolean(employeeLink),
+          hasDirectLink: Boolean(employeeLink || (data?.employeeLink)),
+          employeeLinkReturned: Boolean(data?.employeeLink),
+          employeeLinkReturnedTail: data?.employeeLink ? String(data.employeeLink).slice(-8) : '',
           employeeId: data?.employee?._id ? String(data.employee._id).slice(-6) : '',
           employeeRole: data?.employee?.role ? String(data.employee.role).slice(0, 80) : '',
         }, 'telegram-scanner');
-        return Boolean(currentSessionToken || employeeLink);
+        return Boolean(currentSessionToken || employeeLink || data?.employeeLink);
       } catch (sessionError) {
         lastError = sessionError;
         writeClientTelegramDiagnosticsLog('scanner.session.error', {

@@ -1317,6 +1317,15 @@ router.post('/telegram/webapp/session', async (req, res) => {
     });
 
     const nextSessionToken = createTelegramEmployeeSessionToken(token, employee);
+    let stableEmployeeLink = String(payload.employeeLink || '').trim();
+    if (!stableEmployeeLink) {
+      try {
+        stableEmployeeLink = signTelegramEmployeeDirectLink(token, employee._id, {
+          scope: 'session-return',
+          orderId: req.params?.id || req.body?.orderId || undefined,
+        });
+      } catch { stableEmployeeLink = ''; }
+    }
     logTelegramWebAppDebug('session.success', {
       ...payloadDebug,
       authPath,
@@ -1330,6 +1339,7 @@ router.post('/telegram/webapp/session', async (req, res) => {
     res.json({
       ok: true,
       sessionToken: nextSessionToken,
+      employeeLink: stableEmployeeLink || undefined,
       employee: {
         _id: employee._id,
         fullName: employee.fullName,

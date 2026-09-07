@@ -631,12 +631,17 @@ function OrderDetail() {
         if (currentEmployeeLink && typeof setTelegramEmployeeDirectLink === 'function') {
           try { setTelegramEmployeeDirectLink(currentEmployeeLink); } catch { /* ignore */ }
         }
+        if (!currentEmployeeLink && data?.employeeLink && typeof setTelegramEmployeeDirectLink === 'function') {
+          try { setTelegramEmployeeDirectLink(String(data.employeeLink || '')); } catch { /* ignore */ }
+        }
         setTelegramEmployee(data?.employee || null);
         setSessionError('');
         writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.server.success', {
           sessionTokenReturned: Boolean(nextSessionToken),
           sessionTokenReturnedLength: nextSessionToken ? String(nextSessionToken).length : 0,
           sessionTokenReturnedTail: nextSessionToken ? String(nextSessionToken).slice(-4) : '',
+          employeeLinkReturned: Boolean(data?.employeeLink),
+          employeeLinkReturnedTail: data?.employeeLink ? String(data.employeeLink).slice(-8) : '',
           employeeId: data?.employee?._id ? String(data.employee._id).slice(-6) : '',
           employeeRole: data?.employee?.role ? String(data.employee.role).slice(0, 80) : '',
         }, 'telegram-order');
@@ -688,6 +693,7 @@ function OrderDetail() {
       params.delete('employeeLink');
     }
 
+    setTelegramAuthResolved(true);
     setTelegramSessionBootstrapKey(current => current + 1);
 
     navigate({
