@@ -266,12 +266,27 @@ router.post('/telegram/webapp/bootstrap', (req, res) => {
     if (!resolvedTelegramUserId && unsafeUser?.id) {
       resolvedTelegramUserId = String(unsafeUser.id);
     }
+
     if (!resolvedTelegramUserId) {
-      return res.status(400).json({ message: 'Не удалось определить пользователя Telegram.' });
+      return res.json({
+        ok: true,
+        needReopen: true,
+        needBotAuth: true,
+        employee: null,
+        employeeLink: null,
+        sessionToken: null,
+        message: 'Telegram auth payload ещё не загружен в webview. Повторите попытку через несколько секунд или откройте webapp заново через кнопку в боте.',
+      });
     }
+
     const employee = EmployeeStore.findByTelegramUserId(resolvedTelegramUserId);
     if (!employee) {
-      return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
+      return res.status(403).json({
+        ok: false,
+        needReopen: true,
+        message: 'Сотрудник Telegram не найден или не авторизован.',
+        telegramUserId: resolvedTelegramUserId ? `...${String(resolvedTelegramUserId).slice(-6)}` : '',
+      });
     }
     const scope = String(payload.scope || 'webapp-bootstrap').trim().slice(0, 80);
     const orderId = String(payload.orderId || '').trim();

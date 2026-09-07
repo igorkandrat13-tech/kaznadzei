@@ -43,32 +43,41 @@ function TelegramScannerPage() {
   const [openingScanner, setOpeningScanner] = useState(false);
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
-  const bootstrapTelegramSession = useCallback(async ({ retries = 6 } = {}) => {
+  const bootstrapTelegramSession = useCallback(async ({ retries = 12 } = {}) => {
     markTelegramWebAppSession();
     let lastError = null;
     let currentSessionToken = getTelegramEmployeeSessionToken();
     let currentEmployeeLink = getTelegramEmployeeDirectLink();
-    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 500));
+    const waitForTelegramAuth = (delayMs = 500) => new Promise(resolve => window.setTimeout(resolve, delayMs));
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
       persistTelegramUnsafeUser();
 
-      const initData = getTelegramInitData() || (getTelegramWebApp()?.initData || '');
-      const unsafeUser = getTelegramUnsafeUser() || (getTelegramWebApp()?.initDataUnsafe?.user || null);
+      const directWebApp = getTelegramWebApp();
+      const initData = getTelegramInitData() || (directWebApp?.initData || '');
+      const unsafeUser = getTelegramUnsafeUser() || (directWebApp?.initDataUnsafe?.user || null);
       const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
       const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
       const employeeLink = currentEmployeeLink || getTelegramEmployeeDirectLink();
 
-      if (!hasTelegramAuthPayload && !sessionToken && !employeeLink) {
-        if (attempt < retries - 1) {
-          await waitForTelegramAuth();
-          continue;
-        }
-      }
+      writeClientTelegramDiagnosticsLog('scanner.bootstrap.attempt', {
+        attempt,
+        totalRetries: retries,
+        hasEmployeeLink: Boolean(employeeLink),
+        hasSessionToken: Boolean(sessionToken),
+        hasInitData: Boolean(initData),
+        hasUnsafeUserId: Boolean(unsafeUser?.id),
+        initDataLength: initData ? String(initData).length : 0,
+      }, 'telegram-scanner');
 
-      if ((attempt === 0 || attempt === 3) && hasTelegramAuthPayload && !employeeLink) {
+      if ((attempt === 0 || attempt === 2 || attempt === 4 || attempt === 6 || attempt === 8 || attempt === 10) && !employeeLink) {
         try {
+          writeClientTelegramDiagnosticsLog('scanner.bootstrap.call', {
+            attempt,
+            hasInitData: Boolean(initData),
+            hasUnsafeUserId: Boolean(unsafeUser?.id),
+          }, 'telegram-scanner');
           const bootstrapRes = await apiFetch('/api/telegram/webapp/bootstrap', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -98,6 +107,14 @@ function TelegramScannerPage() {
                 return true;
               }
             }
+            if (bootstrapData?.needBotAuth && attempt < retries - 1) {
+              writeClientTelegramDiagnosticsLog('scanner.bootstrap.need-bot-auth-wait', {
+                attempt,
+                message: (bootstrapData.message || '').slice(0, 255),
+              }, 'telegram-scanner');
+              await waitForTelegramAuth(attempt === 0 ? 300 : 700);
+              continue;
+            }
           }
         } catch (bootstrapError) {
           lastError = bootstrapError;
@@ -110,9 +127,9 @@ function TelegramScannerPage() {
 
       if (!hasTelegramAuthPayload && !sessionToken && !employeeLink) {
         if (attempt < retries - 1) {
-          await waitForTelegramAuth();
+          await waitForTelegramAuth(attempt < 3 ? 400 : (attempt < 6 ? 700 : 1000));
+          continue;
         }
-        continue;
       }
 
       try {
@@ -175,7 +192,7 @@ function TelegramScannerPage() {
           attempt,
           message: sessionError.message || '',
         }, 'telegram-scanner');
-        await waitForTelegramAuth();
+        await waitForTelegramAuth(attempt < 6 ? 500 : 900);
       }
     }
 
