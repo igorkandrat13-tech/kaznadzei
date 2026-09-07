@@ -478,19 +478,36 @@ function OrderDetail() {
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
+
     const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
     const currentSessionToken = getActiveTelegramSessionToken();
-    if (!hasTelegramAuthPayload && !currentSessionToken) {
-      if (!telegramAuthResolved) {
-        setSessionLoading(true);
-        setSessionError('');
-        return;
-      }
-      setTelegramEmployee(null);
-      setSessionLoading(false);
-      setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте.');
-      return;
+    const canAttemptServerCall = Boolean(hasTelegramAuthPayload || currentSessionToken);
+
+    if (!canAttemptServerCall && !telegramAuthResolved) {
+      setSessionLoading(true);
+      setSessionError('');
+      const retryTimer = window.setTimeout(() => {
+        setTelegramSessionBootstrapKey(current => current + 1);
+      }, 500);
+      return () => window.clearTimeout(retryTimer);
     }
+
+    if (!canAttemptServerCall && telegramAuthResolved) {
+      refreshTelegramAuth();
+      const freshInitData = getTelegramInitData();
+      const freshUnsafeUser = getTelegramUnsafeUser();
+      const freshHasPayload = Boolean(freshInitData || freshUnsafeUser?.id);
+      const freshSession = getActiveTelegramSessionToken();
+      if (!freshHasPayload && !freshSession) {
+        setTelegramEmployee(null);
+        setSessionLoading(false);
+        setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте.');
+        return undefined;
+      }
+      setTelegramSessionBootstrapKey(current => current + 1);
+      return undefined;
+    }
+
     setSessionLoading(true);
     setSessionError('');
 
@@ -499,8 +516,8 @@ function OrderDetail() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
+          initData: telegramInitData || getTelegramInitData(),
+          unsafeUser: telegramUnsafeUser || getTelegramUnsafeUser(),
           sessionToken: sessionTokenOverride,
         }),
       });
@@ -511,10 +528,10 @@ function OrderDetail() {
       return data;
     };
 
-    return resolveSession()
+    const promise = resolveSession()
       .catch(async (error) => {
         const canRetryWithoutToken = currentSessionToken
-          && hasTelegramAuthPayload
+          && (Boolean(telegramInitData || getTelegramInitData() || telegramUnsafeUser?.id || getTelegramUnsafeUser()?.id))
           && isRecoverableTelegramSessionMessage(error.message);
         if (!canRetryWithoutToken) {
           throw error;
@@ -533,7 +550,9 @@ function OrderDetail() {
         setSessionError(toUserErrorMessage(error, 'Не удалось определить ваш профиль.'));
       })
       .finally(() => setSessionLoading(false));
-  }, [getActiveTelegramSessionToken, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
+
+    return undefined;
+  }, [getActiveTelegramSessionToken, refreshTelegramAuth, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
 
   useEffect(() => {
     if (!telegramMode) return;
@@ -542,11 +561,9 @@ function OrderDetail() {
     const sessionTokenFromUrl = params.get('employeeSessionToken');
     if (!sessionTokenFromUrl) return;
 
-    if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
-      updateTelegramSessionToken(sessionTokenFromUrl);
-    } else {
-      updateTelegramSessionToken('');
-    }
+    const normalizedToken = String(sessionTokenFromUrl || '').trim();
+    updateTelegramSessionToken(normalizedToken);
+
     setTelegramSessionBootstrapKey(current => current + 1);
     params.delete('employeeSessionToken');
 
@@ -577,11 +594,12 @@ function OrderDetail() {
       webApp.expand();
     }
 
-    const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(refreshTelegramAuth, delay));
+    const retryTimers = [100, 400, 900, 1800, 3200].map(delay => window.setTimeout(refreshTelegramAuth, delay));
     const finishTimer = window.setTimeout(() => {
       refreshTelegramAuth();
       setTelegramAuthResolved(true);
-    }, 1700);
+      setTelegramSessionBootstrapKey(current => current + 1);
+    }, 4500);
 
     return () => {
       retryTimers.forEach(timerId => window.clearTimeout(timerId));

@@ -947,7 +947,7 @@ router.post('/telegram/webapp/session', async (req, res) => {
 
     if (payload.sessionToken) {
       try {
-        const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
+        const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken, { allowGracePeriod: true });
         employee = EmployeeStore.findById(sessionPayload.employeeId);
         if (!employee || String(employee.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
           logTelegramWebAppDebug('session.reject.session-mismatch', {
@@ -959,11 +959,13 @@ router.post('/telegram/webapp/session', async (req, res) => {
           });
           return res.status(403).json({ message: 'Сотрудник Telegram не найден или session token устарел.' });
         }
-        logTelegramWebAppDebug('session.auth.session-token-ok', {
+        logTelegramWebAppDebug(sessionPayload.graceAllowed ? 'session.auth.session-token-grace' : 'session.auth.session-token-ok', {
           ...payloadDebug,
           employeeId: employee._id,
           employeeRole: employee.role,
           telegramUserId: String(sessionPayload.telegramUserId || ''),
+          expired: Boolean(sessionPayload.expired),
+          graceAllowed: Boolean(sessionPayload.graceAllowed),
         });
         telegramUser = {
           id: sessionPayload.telegramUserId,

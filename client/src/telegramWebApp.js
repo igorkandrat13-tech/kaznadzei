@@ -3,12 +3,71 @@ const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
 const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
 
+function getStorageBackends() {
+  const backends = [];
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      backends.push(window.localStorage);
+    }
+  } catch (error) {
+    // ignore
+  }
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      backends.push(window.sessionStorage);
+    }
+  } catch (error) {
+    // ignore
+  }
+  return backends;
+}
+
+function storageGet(key) {
+  const normalizedKey = String(key || '');
+  if (!normalizedKey) return '';
+  const backends = getStorageBackends();
+  for (const backend of backends) {
+    try {
+      const value = backend.getItem(normalizedKey);
+      if (value != null && value !== '') return value;
+    } catch (error) {
+      // ignore
+    }
+  }
+  return '';
+}
+
+function storageSet(key, value) {
+  const normalizedKey = String(key || '');
+  const normalizedValue = value == null ? '' : String(value);
+  if (!normalizedKey) return;
+  const backends = getStorageBackends();
+  for (const backend of backends) {
+    try {
+      if (normalizedValue === '') {
+        backend.removeItem(normalizedKey);
+      } else {
+        backend.setItem(normalizedKey, normalizedValue);
+      }
+    } catch (error) {
+      // ignore
+    }
+  }
+}
+
+function storageRemove(key) {
+  storageSet(key, '');
+}
+
 function decodeBase64Url(value) {
   const normalized = String(value || '')
     .replace(/-/g, '+')
     .replace(/_/g, '/');
   const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
-  return window.atob(padded);
+  if (typeof window !== 'undefined' && typeof window.atob === 'function') {
+    return window.atob(padded);
+  }
+  return Buffer.from(padded, 'base64').toString('utf8');
 }
 
 function parseTelegramEmployeeSessionToken(sessionToken) {
@@ -25,12 +84,16 @@ function parseTelegramEmployeeSessionToken(sessionToken) {
   }
 }
 
-export function isTelegramEmployeeSessionTokenExpired(sessionToken) {
+export function isTelegramEmployeeSessionTokenExpired(sessionToken, { graceMs = 0 } = {}) {
   const payload = parseTelegramEmployeeSessionToken(sessionToken);
-  if (!payload?.exp) {
-    return Boolean(String(sessionToken || '').trim());
+  if (!payload) {
+    return true;
   }
-  return Number(payload.exp) <= Date.now();
+  if (!payload?.exp) {
+    return false;
+  }
+  const graceWindow = Number(graceMs) >= 0 ? Number(graceMs) : 0;
+  return Number(payload.exp) + graceWindow <= Date.now();
 }
 
 export function getTelegramWebApp() {
@@ -38,45 +101,35 @@ export function getTelegramWebApp() {
 }
 
 export function markTelegramWebAppSession() {
-  try {
-    window.sessionStorage?.setItem(TELEGRAM_SESSION_STORAGE_KEY, '1');
-  } catch (error) {
-    // Ignore storage issues in restricted webviews.
-  }
+  storageSet(TELEGRAM_SESSION_STORAGE_KEY, '1');
 }
 
 export function persistTelegramInitData() {
   const initData = getTelegramWebApp()?.initData || '';
-  if (!initData) return '';
-
-  try {
-    window.sessionStorage?.setItem(TELEGRAM_INIT_DATA_STORAGE_KEY, initData);
-  } catch (error) {
-    // Ignore storage issues in restricted webviews.
+  if (initData) {
+    storageSet(TELEGRAM_INIT_DATA_STORAGE_KEY, initData);
+    return initData;
   }
-
-  return initData;
+  return storageGet(TELEGRAM_INIT_DATA_STORAGE_KEY) || '';
 }
 
 export function persistTelegramUnsafeUser() {
   const unsafeUser = getTelegramWebApp()?.initDataUnsafe?.user || null;
-  if (!unsafeUser?.id) return null;
-
-  try {
-    window.sessionStorage?.setItem(TELEGRAM_UNSAFE_USER_STORAGE_KEY, JSON.stringify(unsafeUser));
-  } catch (error) {
-    // Ignore storage issues in restricted webviews.
+  if (unsafeUser?.id) {
+    storageSet(TELEGRAM_UNSAFE_USER_STORAGE_KEY, JSON.stringify(unsafeUser));
+    return unsafeUser;
   }
-
-  return unsafeUser;
+  const storedRaw = storageGet(TELEGRAM_UNSAFE_USER_STORAGE_KEY);
+  if (!storedRaw) return null;
+  try {
+    return JSON.parse(storedRaw);
+  } catch (error) {
+    return null;
+  }
 }
 
 export function hasTelegramWebAppSession() {
-  try {
-    return window.sessionStorage?.getItem(TELEGRAM_SESSION_STORAGE_KEY) === '1';
-  } catch (error) {
-    return false;
-  }
+  return storageGet(TELEGRAM_SESSION_STORAGE_KEY) === '1';
 }
 
 export function isTelegramWebApp() {
@@ -89,12 +142,7 @@ export function getTelegramInitData() {
   if (freshInitData) {
     return freshInitData;
   }
-
-  try {
-    return window.sessionStorage?.getItem(TELEGRAM_INIT_DATA_STORAGE_KEY) || '';
-  } catch (error) {
-    return '';
-  }
+  return storageGet(TELEGRAM_INIT_DATA_STORAGE_KEY) || '';
 }
 
 export function getTelegramUnsafeUser() {
@@ -102,38 +150,25 @@ export function getTelegramUnsafeUser() {
   if (freshUnsafeUser?.id) {
     return freshUnsafeUser;
   }
-
+  const storedRaw = storageGet(TELEGRAM_UNSAFE_USER_STORAGE_KEY);
   try {
-    const storedUnsafeUser = window.sessionStorage?.getItem(TELEGRAM_UNSAFE_USER_STORAGE_KEY);
-    return storedUnsafeUser ? JSON.parse(storedUnsafeUser) : null;
+    return storedRaw ? JSON.parse(storedRaw) : null;
   } catch (error) {
     return null;
   }
 }
 
 export function setTelegramEmployeeSessionToken(sessionToken) {
-  try {
-    if (sessionToken) {
-      window.sessionStorage?.setItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY, String(sessionToken));
-      return;
-    }
-    window.sessionStorage?.removeItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY);
-  } catch (error) {
-    // Ignore storage issues in restricted webviews.
-  }
+  storageSet(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY, String(sessionToken || ''));
 }
 
 export function getTelegramEmployeeSessionToken() {
-  try {
-    const storedToken = window.sessionStorage?.getItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY) || '';
-    if (storedToken && isTelegramEmployeeSessionTokenExpired(storedToken)) {
-      window.sessionStorage?.removeItem(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY);
-      return '';
-    }
-    return storedToken;
-  } catch (error) {
+  const storedToken = storageGet(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY);
+  if (storedToken && isTelegramEmployeeSessionTokenExpired(storedToken)) {
+    storageRemove(TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY);
     return '';
   }
+  return storedToken;
 }
 
 export function getOrderPathFromQr(rawValue) {

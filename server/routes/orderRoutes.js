@@ -451,7 +451,7 @@ function resolveTelegramEmployee(token, payload, context = {}) {
   const payloadDebug = getTelegramPayloadDebug(payload);
   if (payload?.sessionToken) {
     try {
-      const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
+      const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken, { allowGracePeriod: true });
       const employeeBySession = EmployeeStore.findById(sessionPayload.employeeId);
       if (!employeeBySession || String(employeeBySession.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
         logTelegramOrderDebug('resolve.session-mismatch', {
@@ -464,15 +464,23 @@ function resolveTelegramEmployee(token, payload, context = {}) {
         });
         throw new Error('Сотрудник Telegram не найден или session token устарел.');
       }
-      logTelegramOrderDebug('resolve.session-token-ok', {
+      logTelegramOrderDebug(sessionPayload.graceAllowed ? 'resolve.session-token-grace' : 'resolve.session-token-ok', {
         ...context,
         ...payloadDebug,
         employeeId: employeeBySession._id,
         employeeRole: employeeBySession.role,
+        expired: Boolean(sessionPayload.expired),
+        graceAllowed: Boolean(sessionPayload.graceAllowed),
       });
       return {
         ...employeeBySession,
         fullName: getTelegramEmployeeDisplayName(employeeBySession),
+        _telegramSessionMeta: {
+          expired: Boolean(sessionPayload.expired),
+          graceAllowed: Boolean(sessionPayload.graceAllowed),
+          employeeId: employeeBySession._id,
+          telegramUserId: String(sessionPayload.telegramUserId || ''),
+        },
       };
     } catch (sessionError) {
       const hasTelegramAuthPayload = Boolean(String(payload?.initData || '').trim() || payload?.unsafeUser?.id);
@@ -503,6 +511,11 @@ function resolveTelegramEmployee(token, payload, context = {}) {
   return {
     ...employee,
     fullName: getTelegramEmployeeDisplayName(employee, telegramUser),
+    _telegramSessionMeta: {
+      payloadAuth: true,
+      employeeId: employee._id,
+      telegramUserId: String(telegramUser?.id || ''),
+    },
   };
 }
 

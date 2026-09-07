@@ -3612,26 +3612,18 @@ function OrdersWorkspace() {
     ? document.getElementById('orders-header-left-actions')
     : null;
 
-  const headerLeftActions = headerLeftActionsTarget ? createPortal(
-    <div className="orders-header-primary-actions orders-header-nav-actions">
+  const headerPrimaryActions = headerPrimaryActionsTarget ? createPortal(
+    <div className="orders-header-primary-actions orders-header-create-actions">
       <Button
-        variant="primary"
-        className="section-toolbar-btn orders-header-toolbar-btn"
+        className="section-toolbar-btn orders-header-toolbar-btn orders-header-requests-btn"
         onClick={() => {
           navigate('/requests');
         }}
       >
         Заявки
       </Button>
-    </div>,
-    headerLeftActionsTarget,
-  ) : null;
-
-  const headerPrimaryActions = headerPrimaryActionsTarget ? createPortal(
-    <div className="orders-header-primary-actions orders-header-create-actions">
       <Button
-        variant="success"
-        className="section-toolbar-btn orders-header-toolbar-btn"
+        className="section-toolbar-btn orders-header-toolbar-btn orders-header-create-btn"
         onClick={() => {
           openCreateForm();
         }}
@@ -3639,8 +3631,7 @@ function OrdersWorkspace() {
         Новый заказ
       </Button>
       <Button
-        variant="success"
-        className="section-toolbar-btn orders-header-toolbar-btn"
+        className="section-toolbar-btn orders-header-toolbar-btn orders-header-create-btn"
         onClick={() => {
           openCreateRoomEditor();
         }}
@@ -3648,8 +3639,7 @@ function OrdersWorkspace() {
         Новое помещение
       </Button>
       <Button
-        variant="success"
-        className="section-toolbar-btn orders-header-toolbar-btn"
+        className="section-toolbar-btn orders-header-toolbar-btn orders-header-create-btn"
         onClick={() => {
           openCreateItemEditor();
         }}
@@ -3662,7 +3652,6 @@ function OrdersWorkspace() {
 
   return (
     <div>
-      {headerLeftActions}
       {headerPrimaryActions}
 
       <div className="card orders-workspace-table-card">

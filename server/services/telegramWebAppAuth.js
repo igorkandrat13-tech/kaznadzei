@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 
-const TELEGRAM_EMPLOYEE_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const TELEGRAM_EMPLOYEE_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+const TELEGRAM_EMPLOYEE_SESSION_EXPIRATION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getTelegramWebAppUser(token, initData) {
   const normalizedToken = String(token || '').trim();
@@ -116,7 +117,7 @@ function createTelegramEmployeeSessionToken(token, employee) {
   return `${payloadPart}.${signaturePart}`;
 }
 
-function verifyTelegramEmployeeSessionToken(token, sessionToken) {
+function verifyTelegramEmployeeSessionToken(token, sessionToken, { allowGracePeriod = false } = {}) {
   const normalizedToken = String(token || '').trim();
   const normalizedSessionToken = String(sessionToken || '').trim();
   if (!normalizedToken || !normalizedSessionToken) {
@@ -150,11 +151,36 @@ function verifyTelegramEmployeeSessionToken(token, sessionToken) {
     throw new Error('Session token Telegram Web App неполный.');
   }
 
-  if (Number(payload.exp || 0) < Date.now()) {
-    throw new Error('Session token Telegram Web App истёк. Откройте сканер заново из бота.');
+  const exp = Number(payload.exp || 0);
+  const now = Date.now();
+  const allowGrace = Boolean(allowGracePeriod);
+  const graceLimit = exp + TELEGRAM_EMPLOYEE_SESSION_EXPIRATION_GRACE_MS;
+
+  if (exp > 0 && now < exp) {
+    return {
+      ...payload,
+      expired: false,
+      graceAllowed: false,
+    };
   }
 
-  return payload;
+  if (allowGrace && exp > 0 && now <= graceLimit) {
+    return {
+      ...payload,
+      expired: true,
+      graceAllowed: true,
+    };
+  }
+
+  if (exp <= 0) {
+    return {
+      ...payload,
+      expired: false,
+      graceAllowed: false,
+    };
+  }
+
+  throw new Error('Session token Telegram Web App истёк. Откройте сканер заново из бота.');
 }
 
 module.exports = {
