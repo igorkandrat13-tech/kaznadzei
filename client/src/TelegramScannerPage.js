@@ -1,4 +1,4 @@
-﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -104,9 +104,9 @@ function TelegramScannerPage() {
     }
 
     if (lastError) {
-      setError(lastError.message || 'Не удалось подготовить доступ к заказам. Если вы открыли страницу через кнопку в боте — запросите у администратора персональную ссылку и откройте её из чата Telegram.');
+      setError(lastError.message || 'Не удалось подготовить доступ к заказам.');
     } else {
-      setError('Telegram не передал данные сотрудника (initData пустой). Если вы открыли страницу через кнопку в боте — запросите у администратора персональную ссылку с токеном и откройте её из чата Telegram.');
+      setError('Telegram не передал данные сотрудника. Откройте страницу заново через кнопку в боте.');
     }
     return false;
   }, []);

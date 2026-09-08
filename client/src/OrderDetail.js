@@ -666,7 +666,7 @@ function OrderDetail() {
       }
       setTelegramEmployee(null);
       setSessionLoading(false);
-      setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте. Если ошибка сохраняется — запросите у администратора персональную ссылку с токеном и откройте её из чата Telegram.');
+      setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте.');
       return;
     }
     setSessionLoading(true);

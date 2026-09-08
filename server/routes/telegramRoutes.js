@@ -78,6 +78,36 @@ function getTelegramWebAppUrl() {
   }
 }
 
+function buildEmployeeWebAppUrl(employee) {
+  const baseUrl = getTelegramWebAppUrl();
+  if (!baseUrl) return '';
+  try {
+    const url = new URL(baseUrl);
+    if (employee && employee._id) {
+      const token = getConfiguredBotToken();
+      if (token) {
+        try {
+          const sessionToken = createTelegramEmployeeSessionToken(token, employee);
+          if (sessionToken) {
+            url.searchParams.set('employeeSessionToken', String(sessionToken));
+          }
+        } catch (_) { /* ignore token creation errors */ }
+      }
+    }
+    return url.toString();
+  } catch (_) {
+    return baseUrl;
+  }
+}
+
+function getEmployeeByTelegramChatId(chatId) {
+  if (!chatId) return null;
+  const normalized = String(chatId);
+  return EmployeeStore.findAll().find(emp =>
+    String(emp.telegramChatId || '') === normalized
+  ) || null;
+}
+
 function getEmployeeRoleLabel(role) {
   return getRoleLabel(role, SettingsStore.get().roles || SettingsStore.get().roleLabels || {});
 }
@@ -202,14 +232,14 @@ function getTelegramPhotoMimeType(filePath = '') {
 
 function getAuthorizedMessageReplyMarkup(employee = {}) {
   const isWaitingForWorkshopRequest = getEmployeePendingAction(employee) === EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST;
-  const webAppUrl = getTelegramWebAppUrl();
+  const employeeUrl = buildEmployeeWebAppUrl(employee) || getTelegramWebAppUrl();
   const keyboardRow = [];
 
-  if (webAppUrl) {
+  if (employeeUrl) {
     keyboardRow.push({
       text: EMPLOYEE_QR_SCANNER_BUTTON_TEXT,
       web_app: {
-        url: webAppUrl,
+        url: employeeUrl,
       },
     });
   }
@@ -258,7 +288,25 @@ async function clearTelegramMenuButton(token, chatId) {
 }
 
 async function syncTelegramMenuButton(token, chatId) {
-  if (chatId) {
+  if (!chatId) return;
+  const employee = getEmployeeByTelegramChatId(chatId);
+  if (!employee) {
+    await clearTelegramMenuButton(token, chatId);
+    return;
+  }
+  const webAppUrlWithToken = buildEmployeeWebAppUrl(employee);
+  if (!webAppUrlWithToken) {
+    await clearTelegramMenuButton(token, chatId);
+    return;
+  }
+  try {
+    await setChatMenuButton(token, {
+      chatId,
+      type: 'web_app',
+      text: EMPLOYEE_QR_SCANNER_BUTTON_TEXT,
+      url: webAppUrlWithToken,
+    });
+  } catch (_) {
     await clearTelegramMenuButton(token, chatId);
   }
 }
