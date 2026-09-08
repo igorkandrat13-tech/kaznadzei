@@ -22,6 +22,8 @@ import { useGlobalErrorEffect } from './globalErrors';
 
 function isRecoverableTelegramSessionMessage(message) {
   const normalized = String(message || '').toLowerCase();
+  if (normalized.includes('ещё не пришли') || normalized.includes('повторите попытку')) return true;
+  if (normalized.includes('не переданы данные пользователя')) return true;
   return normalized.includes('session token telegram web app')
     && (
       normalized.includes('истек')
@@ -170,21 +172,37 @@ function TelegramScannerPage() {
         const data = await parseJsonSafely(res);
         if (!res.ok) {
           const errorMessage = data?.message || 'Не удалось подготовить доступ к заказу.';
+          const isRetryable = Boolean(data?.retryable || data?.needReopen);
           if (employeeLink) {
             writeClientTelegramDiagnosticsLog('scanner.session.direct-link-failed', {
               attempt,
               hasInitData: Boolean(initData),
               hasUnsafeUser: Boolean(unsafeUser?.id),
               hasSessionToken: Boolean(sessionToken),
+              retryable: isRetryable,
               message: errorMessage.slice(0, 255),
             }, 'telegram-scanner');
           }
-          if ((sessionToken || employeeLink) && isRecoverableTelegramSessionMessage(errorMessage)) {
+          if ((isRetryable || isRecoverableTelegramSessionMessage(errorMessage)) && attempt < retries - 1) {
             currentSessionToken = '';
             setTelegramEmployeeSessionToken('');
-            if (attempt < retries - 1) {
-              await waitForTelegramAuth();
-            }
+            setBootstrapProgress(prev => ({
+              ...prev,
+              note: 'Telegram auth данные ещё не пришли — жду…',
+            }));
+            writeClientTelegramDiagnosticsLog('scanner.session.retryable-wait', {
+              attempt,
+              message: errorMessage.slice(0, 255),
+              retryable: isRetryable,
+              matchedRecoverableMsg: isRecoverableTelegramSessionMessage(errorMessage),
+            }, 'telegram-scanner');
+            await waitForTelegramAuth(attempt < 3 ? 400 : (attempt < 6 ? 700 : 1000));
+            continue;
+          }
+          if ((sessionToken || employeeLink) && isRecoverableTelegramSessionMessage(errorMessage) && attempt < retries - 1) {
+            currentSessionToken = '';
+            setTelegramEmployeeSessionToken('');
+            await waitForTelegramAuth();
             continue;
           }
           if (hasTelegramAuthPayload && attempt < retries - 1) {

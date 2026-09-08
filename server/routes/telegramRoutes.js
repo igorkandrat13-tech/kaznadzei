@@ -1248,8 +1248,10 @@ router.post('/telegram/webapp/session', async (req, res) => {
           hasInitData: Boolean(String(payload.initData || '').trim()),
           hasUnsafeUserId: Boolean(payload.unsafeUser?.id),
         });
-        if (!payload.sessionToken && !String(payload.initData || '').trim() && !payload.unsafeUser?.id) {
-          throw directLinkError;
+        const hasTelegramAuthPayload = Boolean(String(payload.initData || '').trim() || payload.unsafeUser?.id);
+        if (!hasTelegramAuthPayload && !payload.sessionToken) {
+          const msg = 'Telegram auth данные ещё не пришли в webview. Повторите попытку или откройте webapp заново через кнопку в боте.';
+          return res.status(400).json({ ok: false, needReopen: true, retryable: true, message: msg });
         }
       }
     }
@@ -1294,7 +1296,8 @@ router.post('/telegram/webapp/session', async (req, res) => {
           message: sessionError.message || 'Session token validation failed.',
         });
         if (!hasTelegramAuthPayload) {
-          throw sessionError;
+          const msg = 'Telegram auth данные ещё не пришли в webview. Повторите попытку или откройте webapp заново через кнопку в боте.';
+          return res.status(400).json({ ok: false, needReopen: true, retryable: true, message: msg });
         }
         telegramUser = resolveTelegramWebAppUser(token, payload);
         employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
@@ -1306,6 +1309,16 @@ router.post('/telegram/webapp/session', async (req, res) => {
         });
       }
     } else if (!employee) {
+      const hasTelegramAuthPayload = Boolean(String(payload.initData || '').trim() || payload.unsafeUser?.id);
+      if (!hasTelegramAuthPayload) {
+        logTelegramWebAppDebug('session.reject.no-auth-payload', {
+          ...payloadDebug,
+          hasEmployeeLink: Boolean(payload.employeeLink),
+          hasSessionToken: Boolean(payload.sessionToken),
+        });
+        const msg = 'Telegram auth данные ещё не пришли в webview. Повторите попытку или откройте webapp заново через кнопку в боте.';
+        return res.status(400).json({ ok: false, needReopen: true, retryable: true, message: msg });
+      }
       telegramUser = resolveTelegramWebAppUser(token, payload);
       employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
       authPath = 'payload-only';
