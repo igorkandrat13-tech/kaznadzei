@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -40,7 +40,30 @@ function TelegramScannerPage() {
   const [status, setStatus] = useState('Подготовка доступа к сканированию QR-кода изделия.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
   const [openingScanner, setOpeningScanner] = useState(false);
+  const debugMode = (new URLSearchParams(location.search).get('debug') === '1') || Boolean(isTelegramWebApp());
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
+
+  async function copyToClipboard(text) {
+    const str = String(text || '');
+    try {
+      if (navigator && typeof navigator.clipboard?.writeText === 'function') {
+        await navigator.clipboard.writeText(str);
+        return true;
+      }
+    } catch (_) { /* ignore */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = str;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      return true;
+    } catch (_) { return false; }
+  }
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 8 } = {}) => {
     markTelegramWebAppSession();
@@ -232,6 +255,95 @@ function TelegramScannerPage() {
           Закрыть
         </button>
       </div>
+
+      {debugMode && (() => {
+        const urlRaw = readTelegramUrlSessionTokenRaw();
+        const storageToken = getTelegramEmployeeSessionToken() || '';
+        const pathMatch = location.pathname.match(/^\/telegram-app\/t\/([^/]+)\/?/);
+        const pathToken = pathMatch ? pathMatch[1] : '';
+        const snapshot = {
+          at: new Date().toISOString(),
+          location: location.pathname + location.search + location.hash,
+          bootstrappingSession,
+          openingScanner,
+          pathTokenPresent: Boolean(pathToken && pathToken.length > 32),
+          pathTokenLength: pathToken.length,
+          urlParamTokenPresent: Boolean(urlRaw.token && urlRaw.length > 32),
+          urlParamTokenLength: urlRaw.length,
+          storageTokenPresent: Boolean(storageToken && storageToken.length > 32),
+          storageTokenLength: storageToken.length,
+          storageTokenPreview: storageToken ? storageToken.slice(0, 18) + '...' : '',
+          anyTokenPresent: Boolean((pathToken && pathToken.length > 32) || (urlRaw.token && urlRaw.length > 32) || (storageToken && storageToken.length > 32)),
+          error: error || '',
+          status: status || '',
+        };
+        return (
+          <div style={{ borderTop: '1px solid #e2e8f0', marginTop: 20, paddingTop: 16, background: '#fafafa' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 14, color: '#666', fontWeight: 600 }}>СЛУЖЕБНАЯ ИНФОРМАЦИЯ (debug)</div>
+              <button
+                className="btn btn--ghost"
+                type="button"
+                onClick={() => copyToClipboard(JSON.stringify(snapshot, null, 2))}
+              >
+                📋 JSON
+              </button>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                gap: 6,
+                fontSize: 12,
+                background: '#fff',
+                padding: 10,
+                borderRadius: 6,
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              <div style={{ padding: 4 }}>
+                <div style={{ color: '#888' }}>Path токен (/telegram-app/t/...)</div>
+                <div style={{ fontWeight: 600, color: snapshot.pathTokenPresent ? '#27ae60' : '#c0392b' }}>
+                  {snapshot.pathTokenPresent ? `✅ ${snapshot.pathTokenLength} симв.` : '❌ пустой'}
+                </div>
+              </div>
+              <div style={{ padding: 4 }}>
+                <div style={{ color: '#888' }}>URL query/hash токен</div>
+                <div style={{ fontWeight: 600, color: snapshot.urlParamTokenPresent ? '#27ae60' : '#c0392b' }}>
+                  {snapshot.urlParamTokenPresent ? `✅ ${snapshot.urlParamTokenLength} симв.` : '❌ пустой'}
+                </div>
+              </div>
+              <div style={{ padding: 4 }}>
+                <div style={{ color: '#888' }}>Storage (sessionStorage) токен</div>
+                <div style={{ fontWeight: 600, color: snapshot.storageTokenPresent ? '#27ae60' : '#c0392b' }}>
+                  {snapshot.storageTokenPresent ? `✅ ${snapshot.storageTokenLength} симв.` : '❌ пустой'}
+                  {snapshot.storageTokenPreview ? (
+                    <div style={{ fontSize: 10, color: '#666', fontFamily: 'monospace', marginTop: 2 }}>
+                      {snapshot.storageTokenPreview}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <div style={{ padding: 4 }}>
+                <div style={{ color: '#888' }}>ИТОГО токен есть?</div>
+                <div style={{ fontWeight: 600, color: snapshot.anyTokenPresent ? '#27ae60' : '#c0392b' }}>
+                  {snapshot.anyTokenPresent ? '✅ ДА' : '❌ НЕТ'}
+                </div>
+              </div>
+              <div style={{ padding: 4 }}>
+                <div style={{ color: '#888' }}>bootstrappingSession</div>
+                <div style={{ fontWeight: 600, color: snapshot.bootstrappingSession ? '#f39c12' : '#27ae60' }}>
+                  {snapshot.bootstrappingSession ? '⏳ true' : '✅ false'}
+                </div>
+              </div>
+              <div style={{ padding: 4, gridColumn: '1 / -1' }}>
+                <div style={{ color: '#888' }}>Путь страницы</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all' }}>{snapshot.location}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -34,6 +34,30 @@ function isRecoverableTelegramSessionMessage(message) {
     );
 }
 
+async function copyToClipboard(text) {
+  const str = String(text || '');
+  try {
+    if (navigator && typeof navigator.clipboard?.writeText === 'function') {
+      await navigator.clipboard.writeText(str);
+      return true;
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = str;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function createPackageItemId() {
   return `package-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -378,9 +402,14 @@ function OrderDetail() {
   const [telegramAttachmentOpeningKey, setTelegramAttachmentOpeningKey] = useState('');
   const [telegramSpreadsheetPreview, setTelegramSpreadsheetPreview] = useState(null);
   const [telegramAttachmentPreview, setTelegramAttachmentPreview] = useState(null);
+  const [liveAuthCheckLoading, setLiveAuthCheckLoading] = useState(false);
+  const [liveAuthCheckResult, setLiveAuthCheckResult] = useState(null);
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
+
+  const debugParams = new URLSearchParams(location.search);
+  const debugMode = debugParams.get('debug') === '1' || Boolean(telegramMode);
   useGlobalErrorEffect(sessionError, 'Ошибка определения профиля в Telegram.');
   useGlobalErrorEffect(scanActivationError, 'Ошибка принятия изделия в работу.');
   useGlobalErrorEffect(stageError, 'Ошибка отметки этапа.');
@@ -435,7 +464,6 @@ function OrderDetail() {
     return telegramSessionTokenRef.current || getTelegramEmployeeSessionToken();
   }, []);
 
-  const debugMode = new URLSearchParams(location.search).get('debug') === '1';
   const [diagnosticsResult, setDiagnosticsResult] = useState(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const runTokenDiagnostics = useCallback(async () => {
@@ -461,8 +489,6 @@ function OrderDetail() {
     }
   }, [debugMode, getActiveTelegramSessionToken, location.search, telegramInitData, telegramUnsafeUser]);
 
-  const [liveAuthCheckResult, setLiveAuthCheckResult] = useState(null);
-  const [liveAuthCheckLoading, setLiveAuthCheckLoading] = useState(false);
   const runLiveAuthCheck = useCallback(async () => {
     try {
       setLiveAuthCheckLoading(true);
@@ -2316,6 +2342,128 @@ function OrderDetail() {
           </table>
         </div>
       )}
+
+      {debugMode && (
+        <div className="order-details-section" style={{ borderTop: '1px solid #e2e8f0', marginTop: 32, paddingTop: 20, background: '#fafafa' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ fontSize: 15, color: '#666', margin: 0 }}>СЛУЖЕБНАЯ ИНФОРМАЦИЯ (debug)</h3>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn--ghost"
+                disabled={liveAuthCheckLoading}
+                onClick={runLiveAuthCheck}
+                type="button"
+              >
+                {liveAuthCheckLoading ? 'Проверяю...' : '🔎 Проверить сессию'}
+              </button>
+              {liveAuthCheckResult && (
+                <button
+                  className="btn btn--ghost"
+                  type="button"
+                  onClick={() => copyToClipboard(JSON.stringify(liveAuthCheckResult, null, 2))}
+                >
+                  📋 JSON
+                </button>
+              )}
+            </div>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: 8,
+              fontSize: 12,
+              background: '#fff',
+              padding: 12,
+              borderRadius: 6,
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>URL param токен</div>
+              <div style={{ fontWeight: 600, color: (liveAuthCheckResult?.preflight?.urlParamTokenPresent) ? '#27ae60' : '#c0392b' }}>
+                {liveAuthCheckResult?.preflight?.urlParamTokenPresent ? `✅ есть (${liveAuthCheckResult?.preflight?.urlParamTokenLength || 0} симв.)` : '❌ пустой'}
+              </div>
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>Storage токен</div>
+              <div style={{ fontWeight: 600, color: (liveAuthCheckResult?.preflight?.storageTokenPresent) ? '#27ae60' : '#c0392b' }}>
+                {liveAuthCheckResult?.preflight?.storageTokenPresent ? `✅ есть (${liveAuthCheckResult?.preflight?.storageTokenLength || 0} симв.)` : '❌ пустой'}
+              </div>
+              {liveAuthCheckResult?.preflight?.storageTokenLength > 0 ? (
+                <div style={{ fontSize: 10, color: '#666', fontFamily: 'monospace' }}>
+                  {String(getTelegramEmployeeSessionToken() || '').slice(0, 18)}...
+                </div>
+              ) : null}
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>Эффект. токен</div>
+              <div style={{ fontWeight: 600, color: (liveAuthCheckResult?.preflight?.effectiveTokenPresent) ? '#27ae60' : '#c0392b' }}>
+                {liveAuthCheckResult?.preflight?.effectiveTokenPresent ? '✅ есть' : '❌ пустой'}
+              </div>
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>InitData</div>
+              <div style={{ fontWeight: 600, color: (liveAuthCheckResult?.preflight?.initDataPresent) ? '#27ae60' : '#c0392b' }}>
+                {liveAuthCheckResult?.preflight?.initDataPresent ? `✅ есть (${liveAuthCheckResult?.preflight?.initDataLength || 0})` : '❌ пустой'}
+              </div>
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>Unsafe User id</div>
+              <div style={{ fontWeight: 600 }}>
+                {liveAuthCheckResult?.preflight?.unsafeUserId ? liveAuthCheckResult?.preflight?.unsafeUserId : '❌ пустой'}
+              </div>
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>Telegram mode</div>
+              <div style={{ fontWeight: 600, color: (liveAuthCheckResult?.preflight?.telegramMode ? '#2980b9' : '#777') }}>
+                {liveAuthCheckResult?.preflight?.telegramMode ? '✅ true' : 'false'}
+              </div>
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>Auth Resolved</div>
+              <div style={{ fontWeight: 600, color: (liveAuthCheckResult?.preflight?.telegramAuthResolved ? '#27ae60' : '#f39c12') }}>
+                {liveAuthCheckResult?.preflight?.telegramAuthResolved ? '✅ true' : '⏳ false'}
+              </div>
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>Session loading</div>
+              <div style={{ fontWeight: 600 }}>
+                {liveAuthCheckResult?.preflight?.sessionLoading ? '⏳ true' : 'false'}
+              </div>
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>Сотрудник</div>
+              <div style={{ fontWeight: 600, color: (liveAuthCheckResult?.preflight?.telegramEmployeePresent ? '#27ae60' : '#c0392b') }}>
+                {liveAuthCheckResult?.preflight?.telegramEmployeePresent ? `✅ ${liveAuthCheckResult?.preflight?.telegramEmployeeRole || ''}` : '❌ пустой'}
+              </div>
+              {liveAuthCheckResult?.preflight?.employeeRef ? (
+                <div style={{ fontSize: 10, color: '#666', fontFamily: 'monospace' }}>{liveAuthCheckResult?.preflight?.employeeRef}</div>
+              ) : null}
+            </div>
+            <div style={{ padding: 6 }}>
+              <div style={{ color: '#888' }}>Ответ сервера session</div>
+              {liveAuthCheckResult?.sessionResponse ? (
+                <div style={{ fontWeight: 600, color: (liveAuthCheckResult?.sessionResponse?.ok ? '#27ae60' : '#c0392b') }}>
+                  {liveAuthCheckResult?.sessionResponse?.ok ? `✅ 200` : `❌ ${liveAuthCheckResult?.sessionResponse?.status || 'err'}`}
+                  <div style={{ fontSize: 11, color: '#c0392b', fontWeight: 400 }}>
+                    {liveAuthCheckResult?.sessionResponse?.payload?.message || liveAuthCheckResult?.sessionResponse?.error || ''}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontWeight: 500, color: '#777' }}>нажми «🔎 Проверить сессию»</div>
+              )}
+            </div>
+            <div style={{ padding: 6, gridColumn: '1 / -1' }}>
+              <div style={{ color: '#888' }}>Путь</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all' }}>
+                {liveAuthCheckResult?.preflight?.location || (typeof window !== 'undefined' && window.location?.pathname || '') + (typeof window !== 'undefined' && window.location?.search || '') + (typeof window !== 'undefined' && window.location?.hash || '')}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
