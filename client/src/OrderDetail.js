@@ -732,37 +732,52 @@ function OrderDetail() {
 
   useEffect(() => {
     loadTelegramEmployeeSession();
-  }, [loadTelegramEmployeeSession, location.pathname, location.search, telegramSessionBootstrapKey]);
+  }, [loadTelegramEmployeeSession, location.pathname, location.search, location.hash, telegramSessionBootstrapKey]);
 
   useEffect(() => {
-    if (!telegramMode) return;
+    if (!telegramMode) return undefined;
 
+    const storedToken = getActiveTelegramSessionToken();
+    const rawUrl = readTelegramUrlSessionTokenRaw();
+    const urlTokenValid = rawUrl.token && !isTelegramEmployeeSessionTokenExpired(rawUrl.token);
+    const effectiveHasToken = Boolean(storedToken || urlTokenValid);
     const webApp = getTelegramWebApp();
-    if (!webApp) return;
+
+    if (!webApp && !effectiveHasToken) return undefined;
 
     markTelegramWebAppSession();
     refreshTelegramAuth();
 
-    if (typeof webApp.ready === 'function') {
-      webApp.ready();
+    if (webApp && typeof webApp.ready === 'function') {
+      try { webApp.ready(); } catch (_) { /* ignore */ }
     }
-    if (typeof webApp.expand === 'function') {
-      webApp.expand();
+    if (webApp && typeof webApp.expand === 'function') {
+      try { webApp.expand(); } catch (_) { /* ignore */ }
+    }
+
+    if (effectiveHasToken) {
+      setTelegramSessionBootstrapKey(k => k + 1);
     }
 
     const retryTimers = [200, 500, 900, 1400, 2000, 2800].map(delay => window.setTimeout(() => {
       refreshTelegramAuth();
+      if (effectiveHasToken || readTelegramUrlSessionTokenRaw().token) {
+        setTelegramSessionBootstrapKey(k => k + 1);
+      }
     }, delay));
     const finishTimer = window.setTimeout(() => {
       refreshTelegramAuth();
       setTelegramAuthResolved(true);
+      if (effectiveHasToken || readTelegramUrlSessionTokenRaw().token) {
+        setTelegramSessionBootstrapKey(k => k + 1);
+      }
     }, 3200);
 
     return () => {
       retryTimers.forEach(timerId => window.clearTimeout(timerId));
       window.clearTimeout(finishTimer);
     };
-  }, [refreshTelegramAuth, telegramMode]);
+  }, [getActiveTelegramSessionToken, location.search, location.hash, refreshTelegramAuth, telegramMode]);
 
   useEffect(() => {
     if (!telegramMode) return undefined;
