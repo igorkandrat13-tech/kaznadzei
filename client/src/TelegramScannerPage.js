@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -8,6 +8,7 @@ import {
   getTelegramInitData,
   getTelegramUnsafeUser,
   getTelegramWebApp,
+  hasTelegramWebAppSession,
   isTelegramEmployeeSessionTokenExpired,
   isTelegramWebApp,
   markTelegramWebAppSession,
@@ -15,6 +16,7 @@ import {
   persistTelegramInitData,
   persistTelegramUnsafeUser,
   readTelegramUrlSessionToken,
+  readTelegramUrlSessionTokenRaw,
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
 import { useGlobalErrorEffect } from './globalErrors';
@@ -40,7 +42,20 @@ function TelegramScannerPage() {
   const [status, setStatus] = useState('Подготовка доступа к сканированию QR-кода изделия.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
   const [openingScanner, setOpeningScanner] = useState(false);
-  const debugMode = (new URLSearchParams(location.search).get('debug') === '1') || Boolean(isTelegramWebApp());
+  const debugMode = (() => {
+    const paramDebug = new URLSearchParams(location.search).get('debug') === '1';
+    if (paramDebug) return true;
+    const hasStorageToken = Boolean(getTelegramEmployeeSessionToken() && getTelegramEmployeeSessionToken().length > 32);
+    if (hasStorageToken) return true;
+    const urlRaw = readTelegramUrlSessionTokenRaw();
+    if (urlRaw && urlRaw.length > 32) return true;
+    const pathMatch = location.pathname.match(/^\/telegram-app\/t\/[^/]+\/?$/);
+    if (pathMatch) return true;
+    if (hasTelegramWebAppSession()) return true;
+    if (Boolean(getTelegramWebApp())) return true;
+    if (isTelegramWebApp()) return true;
+    return false;
+  })();
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
   async function copyToClipboard(text) {

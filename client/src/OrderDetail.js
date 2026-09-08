@@ -12,6 +12,7 @@ import {
   getTelegramInitData,
   getTelegramUnsafeUser,
   getTelegramWebApp,
+  hasTelegramWebAppSession,
   isTelegramEmployeeSessionTokenExpired,
   isTelegramWebApp,
   markTelegramWebAppSession,
@@ -408,8 +409,19 @@ function OrderDetail() {
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
 
+  const telegramMode = isTelegramWebApp();
   const debugParams = new URLSearchParams(location.search);
-  const debugMode = debugParams.get('debug') === '1' || Boolean(telegramMode);
+  const debugMode = (() => {
+    if (debugParams.get('debug') === '1') return true;
+    if (telegramMode) return true;
+    const storageToken = String(getTelegramEmployeeSessionToken() || '');
+    if (storageToken.length > 32) return true;
+    const urlRaw = readTelegramUrlSessionTokenRaw();
+    if (urlRaw && urlRaw.token && urlRaw.token.length > 32) return true;
+    if (hasTelegramWebAppSession()) return true;
+    if (Boolean(getTelegramWebApp())) return true;
+    return false;
+  })();
   useGlobalErrorEffect(sessionError, 'Ошибка определения профиля в Telegram.');
   useGlobalErrorEffect(scanActivationError, 'Ошибка принятия изделия в работу.');
   useGlobalErrorEffect(stageError, 'Ошибка отметки этапа.');
@@ -417,7 +429,6 @@ function OrderDetail() {
   useGlobalErrorEffect(materialRequestError, 'Ошибка заявок на расходники.');
   useGlobalErrorEffect(telegramActionError, 'Ошибка действия в Telegram.');
 
-  const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
   const telegramUnsafeUser = telegramAuth.unsafeUser;
 
