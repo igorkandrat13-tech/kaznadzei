@@ -411,17 +411,7 @@ function OrderDetail() {
 
   const telegramMode = isTelegramWebApp();
   const debugParams = new URLSearchParams(location.search);
-  const debugMode = (() => {
-    if (debugParams.get('debug') === '1') return true;
-    if (telegramMode) return true;
-    const storageToken = String(getTelegramEmployeeSessionToken() || '');
-    if (storageToken.length > 32) return true;
-    const urlRaw = readTelegramUrlSessionTokenRaw();
-    if (urlRaw && urlRaw.token && urlRaw.token.length > 32) return true;
-    if (hasTelegramWebAppSession()) return true;
-    if (Boolean(getTelegramWebApp())) return true;
-    return false;
-  })();
+  const debugMode = debugParams.get('debug') === '1';
   useGlobalErrorEffect(sessionError, 'Ошибка определения профиля в Telegram.');
   useGlobalErrorEffect(scanActivationError, 'Ошибка принятия изделия в работу.');
   useGlobalErrorEffect(stageError, 'Ошибка отметки этапа.');

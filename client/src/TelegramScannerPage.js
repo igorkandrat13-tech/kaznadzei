@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -38,6 +38,7 @@ function TelegramScannerPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const autoOpenedRef = useRef(false);
+  const openingScannerRef = useRef(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Подготовка доступа к сканированию QR-кода изделия.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
@@ -47,17 +48,7 @@ function TelegramScannerPage() {
   const [pinMessage, setPinMessage] = useState('');
   const debugMode = (() => {
     const paramDebug = new URLSearchParams(location.search).get('debug') === '1';
-    if (paramDebug) return true;
-    const hasStorageToken = Boolean(getTelegramEmployeeSessionToken() && getTelegramEmployeeSessionToken().length > 32);
-    if (hasStorageToken) return true;
-    const urlRaw = readTelegramUrlSessionTokenRaw();
-    if (urlRaw && urlRaw.length > 32) return true;
-    const pathMatch = location.pathname.match(/^\/telegram-app\/t\/[^/]+\/?$/);
-    if (pathMatch) return true;
-    if (hasTelegramWebAppSession()) return true;
-    if (Boolean(getTelegramWebApp())) return true;
-    if (isTelegramWebApp()) return true;
-    return false;
+    return paramDebug;
   })();
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
@@ -163,7 +154,10 @@ function TelegramScannerPage() {
   }, []);
 
   const openScanner = useCallback(() => {
-    if (bootstrappingSession || openingScanner) return;
+    if (bootstrappingSession) return;
+    if (openingScannerRef.current) return;
+    if (openingScanner) return;
+    openingScannerRef.current = true;
     setError('');
     setOpeningScanner(true);
     try {
@@ -188,16 +182,19 @@ function TelegramScannerPage() {
               return;
             }
           } finally {
+            openingScannerRef.current = false;
             setOpeningScanner(false);
           }
         },
         onError: (nextError) => {
+          openingScannerRef.current = false;
           setError(nextError);
           setOpeningScanner(false);
         },
         onStatusChange: setStatus,
       });
     } catch (scannerError) {
+      openingScannerRef.current = false;
       setError(scannerError.message || 'Не удалось открыть камеру.');
       setOpeningScanner(false);
     }
@@ -225,13 +222,12 @@ function TelegramScannerPage() {
         markTelegramWebAppSession();
       }
       const welcomeName = data?.employee?.fullName ? `, ${String(data.employee.fullName).split(' ')[0]}` : '';
-      setPinMessage(`Вход выполнен${welcomeName}. Кнопка меню Telegram тоже обновлена — в следующий раз вход по кнопке будет автоматический.`);
-      setStatus(`Готово${welcomeName}. Камера готова к сканированию.`);
-      setTimeout(() => setOpeningScanner(false), 800);
+      setPinMessage(`Вход выполнен${welcomeName}. Кнопка меню временно скрыта — используйте инлайн-ссылку «📤 Отправить ссылку в Telegram» в карточке сотрудника.`);
+      setStatus(`Готово${welcomeName}. Нажмите «Открыть камеру» для сканирования.`);
       setTimeout(() => {
-        autoOpenedRef.current = false;
-        openScanner();
-      }, 1200);
+        openingScannerRef.current = false;
+        setOpeningScanner(false);
+      }, 800);
     } catch (pinErr) {
       setPinMessage(pinErr?.message || String(pinErr || 'Ошибка входа по ПИН-коду.'));
     } finally {
