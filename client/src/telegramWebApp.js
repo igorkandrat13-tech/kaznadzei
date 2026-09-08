@@ -81,48 +81,7 @@ export function hasTelegramWebAppSession() {
 
 export function isTelegramWebApp() {
   const webApp = getTelegramWebApp();
-  const hasEmployeeSessionToken = Boolean(getTelegramEmployeeSessionToken());
-  let hasEmployeeSessionTokenInUrl = false;
-  try {
-    if (typeof window !== 'undefined' && window.location?.search) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const raw = urlParams.get('employeeSessionToken');
-      if (raw && String(raw).trim().length > 64) {
-        hasEmployeeSessionTokenInUrl = true;
-      }
-    }
-  } catch (_) { /* ignore */ }
-  return Boolean(
-    (webApp && (webApp.initData || webApp.initDataUnsafe?.user || hasTelegramWebAppSession()))
-    || hasEmployeeSessionToken
-    || hasEmployeeSessionTokenInUrl,
-  );
-}
-
-export function hasValidTelegramEmployeeSession() {
-  return Boolean(getTelegramEmployeeSessionToken());
-}
-
-export function tryReadyTelegramWebApp() {
-  try {
-    const webApp = getTelegramWebApp();
-    if (webApp && typeof webApp.ready === 'function') {
-      webApp.ready();
-      return true;
-    }
-  } catch (_error) { /* WebAppMethodUnsupported */ }
-  return false;
-}
-
-export function tryExpandTelegramWebApp() {
-  try {
-    const webApp = getTelegramWebApp();
-    if (webApp && typeof webApp.expand === 'function') {
-      webApp.expand();
-      return true;
-    }
-  } catch (_error) { /* WebAppMethodUnsupported */ }
-  return false;
+  return Boolean(webApp && (webApp.initData || webApp.initDataUnsafe?.user || hasTelegramWebAppSession()));
 }
 
 export function getTelegramInitData() {
@@ -214,39 +173,33 @@ export function buildTelegramOrderPath(orderPath, sessionToken = getTelegramEmpl
 export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {}) {
   const webApp = getTelegramWebApp();
   if (!webApp || typeof webApp.showScanQrPopup !== 'function') {
-    onError?.('Сканирование доступно только в приложении Telegram на поддерживаемом устройстве.');
+    onError?.('Камера для сканирования QR-кодов недоступна. Откройте эту страницу через Telegram, используя кнопку в боте.');
     return false;
   }
 
   onError?.('');
-  onStatusChange?.('Наведите камеру на QR-код заказа.');
+  onStatusChange?.('Подготовка камеры для сканирования QR-кода изделия.');
 
-  try {
-    webApp.showScanQrPopup(
-      { text: 'Наведите камеру на QR-код заказа' },
-      (scannedText) => {
-        const orderPath = getOrderPathFromQr(scannedText);
-        if (!orderPath) {
-          onError?.('QR-код не распознан. Используйте QR-код заказа, сгенерированный в системе.');
-          return false;
-        }
-
-        try {
-          if (typeof webApp.closeScanQrPopup === 'function') {
-            webApp.closeScanQrPopup();
-          }
-        } catch (_) { /* ignore */ }
-
-        onStatusChange?.('Открываю страницу заказа...');
-        onSuccess?.(orderPath);
-        return true;
+  webApp.showScanQrPopup(
+    { text: 'Подготовка камеры для сканирования QR-кода изделия' },
+    (scannedText) => {
+      const orderPath = getOrderPathFromQr(scannedText);
+      if (!orderPath) {
+        onError?.('QR-код не распознан. Используйте QR-код изделия, расположенный на упаковке.');
+        return false;
       }
-    );
-    return true;
-  } catch (scannerError) {
-    onError?.('Камера сканера QR-кода недоступна в этом режиме Telegram. Откройте страницу заказа по прямой ссылке или через кнопку в боте.');
-    return false;
-  }
+
+      if (typeof webApp.closeScanQrPopup === 'function') {
+        webApp.closeScanQrPopup();
+      }
+
+      onStatusChange?.('Переход к найденному изделию...');
+      onSuccess?.(orderPath);
+      return true;
+    }
+  );
+
+  return true;
 }
 
 export function closeTelegramWebApp() {

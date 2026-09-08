@@ -17,10 +17,7 @@ import {
   markTelegramWebAppSession,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
-  bootstrapTelegramInitData,
   setTelegramEmployeeSessionToken,
-  tryExpandTelegramWebApp,
-  tryReadyTelegramWebApp,
 } from './telegramWebApp';
 
 function isRecoverableTelegramSessionMessage(message) {
@@ -411,7 +408,7 @@ function OrderDetail() {
     } catch (_) { /* ignore */ }
   }, []);
 
-  const refreshTelegramAuth = useCallback(({ fromBootstrap = false } = {}) => {
+  const refreshTelegramAuth = useCallback(() => {
     const nextInitData = persistTelegramInitData() || getTelegramInitData();
     const nextUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
 
@@ -425,7 +422,6 @@ function OrderDetail() {
         unsafeUser: nextUnsafeUser,
       };
     });
-    return { initData: nextInitData, unsafeUser: nextUnsafeUser };
   }, []);
 
   const updateTelegramSessionToken = useCallback((nextToken = '') => {
@@ -730,48 +726,34 @@ function OrderDetail() {
   }, [loadTelegramEmployeeSession, location.pathname, location.search, telegramSessionBootstrapKey]);
 
   useEffect(() => {
-    if (!telegramMode) return undefined;
+    if (!telegramMode) return;
 
-    const storedToken = getActiveTelegramSessionToken();
-    const urlParams = new URLSearchParams(location.search);
-    const urlTokenRaw = urlParams.get('employeeSessionToken');
-    const urlTokenValid = urlTokenRaw && !isTelegramEmployeeSessionTokenExpired(urlTokenRaw);
-    const effectiveHasToken = Boolean(storedToken || urlTokenValid);
     const webApp = getTelegramWebApp();
-
-    if (!webApp && !effectiveHasToken) {
-      return undefined;
-    }
+    if (!webApp) return;
 
     markTelegramWebAppSession();
     refreshTelegramAuth();
 
-    tryReadyTelegramWebApp();
-    tryExpandTelegramWebApp();
-
-    if (effectiveHasToken && !webApp) {
-      setTelegramSessionBootstrapKey(k => k + 1);
+    if (typeof webApp.ready === 'function') {
+      webApp.ready();
+    }
+    if (typeof webApp.expand === 'function') {
+      webApp.expand();
     }
 
     const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(() => {
       refreshTelegramAuth();
-      if (getActiveTelegramSessionToken() || urlParams.get('employeeSessionToken')) {
-        setTelegramSessionBootstrapKey(k => k + 1);
-      }
     }, delay));
     const finishTimer = window.setTimeout(() => {
       refreshTelegramAuth();
       setTelegramAuthResolved(true);
-      if (getActiveTelegramSessionToken() || urlParams.get('employeeSessionToken')) {
-        setTelegramSessionBootstrapKey(k => k + 1);
-      }
     }, 1700);
 
     return () => {
       retryTimers.forEach(timerId => window.clearTimeout(timerId));
       window.clearTimeout(finishTimer);
     };
-  }, [getActiveTelegramSessionToken, location.search, refreshTelegramAuth, telegramMode]);
+  }, [refreshTelegramAuth, telegramMode]);
 
   useEffect(() => {
     if (!telegramMode) return undefined;

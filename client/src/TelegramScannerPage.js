@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -9,14 +9,11 @@ import {
   getTelegramUnsafeUser,
   getTelegramWebApp,
   isTelegramEmployeeSessionTokenExpired,
-  isTelegramWebApp,
   markTelegramWebAppSession,
   openTelegramQrScanner,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
   setTelegramEmployeeSessionToken,
-  tryExpandTelegramWebApp,
-  tryReadyTelegramWebApp,
 } from './telegramWebApp';
 import { useGlobalErrorEffect } from './globalErrors';
 
@@ -27,7 +24,7 @@ function isRecoverableTelegramSessionMessage(message) {
       normalized.includes('истек')
       || normalized.includes('истёк')
       || normalized.includes('устарел')
-      || normalized.includes('не про')
+      || normalized.includes('не прош')
       || normalized.includes('некоррект')
       || normalized.includes('непол')
     );
@@ -38,103 +35,75 @@ function TelegramScannerPage() {
   const location = useLocation();
   const autoOpenedRef = useRef(false);
   const [error, setError] = useState('');
-  const [status, setStatus] = useState('Откройте камеру и наведите её на QR-код заказа.');
+  const [status, setStatus] = useState('Подготовка доступа к сканированию QR-кода изделия.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
   const [openingScanner, setOpeningScanner] = useState(false);
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
-  const bootstrapTelegramSession = useCallback(async ({ retries = 6 } = {}) => {
+  const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
     markTelegramWebAppSession();
-    const watchdogTimerId = { current: 0 };
-    let cleanupWatchdogCalled = false;
-    const cleanupWatchdog = () => {
-      if (cleanupWatchdogCalled) return;
-      cleanupWatchdogCalled = true;
-      if (watchdogTimerId.current) {
-        window.clearTimeout(watchdogTimerId.current);
-        watchdogTimerId.current = 0;
-      }
-    };
-    const watchdogPromise = new Promise((_, reject) => {
-      watchdogTimerId.current = window.setTimeout(() => {
-        cleanupWatchdog();
-        reject(new Error('Таймаут подготовки доступа. Обновите страницу или откройте через кнопку в боте.'));
-      }, 10000);
-    });
-    watchdogPromise.catch(() => {});
+    let lastError = null;
+    let currentSessionToken = getTelegramEmployeeSessionToken();
+    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 350));
 
-    const mainFlow = (async () => {
-      let lastError = null;
-      let currentSessionToken = getTelegramEmployeeSessionToken();
-      const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 350));
+    for (let attempt = 0; attempt < retries; attempt += 1) {
+      persistTelegramInitData();
+      persistTelegramUnsafeUser();
 
-      for (let attempt = 0; attempt < retries; attempt += 1) {
-        persistTelegramInitData();
-        persistTelegramUnsafeUser();
+      const initData = getTelegramInitData();
+      const unsafeUser = getTelegramUnsafeUser();
+      const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
+      const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
 
-        const initData = getTelegramInitData();
-        const unsafeUser = getTelegramUnsafeUser();
-        const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
-        const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
-        const isLastAttempt = attempt === retries - 1;
-
-        if (!hasTelegramAuthPayload && !sessionToken && !isLastAttempt) {
+      // In Telegram Web App the signed auth payload may appear a bit later than the
+      // URL query token. Give it a chance to arrive before trusting a stale token.
+      if (!hasTelegramAuthPayload) {
+        if (attempt < retries - 1) {
           await waitForTelegramAuth();
           continue;
         }
+      }
 
-        try {
-          const res = await apiFetch('/api/telegram/webapp/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              initData,
-              unsafeUser,
-              sessionToken,
-            }),
-          });
-          const data = await parseJsonSafely(res);
-          if (!res.ok) {
-            const errorMessage = data?.message || 'Не удалось подготовить доступ к заказам.';
-            if (sessionToken && isRecoverableTelegramSessionMessage(errorMessage)) {
-              currentSessionToken = '';
-              setTelegramEmployeeSessionToken('');
-              if (!isLastAttempt) {
-                await waitForTelegramAuth();
-              }
-              continue;
+      if (!hasTelegramAuthPayload && !sessionToken) {
+        continue;
+      }
+
+      try {
+        const res = await apiFetch('/api/telegram/webapp/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initData,
+            unsafeUser,
+            sessionToken,
+          }),
+        });
+        const data = await parseJsonSafely(res);
+        if (!res.ok) {
+          const errorMessage = data?.message || 'Не удалось подготовить доступ к заказам.';
+          if (sessionToken && isRecoverableTelegramSessionMessage(errorMessage)) {
+            currentSessionToken = '';
+            setTelegramEmployeeSessionToken('');
+            if (attempt < retries - 1) {
+              await waitForTelegramAuth();
             }
-            throw new Error(errorMessage);
+            continue;
           }
-          currentSessionToken = data?.sessionToken || '';
-          setTelegramEmployeeSessionToken(currentSessionToken);
-          return Boolean(currentSessionToken);
-        } catch (sessionError) {
-          lastError = sessionError;
-          if (!isLastAttempt) {
-            await waitForTelegramAuth();
-          }
+          throw new Error(errorMessage);
         }
+        currentSessionToken = data?.sessionToken || '';
+        setTelegramEmployeeSessionToken(currentSessionToken);
+        return Boolean(currentSessionToken);
+      } catch (sessionError) {
+        lastError = sessionError;
+        await waitForTelegramAuth();
       }
-
-      if (lastError) {
-        setError(lastError.message || 'Не удалось подготовить доступ к заказам.');
-      }
-      return false;
-    })();
-
-    try {
-      return await Promise.race([mainFlow, watchdogPromise]);
-    } catch (watchdogOrFlowErr) {
-      if (watchdogOrFlowErr?.message) {
-        setError(String(watchdogOrFlowErr.message));
-      } else {
-        setError('Не удалось подготовить доступ. Пожалуйста, обновите страницу.');
-      }
-      return false;
-    } finally {
-      cleanupWatchdog();
     }
+
+    if (lastError) {
+      setError(lastError.message || 'Не удалось подготовить доступ к заказам.');
+    }
+    return false;
   }, []);
 
   const openScanner = useCallback(() => {
@@ -146,7 +115,7 @@ function TelegramScannerPage() {
         onSuccess: async (orderPath) => {
           try {
             setError('');
-            setStatus('Открываю страницу заказа...');
+            setStatus('Переход к найденному изделию...');
             navigate(buildTelegramOrderPath(orderPath));
           } finally {
             setOpeningScanner(false);
@@ -177,20 +146,23 @@ function TelegramScannerPage() {
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
-    const storedToken = getTelegramEmployeeSessionToken();
-    if (!webApp && !storedToken) return undefined;
-    if (webApp && !isTelegramWebApp() && !storedToken) return undefined;
+    if (!webApp) return;
 
     bootstrapTelegramSession()
       .finally(() => setBootstrappingSession(false));
 
-    tryReadyTelegramWebApp();
-    tryExpandTelegramWebApp();
-    return undefined;
+    if (typeof webApp.ready === 'function') {
+      webApp.ready();
+    }
+
+    if (typeof webApp.expand === 'function') {
+      webApp.expand();
+    }
   }, [bootstrapTelegramSession]);
 
   useEffect(() => {
-    if (autoOpenedRef.current || bootstrappingSession) return;
+    const webApp = getTelegramWebApp();
+    if (!webApp || autoOpenedRef.current || bootstrappingSession) return;
 
     autoOpenedRef.current = true;
     openScanner();
@@ -198,9 +170,9 @@ function TelegramScannerPage() {
 
   return (
     <div className="card scanner-card">
-      <h2>Сканирование QR-кода</h2>
+      <h2>Сканер QR-кодов</h2>
       <p className="text-muted" style={{ lineHeight: 1.6 }}>
-        После сканирования откроется страница заказа.
+        Наведите камеру телефона на QR-код изделия.
       </p>
 
       <div className="scanner-status-box">
@@ -215,7 +187,7 @@ function TelegramScannerPage() {
 
       <div className="inline-actions-centered">
         <button className="btn btn-primary" onClick={openScanner} disabled={bootstrappingSession || openingScanner}>
-          {bootstrappingSession ? 'Подготовка...' : openingScanner ? 'Открываю...' : 'Открыть камеру'}
+          {bootstrappingSession ? 'Подготовка...' : openingScanner ? 'Переход...' : 'Открыть камеру'}
         </button>
         <button className="btn btn-secondary" onClick={() => closeTelegramWebApp() || navigate('/')}>
           Закрыть
