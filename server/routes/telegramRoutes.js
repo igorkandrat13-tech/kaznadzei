@@ -336,22 +336,35 @@ router.get('/employee-directory', express.json({ limit: '4kb' }), async (req, re
 
 router.post('/webapp/employee-link-by-code', express.json({ limit: '16kb' }), async (req, res) => {
   try {
-    const rawCode = String((req.body || {}).code || '').trim().toLowerCase();
+    const rawInput = String((req.body || {}).code || '').trim();
+    const rawCode = rawInput.toLowerCase();
     if (!rawCode || rawCode.length < 2) {
-      return res.status(400).json({ ok: false, retryable: true, message: 'Введите код сотрудника (минимум 2 символа).' });
+      return res.status(400).json({ ok: false, retryable: true, message: 'Введите PIN или код сотрудника (минимум 2 символа).' });
     }
     const employees = (EmployeeStore.list && EmployeeStore.list()) || EmployeeStore.findAll() || [];
-    const match = (employees.find((emp) => {
-      const code = String(emp.code || emp.employeeCode || '').toLowerCase();
-      const username = String(emp.telegramUsername || '').toLowerCase().replace(/^@/, '');
-      const name = String(emp.fullName || emp.name || '').toLowerCase();
-      const id6 = String(emp._id || '').slice(-6).toLowerCase();
-      if (!code && !username && !name) return false;
-      return (code && code === rawCode)
-        || (username && username === rawCode)
-        || (id6 && id6 === rawCode)
-        || (name && rawCode.length >= 3 && name.includes(rawCode));
-    }) || null);
+    let match = null;
+    let matchBy = null;
+    if (/^\d+$/.test(rawInput)) {
+      const pinMatch = EmployeeStore.findByPinCode(rawInput);
+      if (pinMatch) {
+        match = pinMatch;
+        matchBy = 'pin';
+      }
+    }
+    if (!match) {
+      match = (employees.find((emp) => {
+        const code = String(emp.code || emp.employeeCode || '').toLowerCase();
+        const username = String(emp.telegramUsername || '').toLowerCase().replace(/^@/, '');
+        const name = String(emp.fullName || emp.name || '').toLowerCase();
+        const id6 = String(emp._id || '').slice(-6).toLowerCase();
+        if (!code && !username && !name) return false;
+        return (code && code === rawCode)
+          || (username && username === rawCode)
+          || (id6 && id6 === rawCode)
+          || (name && rawCode.length >= 3 && name.includes(rawCode));
+      }) || null);
+      if (match) matchBy = 'code';
+    }
 
     if (!match) {
       addTelegramDiagnosticLog({
@@ -360,7 +373,14 @@ router.post('/webapp/employee-link-by-code', express.json({ limit: '16kb' }), as
         event: 'employee-link-by-code.not-found',
         details: { code: rawCode, searched: employees.length },
       });
-      return res.status(404).json({ ok: false, retryable: true, message: 'Сотрудник с таким кодом не найден. Проверьте код и попробуйте ещё раз.' });
+      const isPinAttempt = /^\d+$/.test(rawInput) && rawInput.length >= 4;
+      return res.status(404).json({
+        ok: false,
+        retryable: true,
+        message: isPinAttempt
+          ? 'Сотрудник с таким PIN не найден. Проверьте PIN (4-6 цифр) или обратитесь к администратору.'
+          : 'Сотрудник с таким кодом не найден. Проверьте код и попробуйте ещё раз.',
+      });
     }
 
     addTelegramDiagnosticLog({
@@ -369,6 +389,7 @@ router.post('/webapp/employee-link-by-code', express.json({ limit: '16kb' }), as
       event: 'employee-link-by-code.found',
       details: {
         code: rawCode,
+        matchBy: matchBy || 'unknown',
         employeeId: match._id ? String(match._id).slice(-8) : '',
         employeeRole: String(match.role || '').slice(0, 80),
         hasTelegramUserId: Boolean(match.telegramUserId),

@@ -46,8 +46,10 @@ function TelegramScannerPage() {
   const [bootstrapProgress, setBootstrapProgress] = useState({ step: 0, total: 12, ready: false, note: '' });
   const [fallbackEmployeeCode, setFallbackEmployeeCode] = useState('');
   const [submittingFallback, setSubmittingFallback] = useState(false);
+  const [fallbackEmployeePin, setFallbackEmployeePin] = useState('');
+  const [submittingFallbackPin, setSubmittingFallbackPin] = useState(false);
   const [fallbackEmployeeName, setFallbackEmployeeName] = useState('');
-  const [directory, setDirectory] = useState({ loaded: false, count: 0, employees: [] });
+  const [directory, setDirectory] = useState({ loaded: false, count: 0, employees: [], error: false });
   const loadDirectoryOnceRef = useRef(false);
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
@@ -68,6 +70,7 @@ function TelegramScannerPage() {
         writeClientTelegramDiagnosticsLog('scanner.directory.fetch.success', { count: list.length }, 'telegram-scanner');
       } catch (dirErr) {
         writeClientTelegramDiagnosticsLog('scanner.directory.fetch.error', { message: String(dirErr.message || '').slice(0,255) }, 'telegram-scanner');
+        setDirectory(prev => ({ ...prev, loaded: true, error: true }));
       }
     })();
   }, []);
@@ -146,6 +149,77 @@ function TelegramScannerPage() {
       setSubmittingFallback(false);
     }
   }, [fallbackEmployeeCode]);
+
+  const submitFallbackPin = useCallback(async () => {
+    const code = String(fallbackEmployeePin || '').trim();
+    if (!code || !/^\d+$/.test(code)) {
+      setError('Введите PIN сотрудника (только цифры, 4-6 знаков).');
+      return;
+    }
+    if (code.length < 4) {
+      setError('PIN сотрудника слишком короткий. Введите 4-6 цифр.');
+      return;
+    }
+    setSubmittingFallbackPin(true);
+    setError('');
+    try {
+      writeClientTelegramDiagnosticsLog('scanner.fallback.pin-submit', {
+        pinLength: code.length,
+        pinTail: String(code).slice(-2),
+      }, 'telegram-scanner');
+      const res = await apiFetch('/api/telegram/webapp/employee-link-by-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const rawText = await res.text();
+      let data = null;
+      try { data = JSON.parse(rawText || '{}'); } catch (_) { data = { ok:false, message: (rawText || '').slice(0, 200) || 'Empty response' }; }
+      writeClientTelegramDiagnosticsLog('scanner.fallback.pin-response', {
+        pinLength: code.length,
+        resStatus: Number(res.status) || 0,
+        resOk: Boolean(res.ok),
+        contentType: res.headers && typeof res.headers.get === 'function' ? String(res.headers.get('content-type')||'').slice(0,80) : '',
+        responseMessage: String(data?.message || '').slice(0,200),
+        responseRawTail: String(rawText||'').slice(-160),
+        dataOk: Boolean(data?.ok),
+        hasEmployeeLink: Boolean(data?.employeeLink),
+        hasSessionToken: Boolean(data?.sessionToken),
+      }, 'telegram-scanner');
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message || 'Не удалось получить доступ по PIN.');
+      }
+      if (data?.employeeLink) {
+        setTelegramEmployeeDirectLink(String(data.employeeLink || ''));
+      }
+      if (data?.sessionToken) {
+        setTelegramEmployeeSessionToken(String(data.sessionToken || ''));
+      }
+      const empName = data?.employee?.fullName || data?.employee?.name || '';
+      setFallbackEmployeeName(empName);
+      writeClientTelegramDiagnosticsLog('scanner.fallback.pin-success', {
+        employeeId: data?.employee?._id ? String(data.employee._id).slice(-6) : '',
+        employeeRole: String(data?.employee?.role || '').slice(0, 80),
+        hasLink: Boolean(data?.employeeLink),
+        hasSession: Boolean(data?.sessionToken),
+      }, 'telegram-scanner');
+      setBootstrapProgress(prev => ({
+        ...prev,
+        step: prev.total,
+        ready: true,
+        note: empName ? `Доступ получен: ${empName}. Можно сканировать.` : 'Доступ готов. Можно сканировать.',
+      }));
+    } catch (fallbackErr) {
+      const msg = fallbackErr?.message || fallbackErr?.toString?.() || 'Unknown fallback error';
+      setError(msg || 'Не удалось получить доступ по PIN сотрудника.');
+      writeClientTelegramDiagnosticsLog('scanner.fallback.pin-error', {
+        message: String(msg || '').slice(0, 255),
+        fallbackErrName: String(fallbackErr?.name || '').slice(0,80),
+      }, 'telegram-scanner');
+    } finally {
+      setSubmittingFallbackPin(false);
+    }
+  }, [fallbackEmployeePin]);
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 12 } = {}) => {
     markTelegramWebAppSession();
@@ -489,16 +563,89 @@ function TelegramScannerPage() {
           border: '1px solid #f1d8a2',
           borderRadius: 10,
         }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: '#965c0c' }}>
-            ⚠️ Telegram не передал данные сотрудника (возможно после долгого неиспользования). Выберите себя в списке или введите код:
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: '#965c0c' }}>
+            ⚠️ Telegram не передал данные сотрудника (возможно после долгого неиспользования). Введите свой PIN — это самый быстрый способ:
           </div>
 
-          {directory.loaded && directory.employees.length > 0 && (
+          <div style={{
+            display: 'flex',
+            gap: 10,
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            marginBottom: 14,
+            padding: 12,
+            background: '#ffffff',
+            border: '1px solid #e9dcb9',
+            borderRadius: 8,
+          }}>
+            <div style={{ flex: '1 1 180px', minWidth: 180 }}>
+              <label style={{
+                fontSize: 12,
+                color: 'var(--muted,#555)',
+                display: 'block',
+                marginBottom: 4,
+                fontWeight: 700,
+              }}>
+                🟢 PIN сотрудника (4-6 цифр, вы использовали его при регистрации в боте):
+              </label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="form-input"
+                value={fallbackEmployeePin}
+                onChange={(e) => {
+                  const onlyDigits = (e.target.value || '').replace(/[^0-9]/g, '').slice(0, 8);
+                  setFallbackEmployeePin(onlyDigits);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitFallbackPin(); }}
+                placeholder="например: 200133"
+                style={{ width: '100%', padding: '10px 12px', fontSize: 18, fontFamily: 'monospace', letterSpacing: 2 }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+              />
+              <div style={{ fontSize: 11, color: 'var(--muted,#777)', marginTop: 4 }}>
+                PIN можно посмотреть в Настройки → Сотрудники (у администратора).
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 180 }}>
+              <button
+                className="btn btn-success"
+                onClick={submitFallbackPin}
+                disabled={submittingFallbackPin || !fallbackEmployeePin || fallbackEmployeePin.length < 4}
+                style={{ minWidth: 180, fontWeight: 700 }}
+              >
+                {submittingFallbackPin ? 'Проверяю PIN...' : '✅ Войти по PIN'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={retryBootstrap}
+                disabled={submittingFallbackPin || submittingFallback}
+                style={{ minWidth: 180 }}
+              >
+                ↻ Ещё раз попробовать Telegram
+              </button>
+            </div>
+          </div>
+
+          <div style={{
+            textAlign: 'center',
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#8a6a2a',
+            margin: '8px 0 14px',
+          }}>
+            — ИЛИ —
+          </div>
+
+          {directory.loaded && !directory.error && directory.employees.length > 0 && (
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
               gap: 8,
-              margin: '8px 0 16px',
+              margin: '0 0 16px',
             }}>
               {directory.employees.map((emp, idx) => {
                 const label = (emp.code ? emp.code + ' · ' : '') + (emp.name || '');
@@ -551,7 +698,7 @@ function TelegramScannerPage() {
                 display: 'block',
                 marginBottom: 4,
               }}>
-                Ваш код сотрудника (например, fvams2):
+                Код сотрудника / Фамилия / @username:
               </label>
               <input
                 type="text"
@@ -559,7 +706,7 @@ function TelegramScannerPage() {
                 value={fallbackEmployeeCode}
                 onChange={(e) => setFallbackEmployeeCode(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') submitFallbackEmployeeCode(); }}
-                placeholder="код сотрудника или выберите сверху"
+                placeholder="например: fvams2 или Игорь"
                 style={{ width: '100%', padding: '8px 10px', fontSize: 15 }}
                 autoComplete="off"
                 autoCorrect="off"
@@ -572,20 +719,12 @@ function TelegramScannerPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 170 }}>
               <button
-                className="btn btn-success"
+                className="btn btn-primary"
                 onClick={submitFallbackEmployeeCode}
-                disabled={submittingFallback || !fallbackEmployeeCode}
+                disabled={submittingFallback || !fallbackEmployeeCode || submittingFallbackPin}
                 style={{ minWidth: 170 }}
               >
-                {submittingFallback ? 'Получаю доступ...' : 'Получить доступ'}
-              </button>
-              <button
-                className="btn btn-secondary"
-                onClick={retryBootstrap}
-                disabled={submittingFallback}
-                style={{ minWidth: 170 }}
-              >
-                ↻ Ещё раз попробовать Telegram
+                {submittingFallback ? 'Получаю доступ...' : 'Получить доступ по коду'}
               </button>
             </div>
           </div>

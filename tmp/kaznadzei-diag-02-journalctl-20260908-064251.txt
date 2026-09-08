@@ -1,0 +1,313 @@
+=== kaznadzei-diag step 2 — journalctl -u kaznadzei ===
+=== Timestamp: 20260908-064251
+
+--- journalctl system unit sudo -u kaznadzei last 30m 300 lines (tail 120) ---
+сен 07 05:51:15 car-manager node[250397]: [telegram-webapp] session.auth.payload-only {"hasInitData":true,"initDataLength":539,"hasUnsafeUser":true,"unsafeUserId":"1284790148","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","resolvedTelegramUserId":"1284790148","employeeFound":true}
+сен 07 05:51:15 car-manager node[250397]: [telegram-webapp] session.success {"hasInitData":true,"initDataLength":539,"hasUnsafeUser":true,"unsafeUserId":"1284790148","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","employeeId":"mrbsyfr6jyj7x0","employeeRole":"Заготовка","telegramUserId":"1284790148","issuedSessionTokenTail":"...512bab"}
+сен 07 06:00:19 car-manager node[250397]: [customer-telegram] message.received {"chatId":"1657716608","telegramUserId":"1657716608","text":"/start","hasText":true,"hasPhoto":false}
+сен 07 06:01:06 car-manager node[250397]: [customer-telegram] message.received {"chatId":"6766995816","telegramUserId":"6766995816","text":"/start","hasText":true,"hasPhoto":false}
+сен 07 06:01:14 car-manager node[250397]: [customer-telegram] message.received {"chatId":"1657716608","telegramUserId":"1657716608","text":"546586","hasText":true,"hasPhoto":false}
+сен 07 06:01:37 car-manager node[250397]: [customer-telegram] message.received {"chatId":"6766995816","telegramUserId":"6766995816","text":"Заявки","hasText":true,"hasPhoto":false}
+сен 07 07:26:09 car-manager node[250397]: [customer-telegram] message.received {"chatId":"6078056663","telegramUserId":"6078056663","text":"Заявки","hasText":true,"hasPhoto":false}
+сен 07 07:26:46 car-manager node[250397]: [customer-telegram] message.received {"chatId":"6078056663","telegramUserId":"6078056663","text":"Фреза галтельная. Диаметр 6,8,10. По 8 шт.","hasText":true,"hasPhoto":false}
+сен 07 08:46:28 car-manager node[250397]: [customer-telegram] message.received {"chatId":"6078056663","telegramUserId":"6078056663","text":"Заявки","hasText":true,"hasPhoto":false}
+сен 07 08:46:45 car-manager node[250397]: [customer-telegram] message.received {"chatId":"6078056663","telegramUserId":"6078056663","text":"Вывезти опилки","hasText":true,"hasPhoto":false}
+сен 07 08:47:05 car-manager node[250397]: [customer-telegram] message.received {"chatId":"6078056663","telegramUserId":"6078056663","text":"Заявки","hasText":true,"hasPhoto":false}
+сен 07 08:47:30 car-manager node[250397]: [customer-telegram] message.received {"chatId":"6078056663","telegramUserId":"6078056663","text":"Сделать интернет на чпу","hasText":true,"hasPhoto":false}
+сен 07 15:36:04 car-manager node[250397]: [customer-telegram] message.received {"chatId":"579111782","telegramUserId":"579111782","text":"📋 Весь заказ","hasText":true,"hasPhoto":false}
+сен 07 15:36:05 car-manager node[250397]: [customer-telegram] full-order.request {"chatId":"579111782","telegramUserId":"579111782","accessCount":1,"text":"📋 Весь заказ"}
+сен 07 15:36:05 car-manager node[250397]: [customer-telegram] full-order.sent {"chatId":"579111782","telegramUserId":"579111782","accessCount":1}
+сен 07 16:07:57 car-manager node[250397]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"/start","hasText":true,"hasPhoto":false}
+сен 07 16:08:10 car-manager node[250397]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"200133","hasText":true,"hasPhoto":false}
+сен 07 16:08:18 car-manager node[250397]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"/start","hasText":true,"hasPhoto":false}
+сен 07 16:08:26 car-manager node[250397]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"200133","hasText":true,"hasPhoto":false}
+сен 07 16:08:33 car-manager node[250397]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"Заявки","hasText":true,"hasPhoto":false}
+сен 07 16:08:36 car-manager node[250397]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"Отмена заявки","hasText":true,"hasPhoto":false}
+сен 07 16:40:13 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 16:40:13 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 16:40:13 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 16:40:13 car-manager systemd[1]: kaznadzei.service: Consumed 25min 50.678s CPU time, 985.1M memory peak, 60.1M memory swap peak.
+сен 07 16:40:13 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 16:40:14 car-manager node[347582]: Existing orders migrated with new fields
+сен 07 16:40:14 car-manager node[347582]: Application settings migrated with new fields
+сен 07 16:40:14 car-manager node[347582]: Server running on http://localhost:5000
+сен 07 16:42:42 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 16:42:42 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 16:42:42 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 16:42:42 car-manager systemd[1]: kaznadzei.service: Consumed 6.735s CPU time, 54M memory peak.
+сен 07 16:42:42 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 16:42:42 car-manager node[347620]: Existing orders migrated with new fields
+сен 07 16:42:42 car-manager node[347620]: Application settings migrated with new fields
+сен 07 16:42:42 car-manager node[347620]: Server running on http://localhost:5000
+сен 07 16:51:57 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 16:51:57 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 16:51:57 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 16:51:57 car-manager systemd[1]: kaznadzei.service: Consumed 2min 52.101s CPU time, 931.3M memory peak.
+сен 07 16:51:57 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 16:51:58 car-manager node[347794]: Existing orders migrated with new fields
+сен 07 16:51:58 car-manager node[347794]: Application settings migrated with new fields
+сен 07 16:51:58 car-manager node[347794]: Server running on http://localhost:5000
+сен 07 17:12:05 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 17:12:05 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 17:12:05 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 17:12:05 car-manager systemd[1]: kaznadzei.service: Consumed 3min 19.735s CPU time, 919.9M memory peak.
+сен 07 17:12:05 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 17:12:06 car-manager node[347999]: Existing orders migrated with new fields
+сен 07 17:12:06 car-manager node[347999]: Application settings migrated with new fields
+сен 07 17:12:06 car-manager node[347999]: Server running on http://localhost:5000
+сен 07 17:20:50 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 17:20:51 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 17:20:51 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 17:20:51 car-manager systemd[1]: kaznadzei.service: Consumed 11.183s CPU time, 62.8M memory peak, 5.9M memory swap peak.
+сен 07 17:20:51 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 17:20:51 car-manager node[348358]: Existing orders migrated with new fields
+сен 07 17:20:51 car-manager node[348358]: Application settings migrated with new fields
+сен 07 17:20:52 car-manager node[348358]: Server running on http://localhost:5000
+сен 07 18:49:44 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 18:49:44 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 18:49:44 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 18:49:44 car-manager systemd[1]: kaznadzei.service: Consumed 6min 50.631s CPU time, 1G memory peak, 24.6M memory swap peak.
+сен 07 18:49:44 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 18:49:45 car-manager node[349330]: Existing orders migrated with new fields
+сен 07 18:49:45 car-manager node[349330]: Application settings migrated with new fields
+сен 07 18:49:45 car-manager node[349330]: Server running on http://localhost:5000
+сен 07 19:11:24 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 19:11:24 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 19:11:24 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 19:11:24 car-manager systemd[1]: kaznadzei.service: Consumed 3min 24.415s CPU time, 992.1M memory peak.
+сен 07 19:11:24 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 19:11:25 car-manager node[349550]: Existing orders migrated with new fields
+сен 07 19:11:25 car-manager node[349550]: Application settings migrated with new fields
+сен 07 19:11:25 car-manager node[349550]: Server running on http://localhost:5000
+сен 07 19:14:21 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 19:14:21 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 19:14:21 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 19:14:21 car-manager systemd[1]: kaznadzei.service: Consumed 9.098s CPU time, 60.8M memory peak.
+сен 07 19:14:21 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 19:14:22 car-manager node[349722]: Existing orders migrated with new fields
+сен 07 19:14:22 car-manager node[349722]: Application settings migrated with new fields
+сен 07 19:14:22 car-manager node[349722]: Server running on http://localhost:5000
+сен 07 19:14:27 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 19:14:27 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 19:14:27 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 19:14:27 car-manager systemd[1]: kaznadzei.service: Consumed 1.418s CPU time, 44.4M memory peak.
+сен 07 19:14:27 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 19:14:27 car-manager node[349736]: Existing orders migrated with new fields
+сен 07 19:14:27 car-manager node[349736]: Application settings migrated with new fields
+сен 07 19:14:28 car-manager node[349736]: Server running on http://localhost:5000
+сен 07 19:15:34 car-manager node[349736]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"/start","hasText":true,"hasPhoto":false}
+сен 07 19:16:39 car-manager node[349736]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"/start","hasText":true,"hasPhoto":false}
+сен 07 19:42:01 car-manager node[349736]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 07 19:42:01 car-manager node[349736]: [telegram-webapp] session.error {"error":"Не переданы данные пользователя Telegram Web App."}
+сен 07 19:42:03 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 07 19:42:03 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 07 19:42:03 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 19:42:03 car-manager systemd[1]: kaznadzei.service: Consumed 6min 22.099s CPU time, 990.3M memory peak, 16.3M memory swap peak.
+сен 07 19:42:03 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 07 19:42:04 car-manager node[350166]: Existing orders migrated with new fields
+сен 07 19:42:04 car-manager node[350166]: Application settings migrated with new fields
+сен 07 19:42:04 car-manager node[350166]: Server running on http://localhost:5000
+сен 07 19:42:57 car-manager node[350166]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 07 19:42:57 car-manager node[350166]: [telegram-webapp] session.error {"error":"Не переданы данные пользователя Telegram Web App."}
+сен 07 20:39:58 car-manager node[350166]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 07 20:39:58 car-manager node[350166]: [telegram-webapp] session.error {"error":"Не переданы данные пользователя Telegram Web App."}
+сен 08 04:04:37 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 08 04:04:37 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 08 04:04:37 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 04:04:37 car-manager systemd[1]: kaznadzei.service: Consumed 14min 47.537s CPU time, 967.8M memory peak, 21M memory swap peak.
+сен 08 04:04:37 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 04:04:38 car-manager node[351431]: Existing orders migrated with new fields
+сен 08 04:04:38 car-manager node[351431]: Application settings migrated with new fields
+сен 08 04:04:38 car-manager node[351431]: Server running on http://localhost:5000
+сен 08 04:04:51 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 08 04:04:51 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 08 04:04:51 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 04:04:51 car-manager systemd[1]: kaznadzei.service: Consumed 2.193s CPU time, 51M memory peak.
+сен 08 04:04:51 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 04:04:51 car-manager node[351465]: Existing orders migrated with new fields
+сен 08 04:04:51 car-manager node[351465]: Application settings migrated with new fields
+сен 08 04:04:51 car-manager node[351465]: Server running on http://localhost:5000
+сен 08 04:05:40 car-manager node[351465]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 08 04:05:40 car-manager node[351465]: [telegram-webapp] session.reject.no-auth-payload {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","hasEmployeeLink":false}
+сен 08 04:17:15 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 08 04:17:15 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 08 04:17:15 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 04:17:15 car-manager systemd[1]: kaznadzei.service: Consumed 19.240s CPU time, 58.6M memory peak.
+сен 08 04:17:15 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 04:17:15 car-manager node[351664]: Existing orders migrated with new fields
+сен 08 04:17:15 car-manager node[351664]: Application settings migrated with new fields
+сен 08 04:17:16 car-manager node[351664]: Server running on http://localhost:5000
+сен 08 04:17:25 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 08 04:17:25 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 08 04:17:25 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 04:17:25 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 04:17:26 car-manager node[351683]: Existing orders migrated with new fields
+сен 08 04:17:26 car-manager node[351683]: Application settings migrated with new fields
+сен 08 04:17:26 car-manager node[351683]: Server running on http://localhost:5000
+сен 08 04:18:24 car-manager node[351683]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 08 04:18:24 car-manager node[351683]: [telegram-webapp] session.reject.no-auth-payload {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","hasEmployeeLink":false}
+сен 08 04:19:39 car-manager node[351683]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 08 04:19:39 car-manager node[351683]: [telegram-webapp] session.reject.no-auth-payload {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","hasEmployeeLink":false}
+сен 08 04:20:40 car-manager node[351683]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"/start","hasText":true,"hasPhoto":false}
+сен 08 04:21:10 car-manager node[351683]: [customer-telegram] message.received {"chatId":"850166260","telegramUserId":"850166260","text":"978055","hasText":true,"hasPhoto":false}
+сен 08 04:21:34 car-manager node[351683]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 08 04:21:34 car-manager node[351683]: [telegram-webapp] session.reject.no-auth-payload {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","hasEmployeeLink":false}
+сен 08 04:24:06 car-manager node[351683]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 08 04:24:06 car-manager node[351683]: [telegram-webapp] session.reject.no-auth-payload {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","hasEmployeeLink":false}
+сен 08 05:21:14 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 08 05:21:14 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 08 05:21:14 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 05:21:14 car-manager systemd[1]: kaznadzei.service: Consumed 10.896s CPU time, 62.7M memory peak.
+сен 08 05:21:14 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 05:21:14 car-manager node[351964]: Existing orders migrated with new fields
+сен 08 05:21:14 car-manager node[351964]: Application settings migrated with new fields
+сен 08 05:21:15 car-manager node[351964]: Server running on http://localhost:5000
+сен 08 05:21:55 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 08 05:21:55 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 08 05:21:55 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 05:21:55 car-manager systemd[1]: kaznadzei.service: Consumed 1.273s CPU time, 47.2M memory peak.
+сен 08 05:21:55 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 05:21:55 car-manager node[351978]: Existing orders migrated with new fields
+сен 08 05:21:55 car-manager node[351978]: Application settings migrated with new fields
+сен 08 05:21:55 car-manager node[351978]: Server running on http://localhost:5000
+сен 08 06:39:44 car-manager node[351978]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 08 06:39:44 car-manager node[351978]: [telegram-webapp] session.reject.no-auth-payload {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","hasEmployeeLink":false}
+сен 08 06:40:56 car-manager systemd[1]: Stopping kaznadzei.service - Kaznadzei Furniture Factory App...
+сен 08 06:40:56 car-manager systemd[1]: kaznadzei.service: Deactivated successfully.
+сен 08 06:40:56 car-manager systemd[1]: Stopped kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 06:40:56 car-manager systemd[1]: kaznadzei.service: Consumed 5min 13.911s CPU time, 941.3M memory peak.
+сен 08 06:40:56 car-manager systemd[1]: Started kaznadzei.service - Kaznadzei Furniture Factory App.
+сен 08 06:40:57 car-manager node[352563]: Existing orders migrated with new fields
+сен 08 06:40:57 car-manager node[352563]: Application settings migrated with new fields
+сен 08 06:40:57 car-manager node[352563]: Server running on http://localhost:5000
+сен 08 06:41:14 car-manager node[352563]: [telegram-webapp] session.request {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":""}
+сен 08 06:41:14 car-manager node[352563]: [telegram-webapp] session.reject.no-auth-payload {"hasInitData":false,"initDataLength":0,"hasUnsafeUser":false,"unsafeUserId":"","hasSessionToken":false,"sessionTokenLength":0,"sessionTokenTail":"","hasEmployeeLink":false}
+
+--- journalctl --user -u kaznadzei (fallback user unit) last 30m ---
+-- No entries --
+
+--- candidate log files in /opt/kaznadzei and subdirs ---
+-rw-rw-r-- 1 bot bot 75K Sep  7 17:34 /tmp/kaznadzei.log
+(no *.log candidates found in /opt/kaznadzei, /opt/kaznadzei/.runtime, /opt/kaznadzei/logs)
+
+--- tail -n 120 of telegram-logs.json ---
+      "attempt": 10,
+      "hasInitData": "••••alse",
+      "hasUnsafeUserId": false,
+      "clientContext": {
+        "clientTimestamp": "2026-09-08T06:41:14.717Z",
+        "hasWebApp": true,
+        "webAppReadyState": "ok",
+        "webAppHasInitData": false,
+        "webAppInitDataLength": 0,
+        "webAppHasUnsafeUser": false,
+        "platform": "android",
+        "version": "9.6",
+        "userAgent": "Mozilla/5.0 (Linux; Android 16; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.7922.199 Mobile Safari/537.36 Telegram-Android/12.10.1 (Realme RMX3851; Android 16; SDK 36; HIGH)",
+        "href": "/telegram-app"
+      }
+    }
+  },
+  {
+    "id": "mtsawqe6ww69vn",
+    "createdAt": "2026-09-08T06:41:14.142Z",
+    "scope": "telegram-scanner",
+    "event": "scanner.bootstrap.need-bot-auth-wait",
+    "details": {
+      "attempt": 10,
+      "message": "Telegram auth payload ещё не загружен в webview. Повторите попытку через несколько секунд или откройте webapp заново через кнопку в боте.",
+      "clientContext": {
+        "clientTimestamp": "2026-09-08T06:41:14.830Z",
+        "hasWebApp": true,
+        "webAppReadyState": "ok",
+        "webAppHasInitData": false,
+        "webAppInitDataLength": 0,
+        "webAppHasUnsafeUser": false,
+        "platform": "android",
+        "version": "9.6",
+        "userAgent": "Mozilla/5.0 (Linux; Android 16; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.7922.199 Mobile Safari/537.36 Telegram-Android/12.10.1 (Realme RMX3851; Android 16; SDK 36; HIGH)",
+        "href": "/telegram-app"
+      }
+    }
+  },
+  {
+    "id": "mtsawqycpmjdbn",
+    "createdAt": "2026-09-08T06:41:14.868Z",
+    "scope": "telegram-scanner",
+    "event": "scanner.bootstrap.attempt",
+    "details": {
+      "attempt": 11,
+      "totalRetries": 12,
+      "hasEmployeeLink": false,
+      "hasSessionToken": "••••alse",
+      "hasInitData": "••••alse",
+      "hasUnsafeUserId": false,
+      "initDataLength": "***",
+      "clientContext": {
+        "clientTimestamp": "2026-09-08T06:41:15.532Z",
+        "hasWebApp": true,
+        "webAppReadyState": "ok",
+        "webAppHasInitData": false,
+        "webAppInitDataLength": 0,
+        "webAppHasUnsafeUser": false,
+        "platform": "android",
+        "version": "9.6",
+        "userAgent": "Mozilla/5.0 (Linux; Android 16; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.7922.199 Mobile Safari/537.36 Telegram-Android/12.10.1 (Realme RMX3851; Android 16; SDK 36; HIGH)",
+        "href": "/telegram-app"
+      }
+    }
+  },
+  {
+    "id": "mtsawqyyv9gutv",
+    "createdAt": "2026-09-08T06:41:14.890Z",
+    "scope": "telegram-webapp",
+    "event": "session.request",
+    "details": {
+      "hasInitData": false,
+      "initDataLength": 0,
+      "hasUnsafeUser": false,
+      "unsafeUserId": "",
+      "hasSessionToken": false,
+      "sessionTokenLength": 0,
+      "sessionTokenTail": ""
+    }
+  },
+  {
+    "id": "mtsawqzf54fmg9",
+    "createdAt": "2026-09-08T06:41:14.907Z",
+    "scope": "telegram-webapp",
+    "event": "session.reject.no-auth-payload",
+    "details": {
+      "hasInitData": false,
+      "initDataLength": 0,
+      "hasUnsafeUser": false,
+      "unsafeUserId": "",
+      "hasSessionToken": false,
+      "sessionTokenLength": 0,
+      "sessionTokenTail": "",
+      "hasEmployeeLink": false
+    }
+  },
+  {
+    "id": "mtsawr0k071kox",
+    "createdAt": "2026-09-08T06:41:14.948Z",
+    "scope": "telegram-scanner",
+    "event": "scanner.session.error",
+    "details": {
+      "attempt": 11,
+      "message": "Telegram auth данные ещё не пришли в webview. Повторите попытку или откройте webapp заново через кнопку в боте.",
+      "clientContext": {
+        "clientTimestamp": "2026-09-08T06:41:15.638Z",
+        "hasWebApp": true,
+        "webAppReadyState": "ok",
+        "webAppHasInitData": false,
+        "webAppInitDataLength": 0,
+        "webAppHasUnsafeUser": false,
+        "platform": "android",
+        "version": "9.6",
+        "userAgent": "Mozilla/5.0 (Linux; Android 16; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.7922.199 Mobile Safari/537.36 Telegram-Android/12.10.1 (Realme RMX3851; Android 16; SDK 36; HIGH)",
+        "href": "/telegram-app"
+      }
+    }
+  }
+]

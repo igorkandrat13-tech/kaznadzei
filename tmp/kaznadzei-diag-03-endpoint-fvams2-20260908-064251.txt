@@ -1,0 +1,8 @@
+=== kaznadzei-diag step 3 — direct POST /api/telegram/webapp/employee-link-by-code ===
+=== Timestamp: 20260908-064251
+
+Request: {"isHttps":true,"hostname":"factory.kaznadzei.by","port":443,"path":"/api/telegram/webapp/employee-link-by-code","publicBaseUrl":"https://factory.kaznadzei.by"}
+status = 404
+body = {
+  "raw": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot POST /api/telegram/webapp/employee-link-by-code</pre>\n</body>\n</html>\n"
+}
