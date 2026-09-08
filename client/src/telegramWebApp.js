@@ -1,4 +1,4 @@
-﻿﻿﻿﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
+﻿﻿﻿﻿﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
 const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
 const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
@@ -185,6 +185,14 @@ export function buildTelegramOrderPath(orderPath, sessionToken = getTelegramEmpl
 
 export function readTelegramUrlSessionToken() {
   if (typeof window === 'undefined' || !window.location) return '';
+  const pathname = String(window.location.pathname || '');
+  const pathMatch = pathname.match(/^\/telegram-app\/t\/([^/]+)\/?/);
+  if (pathMatch && pathMatch[1]) {
+    const pathToken = String(pathMatch[1]).trim();
+    if (pathToken && pathToken.length > 32 && !isTelegramEmployeeSessionTokenExpired(pathToken)) {
+      return pathToken;
+    }
+  }
   try {
     const searchParams = new URLSearchParams(window.location.search);
     const queryToken = String(searchParams.get('employeeSessionToken') || '').trim();
@@ -205,6 +213,12 @@ export function readTelegramUrlSessionToken() {
 
 export function readTelegramUrlSessionTokenRaw() {
   if (typeof window === 'undefined' || !window.location) return { token: '', length: 0 };
+  const pathname = String(window.location.pathname || '');
+  const pathMatch = pathname.match(/^\/telegram-app\/t\/([^/]+)\/?/);
+  if (pathMatch && pathMatch[1]) {
+    const pathToken = String(pathMatch[1]);
+    return { token: pathToken, length: pathToken.length };
+  }
   let token = '';
   let length = 0;
   try {

@@ -85,16 +85,15 @@ function buildEmployeeWebAppUrl(employee) {
   if (!baseUrl) return '';
   try {
     const url = new URL(baseUrl);
-    let sessionToken = '';
     if (employee && employee._id) {
       const token = getConfiguredBotToken();
       if (token) {
         try {
-          const generatedToken = createTelegramEmployeeSessionToken(token, employee);
-          if (generatedToken) {
-            sessionToken = String(generatedToken);
-            url.searchParams.set('employeeSessionToken', sessionToken);
-            url.hash = `token=${encodeURIComponent(sessionToken)}`;
+          const sessionToken = createTelegramEmployeeSessionToken(token, employee);
+          if (sessionToken) {
+            const pathname = String(url.pathname || '/telegram-app').replace(/\/+$/, '');
+            const tokenSegment = encodeURIComponent(String(sessionToken));
+            url.pathname = `${pathname}/t/${tokenSegment}/`;
           }
         } catch (_) { /* ignore token creation errors */ }
       }
@@ -1304,10 +1303,10 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
     let employeeWebAppUrl = '';
     if (publicBase) {
       try {
-        const webAppFull = new URL('/telegram-app', publicBase);
-        webAppFull.searchParams.set('employeeSessionToken', String(sessionToken));
-        webAppFull.hash = `token=${encodeURIComponent(String(sessionToken))}`;
-        employeeWebAppUrl = webAppFull.toString();
+        const base = new URL('/telegram-app', publicBase);
+        const tokenSegment = encodeURIComponent(String(sessionToken));
+        base.pathname = `/telegram-app/t/${tokenSegment}/`;
+        employeeWebAppUrl = base.toString();
       } catch (_) { /* ignore */ }
     }
 
@@ -1424,10 +1423,10 @@ router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express
     let employeeWebAppUrl = '';
     if (publicBase) {
       try {
-        const webAppFull = new URL('/telegram-app', publicBase);
-        webAppFull.searchParams.set('employeeSessionToken', String(sessionToken));
-        webAppFull.hash = `token=${encodeURIComponent(String(sessionToken))}`;
-        employeeWebAppUrl = webAppFull.toString();
+        const base = new URL('/telegram-app', publicBase);
+        const tokenSegment = encodeURIComponent(String(sessionToken));
+        base.pathname = `/telegram-app/t/${tokenSegment}/`;
+        employeeWebAppUrl = base.toString();
       } catch (_) { /* ignore */ }
     }
     const chatId = String(freshEmployee.telegramChatId || '').trim()

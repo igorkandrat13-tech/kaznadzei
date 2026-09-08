@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Admin from './Admin';
 import Archive from './Archive';
 import CustomersPage from './CustomersPage';
@@ -11,9 +11,9 @@ import WorkshopRequestsPage from './WorkshopRequestsPage';
 import Home from './Home';
 import TelegramScannerPage from './TelegramScannerPage';
 import {
-    hasTelegramWebAppSession,
-    isTelegramWebApp as detectTelegramWebApp,
-    markTelegramWebAppSession,
+  isTelegramEmployeeSessionTokenExpired,
+  markTelegramWebAppSession,
+  setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
 import { apiFetch } from './api';
 import { canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
@@ -22,6 +22,21 @@ import { RoleConfigProvider } from './RoleConfigContext';
 import './App.css';
 
 const HEADER_LOGO_SRC = `${process.env.PUBLIC_URL || ''}/kaznadzei-header-logo.png`;
+
+function TelegramScannerTokenRouter() {
+  const { token } = useParams();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const rawToken = String(token || '').trim();
+    if (rawToken && rawToken.length > 32 && !isTelegramEmployeeSessionTokenExpired(rawToken)) {
+      setTelegramEmployeeSessionToken(rawToken);
+      markTelegramWebAppSession();
+    }
+    navigate('/telegram-app', { replace: true });
+  }, [token, navigate]);
+  return <TelegramScannerPage />;
+}
+
 class AppErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
@@ -271,6 +286,8 @@ function AppLayout() {
                     <Route path='/designer' element={<Navigate to='/role/designer' replace />} />
                     <Route path='/assembler' element={<Navigate to='/role/assembler' replace />} />
                     <Route path='/painter' element={<Navigate to='/role/painter' replace />} />
+                    <Route path='/telegram-app/t/:token' element={<TelegramScannerTokenRouter />} />
+                    <Route path='/telegram-app/t/:token/*' element={<TelegramScannerTokenRouter />} />
                     <Route path='/telegram-app' element={<TelegramScannerPage />} />
                     <Route path='/' element={<Home />} />
                 </Routes>
