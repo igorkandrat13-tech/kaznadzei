@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -162,42 +162,6 @@ function TelegramScannerPage() {
     return false;
   }, []);
 
-  const submitPinCode = useCallback(async () => {
-    const rawPin = String(pinCode || '').trim().replace(/[^\d]/g, '');
-    if (rawPin.length < 4 || rawPin.length > 8) {
-      setPinMessage('Введите ПИН-код от 4 до 8 цифр.');
-      return;
-    }
-    setPinLoading(true);
-    setPinMessage('');
-    setError('');
-    try {
-      const res = await apiFetch('/api/telegram/employee-link-by-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinCode: rawPin }),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) throw new Error(data?.message || 'Не удалось войти по ПИН-коду.');
-      if (data?.sessionToken) {
-        setTelegramEmployeeSessionToken(String(data.sessionToken));
-        markTelegramWebAppSession();
-      }
-      const welcomeName = data?.employee?.fullName ? `, ${String(data.employee.fullName).split(' ')[0]}` : '';
-      setPinMessage(`Вход выполнен${welcomeName}. Кнопка меню Telegram тоже обновлена — в следующий раз вход по кнопке будет автоматический.`);
-      setStatus(`Готово${welcomeName}. Камера готова к сканированию.`);
-      setTimeout(() => setOpeningScanner(false), 800);
-      setTimeout(() => {
-        autoOpenedRef.current = false;
-        openScanner();
-      }, 1200);
-    } catch (pinErr) {
-      setPinMessage(pinErr?.message || String(pinErr || 'Ошибка входа по ПИН-коду.'));
-    } finally {
-      setPinLoading(false);
-    }
-  }, [pinCode, openScanner]);
-
   const openScanner = useCallback(() => {
     if (bootstrappingSession || openingScanner) return;
     setError('');
@@ -238,6 +202,42 @@ function TelegramScannerPage() {
       setOpeningScanner(false);
     }
   }, [bootstrappingSession, navigate, openingScanner]);
+
+  const submitPinCode = useCallback(async () => {
+    const rawPin = String(pinCode || '').trim().replace(/[^\d]/g, '');
+    if (rawPin.length < 4 || rawPin.length > 8) {
+      setPinMessage('Введите ПИН-код от 4 до 8 цифр.');
+      return;
+    }
+    setPinLoading(true);
+    setPinMessage('');
+    setError('');
+    try {
+      const res = await apiFetch('/api/telegram/employee-link-by-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinCode: rawPin }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) throw new Error(data?.message || 'Не удалось войти по ПИН-коду.');
+      if (data?.sessionToken) {
+        setTelegramEmployeeSessionToken(String(data.sessionToken));
+        markTelegramWebAppSession();
+      }
+      const welcomeName = data?.employee?.fullName ? `, ${String(data.employee.fullName).split(' ')[0]}` : '';
+      setPinMessage(`Вход выполнен${welcomeName}. Кнопка меню Telegram тоже обновлена — в следующий раз вход по кнопке будет автоматический.`);
+      setStatus(`Готово${welcomeName}. Камера готова к сканированию.`);
+      setTimeout(() => setOpeningScanner(false), 800);
+      setTimeout(() => {
+        autoOpenedRef.current = false;
+        openScanner();
+      }, 1200);
+    } catch (pinErr) {
+      setPinMessage(pinErr?.message || String(pinErr || 'Ошибка входа по ПИН-коду.'));
+    } finally {
+      setPinLoading(false);
+    }
+  }, [pinCode, openScanner]);
 
   useEffect(() => {
     const sessionTokenFromUrl = readTelegramUrlSessionToken();
