@@ -393,6 +393,23 @@ function OrderDetail() {
   const telegramInitData = telegramAuth.initData;
   const telegramUnsafeUser = telegramAuth.unsafeUser;
 
+  const copyToClipboard = useCallback(async (text) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(String(text || ''));
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = String(text || '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (_) { /* ignore */ }
+        document.body.removeChild(ta);
+      }
+    } catch (_) { /* ignore */ }
+  }, []);
+
   const refreshTelegramAuth = useCallback(() => {
     const nextInitData = persistTelegramInitData() || getTelegramInitData();
     const nextUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
@@ -444,6 +461,112 @@ function OrderDetail() {
       setDiagnosticsLoading(false);
     }
   }, [debugMode, getActiveTelegramSessionToken, location.search, telegramInitData, telegramUnsafeUser]);
+
+  const [liveAuthCheckResult, setLiveAuthCheckResult] = useState(null);
+  const [liveAuthCheckLoading, setLiveAuthCheckLoading] = useState(false);
+  const runLiveAuthCheck = useCallback(async () => {
+    try {
+      setLiveAuthCheckLoading(true);
+      const params = new URLSearchParams(location.search);
+      const sessionTokenFromUrl = params.get('employeeSessionToken');
+      const effectiveUrlToken = (sessionTokenFromUrl && !isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl))
+        ? sessionTokenFromUrl
+        : '';
+      const storageToken = getActiveTelegramSessionToken();
+      const sessionToken = effectiveUrlToken || storageToken;
+      const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
+      const preflight = {
+        at: new Date().toISOString(),
+        location: `${location.pathname}${location.search}`,
+        isTelegramWebApp: isTelegramWebApp(),
+        telegramMode,
+        debugMode,
+        urlParamTokenPresent: Boolean(sessionTokenFromUrl),
+        urlParamTokenLength: sessionTokenFromUrl?.length || 0,
+        urlParamTokenValid: Boolean(effectiveUrlToken),
+        storageTokenPresent: Boolean(storageToken),
+        storageTokenLength: storageToken?.length || 0,
+        effectiveTokenPresent: Boolean(sessionToken),
+        effectiveTokenLength: sessionToken?.length || 0,
+        initDataPresent: Boolean(telegramInitData),
+        initDataLength: telegramInitData?.length || 0,
+        unsafeUserId: telegramUnsafeUser?.id ? String(telegramUnsafeUser.id) : '',
+        unsafeUsername: telegramUnsafeUser?.username ? `@${telegramUnsafeUser.username}` : '',
+        hasTelegramAuthPayload,
+        telegramAuthResolved,
+        sessionLoading,
+        sessionError,
+        telegramEmployeePresent: Boolean(telegramEmployee),
+        telegramEmployeeId: telegramEmployee?._id || '',
+        telegramEmployeeRole: telegramEmployee?.role || '',
+        employeeRef: telegramSessionTokenRef.current ? `${telegramSessionTokenRef.current.slice(0, 6)}...(${telegramSessionTokenRef.current.length})` : '',
+      };
+      let sessionResponse = null;
+      let sessionResponseStatus = 0;
+      try {
+        const res = await apiFetch('/api/telegram/webapp/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initData: telegramInitData,
+            unsafeUser: telegramUnsafeUser,
+            sessionToken,
+          }),
+        });
+        sessionResponseStatus = res.status;
+        const json = await parseJsonSafely(res);
+        sessionResponse = {
+          ok: res.ok,
+          status: res.status,
+          payload: json,
+        };
+      } catch (_fetchErr) {
+        sessionResponse = {
+          ok: false,
+          error: String(_fetchErr?.message || _fetchErr || 'fetch failed'),
+        };
+      }
+      const tokenFlow = (async () => {
+        try {
+          if (!telegramEmployee) return null;
+          const empId = telegramEmployee?._id || '';
+          const res2 = await apiFetch('/api/telegram/diagnostics/token-flow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionToken,
+              initData: telegramInitData,
+              unsafeUser: telegramUnsafeUser,
+              employeeId: empId,
+            }),
+          });
+          const json2 = await parseJsonSafely(res2);
+          return {
+            ok: res2.ok,
+            status: res2.status,
+            payload: json2,
+          };
+        } catch (_diagErr) {
+          return { ok: false, error: String(_diagErr?.message || _diagErr || '') };
+        }
+      })();
+      const diagnosticsPayload = await tokenFlow;
+      setLiveAuthCheckResult({
+        preflight,
+        sessionResponse,
+        diagnostics: diagnosticsPayload,
+      });
+    } catch (_err2) {
+      setLiveAuthCheckResult({
+        preflight: null,
+        sessionResponse: null,
+        diagnostics: null,
+        error: String(_err2?.message || _err2 || 'Live check failed'),
+      });
+    } finally {
+      setLiveAuthCheckLoading(false);
+    }
+  }, [debugMode, getActiveTelegramSessionToken, location.pathname, location.search, sessionError, sessionLoading, telegramAuthResolved, telegramEmployee, telegramInitData, telegramMode, telegramUnsafeUser]);
 
   const keepMaterialRequestInputVisible = useCallback(({ behavior = 'smooth' } = {}) => {
     const input = materialRequestInputRef.current;
@@ -1790,6 +1913,175 @@ function OrderDetail() {
               </div>
             )}
           </div>
+
+          {(telegramMode || debugMode) && (
+            <div style={{
+              marginTop: 12,
+              border: '1px solid #c7d3e8',
+              borderRadius: 10,
+              background: debugMode ? '#f0f4fb' : '#f6f8fc',
+              padding: '10px 12px 12px',
+              fontSize: 13,
+              color: '#243446',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 800, fontSize: 14 }}>🔎 Диагностика авторизации</span>
+                  <span style={{
+                    display: 'inline-block',
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    background: sessionError ? '#fde4e4' : (telegramEmployee ? '#e2f5e9' : '#fff2d9'),
+                    color: sessionError ? '#9b2b2b' : (telegramEmployee ? '#1e7041' : '#7a5d10'),
+                    border: `1px solid ${sessionError ? '#f0b5b5' : (telegramEmployee ? '#b9e7cb' : '#eadca5')}`,
+                    fontWeight: 700,
+                    fontSize: 12,
+                  }}>
+                    {sessionError ? '❌ Ошибка' : (telegramEmployee ? '✅ Авторизован' : '⚠️ Нет сессии')}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="btn btn-primary" onClick={runLiveAuthCheck} disabled={liveAuthCheckLoading}>
+                    {liveAuthCheckLoading ? 'Проверяю...' : '🔎 Проверить авторизацию сейчас'}
+                  </button>
+                  {debugMode && (
+                    <button className="btn btn-secondary" onClick={runTokenDiagnostics} disabled={diagnosticsLoading}>
+                      {diagnosticsLoading ? 'Диагностика...' : '🔬 Full token-flow'}
+                    </button>
+                  )}
+                  <button className="btn btn-secondary" onClick={() => {
+                    const params = new URLSearchParams(location.search);
+                    if (params.get('debug') === '1') {
+                      params.delete('debug');
+                    } else {
+                      params.set('debug', '1');
+                    }
+                    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+                  }}>
+                    {debugMode ? 'Скрыть расширенную' : 'Расширенная'}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{
+                marginTop: 10,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: 8,
+                fontSize: 12,
+              }}>
+                {(() => {
+                  const params = new URLSearchParams(location.search);
+                  const urlTok = params.get('employeeSessionToken');
+                  const storageTok = getActiveTelegramSessionToken();
+                  const hasAuth = Boolean(telegramInitData || telegramUnsafeUser?.id);
+                  const row = (k, v) => (
+                    <div key={k} style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f2',
+                      borderRadius: 8,
+                      padding: '6px 8px',
+                      minWidth: 0,
+                    }}>
+                      <div style={{ color: '#73849b', fontWeight: 700, fontSize: 11, letterSpacing: 0.2 }}>{k}</div>
+                      <div style={{
+                        wordBreak: 'break-all',
+                        fontFamily: v && v.length > 24 ? 'monospace' : 'system-ui, sans-serif',
+                        color: '#23374f',
+                        fontWeight: 600,
+                        fontSize: 12,
+                      }}>{v || '—'}</div>
+                    </div>
+                  );
+                  return [
+                    row('URL ?employeeSessionToken', urlTok ? `${urlTok.slice(0, 18)}...(${urlTok.length})` : 'НЕТ'),
+                    row('Storage sessionToken', storageTok ? `${storageTok.slice(0, 18)}...(${storageTok.length})` : 'НЕТ'),
+                    row('initData length', `${String(telegramInitData || '').length} симв.`),
+                    row('unsafeUser Telegram ID', telegramUnsafeUser?.id ? `${String(telegramUnsafeUser.id)}${telegramUnsafeUser?.username ? ` (@${telegramUnsafeUser.username})` : ''}` : 'НЕТ'),
+                    row('hasTelegramAuthPayload', hasAuth ? '✅ Есть initData/unsafeUser' : '❌ Нет签名 авторизации Telegram'),
+                    row('telegramMode / isTelegramWebApp', `${String(telegramMode)} / ${String(isTelegramWebApp())}`),
+                    row('telegramAuthResolved (after 1.7s)', telegramAuthResolved ? '✅ Да' : '⏳ Ещё рано'),
+                    row('Сотрудник в сессии', telegramEmployee ? `${telegramEmployee.fullName} · ${telegramEmployee.role}` : '❌ НЕТ'),
+                    sessionError ? row('Текст ошибки sessionError', sessionError) : null,
+                  ].filter(Boolean);
+                })()}
+              </div>
+
+              {liveAuthCheckResult && (
+                <div style={{
+                  marginTop: 10,
+                  background: '#ffffff',
+                  border: '1px solid #dde6f3',
+                  borderRadius: 10,
+                  padding: 10,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 800, fontSize: 13 }}>
+                      Результат Live-проверки{' '}
+                      {liveAuthCheckResult.sessionResponse?.ok
+                        ? <span style={{ color: '#1e7041' }}>✅ ПРОЙДЕНА</span>
+                        : <span style={{ color: '#9b2b2b' }}>❌ ОШИБКА</span>}
+                    </div>
+                    <button className="btn btn-secondary" onClick={() => copyToClipboard(JSON.stringify(liveAuthCheckResult, null, 2))}>
+                      📋 Скопировать JSON
+                    </button>
+                  </div>
+                  <div style={{
+                    marginTop: 8,
+                    background: '#f5f7fb',
+                    border: '1px solid #d9dfeb',
+                    borderRadius: 8,
+                    padding: 8,
+                    fontFamily: 'monospace',
+                    fontSize: 11.5,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    maxHeight: debugMode ? 520 : 280,
+                    overflowY: 'auto',
+                    color: '#22314a',
+                  }}>
+                    {JSON.stringify(liveAuthCheckResult, null, 2)}
+                  </div>
+                </div>
+              )}
+
+              {debugMode && diagnosticsResult && (
+                <div style={{
+                  marginTop: 10,
+                  background: '#ffffff',
+                  border: '1px solid #dde6f3',
+                  borderRadius: 10,
+                  padding: 10,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 800, fontSize: 13 }}>
+                      Full token-flow diagnostics{' '}
+                      {diagnosticsResult.ok ? <span style={{ color: '#1e7041' }}>✅ OK</span> : <span style={{ color: '#9b2b2b' }}>❌ FAIL</span>}
+                    </div>
+                    <button className="btn btn-secondary" onClick={() => copyToClipboard(JSON.stringify(diagnosticsResult, null, 2))}>
+                      📋 Скопировать JSON
+                    </button>
+                  </div>
+                  <div style={{
+                    marginTop: 8,
+                    background: '#f5f7fb',
+                    border: '1px solid #d9dfeb',
+                    borderRadius: 8,
+                    padding: 8,
+                    fontFamily: 'monospace',
+                    fontSize: 11.5,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    maxHeight: 360,
+                    overflowY: 'auto',
+                    color: '#22314a',
+                  }}>
+                    {JSON.stringify(diagnosticsResult, null, 2)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {(sessionLoading || sessionError || canManagePackage) && (
             <div className="telegram-package-section">
