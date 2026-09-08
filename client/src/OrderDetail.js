@@ -639,21 +639,7 @@ function OrderDetail() {
       updateTelegramSessionToken('');
     }
     setTelegramSessionBootstrapKey(current => current + 1);
-
-    const params = new URLSearchParams(location.search);
-    const hadQueryParam = params.has('employeeSessionToken');
-    params.delete('employeeSessionToken');
-    const hashParams = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
-    const hadHashParam = hashParams.has('token');
-    hashParams.delete('token');
-
-    if (!hadQueryParam && !hadHashParam) return;
-    navigate({
-      pathname: location.pathname,
-      search: params.toString() ? `?${params.toString()}` : '',
-      hash: hashParams.toString() ? `#${hashParams.toString()}` : '',
-    }, { replace: true });
-  }, [location.pathname, location.search, location.hash, navigate, telegramMode, updateTelegramSessionToken]);
+  }, [location.pathname, location.search, location.hash, telegramMode, updateTelegramSessionToken]);
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
