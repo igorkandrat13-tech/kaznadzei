@@ -74,6 +74,17 @@ const EmployeeStore = {
     const db = load();
     const index = db.employees.findIndex(item => item._id === employeeId);
     if (index === -1) return false;
+    const removed = db.employees[index] || {};
+    if (typeof removed === 'object' && removed !== null) {
+      const blankFields = [
+        'telegramUserId', 'telegramChatId', 'telegramUsername',
+        'telegramFirstName', 'telegramLastName',
+        'telegramAuthorizedAt', 'telegramLastSeenAt',
+        'pinCode',
+      ];
+      blankFields.forEach((f) => { removed[f] = ''; });
+      removed.updatedAt = new Date().toISOString();
+    }
     db.employees.splice(index, 1);
     save();
     return true;

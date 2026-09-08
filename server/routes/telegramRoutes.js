@@ -24,7 +24,9 @@ const { notifyMaterialRequestWatchers } = require('../services/orderNotification
 const { createWorkshopRequestAttachment } = require('../services/workshopRequestAttachments');
 const {
   createTelegramEmployeeSessionToken,
+  getTelegramEmployeeSessionTokenInfo,
   resolveTelegramWebAppUser,
+  TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
   verifyTelegramEmployeeSessionToken,
 } = require('../services/telegramWebAppAuth');
 const {
@@ -932,6 +934,210 @@ router.delete('/telegram/logs', requireAdminAccess(), (req, res) => {
   });
 });
 
+router.get('/telegram/employee/:id/session-status', requireAdminAccess(), async (req, res) => {
+  try {
+    const employeeId = String(req.params?.id || '').trim();
+    const employee = EmployeeStore.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
+    }
+    const hasTelegram = Boolean(employee.telegramUserId || employee.telegramAuthorizedAt);
+    const authorizedAtMs = employee.telegramAuthorizedAt
+      ? new Date(String(employee.telegramAuthorizedAt)).getTime()
+      : 0;
+    const lastSeenAtMs = employee.telegramLastSeenAt
+      ? new Date(String(employee.telegramLastSeenAt)).getTime()
+      : 0;
+    let daysLeft = 0;
+    let expired = true;
+    let expiresAtMs = 0;
+    if (authorizedAtMs) {
+      expiresAtMs = authorizedAtMs + (TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+      daysLeft = Math.ceil((expiresAtMs - Date.now()) / (24 * 60 * 60 * 1000));
+      expired = daysLeft <= 0;
+    }
+    let statusLabel = 'Не авторизован в Telegram';
+    let statusLevel = 'none';
+    if (!hasTelegram) {
+      statusLabel = 'Не связан с Telegram (используйте PIN или кнопку в боте)';
+      statusLevel = 'none';
+    } else if (!authorizedAtMs) {
+      statusLabel = 'Связан с Telegram, но нет даты авторизации';
+      statusLevel = 'warning';
+    } else if (expired) {
+      statusLabel = `Токен истёк ${Math.abs(daysLeft)} дней назад.`;
+      statusLevel = 'expired';
+    } else if (daysLeft <= 30) {
+      statusLabel = `Истекает через ${daysLeft} дн. (скоро).`;
+      statusLevel = 'soon';
+    } else if (daysLeft <= 180) {
+      statusLabel = `Осталось ${daysLeft} дн.`;
+      statusLevel = 'ok';
+    } else {
+      statusLabel = `Осталось ${daysLeft} дн. (действует до ${new Date(expiresAtMs).toLocaleDateString('ru-RU')})`;
+      statusLevel = 'great';
+    }
+    res.json({
+      ok: true,
+      employeeId,
+      hasTelegramLink: hasTelegram,
+      telegramUserId: String(employee.telegramUserId || ''),
+      telegramUsername: String(employee.telegramUsername || ''),
+      telegramAuthorizedAt: employee.telegramAuthorizedAt || '',
+      telegramLastSeenAt: employee.telegramLastSeenAt || '',
+      authorizedAtMs,
+      lastSeenAtMs,
+      expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : '',
+      expiresAtMs,
+      daysLeft,
+      expired,
+      statusLabel,
+      statusLevel,
+      ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, message: String(error.message || 'Не удалось получить статус сессии сотрудника.') });
+  }
+});
+
+router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), express.json({ limit: '16kb' }), async (req, res) => {
+  const token = getConfiguredBotToken();
+  try {
+    if (!token) {
+      return res.status(400).json({ ok: false, message: 'Сначала сохраните токен Telegram-бота в Настройки.' });
+    }
+    const employeeId = String((req.body || {}).employeeId || '').trim();
+    if (!employeeId) {
+      return res.status(400).json({ ok: false, message: 'Отсутствует employeeId.' });
+    }
+    const employee = EmployeeStore.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
+    }
+    const now = Date.now();
+    const authorizedAt = new Date(now).toISOString();
+    EmployeeStore.touchTelegramUser(employeeId, {
+      telegramAuthorizedAt: authorizedAt,
+      telegramLastSeenAt: authorizedAt,
+    });
+    const freshEmployee = EmployeeStore.findById(employeeId) || employee;
+    const sessionToken = createTelegramEmployeeSessionToken(token, {
+      ...freshEmployee,
+      telegramAuthorizedAt: authorizedAt,
+    });
+    const info = getTelegramEmployeeSessionTokenInfo(sessionToken);
+    const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
+    const employeeWebAppUrl = publicBase
+      ? `${publicBase.replace(/\/$/, '')}/telegram-app?employeeSessionToken=${encodeURIComponent(sessionToken)}`
+      : '';
+    res.json({
+      ok: true,
+      employeeId,
+      employee: {
+        _id: freshEmployee._id,
+        fullName: freshEmployee.fullName,
+        role: freshEmployee.role,
+        code: freshEmployee.code || freshEmployee.employeeCode || '',
+        telegramUserId: freshEmployee.telegramUserId || '',
+        telegramUsername: freshEmployee.telegramUsername || '',
+      },
+      sessionToken,
+      expiresAt: info?.expiresAt || '',
+      expiresAtMs: info?.expiresAtMs || 0,
+      daysLeft: info?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+      ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+      employeeWebAppUrl,
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, message: String(error.message || 'Не удалось продлить токен сотрудника.') });
+  }
+});
+
+router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express.json({ limit: '16kb' }), async (req, res) => {
+  const token = getConfiguredBotToken();
+  try {
+    if (!token) {
+      return res.status(400).json({ ok: false, message: 'Сначала сохраните токен Telegram-бота в Настройки.' });
+    }
+    const employeeId = String((req.body || {}).employeeId || '').trim();
+    if (!employeeId) {
+      return res.status(400).json({ ok: false, message: 'Отсутствует employeeId.' });
+    }
+    const employee = EmployeeStore.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
+    }
+    const now = Date.now();
+    const authorizedAt = new Date(now).toISOString();
+    EmployeeStore.touchTelegramUser(employeeId, {
+      telegramAuthorizedAt: authorizedAt,
+      telegramLastSeenAt: authorizedAt,
+    });
+    const freshEmployee = EmployeeStore.findById(employeeId) || employee;
+    const sessionToken = createTelegramEmployeeSessionToken(token, {
+      ...freshEmployee,
+      telegramAuthorizedAt: authorizedAt,
+    });
+    const info = getTelegramEmployeeSessionTokenInfo(sessionToken);
+    const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
+    const employeeWebAppUrl = publicBase
+      ? `${publicBase.replace(/\/$/, '')}/telegram-app?employeeSessionToken=${encodeURIComponent(sessionToken)}`
+      : '';
+    const chatId = String(freshEmployee.telegramChatId || '').trim()
+      || String(freshEmployee.telegramUserId || '').trim();
+    let sent = false;
+    let sendStatus = 'no-chat-id';
+    let telegramError = '';
+    if (chatId && employeeWebAppUrl) {
+      const expDate = info?.expiresAtMs ? new Date(info.expiresAtMs) : new Date(now + 1825 * 24 * 60 * 60 * 1000);
+      const expDateRu = expDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const text = `🔐 ${freshEmployee.fullName || 'Сотрудник'}, ваша авторизация в «Казнадзеи» продлена на 5 лет!\n\nДействует до ${expDateRu}. Нажмите на кнопку ниже, чтобы открыть Сканер QR — всё заработает автоматически.`;
+      const reply_markup = {
+        inline_keyboard: [
+          [{
+            text: '📷 Открыть Сканер QR',
+            ...(publicBase ? { url: employeeWebAppUrl } : {}),
+          }],
+        ],
+      };
+      try {
+        await sendMessage(token, chatId, text, { reply_markup, parse_mode: undefined });
+        sent = true;
+        sendStatus = 'sent';
+      } catch (tgErr) {
+        sendStatus = 'telegram-error';
+        telegramError = String(tgErr.message || 'Telegram API error');
+      }
+    }
+    res.json({
+      ok: true,
+      sendStatus,
+      sent,
+      hasChatId: Boolean(chatId),
+      chatId: chatId || '',
+      employeeId,
+      telegramError,
+      employee: {
+        _id: freshEmployee._id,
+        fullName: freshEmployee.fullName,
+        role: freshEmployee.role,
+        code: freshEmployee.code || freshEmployee.employeeCode || '',
+        telegramUserId: freshEmployee.telegramUserId || '',
+        telegramChatId: freshEmployee.telegramChatId || '',
+        telegramUsername: freshEmployee.telegramUsername || '',
+      },
+      sessionToken,
+      expiresAt: info?.expiresAt || '',
+      expiresAtMs: info?.expiresAtMs || 0,
+      daysLeft: info?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+      ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+      employeeWebAppUrl,
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, message: String(error.message || 'Не удалось отправить ссылку сотруднику.') });
+  }
+});
+
 router.post('/telegram/webapp/session', async (req, res) => {
   const token = getConfiguredBotToken();
   if (!token) {
@@ -946,27 +1152,36 @@ router.post('/telegram/webapp/session', async (req, res) => {
     logTelegramWebAppDebug('session.request', payloadDebug);
 
     if (payload.sessionToken) {
+      const tokenInfo = getTelegramEmployeeSessionTokenInfo(payload.sessionToken);
       try {
         const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
         employee = EmployeeStore.findById(sessionPayload.employeeId);
-        if (!employee || String(employee.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
+        const sessionTelegramUserId = String(sessionPayload.telegramUserId || '');
+        const employeeTelegramUserId = String(employee?.telegramUserId || '');
+        const telegramUserIdMatch = !sessionTelegramUserId || !employeeTelegramUserId || sessionTelegramUserId === employeeTelegramUserId;
+        if (!employee || !telegramUserIdMatch) {
           logTelegramWebAppDebug('session.reject.session-mismatch', {
             ...payloadDebug,
             employeeId: sessionPayload.employeeId,
-            telegramUserId: String(sessionPayload.telegramUserId || ''),
+            telegramUserId: sessionTelegramUserId,
             employeeFound: Boolean(employee),
-            employeeTelegramUserId: String(employee?.telegramUserId || ''),
+            employeeTelegramUserId,
+            telegramUserIdMatch,
           });
-          return res.status(403).json({ message: 'Сотрудник Telegram не найден или session token устарел.' });
+          if (!employee || employeeTelegramUserId && sessionTelegramUserId && sessionTelegramUserId !== employeeTelegramUserId) {
+            return res.status(403).json({ message: 'Сотрудник Telegram не найден или session token устарел.' });
+          }
         }
         logTelegramWebAppDebug('session.auth.session-token-ok', {
           ...payloadDebug,
           employeeId: employee._id,
           employeeRole: employee.role,
-          telegramUserId: String(sessionPayload.telegramUserId || ''),
+          telegramUserId: employeeTelegramUserId || sessionTelegramUserId,
+          tokenDaysLeft: tokenInfo?.daysLeft,
+          tokenExpired: tokenInfo?.expired,
         });
         telegramUser = {
-          id: sessionPayload.telegramUserId,
+          id: employee.telegramUserId || sessionTelegramUserId || undefined,
           username: employee.telegramUsername || '',
           first_name: employee.telegramFirstName || '',
           last_name: employee.telegramLastName || '',
@@ -977,12 +1192,25 @@ router.post('/telegram/webapp/session', async (req, res) => {
           ...payloadDebug,
           hasTelegramAuthPayload,
           message: sessionError.message || 'Session token validation failed.',
+          tokenDaysLeft: tokenInfo?.daysLeft,
+          tokenExpired: tokenInfo?.expired,
         });
         if (!hasTelegramAuthPayload) {
           throw sessionError;
         }
         telegramUser = resolveTelegramWebAppUser(token, payload);
         employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+        if (!employee) {
+          const existingByTokenEmployee = tokenInfo?.employeeId ? EmployeeStore.findById(tokenInfo.employeeId) : null;
+          if (existingByTokenEmployee && String(existingByTokenEmployee.telegramUserId || '') === String(telegramUser.id || '')) {
+            employee = existingByTokenEmployee;
+            logTelegramWebAppDebug('session.auth.token-userid-match-fallback', {
+              ...payloadDebug,
+              employeeId: employee._id,
+              resolvedTelegramUserId: String(telegramUser.id || ''),
+            });
+          }
+        }
         logTelegramWebAppDebug('session.auth.payload-fallback', {
           ...payloadDebug,
           resolvedTelegramUserId: String(telegramUser?.id || ''),

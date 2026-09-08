@@ -130,6 +130,11 @@ function Admin() {
   const [editEmployee, setEditEmployee] = useState(null);
   const [newStep, setNewStep] = useState({ stepName: '', description: '', order: 1 });
   const [newEmployee, setNewEmployee] = useState(() => getDefaultEmployeeForm());
+  const [employeeSessionStatus, setEmployeeSessionStatus] = useState(null);
+  const [employeeSessionRefreshing, setEmployeeSessionRefreshing] = useState(false);
+  const [employeeSessionLastRefresh, setEmployeeSessionLastRefresh] = useState(null);
+  const [employeeSessionSendingTelegram, setEmployeeSessionSendingTelegram] = useState(false);
+  const [employeeSessionLastSendResult, setEmployeeSessionLastSendResult] = useState(null);
   const backupImportInputRef = useRef(null);
   const settingsTabs = buildSettingsTabs();
   const settingsTabKeySet = useMemo(() => new Set(settingsTabs.map((tab) => tab.key)), [settingsTabs]);
@@ -450,6 +455,115 @@ function Admin() {
       document.removeEventListener('visibilitychange', handleVisibilityRefresh);
     };
   }, [hasSettingsAccess]);
+
+  const fetchEmployeeSessionStatus = useCallback(async (employeeId) => {
+    try {
+      const normalized = String(employeeId || '').trim();
+      if (!normalized) {
+        setEmployeeSessionStatus(null);
+        return;
+      }
+      const res = await apiFetch(`/api/telegram/employee/${encodeURIComponent(normalized)}/session-status`);
+      const data = await parseJsonSafely(res);
+      if (res.ok && data?.ok) {
+        setEmployeeSessionStatus(data || null);
+      } else {
+        setEmployeeSessionStatus({
+          employeeId: normalized,
+          statusLevel: 'warning',
+          statusLabel: data?.message || 'Не удалось получить статус токена.',
+          ok: false,
+        });
+      }
+    } catch (_err) {
+      setEmployeeSessionStatus({
+        employeeId: String(employeeId || ''),
+        statusLevel: 'warning',
+        statusLabel: 'Сетевая ошибка при получении статуса токена.',
+        ok: false,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (employeeModalMode !== 'edit' || !editEmployee?._id) {
+      setEmployeeSessionStatus(null);
+      setEmployeeSessionLastRefresh(null);
+      setEmployeeSessionLastSendResult(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setEmployeeSessionStatus(null);
+    setEmployeeSessionLastRefresh(null);
+    setEmployeeSessionLastSendResult(null);
+    fetchEmployeeSessionStatus(editEmployee._id).then(() => { if (cancelled) return null; return null; }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [employeeModalMode, editEmployee?._id, fetchEmployeeSessionStatus]);
+
+  const handleRefreshEmployeeSessionToken = useCallback(async () => {
+    const employeeId = String(editEmployee?._id || '').trim();
+    if (!employeeId) return;
+    setEmployeeSessionRefreshing(true);
+    setSettingsError('');
+    setEmployeeSessionLastRefresh(null);
+    try {
+      const res = await apiFetch('/api/telegram/employee/refresh-session-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message || 'Не удалось продлить токен.');
+      }
+      setEmployeeSessionLastRefresh(data || null);
+      await fetchEmployeeSessionStatus(employeeId);
+      fetchEmployees().catch(() => {});
+      setSettingsSuccess(`Токен сотрудника продлён на ${Number(data?.ttlDays || 1825) || 1825} дней.`);
+    } catch (err) {
+      const msg = err?.message || err?.toString?.() || 'Не удалось продлить токен.';
+      setSettingsError(msg || 'Ошибка продления токена.');
+    } finally {
+      setEmployeeSessionRefreshing(false);
+    }
+  }, [editEmployee?._id, fetchEmployeeSessionStatus]);
+
+  const handleSendEmployeeDirectLink = useCallback(async () => {
+    const employeeId = String(editEmployee?._id || '').trim();
+    if (!employeeId) return;
+    setEmployeeSessionSendingTelegram(true);
+    setSettingsError('');
+    setEmployeeSessionLastSendResult(null);
+    try {
+      const res = await apiFetch('/api/telegram/employee/send-direct-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message || 'Не удалось отправить ссылку.');
+      }
+      setEmployeeSessionLastSendResult(data || null);
+      if (data?.sent) {
+        setEmployeeSessionLastRefresh(data || null);
+      }
+      await fetchEmployeeSessionStatus(employeeId);
+      fetchEmployees().catch(() => {});
+      if (data?.sent) {
+        setSettingsSuccess('Ссылка отправлена сотруднику в Telegram.');
+      } else if (data?.sendStatus === 'no-chat-id') {
+        setSettingsError('У сотрудника нет ChatId — отправка невозможна. Используйте кнопку «Копировать ссылку».');
+      } else if (data?.sendStatus === 'telegram-error') {
+        setSettingsError(`Telegram отказал: ${data.telegramError || 'неизвестная ошибка'}.`);
+      }
+    } catch (err) {
+      const msg = err?.message || err?.toString?.() || 'Не удалось отправить ссылку.';
+      setSettingsError(msg || 'Ошибка отправки.');
+    } finally {
+      setEmployeeSessionSendingTelegram(false);
+    }
+  }, [editEmployee?._id, fetchEmployeeSessionStatus]);
 
   const fetchSteps = async () => {
     const res = await apiFetch('/api/processSteps');
@@ -1477,6 +1591,13 @@ function Admin() {
         onClose={closeEmployeeModal}
         saving={savingEmployee}
         columnOptions={employeeColumnOptions}
+        sessionStatus={employeeSessionStatus}
+        refreshingSession={employeeSessionRefreshing}
+        onRefreshSession={handleRefreshEmployeeSessionToken}
+        lastRefreshResult={employeeSessionLastRefresh}
+        sendingTelegram={employeeSessionSendingTelegram}
+        onSendTelegramDirectLink={handleSendEmployeeDirectLink}
+        lastSendResult={employeeSessionLastSendResult}
       />
 
       {stageManagerRoleKey ? (

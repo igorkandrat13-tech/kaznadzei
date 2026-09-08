@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 
-const TELEGRAM_EMPLOYEE_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const TELEGRAM_EMPLOYEE_SESSION_TTL_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+const TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS = Math.ceil(TELEGRAM_EMPLOYEE_SESSION_TTL_MS / (24 * 60 * 60 * 1000));
 
 function getTelegramWebAppUser(token, initData) {
   const normalizedToken = String(token || '').trim();
@@ -146,20 +147,47 @@ function verifyTelegramEmployeeSessionToken(token, sessionToken) {
     throw new Error('Не удалось разобрать session token Telegram Web App.');
   }
 
-  if (!payload?.employeeId || !payload?.telegramUserId) {
-    throw new Error('Session token Telegram Web App неполный.');
+  if (!payload?.employeeId) {
+    throw new Error('Session token Telegram Web App неполный (отсутствует employeeId).');
   }
 
   if (Number(payload.exp || 0) < Date.now()) {
-    throw new Error('Session token Telegram Web App истёк. Откройте сканер заново из бота.');
+    throw new Error('Session token Telegram Web App истёк. Откройте сканер заново из бота или попросите администратора продлить токен.');
   }
 
   return payload;
 }
 
+function getTelegramEmployeeSessionTokenInfo(sessionToken) {
+  try {
+    const normalized = String(sessionToken || '').trim();
+    if (!normalized) return null;
+    const [payloadPart] = normalized.split('.');
+    if (!payloadPart) return null;
+    let payload;
+    try { payload = JSON.parse(decodeBase64Url(payloadPart)); } catch (_) { return null; }
+    const exp = Number(payload?.exp || 0);
+    const daysLeft = Math.ceil((exp - Date.now()) / (24 * 60 * 60 * 1000));
+    return {
+      employeeId: String(payload?.employeeId || ''),
+      telegramUserId: String(payload?.telegramUserId || ''),
+      role: String(payload?.role || ''),
+      expiresAt: exp ? new Date(exp).toISOString() : '',
+      expiresAtMs: exp,
+      daysLeft,
+      expired: daysLeft <= 0,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 module.exports = {
   createTelegramEmployeeSessionToken,
+  getTelegramEmployeeSessionTokenInfo,
   getTelegramWebAppUser,
   resolveTelegramWebAppUser,
+  TELEGRAM_EMPLOYEE_SESSION_TTL_MS,
+  TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
   verifyTelegramEmployeeSessionToken,
 };
