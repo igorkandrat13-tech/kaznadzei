@@ -292,26 +292,38 @@ async function clearTelegramMenuButton(token, chatId) {
 }
 
 async function syncTelegramMenuButton(token, chatId) {
-  if (!chatId) return;
+  if (!chatId) return { updated: false, error: 'empty_chat_id', url: '' };
   const employee = getEmployeeByTelegramChatId(chatId);
   if (!employee) {
     await clearTelegramMenuButton(token, chatId);
-    return;
+    return { updated: false, error: 'no_employee_by_chat_id', url: '' };
   }
   const webAppUrlWithToken = buildEmployeeWebAppUrl(employee);
   if (!webAppUrlWithToken) {
     await clearTelegramMenuButton(token, chatId);
-    return;
+    return { updated: false, error: 'empty_url', url: '' };
   }
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
+    await clearTelegramMenuButton(token, chatId);
+    await wait(150);
     await setChatMenuButton(token, {
       chatId,
       type: 'web_app',
       text: EMPLOYEE_QR_SCANNER_BUTTON_TEXT,
       url: webAppUrlWithToken,
     });
-  } catch (_) {
-    await clearTelegramMenuButton(token, chatId);
+    await wait(200);
+    await setChatMenuButton(token, {
+      chatId,
+      type: 'web_app',
+      text: EMPLOYEE_QR_SCANNER_BUTTON_TEXT,
+      url: webAppUrlWithToken,
+    });
+    return { updated: true, error: '', url: webAppUrlWithToken };
+  } catch (err) {
+    try { await clearTelegramMenuButton(token, chatId); } catch (_) { /* ignore */ }
+    return { updated: false, error: String(err?.message || err || 'unknown'), url: webAppUrlWithToken };
   }
 }
 
@@ -332,16 +344,43 @@ async function refreshAuthorizedEmployeeAccess(token) {
 
   let refreshedCount = 0;
   const errors = [];
+  const perEmployee = [];
 
   for (const employee of employees) {
     try {
-      await syncTelegramMenuButton(token, employee.telegramChatId);
-      refreshedCount += 1;
+      const result = await syncTelegramMenuButton(token, employee.telegramChatId);
+      if (result?.updated) {
+        refreshedCount += 1;
+      } else if (result?.error) {
+        errors.push({
+          employeeId: employee._id,
+          fullName: employee.fullName,
+          chatId: employee.telegramChatId,
+          message: result.error,
+        });
+      }
+      perEmployee.push({
+        employeeId: employee._id,
+        fullName: employee.fullName,
+        chatId: employee.telegramChatId,
+        updated: Boolean(result?.updated),
+        error: result?.error || '',
+        expectedUrl: result?.url || '',
+      });
     } catch (error) {
       errors.push({
         employeeId: employee._id,
         fullName: employee.fullName,
+        chatId: employee.telegramChatId,
         message: error.message || 'Не удалось обновить кнопку в Telegram.',
+      });
+      perEmployee.push({
+        employeeId: employee._id,
+        fullName: employee.fullName,
+        chatId: employee.telegramChatId,
+        updated: false,
+        error: error.message || String(error),
+        expectedUrl: '',
       });
     }
   }
@@ -351,6 +390,7 @@ async function refreshAuthorizedEmployeeAccess(token) {
     refreshedCount,
     failedCount: errors.length,
     errors,
+    perEmployee,
   };
 }
 
@@ -1375,8 +1415,10 @@ router.post('/telegram/employee/get-menu-button', requireAdminAccess(), express.
     }
     const menuButton = await getChatMenuButton(token, { chatId });
     const type = String(menuButton?.type || (menuButton ? 'default' : 'none'));
-    const urlPreview = String(menuButton?.web_app?.url || '');
-    const hasEmployeeToken = /[?&]employeeSessionToken=/.test(urlPreview);
+    const actualUrl = String(menuButton?.web_app?.url || '');
+    const expectedUrl = buildEmployeeWebAppUrl(employee);
+    const hasPathToken = /\/telegram-app\/t\/[^/?#]{32,}/.test(actualUrl) || /[?&]employeeSessionToken=/.test(actualUrl);
+    const urlsMatch = Boolean(expectedUrl && actualUrl && actualUrl.replace(/\/$/, '') === expectedUrl.replace(/\/$/, ''));
     res.json({
       ok: true,
       employeeId,
@@ -1384,8 +1426,17 @@ router.post('/telegram/employee/get-menu-button', requireAdminAccess(), express.
       menuButton,
       type,
       hasChatId: true,
-      hasEmployeeToken,
-      urlPreview,
+      hasEmployeeToken: hasPathToken,
+      urlPreview: actualUrl,
+      expectedUrl,
+      urlsMatch,
+      diff: {
+        hasExpected: Boolean(expectedUrl),
+        hasActual: Boolean(actualUrl),
+        expectedPath: (() => { try { return new URL(expectedUrl).pathname; } catch (_) { return ''; } })(),
+        actualPath: (() => { try { return new URL(actualUrl).pathname; } catch (_) { return ''; } })(),
+        cacheStillOld: Boolean(expectedUrl && actualUrl && !urlsMatch),
+      },
     });
   } catch (error) {
     res.status(400).json({ ok: false, message: String(error.message || 'Не удалось проверить кнопку меню сотрудника.') });
@@ -1480,6 +1531,48 @@ router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express
     });
   } catch (error) {
     res.status(400).json({ ok: false, message: String(error.message || 'Не удалось отправить ссылку сотруднику.') });
+  }
+});
+
+router.post('/telegram/employee-link-by-pin', express.json({ limit: '16kb' }), async (req, res) => {
+  const token = getConfiguredBotToken();
+  try {
+    if (!token) return res.status(400).json({ ok: false, message: 'Сначала сохраните токен Telegram-бота в Настройки.' });
+    const rawPin = String((req.body || {}).pinCode || '').trim().replace(/[^\d]/g, '');
+    if (!rawPin || rawPin.length < 4 || rawPin.length > 8) {
+      return res.status(400).json({ ok: false, message: 'ПИН-код должен содержать от 4 до 8 цифр.' });
+    }
+    const employee = EmployeeStore.findByPinCode(rawPin);
+    if (!employee) return res.status(404).json({ ok: false, message: 'Сотрудник с таким ПИН-кодом не найден.' });
+    const now = Date.now();
+    const authorizedAt = new Date(now).toISOString();
+    EmployeeStore.touchTelegramUser(employee._id, {
+      telegramAuthorizedAt: authorizedAt,
+      telegramLastSeenAt: authorizedAt,
+    });
+    const fresh = EmployeeStore.findById(employee._id) || employee;
+    const sessionToken = createTelegramEmployeeSessionToken(token, { ...fresh, telegramAuthorizedAt: authorizedAt });
+    const webAppUrl = buildEmployeeWebAppUrl({ ...fresh, _id: fresh._id });
+    const chatId = String(fresh.telegramChatId || '').trim();
+    let menuButton = null;
+    if (chatId) {
+      try {
+        menuButton = await syncTelegramMenuButton(token, chatId);
+      } catch (_) { /* ignore */ }
+    }
+    res.json({
+      ok: true,
+      sessionToken,
+      webAppUrl,
+      employee: {
+        _id: fresh._id,
+        fullName: fresh.fullName,
+        role: fresh.role || '',
+      },
+      menuButton,
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, message: String(error.message || 'Не удалось выполнить вход по ПИН-коду.') });
   }
 });
 

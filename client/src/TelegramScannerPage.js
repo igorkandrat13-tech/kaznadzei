@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -42,6 +42,9 @@ function TelegramScannerPage() {
   const [status, setStatus] = useState('Подготовка доступа к сканированию QR-кода изделия.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
   const [openingScanner, setOpeningScanner] = useState(false);
+  const [pinCode, setPinCode] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinMessage, setPinMessage] = useState('');
   const debugMode = (() => {
     const paramDebug = new URLSearchParams(location.search).get('debug') === '1';
     if (paramDebug) return true;
@@ -158,6 +161,42 @@ function TelegramScannerPage() {
     }
     return false;
   }, []);
+
+  const submitPinCode = useCallback(async () => {
+    const rawPin = String(pinCode || '').trim().replace(/[^\d]/g, '');
+    if (rawPin.length < 4 || rawPin.length > 8) {
+      setPinMessage('Введите ПИН-код от 4 до 8 цифр.');
+      return;
+    }
+    setPinLoading(true);
+    setPinMessage('');
+    setError('');
+    try {
+      const res = await apiFetch('/api/telegram/employee-link-by-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinCode: rawPin }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) throw new Error(data?.message || 'Не удалось войти по ПИН-коду.');
+      if (data?.sessionToken) {
+        setTelegramEmployeeSessionToken(String(data.sessionToken));
+        markTelegramWebAppSession();
+      }
+      const welcomeName = data?.employee?.fullName ? `, ${String(data.employee.fullName).split(' ')[0]}` : '';
+      setPinMessage(`Вход выполнен${welcomeName}. Кнопка меню Telegram тоже обновлена — в следующий раз вход по кнопке будет автоматический.`);
+      setStatus(`Готово${welcomeName}. Камера готова к сканированию.`);
+      setTimeout(() => setOpeningScanner(false), 800);
+      setTimeout(() => {
+        autoOpenedRef.current = false;
+        openScanner();
+      }, 1200);
+    } catch (pinErr) {
+      setPinMessage(pinErr?.message || String(pinErr || 'Ошибка входа по ПИН-коду.'));
+    } finally {
+      setPinLoading(false);
+    }
+  }, [pinCode, openScanner]);
 
   const openScanner = useCallback(() => {
     if (bootstrappingSession || openingScanner) return;
@@ -281,11 +320,58 @@ function TelegramScannerPage() {
           && !(storageToken && storageToken.length > 32);
         if (!noTokenAtAll) return null;
         return (
-          <div className="settings-alert mb-16" style={{ textAlign: 'left', borderColor: '#e0b34a', background: '#fffbea', color: '#7a5a00' }}>
-            <strong>Меню кнопка Telegram не передала токен доступа.</strong>
-            <div style={{ marginTop: 6 }}>
-              Администратору: откройте <strong>Настройки → Telegram</strong> и нажмите <strong>«🔄 Обновить кнопки ТГ»</strong>.
-              Либо в карточке сотрудника нажмите <strong>«📤 Отправить ссылку в Telegram»</strong> и откройте сканер по инлайн-ссылке.
+          <div className="settings-alert mb-16" style={{ textAlign: 'left', borderColor: '#c7a544', background: '#fff9e8', color: '#6b5000' }}>
+            <strong style={{ display: 'block', marginBottom: 6 }}>Меню кнопка Telegram не передала токен доступа (Telegram Android может кешировать старую кнопку часами).</strong>
+            <div style={{ marginBottom: 10 }}>
+              Введите ваш ПИН-код (4–8 цифр из настроек сотрудника) — мгновенный вход без ожидания обновления кеша:
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                inputMode="numeric"
+                pattern="[0-9]*"
+                type="password"
+                autoComplete="off"
+                placeholder="ПИН-код"
+                value={pinCode}
+                onChange={(e) => {
+                  const digits = String(e.target.value || '').replace(/[^\d]/g, '').slice(0, 8);
+                  setPinCode(digits);
+                  if (pinMessage) setPinMessage('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitPinCode();
+                  }
+                }}
+                style={{
+                  flex: '1 1 auto',
+                  minWidth: 0,
+                  padding: '10px 12px',
+                  border: '1px solid #d6cfb6',
+                  borderRadius: 6,
+                  fontSize: 16,
+                  letterSpacing: 3,
+                  outline: 'none',
+                  WebkitAppearance: 'none',
+                }}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={submitPinCode}
+                disabled={pinLoading || !String(pinCode || '').replace(/[^\d]/g, '').length}
+                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                {pinLoading ? 'Вход...' : 'Войти по ПИН'}
+              </button>
+            </div>
+            {pinMessage && (
+              <div style={{ marginTop: 8, color: /выполнен|готово/i.test(pinMessage) ? '#38704a' : '#8a6500', fontSize: 14, lineHeight: 1.5 }}>
+                {pinMessage}
+              </div>
+            )}
+            <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.55, color: '#7a5a00', opacity: 0.92 }}>
+              Или администратор: <strong>Настройки → Telegram → 🔄 Обновить кнопки ТГ</strong>, затем в EmployeeModal нажать <strong>«☰ Проверить Menu Button»</strong> и перезапустить приложение Telegram.
             </div>
           </div>
         );
