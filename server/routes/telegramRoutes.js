@@ -1341,6 +1341,8 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
 
     let menuButtonUpdated = false;
     let menuButtonError = '';
+    let keyboardResetSent = false;
+    let keyboardResetError = '';
     const chatId = String(freshEmployee.telegramChatId || '').trim();
     if (chatId) {
       try {
@@ -1348,6 +1350,18 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
         menuButtonUpdated = true;
       } catch (mbErr) {
         menuButtonError = String(mbErr?.message || mbErr || '');
+      }
+      try {
+        const resetText = 'Настройки бота обновлены.\nСканер QR-кодов находится в кнопке слева от поля ввода.';
+        await sendTelegramMessage(token, {
+          chat_id: chatId,
+          text: resetText,
+          reply_markup: JSON.stringify(getAuthorizedMessageReplyMarkup(freshEmployee)),
+          disable_notification: true,
+        });
+        keyboardResetSent = true;
+      } catch (kbErr) {
+        keyboardResetError = String(kbErr?.message || kbErr || 'keyboard_reset_failed');
       }
     }
 
@@ -1370,6 +1384,8 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
       employeeWebAppUrl,
       menuButtonUpdated,
       menuButtonError,
+      keyboardResetSent,
+      keyboardResetError,
     });
   } catch (error) {
     res.status(400).json({ ok: false, message: String(error.message || 'Не удалось продлить токен сотрудника.') });
