@@ -47,7 +47,30 @@ function TelegramScannerPage() {
   const [fallbackEmployeeCode, setFallbackEmployeeCode] = useState('');
   const [submittingFallback, setSubmittingFallback] = useState(false);
   const [fallbackEmployeeName, setFallbackEmployeeName] = useState('');
+  const [directory, setDirectory] = useState({ loaded: false, count: 0, employees: [] });
+  const loadDirectoryOnceRef = useRef(false);
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
+
+  useEffect(() => {
+    if (loadDirectoryOnceRef.current) return;
+    loadDirectoryOnceRef.current = true;
+    (async () => {
+      try {
+        writeClientTelegramDiagnosticsLog('scanner.directory.fetch.start', {}, 'telegram-scanner');
+        const res = await apiFetch('/api/telegram/employee-directory', { method: 'GET' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const raw = await res.text();
+        let data;
+        try { data = JSON.parse(raw || '{}'); } catch (_) { throw new Error('Invalid JSON: ' + (raw || '').slice(0,100)); }
+        if (!data?.ok) throw new Error(data?.message || 'Unknown directory response');
+        const list = Array.isArray(data?.employees) ? data.employees : [];
+        setDirectory({ loaded: true, count: Number(data?.count || list.length), employees: list });
+        writeClientTelegramDiagnosticsLog('scanner.directory.fetch.success', { count: list.length }, 'telegram-scanner');
+      } catch (dirErr) {
+        writeClientTelegramDiagnosticsLog('scanner.directory.fetch.error', { message: String(dirErr.message || '').slice(0,255) }, 'telegram-scanner');
+      }
+    })();
+  }, []);
 
   const isReadyForScan = Boolean(
     bootstrapProgress.ready
@@ -75,7 +98,20 @@ function TelegramScannerPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       });
-      const data = await parseJsonSafely(res);
+      const rawText = await res.text();
+      let data = null;
+      try { data = JSON.parse(rawText || '{}'); } catch (_) { data = { ok:false, message: (rawText || '').slice(0, 200) || 'Empty response' }; }
+      writeClientTelegramDiagnosticsLog('scanner.fallback.response', {
+        codeLength: code.length,
+        resStatus: Number(res.status) || 0,
+        resOk: Boolean(res.ok),
+        contentType: res.headers && typeof res.headers.get === 'function' ? String(res.headers.get('content-type')||'').slice(0,80) : '',
+        responseMessage: String(data?.message || '').slice(0,200),
+        responseRawTail: String(rawText||'').slice(-160),
+        dataOk: Boolean(data?.ok),
+        hasEmployeeLink: Boolean(data?.employeeLink),
+        hasSessionToken: Boolean(data?.sessionToken),
+      }, 'telegram-scanner');
       if (!res.ok || !data?.ok) {
         throw new Error(data?.message || 'Не удалось получить доступ.');
       }
@@ -100,9 +136,11 @@ function TelegramScannerPage() {
         note: empName ? `Доступ получен: ${empName}. Можно сканировать.` : 'Доступ готов. Можно сканировать.',
       }));
     } catch (fallbackErr) {
-      setError(fallbackErr.message || 'Не удалось получить доступ по коду сотрудника.');
+      const msg = fallbackErr?.message || fallbackErr?.toString?.() || 'Unknown fallback error';
+      setError(msg || 'Не удалось получить доступ по коду сотрудника.');
       writeClientTelegramDiagnosticsLog('scanner.fallback.error', {
-        message: String(fallbackErr.message || '').slice(0, 255),
+        message: String(msg || '').slice(0, 255),
+        fallbackErrName: String(fallbackErr?.name || '').slice(0,80),
       }, 'telegram-scanner');
     } finally {
       setSubmittingFallback(false);
@@ -452,8 +490,59 @@ function TelegramScannerPage() {
           borderRadius: 10,
         }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: '#965c0c' }}>
-            ⚠️ Telegram не передал данные сотрудника (возможно после долгого неиспользования). Используйте резервный вход:
+            ⚠️ Telegram не передал данные сотрудника (возможно после долгого неиспользования). Выберите себя в списке или введите код:
           </div>
+
+          {directory.loaded && directory.employees.length > 0 && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+              gap: 8,
+              margin: '8px 0 16px',
+            }}>
+              {directory.employees.map((emp, idx) => {
+                const label = (emp.code ? emp.code + ' · ' : '') + (emp.name || '');
+                if (!label) return null;
+                const active = fallbackEmployeeCode && (
+                  (emp.code && String(fallbackEmployeeCode).toLowerCase() === String(emp.code).toLowerCase())
+                  || (emp.username && String(fallbackEmployeeCode).toLowerCase() === String(emp.username).toLowerCase())
+                  || (emp.name && String(fallbackEmployeeCode).toLowerCase() === String(emp.name).toLowerCase())
+                );
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setError('');
+                      setFallbackEmployeeCode(emp.code || emp.username || (emp.name ? emp.name.slice(0, 24) : ''));
+                    }}
+                    className="btn"
+                    style={{
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      background: active ? '#4a6991' : '#ffffff',
+                      color: active ? '#fff' : '#222',
+                      border: active ? '1px solid #3d587a' : '1px solid #d8d8d8',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                      lineHeight: 1.35,
+                    }}
+                    title={emp.name || ''}
+                  >
+                    {emp.code && <span style={{ fontFamily: 'monospace' }}>{emp.code}</span>}
+                    {emp.code && emp.name && <span style={{ opacity: 0.7 }}> · </span>}
+                    {emp.name && <span style={{ fontWeight: 500 }}>{emp.name}</span>}
+                    {emp.role && !emp.name && <span style={{ opacity: 0.65 }}> · {emp.role}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 180px', minWidth: 180 }}>
               <label style={{
@@ -470,7 +559,7 @@ function TelegramScannerPage() {
                 value={fallbackEmployeeCode}
                 onChange={(e) => setFallbackEmployeeCode(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') submitFallbackEmployeeCode(); }}
-                placeholder="код сотрудника или логин в ТГ"
+                placeholder="код сотрудника или выберите сверху"
                 style={{ width: '100%', padding: '8px 10px', fontSize: 15 }}
                 autoComplete="off"
                 autoCorrect="off"

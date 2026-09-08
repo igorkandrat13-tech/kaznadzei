@@ -315,6 +315,25 @@ router.post('/telegram/webapp/bootstrap', (req, res) => {
   }
 });
 
+router.get('/employee-directory', express.json({ limit: '4kb' }), async (req, res) => {
+  try {
+    const employees = (EmployeeStore.list && EmployeeStore.list()) || EmployeeStore.findAll() || [];
+    const rows = employees
+      .filter(emp => Boolean(emp.code || emp.employeeCode || emp.fullName || emp.name || emp.telegramUsername))
+      .map(emp => ({
+        code: String(emp.code || emp.employeeCode || '').trim(),
+        name: String(emp.fullName || emp.name || '').slice(0, 80),
+        role: String(emp.role || '').slice(0, 32),
+        username: String(emp.telegramUsername || '').replace(/^@/, '').slice(0, 48),
+      }))
+      .filter(r => r.code || r.name)
+      .sort((a, b) => (a.code || a.name || '').localeCompare(b.code || b.name || ''));
+    res.json({ ok: true, count: rows.length, employees: rows });
+  } catch (error) {
+    res.status(500).json({ ok: false, count: 0, employees: [], message: String(error.message || '') });
+  }
+});
+
 router.post('/webapp/employee-link-by-code', express.json({ limit: '16kb' }), async (req, res) => {
   try {
     const rawCode = String((req.body || {}).code || '').trim().toLowerCase();

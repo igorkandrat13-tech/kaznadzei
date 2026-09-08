@@ -1,0 +1,4 @@
+=== kaznadzei-diag step 2 — journalctl -u kaznadzei ===
+=== Timestamp: 20260908-060100
+
+-- No entries --

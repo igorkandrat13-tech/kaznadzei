@@ -81,14 +81,32 @@ log ""
 
 hr
 
-log "STEP 2/3 — journalctl -u kaznadzei last 10 minutes (120 lines tail)"
+log "STEP 2/3 — journalctl -u kaznadzei last 10 minutes (120 lines tail) + fallback file logs"
 log "Output file: ${FILE_JOURNAL}"
 log ""
 {
   echo "=== kaznadzei-diag step 2 — journalctl -u kaznadzei ==="
   echo "=== Timestamp: ${STAMP}"
   echo ""
-  (sudo journalctl -u kaznadzei --since "10 min ago" --no-pager -n 200 2>&1 | tail -n 120) 2>&1
+  echo "--- journalctl system unit sudo -u kaznadzei last 30m 300 lines (tail 120) ---"
+  if command -v journalctl >/dev/null 2>&1; then
+    (sudo journalctl -u kaznadzei -n 300 --no-pager 2>&1 | tail -n 180) 2>&1
+    echo ""
+    echo "--- journalctl --user -u kaznadzei (fallback user unit) last 30m ---"
+    (journalctl --user -u kaznadzei -n 300 --no-pager 2>&1 | tail -n 180) 2>&1 || true
+  else
+    echo "journalctl not available on this host."
+  fi
+  echo ""
+  echo "--- candidate log files in /opt/kaznadzei and subdirs ---"
+  (ls -lah /opt/kaznadzei/*.log /opt/kaznadzei/.runtime/*.log /opt/kaznadzei/logs/*.log /tmp/kaznadzei*.log 2>/dev/null) || echo "(no *.log candidates found in /opt/kaznadzei, /opt/kaznadzei/.runtime, /opt/kaznadzei/logs)"
+  for f in /opt/kaznadzei/.runtime/app.log /opt/kaznadzei/app.log /opt/kaznadzei/server.log /opt/kaznadzei/.runtime/telegram-logs.json; do
+    if [ -f "$f" ]; then
+      echo ""
+      echo "--- tail -n 120 of $(basename "$f") ---"
+      (tail -n 120 "$f" 2>&1 || true)
+    fi
+  done
 } | tee -a "${REPORT_FILE}" > "${FILE_JOURNAL}"
 
 hr
@@ -100,80 +118,80 @@ log ""
   echo "=== kaznadzei-diag step 3 — direct POST /api/telegram/webapp/employee-link-by-code ==="
   echo "=== Timestamp: ${STAMP}"
   echo ""
-  cd /opt/kaznadzei 2>/dev/null && node -e "
-    try {
-      const Settings = require('./server/stores/settingsStore');
-      const get = () => {
-        try { return Settings.get && Settings.get(); } catch { return Settings; }
-      };
-      const s = get() || {};
-      const publicBaseUrl = String(s.publicBaseUrl || '').trim();
-      if (!publicBaseUrl) {
-        const http = require('http');
-        const payload = JSON.stringify({ code: 'fvams2' });
-        const req = http.request({
-          hostname: '127.0.0.1',
-          port: Number(process.env.PORT || 3001),
-          path: '/api/telegram/webapp/employee-link-by-code',
-          method: 'POST',
-          headers: {
-            'Content-Type':'application/json',
-            'Content-Length': Buffer.byteLength(payload),
-            'Host':'127.0.0.1',
-          },
-        }, (res) => {
-          let buf = '';
-          res.on('data', c => buf += c);
-          res.on('end', () => {
-            console.log('status =', res.statusCode);
-            const cleanBuf = buf.length > 4000 ? buf.slice(0,4000) + '...(truncated)' : buf;
-            console.log('body =', cleanBuf);
-          });
-        });
-        req.on('error', e => console.log('request error:', e.message));
-        req.setTimeout(10000, () => { console.log('request timeout 10s'); req.destroy(new Error('timeout')); });
-        req.write(payload); req.end();
-        return;
-      }
-      const url = require('url');
-      const parsed = url.parse(publicBaseUrl);
-      const isHttps = (parsed.protocol === 'https:');
-      const lib = isHttps ? require('https') : require('http');
-      const payload = JSON.stringify({ code: 'fvams2' });
-      const options = {
-        hostname: parsed.hostname,
-        port: parseInt(parsed.port || (isHttps ? 443 : 80), 10),
+  cd /opt/kaznadzei 2>/dev/null && node << 'NODE_STEP3_END' 2>&1
+(function main() {
+  try {
+    const Settings = require('./server/stores/settingsStore');
+    const get = () => {
+      try { return Settings.get && Settings.get(); } catch (e) { return Settings || {}; }
+    };
+    const s = get() || {};
+    const publicBaseUrl = String(s.publicBaseUrl || '').trim();
+    const http = require('http');
+    const https = require('https');
+    const urlLib = require('url');
+    const payload = JSON.stringify({ code: 'fvams2' });
+
+    const run = (opts) => {
+      const lib = (opts.isHttps ? https : http);
+      const req = lib.request({
+        hostname: opts.hostname,
+        port: Number(opts.port),
         path: '/api/telegram/webapp/employee-link-by-code',
         method: 'POST',
         headers: {
           'Content-Type':'application/json',
           'Content-Length': Buffer.byteLength(payload),
-          'Host': parsed.host || (parsed.hostname + ':' + parsed.port),
+          'Host': opts.host || (opts.hostname + ':' + opts.port),
         },
-      };
-      console.log('Request:', JSON.stringify({ isHttps, hostname: options.hostname, port: options.port, path: options.path, publicBaseUrl: publicBaseUrl.slice(0,120) }));
-      const req = lib.request(options, (res) => {
+        timeout: 10000,
+      }, (res) => {
         let buf = '';
         res.on('data', c => buf += c);
         res.on('end', () => {
           console.log('status =', res.statusCode);
-          const bodyObj = (() => { try { return JSON.parse(buf); } catch { return { raw: buf.slice(0,200) }; } })();
-          const safeBody = JSON.stringify(bodyObj, (k,v) => {
+          let bodyObj;
+          try { bodyObj = JSON.parse(buf); } catch (e) { bodyObj = { raw: (buf || '').slice(0,400) }; }
+          const safe = JSON.stringify(bodyObj, (k,v) => {
             if (k && /token|link|hash|signature/i.test(k)) return v && typeof v === 'string' ? ('••••' + v.slice(-8)) : v;
             return v;
           }, 2).slice(0,4000);
-          console.log('body =', safeBody);
+          console.log('body =', safe);
+          process.exit(0);
         });
       });
-      req.on('error', e => console.log('request error:', e.message));
-      req.setTimeout(10000, () => { console.log('request timeout 10s'); req.destroy(new Error('timeout')); });
-      req.write(payload); req.end();
-      setTimeout(() => { /* keep process alive */ }, 11000);
-    } catch (e) {
-      console.log('FATAL step 3:', e.message);
-      process.exit(1);
+      req.on('error', (e) => { console.log('request error:', e.message); process.exit(1); });
+      req.on('timeout', () => { console.log('request timeout 10s'); req.destroy(new Error('timeout')); });
+      req.write(payload);
+      req.end();
+      setTimeout(() => { console.log('process timeout 11s'); process.exit(2); }, 11000);
+    };
+
+    if (!publicBaseUrl) {
+      console.log('Request: local 127.0.0.1 fallback');
+      run({ isHttps: false, hostname: '127.0.0.1', port: Number(process.env.PORT || 3001), host: '127.0.0.1' });
+      return;
     }
-  " 2>&1
+    let parsed;
+    try { parsed = urlLib.parse(publicBaseUrl); } catch (u) { parsed = null; }
+    const isHttps = parsed && parsed.protocol === 'https:';
+    const hostname = (parsed && parsed.hostname) || '127.0.0.1';
+    const port = (parsed && parsed.port) ? parseInt(parsed.port,10) : (isHttps ? 443 : 80);
+    const host = (parsed && parsed.host) ? parsed.host : (hostname + ':' + port);
+    console.log('Request:', JSON.stringify({
+      isHttps,
+      hostname,
+      port,
+      path: '/api/telegram/webapp/employee-link-by-code',
+      publicBaseUrl: publicBaseUrl.slice(0,120),
+    }));
+    run({ isHttps, hostname, port, host });
+  } catch (e) {
+    console.log('FATAL step 3:', e.message);
+    process.exit(1);
+  }
+})();
+NODE_STEP3_END
 } | tee -a "${REPORT_FILE}" > "${FILE_ENDPOINT}"
 
 hr
