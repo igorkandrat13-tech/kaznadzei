@@ -14,7 +14,7 @@ const {
   getFile,
   downloadTelegramFile,
 } = require('../services/telegramService');
-const { addActivityLog, getRequestActor } = require('../services/activityLog');
+const { addActivityLog } = require('../services/activityLog');
 const {
   addTelegramDiagnosticLog,
   clearTelegramDiagnosticLogs,
@@ -26,8 +26,6 @@ const {
   createTelegramEmployeeSessionToken,
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
-  signTelegramEmployeeDirectLink,
-  verifyTelegramEmployeeDirectLink,
 } = require('../services/telegramWebAppAuth');
 const {
   CUSTOMER_FULL_ORDER_BUTTON_TEXT,
@@ -57,383 +55,6 @@ const EMPLOYEE_QR_SCANNER_BUTTON_TEXT = 'Сканер QR';
 const EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT = 'Заявки';
 const EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT = 'Отмена заявки';
 const EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST = 'create_workshop_request';
-
-function maskTelegramObjectDeep(value, depth = 0) {
-  if (!value) return value;
-  if (depth > 4) return '[truncated]';
-  if (Array.isArray(value)) {
-    return value.map((item) => maskTelegramObjectDeep(item, depth + 1));
-  }
-  if (typeof value === 'object') {
-    const next = {};
-    Object.keys(value).forEach((key) => {
-      const normalizedKey = String(key || '').toLowerCase();
-      const raw = value[key];
-      if (normalizedKey.includes('token') || /(password|secret|key$|hash|signature|session|auth_date|initdata|bot.?token)/i.test(normalizedKey)) {
-        if (raw == null || raw === '') {
-          next[key] = raw;
-        } else if (typeof raw === 'object') {
-          next[key] = '[redacted object]';
-        } else {
-          next[key] = maskTelegramValue(raw, { tail: 4 });
-        }
-        return;
-      }
-      next[key] = maskTelegramObjectDeep(raw, depth + 1);
-    });
-    return next;
-  }
-  return value;
-}
-
-function buildTelegramAuthDiagnosticsSnapshot() {
-  const settings = SettingsStore.get() || {};
-  const employees = EmployeeStore ? EmployeeStore.findAll() : [];
-  const accesses = CustomerTelegramAccessStore ? CustomerTelegramAccessStore.findAll() : [];
-  const workshopRequests = WorkshopRequestStore && typeof WorkshopRequestStore.findAll === 'function'
-    ? WorkshopRequestStore.findAll()
-    : [];
-  const telegramLogs = getTelegramDiagnosticLogs({ limit: 400 });
-  const authRelatedLogs = telegramLogs.filter((entry) => {
-    const event = String(entry?.event || '').toLowerCase();
-    const scope = String(entry?.scope || '').toLowerCase();
-    if (scope.includes('webapp')) return true;
-    return /session\.|auth|payload|signature|stale|grace|employee|item-scan|stage-mark|qr/.test(event);
-  }).slice(-200);
-  const packageInfo = {
-    nodeVersion: process.version,
-    platform: process.platform,
-    arch: process.arch,
-    uptimeSeconds: Math.floor(process.uptime()),
-    envProduction: Boolean(process.env.NODE_ENV),
-    pid: process.pid,
-  };
-  const botInfo = {
-    botTokenConfigured: Boolean(String(settings.telegramBotToken || '').length > 0),
-    botTokenTail: maskTelegramValue(settings.telegramBotToken, { tail: 4 }),
-    publicBaseUrl: String(settings.publicBaseUrl || '').trim(),
-    webAppUrl: getTelegramWebAppUrl(),
-    supergroupChatIdConfigured: Boolean(String(settings.telegramSupergroupChatId || '').length > 0),
-    supergroupEnabled: Boolean(settings.telegramSupergroupEnabled),
-  };
-  const employeeRows = employees.map((employee) => ({
-    _id: String(employee._id || ''),
-    role: String(employee.role || ''),
-    fullName: String(employee.fullName || ''),
-    telegramUserId: maskTelegramValue(employee.telegramUserId, { tail: 4 }),
-    telegramChatId: maskTelegramValue(employee.telegramChatId, { tail: 4 }),
-    hasTelegramUserId: Boolean(String(employee.telegramUserId || '').length > 0),
-    hasTelegramChatId: Boolean(String(employee.telegramChatId || '').length > 0),
-    pinEnabled: Boolean(String(employee.pinHash || '').length > 0),
-    allowedColumns: Array.isArray(employee.allowedColumns) ? [...employee.allowedColumns] : [],
-  }));
-  return {
-    generatedAt: new Date().toISOString(),
-    packageInfo,
-    bot: botInfo,
-    constants: {
-      TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS: 365,
-      TELEGRAM_EMPLOYEE_SESSION_EXPIRATION_GRACE_DAYS: 7,
-      TELEGRAM_INIT_DATA_STRICT_TTL_HOURS: 24,
-      TELEGRAM_INIT_DATA_STALE_TTL_DAYS: 180,
-    },
-    employees: employeeRows,
-    customerTelegramAccesses: accesses.map((access) => ({
-      _id: String(access._id || ''),
-      customerName: String(access.customerName || ''),
-      telegramUserId: maskTelegramValue(access.telegramUserId, { tail: 4 }),
-      telegramChatId: maskTelegramValue(access.telegramChatId, { tail: 4 }),
-      linked: Boolean(access.telegramUserId || access.telegramChatId),
-      orderIds: Array.isArray(access.orderIds) ? access.orderIds.map(String) : [],
-      updatedAt: String(access.updatedAt || ''),
-    })),
-    lastWorkshopRequests: workshopRequests.slice(-20).map((req) => ({
-      _id: String(req._id || ''),
-      status: String(req.status || ''),
-      orderId: String(req.orderId || ''),
-      createdAt: String(req.createdAt || ''),
-      updatedAt: String(req.updatedAt || ''),
-    })),
-    logs: maskTelegramObjectDeep(authRelatedLogs),
-    diagnosticsHints: {
-      staleInitData: telegramLogs.filter((entry) => /signatureStale|stale-signature|stale-initdata|graceAllowed/i.test(`${String(entry?.event || '')} ${JSON.stringify(entry?.details || {})}`)).length,
-      expiredSessions: telegramLogs.filter((entry) => /(expired|истек|истёк|session-token-expired|session\.token\.ист)/i.test(`${String(entry?.event || '')} ${JSON.stringify(entry?.details || {})}`)).length,
-      employeeNotFound: telegramLogs.filter((entry) => /employee-not-found|employee\.missing/i.test(String(entry?.event || ''))).length,
-      payloadFallbacks: telegramLogs.filter((entry) => /payload-fallback|payload-only|session-token-failed/i.test(String(entry?.event || ''))).length,
-    },
-  };
-}
-
-router.get('/telegram/auth-diagnostics', requireAdminAccess(), (req, res) => {
-  try {
-    const snapshot = buildTelegramAuthDiagnosticsSnapshot();
-    const fileName = `kaznadzei-telegram-auth-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    addActivityLog({
-      action: 'settings.telegram-auth-diagnostics.export',
-      entityType: 'settings',
-      entityName: fileName,
-      actor: getRequestActor(req),
-      message: 'Выгружен диагностический пакет по авторизации Telegram Web App.',
-      details: {
-        logsCount: snapshot.logs.length,
-        employeesCount: snapshot.employees.length,
-      },
-    });
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.send(`${JSON.stringify(snapshot, null, 2)}\n`);
-  } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось сформировать диагностический файл.' });
-  }
-});
-
-router.post('/telegram/client-diagnostics-log', express.json({ limit: '256kb' }), (req, res) => {
-  try {
-    const payload = req && req.body ? req.body : {};
-    const rawScope = String(payload.scope || 'telegram-webapp').toLowerCase().trim().slice(0, 64);
-    const allowedScopes = ['telegram-webapp', 'telegram-order', 'telegram-scanner', 'customer-telegram', 'telegram-supergroup'];
-    const scope = allowedScopes.includes(rawScope) ? rawScope : 'telegram-webapp';
-    const event = String(payload.event || 'client.event').slice(0, 128);
-    const details = payload.details && typeof payload.details === 'object' && !Array.isArray(payload.details)
-      ? payload.details
-      : { raw: typeof payload.details === 'object' ? payload.details : String(payload.details || '').slice(0, 2000) };
-    const cappedDetails = {};
-    Object.keys(details).forEach((key) => {
-      const raw = details[key];
-      const normalizedKey = String(key || '').toLowerCase();
-      const sensitive = normalizedKey.includes('token') || /(password|secret|key$|hash|signature|session|auth_date|initdata|bot.?token|telegramuserid|telegramchatid)/i.test(normalizedKey);
-      if (sensitive) {
-        if (raw == null || raw === '') cappedDetails[key] = raw;
-        else if (typeof raw === 'object') cappedDetails[key] = '[redacted object]';
-        else {
-          const s = String(raw);
-          cappedDetails[key] = s.length > 4 ? `••••${s.slice(-4)}` : '***';
-        }
-        return;
-      }
-      if (typeof raw === 'string' && raw.length > 3500) {
-        cappedDetails[key] = `${raw.slice(0, 3500)}… [truncated ${raw.length - 3500} chars]`;
-        return;
-      }
-      cappedDetails[key] = raw;
-    });
-    addTelegramDiagnosticLog(scope, event, cappedDetails);
-    res.json({ ok: true });
-  } catch (error) {
-    res.status(error.status || 400).json({ ok: false, message: error.message || 'Не удалось сохранить клиентское диагностическое событие.' });
-  }
-});
-
-router.get('/telegram/stable-employee-link', requireAdminAccess(), (req, res) => {
-  const token = getConfiguredBotToken();
-  if (!token) {
-    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
-  }
-  try {
-    const employeeId = String((req.query.employeeId) || '').trim() || String((req.user && req.user._id) || '').trim();
-    if (!employeeId) {
-      return res.status(400).json({ message: 'Не передан идентификатор сотрудника.' });
-    }
-    const employee = EmployeeStore.findById(employeeId);
-    if (!employee) {
-      return res.status(404).json({ message: 'Сотрудник не найден.' });
-    }
-    const scope = String(req.query.scope || 'qr-item').trim().slice(0, 80);
-    const orderId = String(req.query.orderId || '').trim();
-    const link = signTelegramEmployeeDirectLink(token, employee._id.toString(), { orderId, scope });
-    res.json({ ok: true, employeeId: employee._id.toString(), scope, orderId, employeeLink: link, expiresInDays: 5 * 365 });
-  } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось сгенерировать стабильную ссылку сотрудника.' });
-  }
-});
-
-router.post('/telegram/webapp/bootstrap', (req, res) => {
-  const token = getConfiguredBotToken();
-  if (!token) {
-    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
-  }
-  try {
-    const payload = req && req.body ? req.body : {};
-    const initData = String(payload.initData || '').trim();
-    const unsafeUser = payload.unsafeUser && typeof payload.unsafeUser === 'object' ? payload.unsafeUser : null;
-    let resolvedTelegramUserId = '';
-    if (initData) {
-      try {
-        const parsed = extractTelegramInitDataUser(initData);
-        if (parsed?.id) resolvedTelegramUserId = String(parsed.id);
-      } catch { /* ignore */ }
-    }
-    if (!resolvedTelegramUserId && unsafeUser?.id) {
-      resolvedTelegramUserId = String(unsafeUser.id);
-    }
-
-    if (!resolvedTelegramUserId) {
-      return res.json({
-        ok: true,
-        needReopen: true,
-        needBotAuth: true,
-        employee: null,
-        employeeLink: null,
-        sessionToken: null,
-        message: 'Telegram auth payload ещё не загружен в webview. Повторите попытку через несколько секунд или откройте webapp заново через кнопку в боте.',
-      });
-    }
-
-    const employee = EmployeeStore.findByTelegramUserId(resolvedTelegramUserId);
-    if (!employee) {
-      return res.status(403).json({
-        ok: false,
-        needReopen: true,
-        message: 'Сотрудник Telegram не найден или не авторизован.',
-        telegramUserId: resolvedTelegramUserId ? `...${String(resolvedTelegramUserId).slice(-6)}` : '',
-      });
-    }
-    const scope = String(payload.scope || 'webapp-bootstrap').trim().slice(0, 80);
-    const orderId = String(payload.orderId || '').trim();
-    const employeeLink = signTelegramEmployeeDirectLink(token, employee._id.toString(), { orderId, scope });
-    const nextSessionToken = createTelegramEmployeeSessionToken(token, employee);
-    EmployeeStore.touchTelegramUser(employee._id, {
-      telegramUsername: unsafeUser?.username ? `@${String(unsafeUser.username).replace(/^@+/, '')}` : employee.telegramUsername || '',
-      telegramFirstName: unsafeUser?.first_name || employee.telegramFirstName || '',
-      telegramLastName: unsafeUser?.last_name || employee.telegramLastName || '',
-    });
-    res.json({
-      ok: true,
-      employee: {
-        _id: employee._id,
-        fullName: employee.fullName,
-        role: employee.role,
-        telegramUsername: employee.telegramUsername || '',
-        telegramUserId: employee.telegramUserId || '',
-      },
-      employeeLink,
-      sessionToken: nextSessionToken,
-      expiresInDays: { employeeLink: 5 * 365, sessionToken: 365 },
-    });
-  } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось сгенерировать bootstrap-данные Web App.' });
-  }
-});
-
-router.get('/employee-directory', express.json({ limit: '4kb' }), async (req, res) => {
-  try {
-    const employees = (EmployeeStore.list && EmployeeStore.list()) || EmployeeStore.findAll() || [];
-    const rows = employees
-      .filter(emp => Boolean(emp.code || emp.employeeCode || emp.fullName || emp.name || emp.telegramUsername))
-      .map(emp => ({
-        code: String(emp.code || emp.employeeCode || '').trim(),
-        name: String(emp.fullName || emp.name || '').slice(0, 80),
-        role: String(emp.role || '').slice(0, 32),
-        username: String(emp.telegramUsername || '').replace(/^@/, '').slice(0, 48),
-      }))
-      .filter(r => r.code || r.name)
-      .sort((a, b) => (a.code || a.name || '').localeCompare(b.code || b.name || ''));
-    res.json({ ok: true, count: rows.length, employees: rows });
-  } catch (error) {
-    res.status(500).json({ ok: false, count: 0, employees: [], message: String(error.message || '') });
-  }
-});
-
-router.post('/webapp/employee-link-by-code', express.json({ limit: '16kb' }), async (req, res) => {
-  try {
-    const rawInput = String((req.body || {}).code || '').trim();
-    const rawCode = rawInput.toLowerCase();
-    if (!rawCode || rawCode.length < 2) {
-      return res.status(400).json({ ok: false, retryable: true, message: 'Введите PIN или код сотрудника (минимум 2 символа).' });
-    }
-    const employees = (EmployeeStore.list && EmployeeStore.list()) || EmployeeStore.findAll() || [];
-    let match = null;
-    let matchBy = null;
-    if (/^\d+$/.test(rawInput)) {
-      const pinMatch = EmployeeStore.findByPinCode(rawInput);
-      if (pinMatch) {
-        match = pinMatch;
-        matchBy = 'pin';
-      }
-    }
-    if (!match) {
-      match = (employees.find((emp) => {
-        const code = String(emp.code || emp.employeeCode || '').toLowerCase();
-        const username = String(emp.telegramUsername || '').toLowerCase().replace(/^@/, '');
-        const name = String(emp.fullName || emp.name || '').toLowerCase();
-        const id6 = String(emp._id || '').slice(-6).toLowerCase();
-        if (!code && !username && !name) return false;
-        return (code && code === rawCode)
-          || (username && username === rawCode)
-          || (id6 && id6 === rawCode)
-          || (name && rawCode.length >= 3 && name.includes(rawCode));
-      }) || null);
-      if (match) matchBy = 'code';
-    }
-
-    if (!match) {
-      addTelegramDiagnosticLog({
-        scope: 'telegram-auth',
-        level: 'warn',
-        event: 'employee-link-by-code.not-found',
-        details: { code: rawCode, searched: employees.length },
-      });
-      const isPinAttempt = /^\d+$/.test(rawInput) && rawInput.length >= 4;
-      return res.status(404).json({
-        ok: false,
-        retryable: true,
-        message: isPinAttempt
-          ? 'Сотрудник с таким PIN не найден. Проверьте PIN (4-6 цифр) или обратитесь к администратору.'
-          : 'Сотрудник с таким кодом не найден. Проверьте код и попробуйте ещё раз.',
-      });
-    }
-
-    addTelegramDiagnosticLog({
-      scope: 'telegram-auth',
-      level: 'info',
-      event: 'employee-link-by-code.found',
-      details: {
-        code: rawCode,
-        matchBy: matchBy || 'unknown',
-        employeeId: match._id ? String(match._id).slice(-8) : '',
-        employeeRole: String(match.role || '').slice(0, 80),
-        hasTelegramUserId: Boolean(match.telegramUserId),
-      },
-    });
-
-    const token = getConfiguredBotToken();
-    const issuedAt = Date.now();
-    const employeeLink = signTelegramEmployeeDirectLink(token, match._id, {
-      scope: 'qr-code-employee',
-      issuedAt,
-    });
-
-    const sessionToken = createTelegramEmployeeSessionToken(token, {
-      employeeId: match._id,
-      telegramUserId: match.telegramUserId || undefined,
-      issuedAt,
-    });
-
-    res.json({
-      ok: true,
-      authPath: 'employee-code',
-      employee: {
-        _id: match._id,
-        fullName: match.fullName,
-        role: match.role,
-        telegramUsername: match.telegramUsername || '',
-        telegramUserId: match.telegramUserId || '',
-        code: match.code || match.employeeCode || '',
-      },
-      employeeLink,
-      sessionToken,
-      expiresInDays: { employeeLink: 5 * 365, sessionToken: 365 },
-    });
-  } catch (error) {
-    addTelegramDiagnosticLog({
-      scope: 'telegram-auth',
-      level: 'error',
-      event: 'employee-link-by-code.error',
-      details: { message: String(error.message || '').slice(0, 255) },
-    });
-    res.status(error.status || 400).json({ ok: false, message: error.message || 'Не удалось получить доступ по коду сотрудника.' });
-  }
-});
 
 function getConfiguredBotToken() {
   return String(SettingsStore.get().telegramBotToken || '').trim();
@@ -1320,65 +941,13 @@ router.post('/telegram/webapp/session', async (req, res) => {
   try {
     let employee = null;
     let telegramUser = null;
-    let authPath = 'unknown';
-    let authMeta = {};
     const payload = req.body || {};
     const payloadDebug = getTelegramPayloadDebug(payload);
     logTelegramWebAppDebug('session.request', payloadDebug);
 
-    if (payload.employeeLink) {
+    if (payload.sessionToken) {
       try {
-        const directLinkPayload = verifyTelegramEmployeeDirectLink(token, payload.employeeLink, { allowGracePeriod: true });
-        employee = EmployeeStore.findById(directLinkPayload.employeeId);
-        if (!employee) {
-          logTelegramWebAppDebug('session.reject.direct-link-employee-not-found', {
-            ...payloadDebug,
-            employeeId: directLinkPayload.employeeId,
-            orderId: directLinkPayload.orderId || '',
-            scope: directLinkPayload.scope || '',
-          });
-          return res.status(403).json({ message: 'Сотрудник по QR не найден. Обновите QR-код через кнопку в боте.' });
-        }
-        authPath = 'direct-link';
-        authMeta = {
-          expired: Boolean(directLinkPayload.expired),
-          graceAllowed: Boolean(directLinkPayload.graceAllowed),
-          scope: directLinkPayload.scope || '',
-          orderId: directLinkPayload.orderId || '',
-          issuedAt: directLinkPayload.issuedAt || '',
-          expiresAt: directLinkPayload.expiresAt || '',
-        };
-        logTelegramWebAppDebug(authMeta.graceAllowed ? 'session.auth.direct-link-grace' : 'session.auth.direct-link-ok', {
-          ...payloadDebug,
-          employeeId: employee._id,
-          employeeRole: employee.role,
-          ...authMeta,
-        });
-        telegramUser = {
-          id: employee.telegramUserId || '',
-          username: employee.telegramUsername || '',
-          first_name: employee.telegramFirstName || '',
-          last_name: employee.telegramLastName || '',
-        };
-      } catch (directLinkError) {
-        logTelegramWebAppDebug('session.auth.direct-link-failed', {
-          ...payloadDebug,
-          message: directLinkError.message || 'Direct link validation failed.',
-          hasSessionToken: Boolean(payload.sessionToken),
-          hasInitData: Boolean(String(payload.initData || '').trim()),
-          hasUnsafeUserId: Boolean(payload.unsafeUser?.id),
-        });
-        const hasTelegramAuthPayload = Boolean(String(payload.initData || '').trim() || payload.unsafeUser?.id);
-        if (!hasTelegramAuthPayload && !payload.sessionToken) {
-          const msg = 'Telegram auth данные ещё не пришли в webview. Повторите попытку или откройте webapp заново через кнопку в боте.';
-          return res.status(400).json({ ok: false, needReopen: true, retryable: true, message: msg });
-        }
-      }
-    }
-
-    if (!employee && payload.sessionToken) {
-      try {
-        const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken, { allowGracePeriod: true });
+        const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
         employee = EmployeeStore.findById(sessionPayload.employeeId);
         if (!employee || String(employee.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
           logTelegramWebAppDebug('session.reject.session-mismatch', {
@@ -1390,17 +959,11 @@ router.post('/telegram/webapp/session', async (req, res) => {
           });
           return res.status(403).json({ message: 'Сотрудник Telegram не найден или session token устарел.' });
         }
-        authPath = 'session-token';
-        authMeta = {
-          expired: Boolean(sessionPayload.expired),
-          graceAllowed: Boolean(sessionPayload.graceAllowed),
-        };
-        logTelegramWebAppDebug(sessionPayload.graceAllowed ? 'session.auth.session-token-grace' : 'session.auth.session-token-ok', {
+        logTelegramWebAppDebug('session.auth.session-token-ok', {
           ...payloadDebug,
           employeeId: employee._id,
           employeeRole: employee.role,
           telegramUserId: String(sessionPayload.telegramUserId || ''),
-          ...authMeta,
         });
         telegramUser = {
           id: sessionPayload.telegramUserId,
@@ -1416,32 +979,19 @@ router.post('/telegram/webapp/session', async (req, res) => {
           message: sessionError.message || 'Session token validation failed.',
         });
         if (!hasTelegramAuthPayload) {
-          const msg = 'Telegram auth данные ещё не пришли в webview. Повторите попытку или откройте webapp заново через кнопку в боте.';
-          return res.status(400).json({ ok: false, needReopen: true, retryable: true, message: msg });
+          throw sessionError;
         }
         telegramUser = resolveTelegramWebAppUser(token, payload);
         employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
-        authPath = 'payload-fallback';
         logTelegramWebAppDebug('session.auth.payload-fallback', {
           ...payloadDebug,
           resolvedTelegramUserId: String(telegramUser?.id || ''),
           employeeFound: Boolean(employee),
         });
       }
-    } else if (!employee) {
-      const hasTelegramAuthPayload = Boolean(String(payload.initData || '').trim() || payload.unsafeUser?.id);
-      if (!hasTelegramAuthPayload) {
-        logTelegramWebAppDebug('session.reject.no-auth-payload', {
-          ...payloadDebug,
-          hasEmployeeLink: Boolean(payload.employeeLink),
-          hasSessionToken: Boolean(payload.sessionToken),
-        });
-        const msg = 'Telegram auth данные ещё не пришли в webview. Повторите попытку или откройте webapp заново через кнопку в боте.';
-        return res.status(400).json({ ok: false, needReopen: true, retryable: true, message: msg });
-      }
+    } else {
       telegramUser = resolveTelegramWebAppUser(token, payload);
       employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
-      authPath = 'payload-only';
       logTelegramWebAppDebug('session.auth.payload-only', {
         ...payloadDebug,
         resolvedTelegramUserId: String(telegramUser?.id || ''),
@@ -1453,7 +1003,6 @@ router.post('/telegram/webapp/session', async (req, res) => {
       logTelegramWebAppDebug('session.reject.employee-not-found', {
         ...payloadDebug,
         resolvedTelegramUserId: String(telegramUser?.id || ''),
-        authPath,
       });
       return res.status(403).json({ message: 'Сотрудник Telegram не найден или не авторизован.' });
     }
@@ -1465,42 +1014,31 @@ router.post('/telegram/webapp/session', async (req, res) => {
     });
 
     const nextSessionToken = createTelegramEmployeeSessionToken(token, employee);
-    let stableEmployeeLink = String(payload.employeeLink || '').trim();
-    if (!stableEmployeeLink) {
-      try {
-        stableEmployeeLink = signTelegramEmployeeDirectLink(token, employee._id, {
-          scope: 'session-return',
-          orderId: req.params?.id || req.body?.orderId || undefined,
-        });
-      } catch { stableEmployeeLink = ''; }
-    }
     logTelegramWebAppDebug('session.success', {
       ...payloadDebug,
-      authPath,
       employeeId: employee._id,
       employeeRole: employee.role,
       telegramUserId: String(telegramUser?.id || ''),
       issuedSessionTokenTail: maskTelegramValue(nextSessionToken),
-      ...authMeta,
     });
 
     res.json({
       ok: true,
       sessionToken: nextSessionToken,
-      employeeLink: stableEmployeeLink || undefined,
       employee: {
         _id: employee._id,
         fullName: employee.fullName,
         role: employee.role,
         telegramUsername: employee.telegramUsername || '',
-        telegramUserId: employee.telegramUserId || '',
+        allowedColumns: getEmployeeAllowedColumns(employee),
       },
     });
   } catch (error) {
     logTelegramWebAppDebug('session.error', {
-      error: error.message || 'Unknown session resolution error.',
+      ...getTelegramPayloadDebug(req.body || {}),
+      message: error.message || 'Не удалось авторизовать Telegram Web App.',
     });
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось определить сотрудника.' });
+    res.status(401).json({ message: error.message || 'Не удалось авторизовать Telegram Web App.' });
   }
 });
 

@@ -9,7 +9,6 @@ import { ROLE_COLUMN_ACCESS_OPTIONS } from './roleColumnAccess';
 import { getOrderStatusMeta } from './statusMeta';
 import {
   getTelegramEmployeeSessionToken,
-  getTelegramEmployeeDirectLink,
   getTelegramInitData,
   getTelegramUnsafeUser,
   getTelegramWebApp,
@@ -18,9 +17,7 @@ import {
   markTelegramWebAppSession,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
-  setTelegramEmployeeDirectLink,
   setTelegramEmployeeSessionToken,
-  writeClientTelegramDiagnosticsLog,
 } from './telegramWebApp';
 
 function isRecoverableTelegramSessionMessage(message) {
@@ -481,115 +478,30 @@ function OrderDetail() {
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
-
-    const directWebApp = typeof getTelegramWebApp === 'function' ? getTelegramWebApp() : null;
-    const directInitData = (directWebApp && directWebApp.initData) || '';
-    const directUnsafeUser = (directWebApp && directWebApp.initDataUnsafe && directWebApp.initDataUnsafe.user) || null;
-    const storedInitData = getTelegramInitData();
-    const storedUnsafeUser = getTelegramUnsafeUser();
-    const storedSession = getActiveTelegramSessionToken();
-    const storedDirectLink = getTelegramEmployeeDirectLink();
-
-    const freshInitData = telegramInitData || storedInitData || directInitData;
-    const freshUnsafeUser = telegramUnsafeUser || storedUnsafeUser || directUnsafeUser;
-    const hasTelegramAuthPayload = Boolean(freshInitData || freshUnsafeUser?.id);
-    const currentSessionToken = storedSession;
-    const currentEmployeeLink = storedDirectLink;
-    const canAttemptServerCall = Boolean(hasTelegramAuthPayload || currentSessionToken || currentEmployeeLink);
-
-    writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.enter', {
-      phase: 'enter',
-      bootstrapKey: typeof telegramSessionBootstrapKey === 'number' ? telegramSessionBootstrapKey : null,
-      authResolved: Boolean(telegramAuthResolved),
-      canAttemptServerCall,
-      hasTelegramAuthPayload,
-      hasEmployeeLink: Boolean(currentEmployeeLink),
-      employeeLinkTail: currentEmployeeLink ? String(currentEmployeeLink).slice(-8) : '',
-      stateTelegramInitDataLength: telegramInitData ? String(telegramInitData).length : 0,
-      stateTelegramUnsafeUserHasId: Boolean(telegramUnsafeUser?.id),
-      storedInitDataLength: storedInitData ? String(storedInitData).length : 0,
-      storedUnsafeUserHasId: Boolean(storedUnsafeUser?.id),
-      directInitDataLength: directInitData ? String(directInitData).length : 0,
-      directUnsafeUserHasId: Boolean(directUnsafeUser?.id),
-      currentSessionTokenPresent: Boolean(currentSessionToken),
-      currentSessionTokenLength: currentSessionToken ? String(currentSessionToken).length : 0,
-      currentSessionTokenTail: currentSessionToken ? String(currentSessionToken).slice(-4) : '',
-      currentSessionTokenExpired: isTelegramEmployeeSessionTokenExpired(currentSessionToken),
-    }, 'telegram-order');
-
-    if (!canAttemptServerCall && !telegramAuthResolved) {
-      setSessionLoading(true);
-      setSessionError('');
-      const retryTimer = window.setTimeout(() => {
-        refreshTelegramAuth();
-        writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.retry.scheduled', {
-          reason: 'no-payload-and-not-resolved',
-          retryDelayMs: 500,
-        }, 'telegram-order');
-        setTelegramSessionBootstrapKey(current => current + 1);
-      }, 500);
-      return () => window.clearTimeout(retryTimer);
+    const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
+    const currentSessionToken = getActiveTelegramSessionToken();
+    if (!hasTelegramAuthPayload && !currentSessionToken) {
+      if (!telegramAuthResolved) {
+        setSessionLoading(true);
+        setSessionError('');
+        return;
+      }
+      setTelegramEmployee(null);
+      setSessionLoading(false);
+      setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте.');
+      return;
     }
-
-    if (!canAttemptServerCall && telegramAuthResolved) {
-      refreshTelegramAuth();
-      if (typeof persistTelegramInitData === 'function') {
-        try { persistTelegramInitData(); } catch { /* ignore */ }
-      }
-      if (typeof persistTelegramUnsafeUser === 'function') {
-        try { persistTelegramUnsafeUser(); } catch { /* ignore */ }
-      }
-      const finalInitData = getTelegramInitData() || ((directWebApp && directWebApp.initData) ? directWebApp.initData : '');
-      const finalUnsafeUser = getTelegramUnsafeUser() || ((directWebApp && directWebApp.initDataUnsafe && directWebApp.initDataUnsafe.user) ? directWebApp.initDataUnsafe.user : null);
-      const finalHasPayload = Boolean(finalInitData || finalUnsafeUser?.id);
-      const finalSession = getActiveTelegramSessionToken();
-      const finalDirectLink = getTelegramEmployeeDirectLink();
-      writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.resolved.verdict', {
-        afterFinalRefresh: true,
-        finalInitDataLength: finalInitData ? String(finalInitData).length : 0,
-        finalUnsafeUserHasId: Boolean(finalUnsafeUser?.id),
-        finalSessionPresent: Boolean(finalSession),
-        finalSessionLength: finalSession ? String(finalSession).length : 0,
-        finalSessionTail: finalSession ? String(finalSession).slice(-4) : '',
-        finalSessionExpired: isTelegramEmployeeSessionTokenExpired(finalSession),
-        finalDirectLinkPresent: Boolean(finalDirectLink),
-        finalDirectLinkTail: finalDirectLink ? String(finalDirectLink).slice(-8) : '',
-        finalHasPayload,
-        directWebAppPresent: Boolean(directWebApp),
-      }, 'telegram-order');
-      if (!finalHasPayload && !finalSession && !finalDirectLink) {
-        setTelegramEmployee(null);
-        setSessionLoading(false);
-        setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте.');
-        writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.error.access-denied-final', {
-          reason: 'resolved-but-no-payload-nor-session-nor-direct-link',
-          errorShown: true,
-        }, 'telegram-order');
-        return undefined;
-      }
-      setTelegramSessionBootstrapKey(current => current + 1);
-      return undefined;
-    }
-
     setSessionLoading(true);
     setSessionError('');
 
-    const resolveSession = async (sessionTokenOverride = currentSessionToken, employeeLinkOverride = currentEmployeeLink) => {
-      writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.server.request', {
-        employeeLinkOverridePresent: Boolean(employeeLinkOverride),
-        sessionTokenOverridePresent: Boolean(sessionTokenOverride),
-        sessionTokenOverrideLength: sessionTokenOverride ? String(sessionTokenOverride).length : 0,
-        freshInitDataLength: freshInitData ? String(freshInitData).length : 0,
-        freshUnsafeUserHasId: Boolean(freshUnsafeUser?.id),
-      }, 'telegram-order');
+    const resolveSession = async (sessionTokenOverride = currentSessionToken) => {
       const res = await apiFetch('/api/telegram/webapp/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          initData: freshInitData,
-          unsafeUser: freshUnsafeUser,
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
           sessionToken: sessionTokenOverride,
-          employeeLink: employeeLinkOverride,
         }),
       });
       const data = await parseJsonSafely(res);
@@ -599,102 +511,44 @@ function OrderDetail() {
       return data;
     };
 
-    const promise = resolveSession()
+    return resolveSession()
       .catch(async (error) => {
-        writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.server.catch', {
-          originalMessage: error && error.message ? String(error.message).slice(0, 255) : '',
-          originalRecoverable: isRecoverableTelegramSessionMessage(error.message),
-        }, 'telegram-order');
-        const freshStoredInitData = getTelegramInitData();
-        const freshStoredUnsafeUser = getTelegramUnsafeUser();
-        const fallbackInitData = freshInitData || freshStoredInitData || (directWebApp && directWebApp.initData) || '';
-        const fallbackUnsafeUser = freshUnsafeUser || freshStoredUnsafeUser || ((directWebApp && directWebApp.initDataUnsafe && directWebApp.initDataUnsafe.user) ? directWebApp.initDataUnsafe.user : null);
-        const fallbackEmployeeLink = currentEmployeeLink || getTelegramEmployeeDirectLink();
         const canRetryWithoutToken = currentSessionToken
-          && (Boolean(fallbackInitData || fallbackUnsafeUser?.id || fallbackEmployeeLink))
+          && hasTelegramAuthPayload
           && isRecoverableTelegramSessionMessage(error.message);
         if (!canRetryWithoutToken) {
           throw error;
         }
-        writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.server.retry-without-session', {
-          reason: 'recoverable-message',
-          fallbackInitDataLength: fallbackInitData ? String(fallbackInitData).length : 0,
-          fallbackUnsafeUserHasId: Boolean(fallbackUnsafeUser?.id),
-          useDirectLinkFallback: Boolean(fallbackEmployeeLink),
-        }, 'telegram-order');
         updateTelegramSessionToken('');
-        return resolveSession('', fallbackEmployeeLink);
+        return resolveSession('');
       })
       .then(data => {
         const nextSessionToken = data?.sessionToken || '';
         updateTelegramSessionToken(nextSessionToken);
-        if (currentEmployeeLink && typeof setTelegramEmployeeDirectLink === 'function') {
-          try { setTelegramEmployeeDirectLink(currentEmployeeLink); } catch { /* ignore */ }
-        }
-        if (!currentEmployeeLink && data?.employeeLink && typeof setTelegramEmployeeDirectLink === 'function') {
-          try { setTelegramEmployeeDirectLink(String(data.employeeLink || '')); } catch { /* ignore */ }
-        }
         setTelegramEmployee(data?.employee || null);
         setSessionError('');
-        writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.server.success', {
-          sessionTokenReturned: Boolean(nextSessionToken),
-          sessionTokenReturnedLength: nextSessionToken ? String(nextSessionToken).length : 0,
-          sessionTokenReturnedTail: nextSessionToken ? String(nextSessionToken).slice(-4) : '',
-          employeeLinkReturned: Boolean(data?.employeeLink),
-          employeeLinkReturnedTail: data?.employeeLink ? String(data.employeeLink).slice(-8) : '',
-          employeeId: data?.employee?._id ? String(data.employee._id).slice(-6) : '',
-          employeeRole: data?.employee?.role ? String(data.employee.role).slice(0, 80) : '',
-        }, 'telegram-order');
       })
       .catch(error => {
         setTelegramEmployee(null);
         setSessionError(toUserErrorMessage(error, 'Не удалось определить ваш профиль.'));
-        writeClientTelegramDiagnosticsLog('orderdetail.loadTelegramEmployeeSession.server.error-final', {
-          finalMessage: error && error.message ? String(error.message).slice(0, 512) : '',
-          shownMessage: toUserErrorMessage(error, 'Не удалось определить ваш профиль.').slice(0, 255),
-        }, 'telegram-order');
       })
       .finally(() => setSessionLoading(false));
-
-    return undefined;
-  }, [getActiveTelegramSessionToken, refreshTelegramAuth, telegramAuthResolved, telegramInitData, telegramMode, telegramSessionBootstrapKey, telegramUnsafeUser, updateTelegramSessionToken]);
+  }, [getActiveTelegramSessionToken, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
 
   useEffect(() => {
     if (!telegramMode) return;
 
     const params = new URLSearchParams(location.search);
     const sessionTokenFromUrl = params.get('employeeSessionToken');
-    const employeeLinkFromUrl = params.get('employeeLink');
+    if (!sessionTokenFromUrl) return;
 
-    const normalizedToken = String(sessionTokenFromUrl || '').trim();
-    const normalizedDirectLink = String(employeeLinkFromUrl || '').trim();
-
-    if (!normalizedToken && !normalizedDirectLink) return;
-
-    if (normalizedToken) {
-      writeClientTelegramDiagnosticsLog('orderdetail.url.session-token.bootstrap', {
-        fromUrl: true,
-        tokenLength: normalizedToken.length,
-        tokenTail: normalizedToken ? normalizedToken.slice(-4) : '',
-        tokenExpiredAtUrl: isTelegramEmployeeSessionTokenExpired(normalizedToken),
-      }, 'telegram-order');
-      updateTelegramSessionToken(normalizedToken);
-      params.delete('employeeSessionToken');
+    if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
+      updateTelegramSessionToken(sessionTokenFromUrl);
+    } else {
+      updateTelegramSessionToken('');
     }
-
-    if (normalizedDirectLink) {
-      writeClientTelegramDiagnosticsLog('orderdetail.url.employee-link.bootstrap', {
-        fromUrl: true,
-        directLinkTail: normalizedDirectLink.slice(-8),
-      }, 'telegram-order');
-      if (typeof setTelegramEmployeeDirectLink === 'function') {
-        try { setTelegramEmployeeDirectLink(normalizedDirectLink); } catch { /* ignore */ }
-      }
-      params.delete('employeeLink');
-    }
-
-    setTelegramAuthResolved(true);
     setTelegramSessionBootstrapKey(current => current + 1);
+    params.delete('employeeSessionToken');
 
     navigate({
       pathname: location.pathname,
@@ -710,78 +564,28 @@ function OrderDetail() {
     if (!telegramMode) return;
 
     const webApp = getTelegramWebApp();
-    if (webApp) {
-      markTelegramWebAppSession();
-      refreshTelegramAuth();
-      if (typeof webApp.ready === 'function') {
-        webApp.ready();
-      }
-      if (typeof webApp.expand === 'function') {
-        webApp.expand();
-      }
-    } else {
-      refreshTelegramAuth();
+    if (!webApp) return;
+
+    markTelegramWebAppSession();
+    refreshTelegramAuth();
+
+    if (typeof webApp.ready === 'function') {
+      webApp.ready();
     }
 
-    writeClientTelegramDiagnosticsLog('orderdetail.bootstrap.start', {
-      webAppPresent: Boolean(webApp),
-      platform: webApp && webApp.platform ? String(webApp.platform).slice(0, 80) : '',
-      version: webApp && webApp.version ? String(webApp.version).slice(0, 80) : '',
-      initialInitDataLength: webApp && webApp.initData ? String(webApp.initData).length : 0,
-      initialUnsafeUserIdPresent: Boolean(webApp && webApp.initDataUnsafe && webApp.initDataUnsafe.user && webApp.initDataUnsafe.user.id),
-    }, 'telegram-order');
+    if (typeof webApp.expand === 'function') {
+      webApp.expand();
+    }
 
-    const resolvedRef = { current: false };
-    const baseRetryTimers = [100, 400, 900, 1800, 3200, 4800, 7200, 9600].map(delay => window.setTimeout(() => {
+    const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(refreshTelegramAuth, delay));
+    const finishTimer = window.setTimeout(() => {
       refreshTelegramAuth();
-      if (typeof persistTelegramInitData === 'function') {
-        try { persistTelegramInitData(); } catch { /* ignore */ }
-      }
-      if (typeof persistTelegramUnsafeUser === 'function') {
-        try { persistTelegramUnsafeUser(); } catch { /* ignore */ }
-      }
-      const direct = typeof getTelegramWebApp === 'function' ? getTelegramWebApp() : null;
-      const hasDirectData = Boolean((direct && direct.initData) || (direct && direct.initDataUnsafe && direct.initDataUnsafe.user && direct.initDataUnsafe.user.id)) || Boolean(getActiveTelegramSessionToken()) || Boolean(getTelegramEmployeeDirectLink());
-      if (hasDirectData && !resolvedRef.current) {
-        resolvedRef.current = true;
-        writeClientTelegramDiagnosticsLog('orderdetail.bootstrap.resolved.early', {
-          reason: 'direct-data-ready-at-retry',
-          resolvedAtMs: delay,
-          initDataLength: direct && direct.initData ? String(direct.initData).length : 0,
-          unsafeUserIdPresent: Boolean(direct && direct.initDataUnsafe && direct.initDataUnsafe.user && direct.initDataUnsafe.user.id),
-          sessionTokenPresent: Boolean(getActiveTelegramSessionToken()),
-          directLinkPresent: Boolean(getTelegramEmployeeDirectLink()),
-        }, 'telegram-order');
-        setTelegramAuthResolved(true);
-        setTelegramSessionBootstrapKey(current => current + 1);
-      }
-    }, delay));
-    const hardFinishTimer = window.setTimeout(() => {
-      if (!resolvedRef.current) {
-        resolvedRef.current = true;
-        writeClientTelegramDiagnosticsLog('orderdetail.bootstrap.resolved.hard-timeout', {
-          reason: 'hard-timeout-12s',
-          finalInitDataLength: (() => {
-            const d = typeof getTelegramWebApp === 'function' ? getTelegramWebApp() : null;
-            return d && d.initData ? String(d.initData).length : 0;
-          })(),
-          finalUnsafeUserIdPresent: (() => {
-            const d = typeof getTelegramWebApp === 'function' ? getTelegramWebApp() : null;
-            return Boolean(d && d.initDataUnsafe && d.initDataUnsafe.user && d.initDataUnsafe.user.id);
-          })(),
-          finalSessionTokenPresent: Boolean(getActiveTelegramSessionToken()),
-          finalSessionTokenTail: getActiveTelegramSessionToken() ? String(getActiveTelegramSessionToken()).slice(-4) : '',
-          finalDirectLinkPresent: Boolean(getTelegramEmployeeDirectLink()),
-        }, 'telegram-order');
-        refreshTelegramAuth();
-        setTelegramAuthResolved(true);
-        setTelegramSessionBootstrapKey(current => current + 1);
-      }
-    }, 12000);
+      setTelegramAuthResolved(true);
+    }, 1700);
 
     return () => {
-      baseRetryTimers.forEach(timerId => window.clearTimeout(timerId));
-      window.clearTimeout(hardFinishTimer);
+      retryTimers.forEach(timerId => window.clearTimeout(timerId));
+      window.clearTimeout(finishTimer);
     };
   }, [refreshTelegramAuth, telegramMode]);
 
@@ -962,7 +766,6 @@ function OrderDetail() {
 
     const activateItem = async () => {
       const sessionToken = getActiveTelegramSessionToken();
-      const employeeLink = getTelegramEmployeeDirectLink();
       const res = await apiFetch(`/api/orders/${id}/telegram-item-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -970,7 +773,6 @@ function OrderDetail() {
           initData: telegramInitData,
           unsafeUser: telegramUnsafeUser,
           sessionToken,
-          employeeLink,
           itemId: selectedItem.itemId,
         }),
       });
@@ -1007,7 +809,6 @@ function OrderDetail() {
     setTelegramActionError('');
     try {
       const sessionToken = getActiveTelegramSessionToken();
-      const employeeLink = getTelegramEmployeeDirectLink();
       const res = await apiFetch(`/api/orders/${id}/telegram-stage-mark`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1015,7 +816,6 @@ function OrderDetail() {
           initData: telegramInitData,
           unsafeUser: telegramUnsafeUser,
           sessionToken,
-          employeeLink,
           itemId: selectedItem.itemId,
           columnKey: normalizedColumnKeys[0],
           columnKeys: normalizedColumnKeys,
