@@ -327,8 +327,7 @@ async function sendGuestMessage(token, chatId, text) {
 
 async function refreshAuthorizedEmployeeAccess(token) {
   const employees = EmployeeStore.findAll().filter(employee =>
-    String(employee.telegramUserId || '').trim()
-    && String(employee.telegramChatId || '').trim()
+    String(employee.telegramChatId || '').trim()
   );
 
   let refreshedCount = 0;

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -169,10 +169,18 @@ function TelegramScannerPage() {
           try {
             setError('');
             setStatus('Переход к найденному изделию...');
-            const relPath = buildTelegramOrderPath(orderPath);
+            const sessionToken = String(getTelegramEmployeeSessionToken() || '').trim();
+            const relPath = buildTelegramOrderPath(orderPath, sessionToken);
             if (relPath) {
               const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
-              const absUrl = origin + relPath;
+              let absUrl;
+              if (sessionToken && sessionToken.length > 32) {
+                const safeToken = encodeURIComponent(sessionToken);
+                const encodedRelay = String(relPath).replace(/^\/+/, '');
+                absUrl = `${origin}/telegram-app/t/${safeToken}/scan/${encodedRelay}`;
+              } else {
+                absUrl = origin + relPath;
+              }
               window.location.replace(absUrl);
               return;
             }
@@ -261,6 +269,27 @@ function TelegramScannerPage() {
           {error}
         </div>
       )}
+
+      {(() => {
+        const urlRaw = readTelegramUrlSessionTokenRaw();
+        const storageToken = getTelegramEmployeeSessionToken() || '';
+        const pathMatch = location.pathname.match(/^\/telegram-app\/t\/([^/]+)\/?/);
+        const pathToken = pathMatch ? pathMatch[1] : '';
+        const noTokenAtAll = !bootstrappingSession
+          && !(pathToken && pathToken.length > 32)
+          && !(urlRaw.token && urlRaw.length > 32)
+          && !(storageToken && storageToken.length > 32);
+        if (!noTokenAtAll) return null;
+        return (
+          <div className="settings-alert mb-16" style={{ textAlign: 'left', borderColor: '#e0b34a', background: '#fffbea', color: '#7a5a00' }}>
+            <strong>Меню кнопка Telegram не передала токен доступа.</strong>
+            <div style={{ marginTop: 6 }}>
+              Администратору: откройте <strong>Настройки → Telegram</strong> и нажмите <strong>«🔄 Обновить кнопки ТГ»</strong>.
+              Либо в карточке сотрудника нажмите <strong>«📤 Отправить ссылку в Telegram»</strong> и откройте сканер по инлайн-ссылке.
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="inline-actions-centered">
         <button className="btn btn-primary" onClick={openScanner} disabled={bootstrappingSession || openingScanner}>

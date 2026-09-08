@@ -28,14 +28,24 @@ const HEADER_LOGO_SRC = `${process.env.PUBLIC_URL || ''}/kaznadzei-header-logo.p
 function TelegramScannerTokenRouter() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   useEffect(() => {
     const rawToken = String(token || '').trim();
     if (rawToken && rawToken.length > 32 && !isTelegramEmployeeSessionTokenExpired(rawToken)) {
       setTelegramEmployeeSessionToken(rawToken);
       markTelegramWebAppSession();
     }
+    try {
+      const pathname = String(location.pathname || '');
+      const scanMatch = pathname.match(/^\/telegram-app\/t\/[^/]+\/scan\/(.+)$/);
+      if (scanMatch && scanMatch[1]) {
+        const nextPath = '/' + String(scanMatch[1]).replace(/^\/+/, '');
+        window.location.replace((window.location?.origin || '') + nextPath);
+        return undefined;
+      }
+    } catch (_) { /* ignore routing errors */ }
     navigate('/telegram-app', { replace: true });
-  }, [token, navigate]);
+  }, [token, navigate, location.pathname]);
   return <TelegramScannerPage />;
 }
 
