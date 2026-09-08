@@ -17,6 +17,7 @@ import {
   markTelegramWebAppSession,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
+  readTelegramUrlSessionTokenRaw,
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
 
@@ -465,8 +466,8 @@ function OrderDetail() {
   const runLiveAuthCheck = useCallback(async () => {
     try {
       setLiveAuthCheckLoading(true);
-      const params = new URLSearchParams(location.search);
-      const sessionTokenFromUrl = params.get('employeeSessionToken');
+      const rawUrl = readTelegramUrlSessionTokenRaw();
+      const sessionTokenFromUrl = rawUrl.token;
       const effectiveUrlToken = (sessionTokenFromUrl && !isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl))
         ? sessionTokenFromUrl
         : '';
@@ -475,12 +476,12 @@ function OrderDetail() {
       const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
       const preflight = {
         at: new Date().toISOString(),
-        location: `${location.pathname}${location.search}`,
+        location: `${location.pathname}${location.search}${location.hash || ''}`,
         isTelegramWebApp: isTelegramWebApp(),
         telegramMode,
         debugMode,
         urlParamTokenPresent: Boolean(sessionTokenFromUrl),
-        urlParamTokenLength: sessionTokenFromUrl?.length || 0,
+        urlParamTokenLength: rawUrl.length || 0,
         urlParamTokenValid: Boolean(effectiveUrlToken),
         storageTokenPresent: Boolean(storageToken),
         storageTokenLength: storageToken?.length || 0,
@@ -628,8 +629,8 @@ function OrderDetail() {
   useEffect(() => {
     if (!telegramMode) return;
 
-    const params = new URLSearchParams(location.search);
-    const sessionTokenFromUrl = params.get('employeeSessionToken');
+    const rawUrl = readTelegramUrlSessionTokenRaw();
+    const sessionTokenFromUrl = rawUrl.token;
     if (!sessionTokenFromUrl) return;
 
     if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
@@ -638,19 +639,27 @@ function OrderDetail() {
       updateTelegramSessionToken('');
     }
     setTelegramSessionBootstrapKey(current => current + 1);
-    params.delete('employeeSessionToken');
 
+    const params = new URLSearchParams(location.search);
+    const hadQueryParam = params.has('employeeSessionToken');
+    params.delete('employeeSessionToken');
+    const hashParams = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+    const hadHashParam = hashParams.has('token');
+    hashParams.delete('token');
+
+    if (!hadQueryParam && !hadHashParam) return;
     navigate({
       pathname: location.pathname,
       search: params.toString() ? `?${params.toString()}` : '',
+      hash: hashParams.toString() ? `#${hashParams.toString()}` : '',
     }, { replace: true });
-  }, [location.pathname, location.search, navigate, telegramMode, updateTelegramSessionToken]);
+  }, [location.pathname, location.search, location.hash, navigate, telegramMode, updateTelegramSessionToken]);
 
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
 
-    const params = new URLSearchParams(location.search);
-    const sessionTokenFromUrl = params.get('employeeSessionToken');
+    const rawUrl = readTelegramUrlSessionTokenRaw();
+    const sessionTokenFromUrl = rawUrl.token;
     const effectiveUrlSessionToken = sessionTokenFromUrl && !isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)
       ? sessionTokenFromUrl
       : '';

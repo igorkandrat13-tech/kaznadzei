@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -13,6 +13,7 @@ import {
   openTelegramQrScanner,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
+  readTelegramUrlSessionToken,
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
 import { useGlobalErrorEffect } from './globalErrors';
@@ -139,15 +140,16 @@ function TelegramScannerPage() {
   }, [bootstrappingSession, navigate, openingScanner]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const sessionTokenFromUrl = params.get('employeeSessionToken');
+    const sessionTokenFromUrl = readTelegramUrlSessionToken();
     if (!sessionTokenFromUrl) return;
 
     if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
       setTelegramEmployeeSessionToken(sessionTokenFromUrl);
     }
-    navigate('/telegram-app', { replace: true });
-  }, [location.search, navigate]);
+    // Don't navigate(replace=true) to empty /telegram-app because that would
+    // strip the URL/hash tokens on some React Router / WebView builds. The
+    // bootstrapTelegramSession effect below is idempotent.
+  }, [location.search, location.hash]);
 
   useEffect(() => {
     const webApp = getTelegramWebApp();

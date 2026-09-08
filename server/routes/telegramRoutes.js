@@ -85,13 +85,16 @@ function buildEmployeeWebAppUrl(employee) {
   if (!baseUrl) return '';
   try {
     const url = new URL(baseUrl);
+    let sessionToken = '';
     if (employee && employee._id) {
       const token = getConfiguredBotToken();
       if (token) {
         try {
-          const sessionToken = createTelegramEmployeeSessionToken(token, employee);
-          if (sessionToken) {
-            url.searchParams.set('employeeSessionToken', String(sessionToken));
+          const generatedToken = createTelegramEmployeeSessionToken(token, employee);
+          if (generatedToken) {
+            sessionToken = String(generatedToken);
+            url.searchParams.set('employeeSessionToken', sessionToken);
+            url.hash = `token=${encodeURIComponent(sessionToken)}`;
           }
         } catch (_) { /* ignore token creation errors */ }
       }
@@ -1298,9 +1301,15 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
     });
     const info = getTelegramEmployeeSessionTokenInfo(sessionToken);
     const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
-    const employeeWebAppUrl = publicBase
-      ? `${publicBase.replace(/\/$/, '')}/telegram-app?employeeSessionToken=${encodeURIComponent(sessionToken)}`
-      : '';
+    let employeeWebAppUrl = '';
+    if (publicBase) {
+      try {
+        const webAppFull = new URL('/telegram-app', publicBase);
+        webAppFull.searchParams.set('employeeSessionToken', String(sessionToken));
+        webAppFull.hash = `token=${encodeURIComponent(String(sessionToken))}`;
+        employeeWebAppUrl = webAppFull.toString();
+      } catch (_) { /* ignore */ }
+    }
 
     let menuButtonUpdated = false;
     let menuButtonError = '';
@@ -1412,9 +1421,15 @@ router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express
     });
     const info = getTelegramEmployeeSessionTokenInfo(sessionToken);
     const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
-    const employeeWebAppUrl = publicBase
-      ? `${publicBase.replace(/\/$/, '')}/telegram-app?employeeSessionToken=${encodeURIComponent(sessionToken)}`
-      : '';
+    let employeeWebAppUrl = '';
+    if (publicBase) {
+      try {
+        const webAppFull = new URL('/telegram-app', publicBase);
+        webAppFull.searchParams.set('employeeSessionToken', String(sessionToken));
+        webAppFull.hash = `token=${encodeURIComponent(String(sessionToken))}`;
+        employeeWebAppUrl = webAppFull.toString();
+      } catch (_) { /* ignore */ }
+    }
     const chatId = String(freshEmployee.telegramChatId || '').trim()
       || String(freshEmployee.telegramUserId || '').trim();
     let sent = false;

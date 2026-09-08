@@ -1,4 +1,4 @@
-﻿﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
+﻿﻿﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
 const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
 const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
@@ -162,12 +162,69 @@ export function buildTelegramOrderPath(orderPath, sessionToken = getTelegramEmpl
   if (!normalizedPath) return '';
 
   const [pathWithoutHash, hashPart = ''] = normalizedPath.split('#', 2);
-  const url = new URL(pathWithoutHash, window.location.origin);
+  const [pathWithoutSearch, searchPart = ''] = pathWithoutHash.split('?', 2);
+  const url = new URL(pathWithoutSearch + (searchPart ? `?${searchPart}` : ''), window.location.origin);
   if (sessionToken) {
     url.searchParams.set('employeeSessionToken', String(sessionToken));
+    const hashParams = new URLSearchParams(hashPart);
+    hashParams.set('token', String(sessionToken));
+    const hashStr = hashParams.toString();
+    url.hash = hashStr;
+  } else if (hashPart) {
+    url.hash = hashPart;
   }
 
-  return `${url.pathname}${url.search}${hashPart ? `#${hashPart}` : ''}`;
+  return `${url.pathname}${url.search}${url.hash ? url.hash : ''}`;
+}
+
+export function readTelegramUrlSessionToken() {
+  if (typeof window === 'undefined' || !window.location) return '';
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    const queryToken = String(searchParams.get('employeeSessionToken') || '').trim();
+    if (queryToken && queryToken.length > 32 && !isTelegramEmployeeSessionTokenExpired(queryToken)) {
+      return queryToken;
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    const rawHash = String(window.location.hash || '').replace(/^#/, '');
+    const hashParams = new URLSearchParams(rawHash);
+    const hashToken = String(hashParams.get('token') || '').trim();
+    if (hashToken && hashToken.length > 32 && !isTelegramEmployeeSessionTokenExpired(hashToken)) {
+      return hashToken;
+    }
+  } catch (_) { /* ignore */ }
+  return '';
+}
+
+export function readTelegramUrlSessionTokenRaw() {
+  if (typeof window === 'undefined' || !window.location) return { token: '', length: 0 };
+  let token = '';
+  let length = 0;
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    const raw = searchParams.get('employeeSessionToken');
+    if (raw) {
+      token = String(raw);
+      length = String(raw).length;
+    }
+  } catch (_) { /* ignore */ }
+  if (token) return { token, length };
+  try {
+    const rawHash = String(window.location.hash || '').replace(/^#/, '');
+    const hashParams = new URLSearchParams(rawHash);
+    const raw = hashParams.get('token');
+    if (raw) {
+      token = String(raw);
+      length = String(raw).length;
+    }
+  } catch (_) { /* ignore */ }
+  return { token, length };
+}
+
+export function isTelegramUrlSessionTokenValid() {
+  const token = readTelegramUrlSessionToken();
+  return Boolean(token);
 }
 
 export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {}) {
