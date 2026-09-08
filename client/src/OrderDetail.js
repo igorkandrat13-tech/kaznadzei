@@ -392,30 +392,6 @@ function OrderDetail() {
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
   const telegramUnsafeUser = telegramAuth.unsafeUser;
-  const debugMode = new URLSearchParams(location.search).get('debug') === '1';
-  const [diagnosticsResult, setDiagnosticsResult] = useState(null);
-  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
-  const runTokenDiagnostics = useCallback(async () => {
-    try {
-      setDiagnosticsLoading(true);
-      const currentToken = getActiveTelegramSessionToken();
-      const res = await apiFetch('/api/telegram/diagnostics/token-flow', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionToken: currentToken,
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
-        }),
-      });
-      const data = await parseJsonSafely(res);
-      setDiagnosticsResult(data || null);
-    } catch (_err) {
-      setDiagnosticsResult({ ok: false, steps: [], error: String(_err?.message || _err || 'Network error') });
-    } finally {
-      setDiagnosticsLoading(false);
-    }
-  }, [getActiveTelegramSessionToken, telegramInitData, telegramUnsafeUser]);
 
   const refreshTelegramAuth = useCallback(() => {
     const nextInitData = persistTelegramInitData() || getTelegramInitData();
@@ -442,6 +418,32 @@ function OrderDetail() {
   const getActiveTelegramSessionToken = useCallback(() => {
     return telegramSessionTokenRef.current || getTelegramEmployeeSessionToken();
   }, []);
+
+  const debugMode = new URLSearchParams(location.search).get('debug') === '1';
+  const [diagnosticsResult, setDiagnosticsResult] = useState(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const runTokenDiagnostics = useCallback(async () => {
+    try {
+      setDiagnosticsLoading(true);
+      const currentToken = getActiveTelegramSessionToken();
+      const res = await apiFetch('/api/telegram/diagnostics/token-flow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionToken: currentToken,
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          employeeId: debugMode ? (new URLSearchParams(location.search).get('employeeId') || '') : '',
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      setDiagnosticsResult(data || null);
+    } catch (_err) {
+      setDiagnosticsResult({ ok: false, steps: [], error: String(_err?.message || _err || 'Network error') });
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  }, [debugMode, getActiveTelegramSessionToken, location.search, telegramInitData, telegramUnsafeUser]);
 
   const keepMaterialRequestInputVisible = useCallback(({ behavior = 'smooth' } = {}) => {
     const input = materialRequestInputRef.current;

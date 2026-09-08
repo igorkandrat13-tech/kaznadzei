@@ -147,6 +147,7 @@ function EmployeeModal({
           sessionToken,
           initData: '',
           unsafeUser: null,
+          employeeId: employee?._id || '',
         }),
       });
       const data = await parseJsonSafely(res);
@@ -156,7 +157,7 @@ function EmployeeModal({
     } finally {
       setDiagnosticsLoading(false);
     }
-  }, [lastRefreshResult?.sessionToken, lastSendResult?.sessionToken]);
+  }, [employee?._id, lastRefreshResult?.sessionToken, lastSendResult?.sessionToken]);
   const sendStatusLabel = (() => {
     if (!lastSendResult) return null;
     if (lastSendResult.sent) return { icon: '✅', text: 'Ссылка отправлена сотруднику в личку Telegram', style: { color: '#2d7a4a', background: '#eefbf2', border: '1px solid #c9ecd5' } };

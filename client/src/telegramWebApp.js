@@ -210,33 +210,47 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
   onError?.('');
   onStatusChange?.('Наведите камеру на QR-код заказа.');
 
-  webApp.showScanQrPopup(
-    { text: 'Наведите камеру на QR-код заказа' },
-    (scannedText) => {
-      const orderPath = getOrderPathFromQr(scannedText);
-      if (!orderPath) {
-        onError?.('QR-код не распознан. Используйте QR-код заказа, сгенерированный в системе.');
-        return false;
-      }
+  try {
+    webApp.showScanQrPopup(
+      { text: 'Наведите камеру на QR-код заказа' },
+      (scannedText) => {
+        const orderPath = getOrderPathFromQr(scannedText);
+        if (!orderPath) {
+          onError?.('QR-код не распознан. Используйте QR-код заказа, сгенерированный в системе.');
+          return false;
+        }
 
-      if (typeof webApp.closeScanQrPopup === 'function') {
-        webApp.closeScanQrPopup();
-      }
+        try {
+          if (typeof webApp.closeScanQrPopup === 'function') {
+            webApp.closeScanQrPopup();
+          }
+        } catch (_closeErr) { /* WebAppMethodUnsupported tolerance */ }
 
-      onStatusChange?.('Открываю страницу заказа...');
-      onSuccess?.(orderPath);
-      return true;
+        onStatusChange?.('Открываю страницу заказа...');
+        onSuccess?.(orderPath);
+        return true;
+      }
+    );
+  } catch (scannerErr) {
+    const msg = scannerErr?.message || scannerErr?.name || String(scannerErr || '');
+    if (String(msg).includes('Unsupported') || String(msg).includes('not supported')) {
+      onError?.('Камера сканера QR-кода недоступна в этом режиме Telegram. Откройте сканер через кнопку «Меню бота» или перейдите по прямой ссылке на заказ.');
+    } else {
+      onError?.(`Не удалось открыть камеру: ${msg}`);
     }
-  );
+    return false;
+  }
 
   return true;
 }
 
 export function closeTelegramWebApp() {
-  const webApp = getTelegramWebApp();
-  if (webApp && typeof webApp.close === 'function') {
-    webApp.close();
-    return true;
-  }
+  try {
+    const webApp = getTelegramWebApp();
+    if (webApp && typeof webApp.close === 'function') {
+      webApp.close();
+      return true;
+    }
+  } catch (_) { /* unsupported */ }
   return false;
 }

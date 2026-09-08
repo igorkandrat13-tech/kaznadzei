@@ -950,17 +950,55 @@ router.post('/telegram/diagnostics/token-flow', requireAdminAccess(), express.js
     const sessionToken = String(body.sessionToken || '').trim();
     const initData = String(body.initData || '').trim();
     const unsafeUserId = body.unsafeUser?.id ? String(body.unsafeUser.id) : '';
+    const employeeIdParam = String(body.employeeId || '').trim();
+    let effectiveSessionToken = sessionToken;
+    let serverIssuedDiagnosticToken = false;
+    if (!effectiveSessionToken && employeeIdParam) {
+      const candidate = EmployeeStore.findById(employeeIdParam);
+      if (candidate) {
+        try {
+          effectiveSessionToken = createTelegramEmployeeSessionToken(token, candidate);
+          serverIssuedDiagnosticToken = true;
+          pushStep('employee.lookup-by-id', {
+            ok: true,
+            employeeId: employeeIdParam,
+            found: true,
+            fullName: candidate.fullName || '',
+            hasTelegramUserId: Boolean(candidate.telegramUserId),
+            telegramUserId: String(candidate.telegramUserId || ''),
+            authorizedAt: candidate.telegramAuthorizedAt || '',
+            serverIssuedToken: true,
+          });
+        } catch (issueErr) {
+          pushStep('employee.lookup-by-id', {
+            ok: false,
+            employeeId: employeeIdParam,
+            found: true,
+            error: String(issueErr.message || issueErr || ''),
+          });
+        }
+      } else {
+        pushStep('employee.lookup-by-id', {
+          ok: false,
+          employeeId: employeeIdParam,
+          found: false,
+          error: 'Сотрудник с таким employeeId не найден в EmployeeStore.',
+        });
+      }
+    }
     pushStep('input', {
-      hasSessionToken: Boolean(sessionToken),
-      sessionTokenLength: sessionToken.length,
+      hasSessionToken: Boolean(effectiveSessionToken),
+      sessionTokenLength: effectiveSessionToken.length,
       hasInitData: Boolean(initData),
       hasUnsafeUserId: Boolean(unsafeUserId),
       unsafeUserId,
+      employeeId: employeeIdParam,
+      serverIssuedDiagnosticToken,
     });
 
     let tokenInfo = null;
-    if (sessionToken) {
-      tokenInfo = getTelegramEmployeeSessionTokenInfo(sessionToken);
+    if (effectiveSessionToken) {
+      tokenInfo = getTelegramEmployeeSessionTokenInfo(effectiveSessionToken);
       pushStep('token.decode', {
         ok: Boolean(tokenInfo && tokenInfo.employeeId),
         employeeId: tokenInfo?.employeeId || '',
@@ -969,13 +1007,14 @@ router.post('/telegram/diagnostics/token-flow', requireAdminAccess(), express.js
         daysLeft: tokenInfo?.daysLeft,
         expired: tokenInfo?.expired,
         expiresAt: tokenInfo?.expiresAt || '',
+        serverIssuedDiagnosticToken,
       });
     }
 
     let sigMatches = false;
-    if (sessionToken) {
+    if (effectiveSessionToken) {
       try {
-        const [payloadPart, signaturePart] = sessionToken.split('.');
+        const [payloadPart, signaturePart] = effectiveSessionToken.split('.');
         if (payloadPart && signaturePart) {
           const crypto = require('crypto');
           const expected = crypto
@@ -993,7 +1032,7 @@ router.post('/telegram/diagnostics/token-flow', requireAdminAccess(), express.js
     let verifyResult = null;
     let verifyError = null;
     try {
-      verifyResult = verifyTelegramEmployeeSessionToken(token, sessionToken);
+      verifyResult = verifyTelegramEmployeeSessionToken(token, effectiveSessionToken);
       pushStep('token.verify', { ok: true, employeeId: verifyResult?.employeeId || '', telegramUserId: String(verifyResult?.telegramUserId || '') });
     } catch (err) {
       verifyError = String(err.message || '');
@@ -1076,6 +1115,8 @@ router.post('/telegram/diagnostics/token-flow', requireAdminAccess(), express.js
       pushStep('issue', {
         ok: true,
         newSessionToken: `${sessionTokenFresh.slice(0, 16)}...[${sessionTokenFresh.length} chars]`,
+        newSessionTokenFull: sessionTokenFresh,
+        employeeWebAppUrl: webAppUrl,
         ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
         webAppUrl,
       });
@@ -1085,6 +1126,18 @@ router.post('/telegram/diagnostics/token-flow', requireAdminAccess(), express.js
     res.json({
       ok: finalOk,
       steps,
+      effectiveSessionToken: effectiveSessionToken || '',
+      serverIssuedDiagnosticToken,
+      issued: employee ? {
+        sessionToken: sessionTokenFresh,
+        employeeWebAppUrl: (() => {
+          const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
+          return publicBase
+            ? `${publicBase.replace(/\/$/, '')}/telegram-app?employeeSessionToken=${encodeURIComponent(sessionTokenFresh)}`
+            : '';
+        })(),
+        ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+      } : null,
       employee: employee ? {
         _id: employee._id,
         fullName: employee.fullName,
