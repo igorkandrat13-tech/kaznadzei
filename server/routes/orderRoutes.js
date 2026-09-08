@@ -455,7 +455,64 @@ function resolveTelegramEmployee(token, payload, context = {}) {
   if (payload?.sessionToken) {
     const tokenInfo = getTelegramEmployeeSessionTokenInfo(payload.sessionToken);
     try {
-      const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
+      const normalized = String(payload.sessionToken || '').trim();
+      let sessionPayload = null;
+      let validateError = null;
+      try {
+        sessionPayload = verifyTelegramEmployeeSessionToken(token, normalized);
+      } catch (verifyErr) {
+        validateError = verifyErr;
+      }
+      if (!sessionPayload && tokenInfo && tokenInfo.employeeId) {
+        const candidate = EmployeeStore.findById(tokenInfo.employeeId);
+        const sigMatches = (() => {
+          try {
+            if (!normalized) return false;
+            const [payloadPart, signaturePart] = normalized.split('.');
+            if (!payloadPart || !signaturePart) return false;
+            const crypto = require('crypto');
+            const expected = crypto
+              .createHmac('sha256', String(token || '').trim())
+              .update(payloadPart)
+              .digest('hex');
+            const lenOk = Buffer.from(signaturePart, 'hex').length === Buffer.from(expected, 'hex').length;
+            if (!lenOk) return false;
+            return crypto.timingSafeEqual(Buffer.from(signaturePart, 'hex'), Buffer.from(expected, 'hex'));
+          } catch (_) { return false; }
+        })();
+        if (candidate && sigMatches) {
+          const authorizedAtMs = candidate.telegramAuthorizedAt ? Number(new Date(candidate.telegramAuthorizedAt)) : 0;
+          const fiveYearsAgoMs = Date.now() - (5 * 365 * 24 * 60 * 60 * 1000);
+          const authorizedFresh = authorizedAtMs >= fiveYearsAgoMs;
+          const userIdMatches = !tokenInfo.telegramUserId
+            || !candidate.telegramUserId
+            || String(tokenInfo.telegramUserId) === String(candidate.telegramUserId);
+          if (authorizedFresh && userIdMatches) {
+            logTelegramOrderDebug('resolve.session-token-expired-but-server-refreshed', {
+              ...context,
+              ...payloadDebug,
+              employeeId: candidate._id,
+              employeeRole: candidate.role,
+              tokenDaysLeft: tokenInfo.daysLeft,
+              tokenExpired: tokenInfo.expired,
+              authorizedAtMs,
+              authorizedFresh,
+              sigMatches,
+              userIdMatches,
+            });
+            sessionPayload = {
+              employeeId: candidate._id,
+              telegramUserId: String(candidate.telegramUserId || tokenInfo.telegramUserId || ''),
+              role: candidate.role || tokenInfo.role || '',
+              exp: Date.now() + (5 * 365 * 24 * 60 * 60 * 1000),
+              _serverRefreshed: true,
+            };
+          }
+        }
+      }
+      if (!sessionPayload && validateError) {
+        throw validateError;
+      }
       const employeeBySession = EmployeeStore.findById(sessionPayload.employeeId);
       const sessionTelegramUserId = String(sessionPayload.telegramUserId || '');
       const employeeTelegramUserId = String(employeeBySession?.telegramUserId || '');
@@ -485,6 +542,7 @@ function resolveTelegramEmployee(token, payload, context = {}) {
         employeeRole: employee.role,
         tokenDaysLeft: tokenInfo?.daysLeft,
         tokenExpired: tokenInfo?.expired,
+        serverRefreshed: Boolean(sessionPayload._serverRefreshed),
       });
       telegramUser = {
         id: employee.telegramUserId || sessionTelegramUserId || undefined,

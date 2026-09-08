@@ -934,6 +934,174 @@ router.delete('/telegram/logs', requireAdminAccess(), (req, res) => {
   });
 });
 
+router.post('/telegram/diagnostics/token-flow', requireAdminAccess(), express.json({ limit: '32kb' }), async (req, res) => {
+  const token = getConfiguredBotToken();
+  const steps = [];
+  const pushStep = (name, details = {}) => {
+    steps.push({ step: name, ts: new Date().toISOString(), ...details });
+  };
+  try {
+    if (!token) {
+      pushStep('bot-token', { ok: false, reason: 'Отсутствует bot token в SettingsStore.' });
+      return res.status(400).json({ ok: false, steps, message: 'Сначала сохраните токен Telegram-бота.' });
+    }
+    pushStep('bot-token', { ok: true });
+    const body = req.body || {};
+    const sessionToken = String(body.sessionToken || '').trim();
+    const initData = String(body.initData || '').trim();
+    const unsafeUserId = body.unsafeUser?.id ? String(body.unsafeUser.id) : '';
+    pushStep('input', {
+      hasSessionToken: Boolean(sessionToken),
+      sessionTokenLength: sessionToken.length,
+      hasInitData: Boolean(initData),
+      hasUnsafeUserId: Boolean(unsafeUserId),
+      unsafeUserId,
+    });
+
+    let tokenInfo = null;
+    if (sessionToken) {
+      tokenInfo = getTelegramEmployeeSessionTokenInfo(sessionToken);
+      pushStep('token.decode', {
+        ok: Boolean(tokenInfo && tokenInfo.employeeId),
+        employeeId: tokenInfo?.employeeId || '',
+        telegramUserId: tokenInfo?.telegramUserId || '',
+        role: tokenInfo?.role || '',
+        daysLeft: tokenInfo?.daysLeft,
+        expired: tokenInfo?.expired,
+        expiresAt: tokenInfo?.expiresAt || '',
+      });
+    }
+
+    let sigMatches = false;
+    if (sessionToken) {
+      try {
+        const [payloadPart, signaturePart] = sessionToken.split('.');
+        if (payloadPart && signaturePart) {
+          const crypto = require('crypto');
+          const expected = crypto
+            .createHmac('sha256', String(token || '').trim())
+            .update(payloadPart)
+            .digest('hex');
+          if (Buffer.from(signaturePart, 'hex').length === Buffer.from(expected, 'hex').length) {
+            sigMatches = crypto.timingSafeEqual(Buffer.from(signaturePart, 'hex'), Buffer.from(expected, 'hex'));
+          }
+        }
+      } catch (_) { sigMatches = false; }
+      pushStep('token.signature', { ok: sigMatches });
+    }
+
+    let verifyResult = null;
+    let verifyError = null;
+    try {
+      verifyResult = verifyTelegramEmployeeSessionToken(token, sessionToken);
+      pushStep('token.verify', { ok: true, employeeId: verifyResult?.employeeId || '', telegramUserId: String(verifyResult?.telegramUserId || '') });
+    } catch (err) {
+      verifyError = String(err.message || '');
+      pushStep('token.verify', { ok: false, error: verifyError });
+    }
+
+    let serverRefreshed = false;
+    if (!verifyResult && tokenInfo && tokenInfo.employeeId && sigMatches) {
+      const candidate = EmployeeStore.findById(tokenInfo.employeeId);
+      const authorizedAtMs = candidate?.telegramAuthorizedAt ? Number(new Date(candidate.telegramAuthorizedAt)) : 0;
+      const fiveYearsAgoMs = Date.now() - (5 * 365 * 24 * 60 * 60 * 1000);
+      const authorizedFresh = authorizedAtMs >= fiveYearsAgoMs;
+      const userIdMatches = !tokenInfo.telegramUserId
+        || !candidate?.telegramUserId
+        || String(tokenInfo.telegramUserId) === String(candidate.telegramUserId);
+      serverRefreshed = Boolean(candidate && authorizedFresh && userIdMatches);
+      pushStep('token.server-refresh-check', {
+        ok: serverRefreshed,
+        candidateFound: Boolean(candidate),
+        authorizedAtMs,
+        authorizedAt: candidate?.telegramAuthorizedAt || '',
+        authorizedFresh,
+        userIdMatches,
+        tokenTelegramUserId: tokenInfo.telegramUserId || '',
+        employeeTelegramUserId: candidate?.telegramUserId || '',
+      });
+    }
+
+    const finalPayload = verifyResult || (serverRefreshed && tokenInfo ? {
+      employeeId: tokenInfo.employeeId,
+      telegramUserId: tokenInfo.telegramUserId,
+      role: tokenInfo.role,
+      exp: Date.now() + (5 * 365 * 24 * 60 * 60 * 1000),
+      _serverRefreshed: true,
+    } : null);
+
+    let employee = null;
+    if (finalPayload?.employeeId) {
+      employee = EmployeeStore.findById(finalPayload.employeeId);
+      const finalTelegramUserId = String(finalPayload.telegramUserId || '');
+      const employeeTelegramUserId = String(employee?.telegramUserId || '');
+      const match = !finalTelegramUserId || !employeeTelegramUserId || finalTelegramUserId === employeeTelegramUserId;
+      pushStep('employee.lookup', {
+        ok: Boolean(employee && match),
+        employeeFound: Boolean(employee),
+        employeeFullName: employee?.fullName || '',
+        employeeTelegramUserId,
+        finalTelegramUserId,
+        userIdMatch: match,
+        allowedColumns: employee?.allowedColumns || [],
+        role: employee?.role || '',
+      });
+    }
+
+    if (!employee && (initData || unsafeUserId)) {
+      let tgUserId = '';
+      try {
+        const tgUser = resolveTelegramWebAppUser(token, body);
+        tgUserId = String(tgUser?.id || '');
+      } catch (_) { tgUserId = ''; }
+      employee = tgUserId ? EmployeeStore.findByTelegramUserId(tgUserId) : null;
+      pushStep('employee.initData-fallback', {
+        ok: Boolean(employee),
+        resolvedTelegramUserId: tgUserId,
+        employeeFound: Boolean(employee),
+        employeeFullName: employee?.fullName || '',
+      });
+    }
+
+    let sessionTokenFresh = '';
+    if (employee) {
+      sessionTokenFresh = createTelegramEmployeeSessionToken(token, {
+        ...employee,
+        telegramAuthorizedAt: employee.telegramAuthorizedAt || new Date().toISOString(),
+      });
+      const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
+      const webAppUrl = publicBase
+        ? `${publicBase.replace(/\/$/, '')}/telegram-app?employeeSessionToken=${encodeURIComponent(sessionTokenFresh)}`
+        : '';
+      pushStep('issue', {
+        ok: true,
+        newSessionToken: `${sessionTokenFresh.slice(0, 16)}...[${sessionTokenFresh.length} chars]`,
+        ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+        webAppUrl,
+      });
+    }
+
+    const finalOk = Boolean(employee);
+    res.json({
+      ok: finalOk,
+      steps,
+      employee: employee ? {
+        _id: employee._id,
+        fullName: employee.fullName,
+        role: employee.role,
+        allowedColumns: employee.allowedColumns || [],
+        telegramUserId: employee.telegramUserId || '',
+        telegramUsername: employee.telegramUsername || '',
+        telegramAuthorizedAt: employee.telegramAuthorizedAt || '',
+        telegramChatId: employee.telegramChatId || '',
+      } : null,
+    });
+  } catch (error) {
+    pushStep('fatal', { error: String(error.message || ''), stack: String(error.stack || '').slice(0, 400) });
+    res.status(500).json({ ok: false, steps, message: String(error.message || 'Неожиданная ошибка при диагностике токена.') });
+  }
+});
+
 router.get('/telegram/employee/:id/session-status', requireAdminAccess(), async (req, res) => {
   try {
     const employeeId = String(req.params?.id || '').trim();
@@ -1153,8 +1321,68 @@ router.post('/telegram/webapp/session', async (req, res) => {
 
     if (payload.sessionToken) {
       const tokenInfo = getTelegramEmployeeSessionTokenInfo(payload.sessionToken);
+      const normalized = String(payload.sessionToken || '').trim();
+      let sessionPayload = null;
+      let validateError = null;
       try {
-        const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
+        sessionPayload = verifyTelegramEmployeeSessionToken(token, normalized);
+      } catch (verifyErr) {
+        validateError = verifyErr;
+      }
+      if (!sessionPayload && tokenInfo && tokenInfo.employeeId) {
+        const candidate = EmployeeStore.findById(tokenInfo.employeeId);
+        let sigMatches = false;
+        try {
+          if (normalized) {
+            const [payloadPart, signaturePart] = normalized.split('.');
+            if (payloadPart && signaturePart) {
+              const crypto = require('crypto');
+              const expected = crypto
+                .createHmac('sha256', String(token || '').trim())
+                .update(payloadPart)
+                .digest('hex');
+              if (Buffer.from(signaturePart, 'hex').length === Buffer.from(expected, 'hex').length) {
+                sigMatches = crypto.timingSafeEqual(Buffer.from(signaturePart, 'hex'), Buffer.from(expected, 'hex'));
+              }
+            }
+          }
+        } catch (_) { sigMatches = false; }
+        if (candidate && sigMatches) {
+          const authorizedAtMs = candidate.telegramAuthorizedAt ? Number(new Date(candidate.telegramAuthorizedAt)) : 0;
+          const fiveYearsAgoMs = Date.now() - (5 * 365 * 24 * 60 * 60 * 1000);
+          const authorizedFresh = authorizedAtMs >= fiveYearsAgoMs;
+          const userIdMatches = !tokenInfo.telegramUserId
+            || !candidate.telegramUserId
+            || String(tokenInfo.telegramUserId) === String(candidate.telegramUserId);
+          if (authorizedFresh && userIdMatches) {
+            logTelegramWebAppDebug('session.auth.token-expired-but-server-refreshed', {
+              ...payloadDebug,
+              employeeId: candidate._id,
+              employeeRole: candidate.role,
+              tokenDaysLeft: tokenInfo.daysLeft,
+              tokenExpired: tokenInfo.expired,
+              authorizedAtMs,
+              authorizedFresh,
+              sigMatches,
+              userIdMatches,
+            });
+            sessionPayload = {
+              employeeId: candidate._id,
+              telegramUserId: String(candidate.telegramUserId || tokenInfo.telegramUserId || ''),
+              role: candidate.role || tokenInfo.role || '',
+              exp: Date.now() + (5 * 365 * 24 * 60 * 60 * 1000),
+              _serverRefreshed: true,
+            };
+          }
+        }
+      }
+      try {
+        if (!sessionPayload && validateError) {
+          throw validateError;
+        }
+        if (!sessionPayload) {
+          throw new Error('Session token Telegram Web App не прошёл проверку.');
+        }
         employee = EmployeeStore.findById(sessionPayload.employeeId);
         const sessionTelegramUserId = String(sessionPayload.telegramUserId || '');
         const employeeTelegramUserId = String(employee?.telegramUserId || '');
@@ -1179,6 +1407,7 @@ router.post('/telegram/webapp/session', async (req, res) => {
           telegramUserId: employeeTelegramUserId || sessionTelegramUserId,
           tokenDaysLeft: tokenInfo?.daysLeft,
           tokenExpired: tokenInfo?.expired,
+          serverRefreshed: Boolean(sessionPayload._serverRefreshed),
         });
         telegramUser = {
           id: employee.telegramUserId || sessionTelegramUserId || undefined,

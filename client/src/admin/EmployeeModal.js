@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { generatePinCode } from '../adminUI';
 import { Button, Modal, ModalHeader } from '../ui';
+import { apiFetch, parseJsonSafely } from '../api';
 
 function hexToRgb(hex) {
   const normalized = String(hex || '').trim().replace('#', '');
@@ -133,6 +134,29 @@ function EmployeeModal({
     ? 'success'
     : 'primary';
   const sendButtonVariant = (lastSendResult?.sent) ? 'success' : 'secondary';
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const [diagnosticsResult, setDiagnosticsResult] = useState(null);
+  const runEmployeeTokenDiagnostics = useCallback(async () => {
+    try {
+      setDiagnosticsLoading(true);
+      const sessionToken = lastRefreshResult?.sessionToken || lastSendResult?.sessionToken || '';
+      const res = await apiFetch('/api/telegram/diagnostics/token-flow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionToken,
+          initData: '',
+          unsafeUser: null,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      setDiagnosticsResult(data || null);
+    } catch (_err) {
+      setDiagnosticsResult({ ok: false, steps: [], error: String(_err?.message || _err || 'Network error') });
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  }, [lastRefreshResult?.sessionToken, lastSendResult?.sessionToken]);
   const sendStatusLabel = (() => {
     if (!lastSendResult) return null;
     if (lastSendResult.sent) return { icon: '✅', text: 'Ссылка отправлена сотруднику в личку Telegram', style: { color: '#2d7a4a', background: '#eefbf2', border: '1px solid #c9ecd5' } };
@@ -301,7 +325,41 @@ function EmployeeModal({
                     ? 'Отправляю в Telegram...'
                     : '📤 Отправить ссылку в Telegram'}
                 </Button>
+                <Button
+                  variant="secondary"
+                  onClick={runEmployeeTokenDiagnostics}
+                  disabled={diagnosticsLoading || saving}
+                >
+                  {diagnosticsLoading ? 'Диагностика...' : '🔍 Диагностика токена'}
+                </Button>
               </div>
+
+              {diagnosticsResult && (
+                <div style={{
+                  marginTop: 10,
+                  background: '#f5f7fb',
+                  border: '1px solid #d9dfeb',
+                  borderRadius: 8,
+                  padding: 10,
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  color: '#1f3046',
+                  maxHeight: 280,
+                  overflowY: 'auto',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontFamily: 'system-ui, sans-serif', fontSize: 13 }}>
+                    <span style={{ fontWeight: 700 }}>
+                      {diagnosticsResult.ok ? '✅ Авторизация работает' : '❌ Найдена проблема'}
+                    </span>
+                    <Button variant="secondary" onClick={() => copyLink(JSON.stringify(diagnosticsResult, null, 2))}>
+                      📋 Скопировать JSON
+                    </Button>
+                  </div>
+                  {JSON.stringify(diagnosticsResult, null, 2)}
+                </div>
+              )}
 
               {sendStatusLabel && (
                 <div style={{
