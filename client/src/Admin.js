@@ -489,14 +489,12 @@ function Admin() {
     if (employeeModalMode !== 'edit' || !editEmployee?._id) {
       setEmployeeSessionStatus(null);
       setEmployeeSessionLastRefresh(null);
-      setEmployeeSessionLastSendResult(null);
       setEmployeeSessionLastMenuButtonCheck(null);
       return undefined;
     }
     let cancelled = false;
     setEmployeeSessionStatus(null);
     setEmployeeSessionLastRefresh(null);
-    setEmployeeSessionLastSendResult(null);
     setEmployeeSessionLastMenuButtonCheck(null);
     fetchEmployeeSessionStatus(editEmployee._id).then(() => { if (cancelled) return null; return null; }).catch(() => {});
     return () => { cancelled = true; };
