@@ -133,8 +133,6 @@ function Admin() {
   const [employeeSessionStatus, setEmployeeSessionStatus] = useState(null);
   const [employeeSessionRefreshing, setEmployeeSessionRefreshing] = useState(false);
   const [employeeSessionLastRefresh, setEmployeeSessionLastRefresh] = useState(null);
-  const [employeeSessionSendingTelegram, setEmployeeSessionSendingTelegram] = useState(false);
-  const [employeeSessionLastSendResult, setEmployeeSessionLastSendResult] = useState(null);
   const [employeeSessionMenuButtonCheckLoading, setEmployeeSessionMenuButtonCheckLoading] = useState(false);
   const [employeeSessionLastMenuButtonCheck, setEmployeeSessionLastMenuButtonCheck] = useState(null);
   const backupImportInputRef = useRef(null);
@@ -529,43 +527,6 @@ function Admin() {
       setSettingsError(msg || 'Ошибка продления токена.');
     } finally {
       setEmployeeSessionRefreshing(false);
-    }
-  }, [editEmployee?._id, fetchEmployeeSessionStatus]);
-
-  const handleSendEmployeeDirectLink = useCallback(async () => {
-    const employeeId = String(editEmployee?._id || '').trim();
-    if (!employeeId) return;
-    setEmployeeSessionSendingTelegram(true);
-    setSettingsError('');
-    setEmployeeSessionLastSendResult(null);
-    try {
-      const res = await apiFetch('/api/telegram/employee/send-direct-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId }),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.message || 'Не удалось отправить ссылку.');
-      }
-      setEmployeeSessionLastSendResult(data || null);
-      if (data?.sent) {
-        setEmployeeSessionLastRefresh(data || null);
-      }
-      await fetchEmployeeSessionStatus(employeeId);
-      fetchEmployees().catch(() => {});
-      if (data?.sent) {
-        setSettingsSuccess('Ссылка отправлена сотруднику в Telegram.');
-      } else if (data?.sendStatus === 'no-chat-id') {
-        setSettingsError('У сотрудника нет ChatId — отправка невозможна. Используйте кнопку «Копировать ссылку».');
-      } else if (data?.sendStatus === 'telegram-error') {
-        setSettingsError(`Telegram отказал: ${data.telegramError || 'неизвестная ошибка'}.`);
-      }
-    } catch (err) {
-      const msg = err?.message || err?.toString?.() || 'Не удалось отправить ссылку.';
-      setSettingsError(msg || 'Ошибка отправки.');
-    } finally {
-      setEmployeeSessionSendingTelegram(false);
     }
   }, [editEmployee?._id, fetchEmployeeSessionStatus]);
 
@@ -1654,9 +1615,6 @@ function Admin() {
         refreshingSession={employeeSessionRefreshing}
         onRefreshSession={handleRefreshEmployeeSessionToken}
         lastRefreshResult={employeeSessionLastRefresh}
-        sendingTelegram={employeeSessionSendingTelegram}
-        onSendTelegramDirectLink={handleSendEmployeeDirectLink}
-        lastSendResult={employeeSessionLastSendResult}
         menuButtonCheckLoading={employeeSessionMenuButtonCheckLoading}
         onCheckMenuButton={handleCheckEmployeeMenuButton}
         lastMenuButtonCheck={employeeSessionLastMenuButtonCheck}

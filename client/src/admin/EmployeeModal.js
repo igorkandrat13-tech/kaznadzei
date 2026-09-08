@@ -86,9 +86,6 @@ function EmployeeModal({
   refreshingSession = false,
   onRefreshSession = null,
   lastRefreshResult = null,
-  sendingTelegram = false,
-  onSendTelegramDirectLink = null,
-  lastSendResult = null,
   menuButtonCheckLoading = false,
   onCheckMenuButton = null,
   lastMenuButtonCheck = null,
@@ -133,17 +130,16 @@ function EmployeeModal({
   const expiresLabel = formatDateRu(expiresAt) || '';
   const lastSeenLabel = formatDateRu(sessionStatus?.telegramLastSeenAt) || '';
   const authorizedLabel = formatDateRu(sessionStatus?.telegramAuthorizedAt) || '';
-  const webAppUrl = lastRefreshResult?.employeeWebAppUrl || lastSendResult?.employeeWebAppUrl || '';
+  const webAppUrl = lastRefreshResult?.employeeWebAppUrl || '';
   const refreshButtonVariant = (sessionStatus?.statusLevel === 'expired' || sessionStatus?.statusLevel === 'soon')
     ? 'success'
     : 'primary';
-  const sendButtonVariant = (lastSendResult?.sent) ? 'success' : 'secondary';
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const [diagnosticsResult, setDiagnosticsResult] = useState(null);
   const runEmployeeTokenDiagnostics = useCallback(async () => {
     try {
       setDiagnosticsLoading(true);
-      const sessionToken = lastRefreshResult?.sessionToken || lastSendResult?.sessionToken || '';
+      const sessionToken = lastRefreshResult?.sessionToken || '';
       const effectiveEmployeeId = String(
         employee?._id || employeeForm?._id || '',
       ).trim();
@@ -164,14 +160,7 @@ function EmployeeModal({
     } finally {
       setDiagnosticsLoading(false);
     }
-  }, [employee?._id, employeeForm?._id, lastRefreshResult?.sessionToken, lastSendResult?.sessionToken]);
-  const sendStatusLabel = (() => {
-    if (!lastSendResult) return null;
-    if (lastSendResult.sent) return { icon: '✅', text: 'Ссылка отправлена сотруднику в личку Telegram', style: { color: '#2d7a4a', background: '#eefbf2', border: '1px solid #c9ecd5' } };
-    if (lastSendResult.sendStatus === 'no-chat-id') return { icon: '⚠️', text: 'У сотрудника нет Telegram ChatId — отправка в бот невозможна. Скопируйте ссылку вручную и отправьте лично.', style: { color: '#8a6a11', background: '#fff7e0', border: '1px solid #f3e0a3' } };
-    if (lastSendResult.sendStatus === 'telegram-error') return { icon: '❌', text: `Telegram отказал: ${lastSendResult.telegramError || 'неизвестная ошибка'}. Скопируйте ссылку и отправьте вручную.`, style: { color: '#a8272a', background: '#fde9e9', border: '1px solid #f3bdbd' } };
-    return null;
-  })();
+  }, [employee?._id, employeeForm?._id, lastRefreshResult?.sessionToken]);
 
   return (
     <Modal open={Boolean(mode)} onClose={onClose} closeDisabled={saving} size="lg">
@@ -325,15 +314,6 @@ function EmployeeModal({
                     : '🔄 Продлить токен на 5 лет'}
                 </Button>
                 <Button
-                  variant={sendButtonVariant}
-                  onClick={() => onSendTelegramDirectLink && onSendTelegramDirectLink()}
-                  disabled={sendingTelegram || saving || !onSendTelegramDirectLink || !sessionStatus?.hasTelegramLink}
-                >
-                  {sendingTelegram
-                    ? 'Отправляю в Telegram...'
-                    : '📤 Отправить ссылку в Telegram'}
-                </Button>
-                <Button
                   variant="secondary"
                   onClick={runEmployeeTokenDiagnostics}
                   disabled={diagnosticsLoading || saving}
@@ -413,21 +393,7 @@ function EmployeeModal({
                 </div>
               )}
 
-              {sendStatusLabel && (
-                <div style={{
-                  marginTop: 8,
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  fontSize: 12.5,
-                  lineHeight: 1.5,
-                  ...sendStatusLabel.style,
-                }}>
-                  <span style={{ marginRight: 6 }}>{sendStatusLabel.icon}</span>
-                  {sendStatusLabel.text}
-                </div>
-              )}
-
-              {(lastRefreshResult?.ok || lastSendResult?.ok) && webAppUrl && (
+              {lastRefreshResult?.ok && webAppUrl && (
                 <div style={{
                   marginTop: 6,
                   padding: 12,
@@ -438,46 +404,46 @@ function EmployeeModal({
                   lineHeight: 1.55,
                 }}>
                   <div style={{ fontWeight: 700, color: '#2d7a4a', marginBottom: 6 }}>
-                    ✅ {lastSendResult?.sent ? 'Токен продлён и отправлен сотруднику в Telegram!' : 'Токен продлён!'} Действует до {formatDateRu(lastRefreshResult.expiresAt || lastSendResult.expiresAt)}.
+                    ✅ Токен продлён! Действует до {formatDateRu(lastRefreshResult.expiresAt)}.
                   </div>
                   <div style={{ marginBottom: 6, color: '#23394f' }}>
-                    Отправьте сотруднику эту ссылку — при открытии он сразу получит доступ на {Number(lastRefreshResult.daysLeft || lastSendResult.daysLeft || 1825) || 1825} дней:
+                    Сотруднику достаточно открыть бота и нажать кнопку сканера слева от поля ввода.
                   </div>
-                  <div style={{
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                  }}>
+                  {lastRefreshResult?.sessionToken && (
                     <div style={{
-                      flex: '1 1 240px',
-                      minWidth: 240,
-                      background: '#ffffff',
-                      border: '1px solid #d9dfeb',
-                      borderRadius: 6,
-                      padding: '6px 10px',
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      wordBreak: 'break-all',
-                      color: '#1f3046',
+                      display: 'flex',
+                      gap: 8,
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
                     }}>
-                      {webAppUrl}
-                    </div>
-                    <Button
-                      variant="secondary"
-                      onClick={() => copyLink(webAppUrl)}
-                    >
-                      📋 Копировать ссылку
-                    </Button>
-                    {(lastRefreshResult?.sessionToken || lastSendResult?.sessionToken) && (
+                      <div style={{
+                        flex: '1 1 240px',
+                        minWidth: 240,
+                        background: '#ffffff',
+                        border: '1px solid #d9dfeb',
+                        borderRadius: 6,
+                        padding: '6px 10px',
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        wordBreak: 'break-all',
+                        color: '#1f3046',
+                      }}>
+                        {webAppUrl}
+                      </div>
                       <Button
                         variant="secondary"
-                        onClick={() => copyLink(lastRefreshResult.sessionToken || lastSendResult.sessionToken)}
+                        onClick={() => copyLink(webAppUrl)}
+                      >
+                        📋 Копировать ссылку
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => copyLink(lastRefreshResult.sessionToken)}
                       >
                         📋 Копировать токен
                       </Button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

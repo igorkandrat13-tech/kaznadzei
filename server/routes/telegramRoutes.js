@@ -250,7 +250,7 @@ function getAuthorizedMessageReplyMarkup(employee = {}) {
     one_time_keyboard: false,
     input_field_placeholder: isWaitingForWorkshopRequest
       ? 'Напишите заявку для цеха'
-      : 'Сканер QR-кодов: кнопка слева от поля ввода',
+      : '',
   };
 }
 
