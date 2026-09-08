@@ -11,6 +11,7 @@ const {
   setChatMenuButton,
   getChatMenuButton,
   sendMessage,
+  deleteMessage,
   createForumTopic,
   answerCallbackQuery,
   getFile,
@@ -281,6 +282,37 @@ async function clearTelegramMenuButton(token, chatId) {
   }
 }
 
+async function resetEmployeeKeyboardSilently(token, chatId, employee = {}) {
+  if (!token || !chatId) return { sent: false, deleted: false, error: 'missing_params' };
+  let messageId = null;
+  let sent = false;
+  let deleted = false;
+  let error = '';
+  try {
+    const resetText = '\u00a0';
+    const sendResult = await sendMessage(token, {
+      chat_id: chatId,
+      text: resetText,
+      reply_markup: JSON.stringify(getAuthorizedMessageReplyMarkup(employee)),
+      disable_notification: true,
+      disable_web_page_preview: true,
+    });
+    messageId = Number(sendResult?.result?.message_id) || 0;
+    sent = Boolean(messageId > 0);
+  } catch (sendErr) {
+    error = String(sendErr?.message || sendErr || 'send_failed');
+  }
+  if (sent && messageId > 0) {
+    try {
+      await deleteMessage(token, chatId, messageId);
+      deleted = true;
+    } catch (delErr) {
+      error = String(delErr?.message || delErr || 'delete_failed');
+    }
+  }
+  return { sent, deleted, messageId, error };
+}
+
 async function syncTelegramMenuButton(token, chatId) {
   if (!chatId) return { updated: false, error: 'empty_chat_id', url: '' };
   const employee = getEmployeeByTelegramChatId(chatId);
@@ -339,6 +371,19 @@ async function refreshAuthorizedEmployeeAccess(token) {
   for (const employee of employees) {
     try {
       const result = await syncTelegramMenuButton(token, employee.telegramChatId);
+      let kbSent = false;
+      let kbDeleted = false;
+      let kbErr = '';
+      try {
+        const kbReset = await resetEmployeeKeyboardSilently(token, employee.telegramChatId, employee);
+        kbSent = Boolean(kbReset?.sent);
+        kbDeleted = Boolean(kbReset?.deleted);
+        if (kbReset?.error && !kbReset.sent) {
+          kbErr = kbReset.error;
+        }
+      } catch (kbInnerErr) {
+        kbErr = String(kbInnerErr?.message || kbInnerErr || '');
+      }
       if (result?.updated) {
         refreshedCount += 1;
       } else if (result?.error) {
@@ -356,6 +401,9 @@ async function refreshAuthorizedEmployeeAccess(token) {
         updated: Boolean(result?.updated),
         error: result?.error || '',
         expectedUrl: result?.url || '',
+        keyboardResetSent: kbSent,
+        keyboardResetDeleted: kbDeleted,
+        keyboardResetError: kbErr,
       });
     } catch (error) {
       errors.push({
@@ -371,6 +419,9 @@ async function refreshAuthorizedEmployeeAccess(token) {
         updated: false,
         error: error.message || String(error),
         expectedUrl: '',
+        keyboardResetSent: false,
+        keyboardResetDeleted: false,
+        keyboardResetError: error.message || String(error),
       });
     }
   }
@@ -1342,6 +1393,7 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
     let menuButtonUpdated = false;
     let menuButtonError = '';
     let keyboardResetSent = false;
+    let keyboardResetDeleted = false;
     let keyboardResetError = '';
     const chatId = String(freshEmployee.telegramChatId || '').trim();
     if (chatId) {
@@ -1352,14 +1404,12 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
         menuButtonError = String(mbErr?.message || mbErr || '');
       }
       try {
-        const resetText = 'Настройки бота обновлены.\nСканер QR-кодов находится в кнопке слева от поля ввода.';
-        await sendTelegramMessage(token, {
-          chat_id: chatId,
-          text: resetText,
-          reply_markup: JSON.stringify(getAuthorizedMessageReplyMarkup(freshEmployee)),
-          disable_notification: true,
-        });
-        keyboardResetSent = true;
+        const kbReset = await resetEmployeeKeyboardSilently(token, chatId, freshEmployee);
+        keyboardResetSent = Boolean(kbReset?.sent);
+        keyboardResetDeleted = Boolean(kbReset?.deleted);
+        if (kbReset?.error && !kbReset.sent) {
+          keyboardResetError = kbReset.error;
+        }
       } catch (kbErr) {
         keyboardResetError = String(kbErr?.message || kbErr || 'keyboard_reset_failed');
       }
@@ -1385,6 +1435,7 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
       menuButtonUpdated,
       menuButtonError,
       keyboardResetSent,
+      keyboardResetDeleted,
       keyboardResetError,
     });
   } catch (error) {

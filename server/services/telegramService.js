@@ -74,6 +74,13 @@ async function answerCallbackQuery(token, callbackQueryId, text = '') {
   });
 }
 
+async function deleteMessage(token, chatId, messageId) {
+  return telegramRequest(token, 'deleteMessage', {
+    chat_id: chatId,
+    message_id: Number(messageId) || 0,
+  });
+}
+
 async function getFile(token, fileId) {
   return telegramRequest(token, 'getFile', {
     file_id: fileId,
@@ -149,6 +156,7 @@ module.exports = {
   setChatMenuButton,
   getChatMenuButton,
   sendMessage,
+  deleteMessage,
   createForumTopic,
   answerCallbackQuery,
   getFile,
