@@ -1584,7 +1584,7 @@ function Admin() {
     <>
       <EmployeeModal
         mode={employeeModalMode}
-        employee={editingEmployee}
+        employee={employeeModalMode === 'edit' ? editEmployee : null}
         employeeForm={employeeForm}
         setEmployeeForm={setEmployeeForm}
         onAdd={handleAddEmployee}
