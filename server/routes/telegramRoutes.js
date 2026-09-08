@@ -236,17 +236,7 @@ function getTelegramPhotoMimeType(filePath = '') {
 
 function getAuthorizedMessageReplyMarkup(employee = {}) {
   const isWaitingForWorkshopRequest = getEmployeePendingAction(employee) === EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST;
-  const employeeUrl = buildEmployeeWebAppUrl(employee) || getTelegramWebAppUrl();
   const keyboardRow = [];
-
-  if (employeeUrl) {
-    keyboardRow.push({
-      text: EMPLOYEE_QR_SCANNER_BUTTON_TEXT,
-      web_app: {
-        url: employeeUrl,
-      },
-    });
-  }
 
   keyboardRow.push({
     text: isWaitingForWorkshopRequest
@@ -260,7 +250,7 @@ function getAuthorizedMessageReplyMarkup(employee = {}) {
     one_time_keyboard: false,
     input_field_placeholder: isWaitingForWorkshopRequest
       ? 'Напишите заявку для цеха'
-      : 'Выберите действие',
+      : 'Сканер QR-кодов: кнопка слева от поля ввода',
   };
 }
 

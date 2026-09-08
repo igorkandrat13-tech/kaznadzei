@@ -59,7 +59,7 @@ function TelegramScannerTokenRouter() {
     } catch (_) { /* ignore routing errors */ }
     navigate('/telegram-app', { replace: true });
   }, [token, navigate, location.pathname]);
-  return <TelegramScannerPage />;
+  return null;
 }
 
 class AppErrorBoundary extends React.Component {
