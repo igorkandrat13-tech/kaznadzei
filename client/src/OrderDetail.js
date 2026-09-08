@@ -17,6 +17,7 @@ import {
   markTelegramWebAppSession,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
+  bootstrapTelegramInitData,
   setTelegramEmployeeSessionToken,
   tryExpandTelegramWebApp,
   tryReadyTelegramWebApp,
@@ -410,7 +411,7 @@ function OrderDetail() {
     } catch (_) { /* ignore */ }
   }, []);
 
-  const refreshTelegramAuth = useCallback(() => {
+  const refreshTelegramAuth = useCallback(({ fromBootstrap = false } = {}) => {
     const nextInitData = persistTelegramInitData() || getTelegramInitData();
     const nextUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
 
@@ -424,6 +425,7 @@ function OrderDetail() {
         unsafeUser: nextUnsafeUser,
       };
     });
+    return { initData: nextInitData, unsafeUser: nextUnsafeUser };
   }, []);
 
   const updateTelegramSessionToken = useCallback((nextToken = '') => {
@@ -728,25 +730,53 @@ function OrderDetail() {
   }, [loadTelegramEmployeeSession, location.pathname, location.search, telegramSessionBootstrapKey]);
 
   useEffect(() => {
-    if (!telegramMode) return;
+    if (!telegramMode) return undefined;
+
+    let cancelled = false;
+    let pendingTimers = [];
 
     markTelegramWebAppSession();
-    refreshTelegramAuth();
-
     tryReadyTelegramWebApp();
     tryExpandTelegramWebApp();
 
-    const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(refreshTelegramAuth, delay));
-    const finishTimer = window.setTimeout(() => {
-      refreshTelegramAuth();
+    (async () => {
+      const bootstrapResult = await bootstrapTelegramInitData({ retries: 4, delayMs: 350, markSession: true });
+      if (cancelled) return;
+      if ((bootstrapResult.initData && String(bootstrapResult.initData).trim().length > 0)
+        || (bootstrapResult.unsafeUser?.id)) {
+        setTelegramAuth({
+          initData: bootstrapResult.initData || '',
+          unsafeUser: bootstrapResult.unsafeUser || null,
+        });
+      }
       setTelegramAuthResolved(true);
-    }, 1700);
+      if ((bootstrapResult.initData && String(bootstrapResult.initData).trim().length > 0)
+        || (bootstrapResult.unsafeUser?.id)
+        || getActiveTelegramSessionToken()) {
+        setTelegramSessionBootstrapKey(current => current + 1);
+      }
+    })();
+
+    const fallbackTimers = [100, 350, 800, 1500, 2500].map((delay) => (
+      window.setTimeout(() => {
+        if (cancelled) return;
+        refreshTelegramAuth({ fromBootstrap: true });
+      }, delay)
+    ));
+    pendingTimers.push(...fallbackTimers);
+
+    const fallbackFinishTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      refreshTelegramAuth({ fromBootstrap: true });
+      setTelegramAuthResolved(current => current || true);
+    }, 3200);
+    pendingTimers.push(fallbackFinishTimer);
 
     return () => {
-      retryTimers.forEach(timerId => window.clearTimeout(timerId));
-      window.clearTimeout(finishTimer);
+      cancelled = true;
+      pendingTimers.forEach(timerId => window.clearTimeout(timerId));
     };
-  }, [refreshTelegramAuth, telegramMode]);
+  }, [getActiveTelegramSessionToken, refreshTelegramAuth, telegramMode]);
 
   useEffect(() => {
     if (!telegramMode) return undefined;

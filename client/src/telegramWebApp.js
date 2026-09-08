@@ -71,6 +71,46 @@ export function persistTelegramUnsafeUser() {
   return unsafeUser;
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function bootstrapTelegramInitData({ retries = 4, delayMs = 350, markSession = true } = {}) {
+  let resolvedInitData = persistTelegramInitData() || getTelegramInitData();
+  let resolvedUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
+  if (markSession) markTelegramWebAppSession();
+
+  if ((resolvedInitData && String(resolvedInitData).trim().length > 0) || (resolvedUnsafeUser?.id)) {
+    return { initData: resolvedInitData, unsafeUser: resolvedUnsafeUser, retriesLeft: retries, resolvedFast: true };
+  }
+
+  const attemptCount = Math.max(0, Math.min(12, Number(retries) || 0));
+  for (let attempt = 0; attempt < attemptCount; attempt++) {
+    await sleep(delayMs);
+    resolvedInitData = persistTelegramInitData() || getTelegramInitData();
+    resolvedUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
+    if ((resolvedInitData && String(resolvedInitData).trim().length > 0) || (resolvedUnsafeUser?.id)) {
+      if (markSession) markTelegramWebAppSession();
+      return {
+        initData: resolvedInitData,
+        unsafeUser: resolvedUnsafeUser,
+        retriesLeft: attemptCount - attempt - 1,
+        resolvedFast: false,
+        attempt,
+      };
+    }
+  }
+
+  return {
+    initData: resolvedInitData || '',
+    unsafeUser: resolvedUnsafeUser || null,
+    retriesLeft: 0,
+    resolvedFast: false,
+    attempt: attemptCount,
+    timedOut: true,
+  };
+}
+
 export function hasTelegramWebAppSession() {
   try {
     return window.sessionStorage?.getItem(TELEGRAM_SESSION_STORAGE_KEY) === '1';

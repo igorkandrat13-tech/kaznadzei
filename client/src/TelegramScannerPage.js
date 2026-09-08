@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
+  bootstrapTelegramInitData,
   buildTelegramOrderPath,
   closeTelegramWebApp,
   getTelegramEmployeeSessionToken,
@@ -47,6 +48,8 @@ function TelegramScannerPage() {
     let lastError = null;
     let currentSessionToken = getTelegramEmployeeSessionToken();
     const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 350));
+
+    await bootstrapTelegramInitData({ retries: retries, delayMs: 350, markSession: true });
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
