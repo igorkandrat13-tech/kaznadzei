@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -43,70 +43,98 @@ function TelegramScannerPage() {
   const [openingScanner, setOpeningScanner] = useState(false);
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
-  const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
+  const bootstrapTelegramSession = useCallback(async ({ retries = 6 } = {}) => {
     markTelegramWebAppSession();
-    let lastError = null;
-    let currentSessionToken = getTelegramEmployeeSessionToken();
-    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 350));
+    const watchdogTimerId = { current: 0 };
+    let cleanupWatchdogCalled = false;
+    const cleanupWatchdog = () => {
+      if (cleanupWatchdogCalled) return;
+      cleanupWatchdogCalled = true;
+      if (watchdogTimerId.current) {
+        window.clearTimeout(watchdogTimerId.current);
+        watchdogTimerId.current = 0;
+      }
+    };
+    const watchdogPromise = new Promise((_, reject) => {
+      watchdogTimerId.current = window.setTimeout(() => {
+        cleanupWatchdog();
+        reject(new Error('Таймаут подготовки доступа. Обновите страницу или откройте через кнопку в боте.'));
+      }, 10000);
+    });
+    watchdogPromise.catch(() => {});
 
-    for (let attempt = 0; attempt < retries; attempt += 1) {
-      persistTelegramInitData();
-      persistTelegramUnsafeUser();
+    const mainFlow = (async () => {
+      let lastError = null;
+      let currentSessionToken = getTelegramEmployeeSessionToken();
+      const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 350));
 
-      const initData = getTelegramInitData();
-      const unsafeUser = getTelegramUnsafeUser();
-      const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
-      const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
+      for (let attempt = 0; attempt < retries; attempt += 1) {
+        persistTelegramInitData();
+        persistTelegramUnsafeUser();
 
-      // In Telegram Web App the signed auth payload may appear a bit later than the
-      // URL query token. Give it a chance to arrive before trusting a stale token.
-      if (!hasTelegramAuthPayload) {
-        if (attempt < retries - 1) {
+        const initData = getTelegramInitData();
+        const unsafeUser = getTelegramUnsafeUser();
+        const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
+        const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
+        const isLastAttempt = attempt === retries - 1;
+
+        if (!hasTelegramAuthPayload && !sessionToken && !isLastAttempt) {
           await waitForTelegramAuth();
           continue;
         }
-      }
 
-      if (!hasTelegramAuthPayload && !sessionToken) {
-        continue;
-      }
-
-      try {
-        const res = await apiFetch('/api/telegram/webapp/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            initData,
-            unsafeUser,
-            sessionToken,
-          }),
-        });
-        const data = await parseJsonSafely(res);
-        if (!res.ok) {
-          const errorMessage = data?.message || 'Не удалось подготовить доступ к заказам.';
-          if (sessionToken && isRecoverableTelegramSessionMessage(errorMessage)) {
-            currentSessionToken = '';
-            setTelegramEmployeeSessionToken('');
-            if (attempt < retries - 1) {
-              await waitForTelegramAuth();
+        try {
+          const res = await apiFetch('/api/telegram/webapp/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              initData,
+              unsafeUser,
+              sessionToken,
+            }),
+          });
+          const data = await parseJsonSafely(res);
+          if (!res.ok) {
+            const errorMessage = data?.message || 'Не удалось подготовить доступ к заказам.';
+            if (sessionToken && isRecoverableTelegramSessionMessage(errorMessage)) {
+              currentSessionToken = '';
+              setTelegramEmployeeSessionToken('');
+              if (!isLastAttempt) {
+                await waitForTelegramAuth();
+              }
+              continue;
             }
-            continue;
+            throw new Error(errorMessage);
           }
-          throw new Error(errorMessage);
+          currentSessionToken = data?.sessionToken || '';
+          setTelegramEmployeeSessionToken(currentSessionToken);
+          return Boolean(currentSessionToken);
+        } catch (sessionError) {
+          lastError = sessionError;
+          if (!isLastAttempt) {
+            await waitForTelegramAuth();
+          }
         }
-        currentSessionToken = data?.sessionToken || '';
-        setTelegramEmployeeSessionToken(currentSessionToken);
-        return Boolean(currentSessionToken);
-      } catch (sessionError) {
-        lastError = sessionError;
-        await waitForTelegramAuth();
       }
-    }
 
-    if (lastError) {
-      setError(lastError.message || 'Не удалось подготовить доступ к заказам.');
+      if (lastError) {
+        setError(lastError.message || 'Не удалось подготовить доступ к заказам.');
+      }
+      return false;
+    })();
+
+    try {
+      return await Promise.race([mainFlow, watchdogPromise]);
+    } catch (watchdogOrFlowErr) {
+      if (watchdogOrFlowErr?.message) {
+        setError(String(watchdogOrFlowErr.message));
+      } else {
+        setError('Не удалось подготовить доступ. Пожалуйста, обновите страницу.');
+      }
+      return false;
+    } finally {
+      cleanupWatchdog();
     }
-    return false;
   }, []);
 
   const openScanner = useCallback(() => {
