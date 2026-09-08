@@ -39,8 +39,21 @@ function TelegramScannerTokenRouter() {
       const pathname = String(location.pathname || '');
       const scanMatch = pathname.match(/^\/telegram-app\/t\/[^/]+\/scan\/(.+)$/);
       if (scanMatch && scanMatch[1]) {
-        const nextPath = '/' + String(scanMatch[1]).replace(/^\/+/, '');
-        window.location.replace((window.location?.origin || '') + nextPath);
+        const nextBase = '/' + String(scanMatch[1]).replace(/^\/+/, '');
+        let finalUrl;
+        try {
+          const u = new URL(nextBase, window.location?.origin || 'http://localhost');
+          if (rawToken && rawToken.length > 32) {
+            u.searchParams.set('employeeSessionToken', rawToken);
+            const hashParams = new URLSearchParams(u.hash.replace(/^#/, ''));
+            hashParams.set('token', rawToken);
+            u.hash = hashParams.toString();
+          }
+          finalUrl = `${window.location.origin}${u.pathname}${u.search}${u.hash ? u.hash : ''}`;
+        } catch (_) {
+          finalUrl = (window.location?.origin || '') + nextBase;
+        }
+        window.location.replace(finalUrl);
         return undefined;
       }
     } catch (_) { /* ignore routing errors */ }

@@ -294,12 +294,36 @@ async function clearTelegramMenuButton(token, chatId) {
 async function syncTelegramMenuButton(token, chatId) {
   if (!chatId) return { updated: false, error: 'empty_chat_id', url: '' };
   const employee = getEmployeeByTelegramChatId(chatId);
-  const webAppUrlWithToken = employee ? buildEmployeeWebAppUrl(employee) : '';
+  if (!employee) {
+    await clearTelegramMenuButton(token, chatId);
+    return { updated: false, error: 'no_employee_by_chat_id', url: '' };
+  }
+  const webAppUrlWithToken = buildEmployeeWebAppUrl(employee);
+  if (!webAppUrlWithToken) {
+    await clearTelegramMenuButton(token, chatId);
+    return { updated: false, error: 'empty_url', url: '' };
+  }
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
     await clearTelegramMenuButton(token, chatId);
-    return { updated: true, error: '', url: webAppUrlWithToken, hidden: true };
+    await wait(150);
+    await setChatMenuButton(token, {
+      chatId,
+      type: 'web_app',
+      text: EMPLOYEE_QR_SCANNER_BUTTON_TEXT,
+      url: webAppUrlWithToken,
+    });
+    await wait(200);
+    await setChatMenuButton(token, {
+      chatId,
+      type: 'web_app',
+      text: EMPLOYEE_QR_SCANNER_BUTTON_TEXT,
+      url: webAppUrlWithToken,
+    });
+    return { updated: true, error: '', url: webAppUrlWithToken };
   } catch (err) {
-    return { updated: false, error: String(err?.message || err || 'unknown'), url: webAppUrlWithToken, hidden: true };
+    try { await clearTelegramMenuButton(token, chatId); } catch (_) { /* ignore */ }
+    return { updated: false, error: String(err?.message || err || 'unknown'), url: webAppUrlWithToken };
   }
 }
 
