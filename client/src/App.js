@@ -11,7 +11,9 @@ import WorkshopRequestsPage from './WorkshopRequestsPage';
 import Home from './Home';
 import TelegramScannerPage from './TelegramScannerPage';
 import {
+  hasTelegramWebAppSession,
   isTelegramEmployeeSessionTokenExpired,
+  isTelegramWebApp,
   markTelegramWebAppSession,
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
@@ -101,14 +103,14 @@ function AppLayout() {
     const routeTelegramMode = location.pathname === '/telegram-app';
     const ordersRoute = location.pathname === '/orders';
     const centeredHeaderLogoRoute = !ordersRoute;
-    const telegramMode = detectTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
+    const telegramMode = isTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
     const canAccessOrders = canAccessRole('manager', authRole);
     const mobileMenuAnchorRef = useRef(null);
 
     useEffect(() => {
-        if (detectTelegramWebApp()) {
+        if (isTelegramWebApp()) {
             markTelegramWebAppSession();
         }
     }, [location.pathname]);
