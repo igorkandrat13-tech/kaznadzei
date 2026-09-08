@@ -1,4 +1,4 @@
-const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
+﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
 const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
 const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
@@ -71,46 +71,6 @@ export function persistTelegramUnsafeUser() {
   return unsafeUser;
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-export async function bootstrapTelegramInitData({ retries = 4, delayMs = 350, markSession = true } = {}) {
-  let resolvedInitData = persistTelegramInitData() || getTelegramInitData();
-  let resolvedUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
-  if (markSession) markTelegramWebAppSession();
-
-  if ((resolvedInitData && String(resolvedInitData).trim().length > 0) || (resolvedUnsafeUser?.id)) {
-    return { initData: resolvedInitData, unsafeUser: resolvedUnsafeUser, retriesLeft: retries, resolvedFast: true };
-  }
-
-  const attemptCount = Math.max(0, Math.min(12, Number(retries) || 0));
-  for (let attempt = 0; attempt < attemptCount; attempt++) {
-    await sleep(delayMs);
-    resolvedInitData = persistTelegramInitData() || getTelegramInitData();
-    resolvedUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
-    if ((resolvedInitData && String(resolvedInitData).trim().length > 0) || (resolvedUnsafeUser?.id)) {
-      if (markSession) markTelegramWebAppSession();
-      return {
-        initData: resolvedInitData,
-        unsafeUser: resolvedUnsafeUser,
-        retriesLeft: attemptCount - attempt - 1,
-        resolvedFast: false,
-        attempt,
-      };
-    }
-  }
-
-  return {
-    initData: resolvedInitData || '',
-    unsafeUser: resolvedUnsafeUser || null,
-    retriesLeft: 0,
-    resolvedFast: false,
-    attempt: attemptCount,
-    timedOut: true,
-  };
-}
-
 export function hasTelegramWebAppSession() {
   try {
     return window.sessionStorage?.getItem(TELEGRAM_SESSION_STORAGE_KEY) === '1';
@@ -132,13 +92,8 @@ export function isTelegramWebApp() {
       }
     }
   } catch (_) { /* ignore */ }
-  if (!webApp) {
-    return Boolean(hasEmployeeSessionToken || hasEmployeeSessionTokenInUrl);
-  }
   return Boolean(
-    webApp.initData
-    || webApp.initDataUnsafe?.user
-    || hasTelegramWebAppSession()
+    (webApp && (webApp.initData || webApp.initDataUnsafe?.user || hasTelegramWebAppSession()))
     || hasEmployeeSessionToken
     || hasEmployeeSessionTokenInUrl,
   );
@@ -155,7 +110,7 @@ export function tryReadyTelegramWebApp() {
       webApp.ready();
       return true;
     }
-  } catch (_) { /* WebAppMethodUnsupported or similar — ignore */ }
+  } catch (_error) { /* WebAppMethodUnsupported */ }
   return false;
 }
 
@@ -166,7 +121,7 @@ export function tryExpandTelegramWebApp() {
       webApp.expand();
       return true;
     }
-  } catch (_) { /* WebAppMethodUnsupported or similar — ignore */ }
+  } catch (_error) { /* WebAppMethodUnsupported */ }
   return false;
 }
 
@@ -280,33 +235,25 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
           if (typeof webApp.closeScanQrPopup === 'function') {
             webApp.closeScanQrPopup();
           }
-        } catch (_closeErr) { /* WebAppMethodUnsupported tolerance */ }
+        } catch (_) { /* ignore */ }
 
         onStatusChange?.('Открываю страницу заказа...');
         onSuccess?.(orderPath);
         return true;
       }
     );
-  } catch (scannerErr) {
-    const msg = scannerErr?.message || scannerErr?.name || String(scannerErr || '');
-    if (String(msg).includes('Unsupported') || String(msg).includes('not supported')) {
-      onError?.('Камера сканера QR-кода недоступна в этом режиме Telegram. Откройте сканер через кнопку «Меню бота» или перейдите по прямой ссылке на заказ.');
-    } else {
-      onError?.(`Не удалось открыть камеру: ${msg}`);
-    }
+    return true;
+  } catch (scannerError) {
+    onError?.('Камера сканера QR-кода недоступна в этом режиме Telegram. Откройте страницу заказа по прямой ссылке или через кнопку в боте.');
     return false;
   }
-
-  return true;
 }
 
 export function closeTelegramWebApp() {
-  try {
-    const webApp = getTelegramWebApp();
-    if (webApp && typeof webApp.close === 'function') {
-      webApp.close();
-      return true;
-    }
-  } catch (_) { /* unsupported */ }
+  const webApp = getTelegramWebApp();
+  if (webApp && typeof webApp.close === 'function') {
+    webApp.close();
+    return true;
+  }
   return false;
 }

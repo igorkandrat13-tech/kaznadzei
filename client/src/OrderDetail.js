@@ -732,25 +732,46 @@ function OrderDetail() {
   useEffect(() => {
     if (!telegramMode) return undefined;
 
+    const storedToken = getActiveTelegramSessionToken();
+    const urlParams = new URLSearchParams(location.search);
+    const urlTokenRaw = urlParams.get('employeeSessionToken');
+    const urlTokenValid = urlTokenRaw && !isTelegramEmployeeSessionTokenExpired(urlTokenRaw);
+    const effectiveHasToken = Boolean(storedToken || urlTokenValid);
+    const webApp = getTelegramWebApp();
+
+    if (!webApp && !effectiveHasToken) {
+      return undefined;
+    }
+
     markTelegramWebAppSession();
-    refreshTelegramAuth({ fromBootstrap: true });
+    refreshTelegramAuth();
 
     tryReadyTelegramWebApp();
     tryExpandTelegramWebApp();
 
-    const retryTimers = [100, 350, 800, 1500].map(delay => (
-      window.setTimeout(() => refreshTelegramAuth({ fromBootstrap: true }), delay)
-    ));
+    if (effectiveHasToken && !webApp) {
+      setTelegramSessionBootstrapKey(k => k + 1);
+    }
+
+    const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(() => {
+      refreshTelegramAuth();
+      if (getActiveTelegramSessionToken() || urlParams.get('employeeSessionToken')) {
+        setTelegramSessionBootstrapKey(k => k + 1);
+      }
+    }, delay));
     const finishTimer = window.setTimeout(() => {
-      refreshTelegramAuth({ fromBootstrap: true });
+      refreshTelegramAuth();
       setTelegramAuthResolved(true);
+      if (getActiveTelegramSessionToken() || urlParams.get('employeeSessionToken')) {
+        setTelegramSessionBootstrapKey(k => k + 1);
+      }
     }, 1700);
 
     return () => {
       retryTimers.forEach(timerId => window.clearTimeout(timerId));
       window.clearTimeout(finishTimer);
     };
-  }, [refreshTelegramAuth, telegramMode]);
+  }, [getActiveTelegramSessionToken, location.search, refreshTelegramAuth, telegramMode]);
 
   useEffect(() => {
     if (!telegramMode) return undefined;

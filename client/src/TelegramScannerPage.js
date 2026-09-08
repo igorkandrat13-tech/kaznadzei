@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
-  bootstrapTelegramInitData,
   buildTelegramOrderPath,
   closeTelegramWebApp,
   getTelegramEmployeeSessionToken,
@@ -10,6 +9,7 @@ import {
   getTelegramUnsafeUser,
   getTelegramWebApp,
   isTelegramEmployeeSessionTokenExpired,
+  isTelegramWebApp,
   markTelegramWebAppSession,
   openTelegramQrScanner,
   persistTelegramInitData,
@@ -27,7 +27,7 @@ function isRecoverableTelegramSessionMessage(message) {
       normalized.includes('истек')
       || normalized.includes('истёк')
       || normalized.includes('устарел')
-      || normalized.includes('не прош')
+      || normalized.includes('не про')
       || normalized.includes('некоррект')
       || normalized.includes('непол')
     );
@@ -83,7 +83,7 @@ function TelegramScannerPage() {
         });
         const data = await parseJsonSafely(res);
         if (!res.ok) {
-          const errorMessage = data?.message || 'Не удалось подготовить доступ к заказу.';
+          const errorMessage = data?.message || 'Не удалось подготовить доступ к заказам.';
           if (sessionToken && isRecoverableTelegramSessionMessage(errorMessage)) {
             currentSessionToken = '';
             setTelegramEmployeeSessionToken('');
@@ -104,7 +104,7 @@ function TelegramScannerPage() {
     }
 
     if (lastError) {
-      setError(lastError.message || 'Не удалось подготовить доступ к заказу.');
+      setError(lastError.message || 'Не удалось подготовить доступ к заказам.');
     }
     return false;
   }, []);
@@ -149,19 +149,20 @@ function TelegramScannerPage() {
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
-    const hasStoredToken = Boolean(getTelegramEmployeeSessionToken());
-    if (!webApp && !hasStoredToken) return;
+    const storedToken = getTelegramEmployeeSessionToken();
+    if (!webApp && !storedToken) return undefined;
+    if (webApp && !isTelegramWebApp() && !storedToken) return undefined;
 
     bootstrapTelegramSession()
       .finally(() => setBootstrappingSession(false));
 
     tryReadyTelegramWebApp();
     tryExpandTelegramWebApp();
+    return undefined;
   }, [bootstrapTelegramSession]);
 
   useEffect(() => {
-    const webApp = getTelegramWebApp();
-    if (!webApp || autoOpenedRef.current || bootstrappingSession) return;
+    if (autoOpenedRef.current || bootstrappingSession) return;
 
     autoOpenedRef.current = true;
     openScanner();
