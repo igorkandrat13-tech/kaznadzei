@@ -1,4 +1,4 @@
-﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -40,11 +40,11 @@ function TelegramScannerPage() {
   const [openingScanner, setOpeningScanner] = useState(false);
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
-  const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
+  const bootstrapTelegramSession = useCallback(async ({ retries = 8 } = {}) => {
     markTelegramWebAppSession();
     let lastError = null;
     let currentSessionToken = getTelegramEmployeeSessionToken();
-    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 350));
+    const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 400));
 
     for (let attempt = 0; attempt < retries; attempt += 1) {
       persistTelegramInitData();
@@ -54,6 +54,7 @@ function TelegramScannerPage() {
       const unsafeUser = getTelegramUnsafeUser();
       const hasTelegramAuthPayload = Boolean(initData || unsafeUser?.id);
       const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
+      const isLastAttempt = attempt === retries - 1;
 
       // In Telegram Web App the signed auth payload may appear a bit later than the
       // URL query token. Give it a chance to arrive before trusting a stale token.
@@ -64,7 +65,7 @@ function TelegramScannerPage() {
         }
       }
 
-      if (!hasTelegramAuthPayload && !sessionToken) {
+      if (!hasTelegramAuthPayload && !sessionToken && !isLastAttempt) {
         continue;
       }
 
@@ -96,12 +97,16 @@ function TelegramScannerPage() {
         return Boolean(currentSessionToken);
       } catch (sessionError) {
         lastError = sessionError;
-        await waitForTelegramAuth();
+        if (attempt < retries - 1) {
+          await waitForTelegramAuth();
+        }
       }
     }
 
     if (lastError) {
-      setError(lastError.message || 'Не удалось подготовить доступ к заказам.');
+      setError(lastError.message || 'Не удалось подготовить доступ к заказам. Если вы открыли страницу через кнопку в боте — запросите у администратора персональную ссылку и откройте её из чата Telegram.');
+    } else {
+      setError('Telegram не передал данные сотрудника (initData пустой). Если вы открыли страницу через кнопку в боте — запросите у администратора персональную ссылку с токеном и откройте её из чата Telegram.');
     }
     return false;
   }, []);

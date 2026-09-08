@@ -666,7 +666,7 @@ function OrderDetail() {
       }
       setTelegramEmployee(null);
       setSessionLoading(false);
-      setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте.');
+      setSessionError('Не удалось подтвердить ваш доступ. Откройте заказ заново через кнопку в боте. Если ошибка сохраняется — запросите у администратора персональную ссылку с токеном и откройте её из чата Telegram.');
       return;
     }
     setSessionLoading(true);
@@ -741,13 +741,13 @@ function OrderDetail() {
       webApp.expand();
     }
 
-    const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(() => {
+    const retryTimers = [200, 500, 900, 1400, 2000, 2800].map(delay => window.setTimeout(() => {
       refreshTelegramAuth();
     }, delay));
     const finishTimer = window.setTimeout(() => {
       refreshTelegramAuth();
       setTelegramAuthResolved(true);
-    }, 1700);
+    }, 3200);
 
     return () => {
       retryTimers.forEach(timerId => window.clearTimeout(timerId));
