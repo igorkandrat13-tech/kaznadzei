@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -131,7 +131,13 @@ function TelegramScannerPage() {
           try {
             setError('');
             setStatus('Переход к найденному изделию...');
-            navigate(buildTelegramOrderPath(orderPath));
+            const relPath = buildTelegramOrderPath(orderPath);
+            if (relPath) {
+              const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
+              const absUrl = origin + relPath;
+              window.location.replace(absUrl);
+              return;
+            }
           } finally {
             setOpeningScanner(false);
           }

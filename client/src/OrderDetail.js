@@ -743,18 +743,20 @@ function OrderDetail() {
 
     if (effectiveHasToken) {
       setTelegramSessionBootstrapKey(k => k + 1);
+      setTelegramAuthResolved(true);
+      return undefined;
     }
 
     const retryTimers = [200, 500, 900, 1400, 2000, 2800].map(delay => window.setTimeout(() => {
       refreshTelegramAuth();
-      if (effectiveHasToken || readTelegramUrlSessionTokenRaw().token) {
+      if (readTelegramUrlSessionTokenRaw().token || getActiveTelegramSessionToken()) {
         setTelegramSessionBootstrapKey(k => k + 1);
       }
     }, delay));
     const finishTimer = window.setTimeout(() => {
       refreshTelegramAuth();
       setTelegramAuthResolved(true);
-      if (effectiveHasToken || readTelegramUrlSessionTokenRaw().token) {
+      if (readTelegramUrlSessionTokenRaw().token || getActiveTelegramSessionToken()) {
         setTelegramSessionBootstrapKey(k => k + 1);
       }
     }, 3200);
