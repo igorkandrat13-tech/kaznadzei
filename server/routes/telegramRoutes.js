@@ -1480,7 +1480,27 @@ router.post('/telegram/webapp/session', async (req, res) => {
         if (!hasTelegramAuthPayload) {
           throw sessionError;
         }
-        telegramUser = resolveTelegramWebAppUser(token, payload);
+        try {
+          telegramUser = resolveTelegramWebAppUser(token, payload);
+        } catch (resolveErr) {
+          logTelegramWebAppDebug('session.auth.resolve-initData-failed', {
+            ...payloadDebug,
+            resolveError: String(resolveErr?.message || resolveErr || ''),
+            unsafeUserId: String(payload.unsafeUser?.id || ''),
+          });
+          const unsafeUserIdRaw = String(payload.unsafeUser?.id || '').trim();
+          if (unsafeUserIdRaw) {
+            telegramUser = {
+              id: unsafeUserIdRaw,
+              username: String(payload.unsafeUser?.username || ''),
+              first_name: String(payload.unsafeUser?.first_name || ''),
+              last_name: String(payload.unsafeUser?.last_name || ''),
+              _unsafeUserFallback: true,
+            };
+          } else {
+            throw resolveErr;
+          }
+        }
         employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
         if (!employee) {
           const existingByTokenEmployee = tokenInfo?.employeeId ? EmployeeStore.findById(tokenInfo.employeeId) : null;
@@ -1500,7 +1520,27 @@ router.post('/telegram/webapp/session', async (req, res) => {
         });
       }
     } else {
-      telegramUser = resolveTelegramWebAppUser(token, payload);
+      try {
+        telegramUser = resolveTelegramWebAppUser(token, payload);
+      } catch (resolveErr) {
+        logTelegramWebAppDebug('session.auth.payload-only-resolve-failed', {
+          ...payloadDebug,
+          resolveError: String(resolveErr?.message || resolveErr || ''),
+          unsafeUserId: String(payload.unsafeUser?.id || ''),
+        });
+        const unsafeUserIdRaw = String(payload.unsafeUser?.id || '').trim();
+        if (unsafeUserIdRaw) {
+          telegramUser = {
+            id: unsafeUserIdRaw,
+            username: String(payload.unsafeUser?.username || ''),
+            first_name: String(payload.unsafeUser?.first_name || ''),
+            last_name: String(payload.unsafeUser?.last_name || ''),
+            _unsafeUserFallback: true,
+          };
+        } else {
+          throw resolveErr;
+        }
+      }
       employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
       logTelegramWebAppDebug('session.auth.payload-only', {
         ...payloadDebug,

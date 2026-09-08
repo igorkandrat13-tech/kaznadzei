@@ -563,7 +563,28 @@ function resolveTelegramEmployee(token, payload, context = {}) {
       if (!hasTelegramAuthPayload) {
         throw sessionError;
       }
-      telegramUser = resolveTelegramWebAppUser(token, payload || {});
+      try {
+        telegramUser = resolveTelegramWebAppUser(token, payload || {});
+      } catch (resolveErr) {
+        logTelegramOrderDebug('resolve.resolve-initData-failed', {
+          ...context,
+          ...payloadDebug,
+          resolveError: String(resolveErr?.message || resolveErr || ''),
+          unsafeUserId: String(payload?.unsafeUser?.id || ''),
+        });
+        const unsafeUserIdRaw = String(payload?.unsafeUser?.id || '').trim();
+        if (unsafeUserIdRaw) {
+          telegramUser = {
+            id: unsafeUserIdRaw,
+            username: String(payload?.unsafeUser?.username || ''),
+            first_name: String(payload?.unsafeUser?.first_name || ''),
+            last_name: String(payload?.unsafeUser?.last_name || ''),
+            _unsafeUserFallback: true,
+          };
+        } else {
+          throw resolveErr;
+        }
+      }
       employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
       if (!employee) {
         const existingByTokenEmployee = tokenInfo?.employeeId ? EmployeeStore.findById(tokenInfo.employeeId) : null;
@@ -586,7 +607,28 @@ function resolveTelegramEmployee(token, payload, context = {}) {
       });
     }
   } else {
-    telegramUser = resolveTelegramWebAppUser(token, payload || {});
+    try {
+      telegramUser = resolveTelegramWebAppUser(token, payload || {});
+    } catch (resolveErr) {
+      logTelegramOrderDebug('resolve.payload-only-resolve-failed', {
+        ...context,
+        ...payloadDebug,
+        resolveError: String(resolveErr?.message || resolveErr || ''),
+        unsafeUserId: String(payload?.unsafeUser?.id || ''),
+      });
+      const unsafeUserIdRaw = String(payload?.unsafeUser?.id || '').trim();
+      if (unsafeUserIdRaw) {
+        telegramUser = {
+          id: unsafeUserIdRaw,
+          username: String(payload?.unsafeUser?.username || ''),
+          first_name: String(payload?.unsafeUser?.first_name || ''),
+          last_name: String(payload?.unsafeUser?.last_name || ''),
+          _unsafeUserFallback: true,
+        };
+      } else {
+        throw resolveErr;
+      }
+    }
     employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
     logTelegramOrderDebug('resolve.payload', {
       ...context,
