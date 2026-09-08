@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -43,6 +43,12 @@ function TelegramScannerPage() {
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 8 } = {}) => {
     markTelegramWebAppSession();
+
+    const existingToken = getTelegramEmployeeSessionToken() || readTelegramUrlSessionToken();
+    if (existingToken) {
+      return true;
+    }
+
     let lastError = null;
     let currentSessionToken = getTelegramEmployeeSessionToken();
     const waitForTelegramAuth = () => new Promise(resolve => window.setTimeout(resolve, 400));
@@ -57,8 +63,10 @@ function TelegramScannerPage() {
       const sessionToken = currentSessionToken || getTelegramEmployeeSessionToken();
       const isLastAttempt = attempt === retries - 1;
 
-      // In Telegram Web App the signed auth payload may appear a bit later than the
-      // URL query token. Give it a chance to arrive before trusting a stale token.
+      if (sessionToken) {
+        return true;
+      }
+
       if (!hasTelegramAuthPayload) {
         if (attempt < retries - 1) {
           await waitForTelegramAuth();
@@ -66,7 +74,7 @@ function TelegramScannerPage() {
         }
       }
 
-      if (!hasTelegramAuthPayload && !sessionToken && !isLastAttempt) {
+      if (!hasTelegramAuthPayload && !isLastAttempt) {
         continue;
       }
 
@@ -152,20 +160,37 @@ function TelegramScannerPage() {
   }, [location.search, location.hash]);
 
   useEffect(() => {
+    const storedToken = getTelegramEmployeeSessionToken();
+    const urlToken = readTelegramUrlSessionToken();
+    const hasToken = Boolean(storedToken || urlToken);
     const webApp = getTelegramWebApp();
-    if (!webApp) return;
 
-    bootstrapTelegramSession()
-      .finally(() => setBootstrappingSession(false));
-
-    if (typeof webApp.ready === 'function') {
-      webApp.ready();
+    if (!webApp && !hasToken) {
+      setBootstrappingSession(false);
+      return undefined;
+    }
+    if (webApp && !isTelegramWebApp() && !hasToken) {
+      setBootstrappingSession(false);
+      return undefined;
     }
 
-    if (typeof webApp.expand === 'function') {
-      webApp.expand();
+    if (hasToken) {
+      markTelegramWebAppSession();
+      setBootstrappingSession(false);
+    } else {
+      bootstrapTelegramSession()
+        .finally(() => setBootstrappingSession(false));
     }
-  }, [bootstrapTelegramSession]);
+
+    if (webApp && typeof webApp.ready === 'function') {
+      try { webApp.ready(); } catch (_) { /* ignore */ }
+    }
+
+    if (webApp && typeof webApp.expand === 'function') {
+      try { webApp.expand(); } catch (_) { /* ignore */ }
+    }
+    return undefined;
+  }, [bootstrapTelegramSession, location.search, location.hash]);
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
