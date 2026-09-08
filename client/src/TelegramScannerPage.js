@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
@@ -9,6 +9,7 @@ import {
   getTelegramUnsafeUser,
   getTelegramWebApp,
   isTelegramEmployeeSessionTokenExpired,
+  isTelegramWebApp,
   markTelegramWebAppSession,
   openTelegramQrScanner,
   persistTelegramInitData,
