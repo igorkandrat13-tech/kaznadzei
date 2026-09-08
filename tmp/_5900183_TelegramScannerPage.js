@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, parseJsonSafely } from './api';
 import {
-  bootstrapTelegramInitData,
   buildTelegramOrderPath,
   closeTelegramWebApp,
   getTelegramEmployeeSessionToken,
@@ -15,8 +14,6 @@ import {
   persistTelegramInitData,
   persistTelegramUnsafeUser,
   setTelegramEmployeeSessionToken,
-  tryExpandTelegramWebApp,
-  tryReadyTelegramWebApp,
 } from './telegramWebApp';
 import { useGlobalErrorEffect } from './globalErrors';
 
@@ -24,12 +21,12 @@ function isRecoverableTelegramSessionMessage(message) {
   const normalized = String(message || '').toLowerCase();
   return normalized.includes('session token telegram web app')
     && (
-      normalized.includes('–∏—Å—Ç–µ–∫')
-      || normalized.includes('–∏—Å—Ç—ë–∫')
-      || normalized.includes('—É—Å—Ç–∞—Ä–µ–ª')
-      || normalized.includes('–Ω–µ –ø—Ä–æ—à')
-      || normalized.includes('–Ω–µ–∫–æ—Ä—Ä–µ–∫—Ç')
-      || normalized.includes('–Ω–µ–ø–æ–ª')
+      normalized.includes('¶¨T¡T¬¶¶¶¶')
+      || normalized.includes('¶¨T¡T¬T—¶¶')
+      || normalized.includes('T√T¡T¬¶-T¿¶¶¶¨')
+      || normalized.includes('¶-¶¶ ¶¨T¿¶-T»')
+      || normalized.includes('¶-¶¶¶¶¶-T¿T¿¶¶¶¶T¬')
+      || normalized.includes('¶-¶¶¶¨¶-¶¨')
     );
 }
 
@@ -38,10 +35,10 @@ function TelegramScannerPage() {
   const location = useLocation();
   const autoOpenedRef = useRef(false);
   const [error, setError] = useState('');
-  const [status, setStatus] = useState('–û—Ç–∫—Ä–æ–π—Ç–µ –∫–∞–º–µ—Ä—É –∏ –Ω–∞–≤–µ–¥–∏—Ç–µ –µ—ë –Ω–∞ QR-–∫–æ–¥ –∑–∞–∫–∞–∑–∞.');
+  const [status, setStatus] = useState('¶ﬁT¬¶¶T¿¶-¶¶T¬¶¶ ¶¶¶-¶-¶¶T¿T√ ¶¨ ¶-¶-¶-¶¶¶+¶¨T¬¶¶ ¶¶T— ¶-¶- QR-¶¶¶-¶+ ¶¨¶-¶¶¶-¶¨¶-.');
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
   const [openingScanner, setOpeningScanner] = useState(false);
-  useGlobalErrorEffect(error, '–û—à–∏–±–∫–∞ Telegram Web App.');
+  useGlobalErrorEffect(error, '¶ﬁT»¶¨¶-¶¶¶- Telegram Web App.');
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 4 } = {}) => {
     markTelegramWebAppSession();
@@ -83,7 +80,7 @@ function TelegramScannerPage() {
         });
         const data = await parseJsonSafely(res);
         if (!res.ok) {
-          const errorMessage = data?.message || '–ù–µ —É–¥–∞–ª–æ—Å—å –ø–æ–¥–≥–æ—Ç–æ–≤–∏—Ç—å –¥–æ—Å—Ç—É–ø –∫ –∑–∞–∫–∞–∑—É.';
+          const errorMessage = data?.message || '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶-¶+¶¶¶-T¬¶-¶-¶¨T¬TÃ ¶+¶-T¡T¬T√¶¨ ¶¶ ¶¨¶-¶¶¶-¶¨T√.';
           if (sessionToken && isRecoverableTelegramSessionMessage(errorMessage)) {
             currentSessionToken = '';
             setTelegramEmployeeSessionToken('');
@@ -104,7 +101,7 @@ function TelegramScannerPage() {
     }
 
     if (lastError) {
-      setError(lastError.message || '–ù–µ —É–¥–∞–ª–æ—Å—å –ø–æ–¥–≥–æ—Ç–æ–≤–∏—Ç—å –¥–æ—Å—Ç—É–ø –∫ –∑–∞–∫–∞–∑—É.');
+      setError(lastError.message || '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶-¶+¶¶¶-T¬¶-¶-¶¨T¬TÃ ¶+¶-T¡T¬T√¶¨ ¶¶ ¶¨¶-¶¶¶-¶¨T√.');
     }
     return false;
   }, []);
@@ -118,7 +115,7 @@ function TelegramScannerPage() {
         onSuccess: async (orderPath) => {
           try {
             setError('');
-            setStatus('–û—Ç–∫—Ä—ã–≤–∞—é —Å—Ç—Ä–∞–Ω–∏—Ü—É –∑–∞–∫–∞–∑–∞...');
+            setStatus('¶ﬁT¬¶¶T¿TÀ¶-¶-TŒ T¡T¬T¿¶-¶-¶¨T∆T√ ¶¨¶-¶¶¶-¶¨¶-...');
             navigate(buildTelegramOrderPath(orderPath));
           } finally {
             setOpeningScanner(false);
@@ -131,7 +128,7 @@ function TelegramScannerPage() {
         onStatusChange: setStatus,
       });
     } catch (scannerError) {
-      setError(scannerError.message || '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–∫—Ä—ã—Ç—å –∫–∞–º–µ—Ä—É.');
+      setError(scannerError.message || '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶¶T¿TÀT¬TÃ ¶¶¶-¶-¶¶T¿T√.');
       setOpeningScanner(false);
     }
   }, [bootstrappingSession, navigate, openingScanner]);
@@ -149,14 +146,18 @@ function TelegramScannerPage() {
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
-    const hasStoredToken = Boolean(getTelegramEmployeeSessionToken());
-    if (!webApp && !hasStoredToken) return;
+    if (!webApp) return;
 
     bootstrapTelegramSession()
       .finally(() => setBootstrappingSession(false));
 
-    tryReadyTelegramWebApp();
-    tryExpandTelegramWebApp();
+    if (typeof webApp.ready === 'function') {
+      webApp.ready();
+    }
+
+    if (typeof webApp.expand === 'function') {
+      webApp.expand();
+    }
   }, [bootstrapTelegramSession]);
 
   useEffect(() => {
@@ -169,13 +170,13 @@ function TelegramScannerPage() {
 
   return (
     <div className="card scanner-card">
-      <h2>–°–∫–∞–Ω–∏—Ä–æ–≤–∞–Ω–∏–µ QR-–∫–æ–¥–∞</h2>
+      <h2>¶·¶¶¶-¶-¶¨T¿¶-¶-¶-¶-¶¨¶¶ QR-¶¶¶-¶+¶-</h2>
       <p className="text-muted" style={{ lineHeight: 1.6 }}>
-        –ü–æ—Å–ª–µ —Å–∫–∞–Ω–∏—Ä–æ–≤–∞–Ω–∏—è –æ—Ç–∫—Ä–æ–µ—Ç—Å—è —Å—Ç—Ä–∞–Ω–∏—Ü–∞ –∑–∞–∫–∞–∑–∞.
+        ¶ﬂ¶-T¡¶¨¶¶ T¡¶¶¶-¶-¶¨T¿¶-¶-¶-¶-¶¨Tœ ¶-T¬¶¶T¿¶-¶¶T¬T¡Tœ T¡T¬T¿¶-¶-¶¨T∆¶- ¶¨¶-¶¶¶-¶¨¶-.
       </p>
 
       <div className="scanner-status-box">
-        {bootstrappingSession ? '–ü–æ–¥–≥–æ—Ç–∞–≤–ª–∏–≤–∞—é –¥–æ—Å—Ç—É–ø...' : status}
+        {bootstrappingSession ? '¶ﬂ¶-¶+¶¶¶-T¬¶-¶-¶¨¶¨¶-¶-TŒ ¶+¶-T¡T¬T√¶¨...' : status}
       </div>
 
       {error && (
@@ -186,10 +187,10 @@ function TelegramScannerPage() {
 
       <div className="inline-actions-centered">
         <button className="btn btn-primary" onClick={openScanner} disabled={bootstrappingSession || openingScanner}>
-          {bootstrappingSession ? '–ü–æ–¥–≥–æ—Ç–æ–≤–∫–∞...' : openingScanner ? '–û—Ç–∫—Ä—ã–≤–∞—é...' : '–û—Ç–∫—Ä—ã—Ç—å –∫–∞–º–µ—Ä—É'}
+          {bootstrappingSession ? '¶ﬂ¶-¶+¶¶¶-T¬¶-¶-¶¶¶-...' : openingScanner ? '¶ﬁT¬¶¶T¿TÀ¶-¶-TŒ...' : '¶ﬁT¬¶¶T¿TÀT¬TÃ ¶¶¶-¶-¶¶T¿T√'}
         </button>
         <button className="btn btn-secondary" onClick={() => closeTelegramWebApp() || navigate('/')}>
-          –ó–∞–∫—Ä—ã—Ç—å
+          ¶◊¶-¶¶T¿TÀT¬TÃ
         </button>
       </div>
     </div>

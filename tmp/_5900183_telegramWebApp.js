@@ -71,46 +71,6 @@ export function persistTelegramUnsafeUser() {
   return unsafeUser;
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-export async function bootstrapTelegramInitData({ retries = 4, delayMs = 350, markSession = true } = {}) {
-  let resolvedInitData = persistTelegramInitData() || getTelegramInitData();
-  let resolvedUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
-  if (markSession) markTelegramWebAppSession();
-
-  if ((resolvedInitData && String(resolvedInitData).trim().length > 0) || (resolvedUnsafeUser?.id)) {
-    return { initData: resolvedInitData, unsafeUser: resolvedUnsafeUser, retriesLeft: retries, resolvedFast: true };
-  }
-
-  const attemptCount = Math.max(0, Math.min(12, Number(retries) || 0));
-  for (let attempt = 0; attempt < attemptCount; attempt++) {
-    await sleep(delayMs);
-    resolvedInitData = persistTelegramInitData() || getTelegramInitData();
-    resolvedUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
-    if ((resolvedInitData && String(resolvedInitData).trim().length > 0) || (resolvedUnsafeUser?.id)) {
-      if (markSession) markTelegramWebAppSession();
-      return {
-        initData: resolvedInitData,
-        unsafeUser: resolvedUnsafeUser,
-        retriesLeft: attemptCount - attempt - 1,
-        resolvedFast: false,
-        attempt,
-      };
-    }
-  }
-
-  return {
-    initData: resolvedInitData || '',
-    unsafeUser: resolvedUnsafeUser || null,
-    retriesLeft: 0,
-    resolvedFast: false,
-    attempt: attemptCount,
-    timedOut: true,
-  };
-}
-
 export function hasTelegramWebAppSession() {
   try {
     return window.sessionStorage?.getItem(TELEGRAM_SESSION_STORAGE_KEY) === '1';
@@ -121,53 +81,7 @@ export function hasTelegramWebAppSession() {
 
 export function isTelegramWebApp() {
   const webApp = getTelegramWebApp();
-  const hasEmployeeSessionToken = Boolean(getTelegramEmployeeSessionToken());
-  let hasEmployeeSessionTokenInUrl = false;
-  try {
-    if (typeof window !== 'undefined' && window.location?.search) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const raw = urlParams.get('employeeSessionToken');
-      if (raw && String(raw).trim().length > 64) {
-        hasEmployeeSessionTokenInUrl = true;
-      }
-    }
-  } catch (_) { /* ignore */ }
-  if (!webApp) {
-    return Boolean(hasEmployeeSessionToken || hasEmployeeSessionTokenInUrl);
-  }
-  return Boolean(
-    webApp.initData
-    || webApp.initDataUnsafe?.user
-    || hasTelegramWebAppSession()
-    || hasEmployeeSessionToken
-    || hasEmployeeSessionTokenInUrl,
-  );
-}
-
-export function hasValidTelegramEmployeeSession() {
-  return Boolean(getTelegramEmployeeSessionToken());
-}
-
-export function tryReadyTelegramWebApp() {
-  try {
-    const webApp = getTelegramWebApp();
-    if (webApp && typeof webApp.ready === 'function') {
-      webApp.ready();
-      return true;
-    }
-  } catch (_) { /* WebAppMethodUnsupported or similar ‚Äî ignore */ }
-  return false;
-}
-
-export function tryExpandTelegramWebApp() {
-  try {
-    const webApp = getTelegramWebApp();
-    if (webApp && typeof webApp.expand === 'function') {
-      webApp.expand();
-      return true;
-    }
-  } catch (_) { /* WebAppMethodUnsupported or similar ‚Äî ignore */ }
-  return false;
+  return Boolean(webApp && (webApp.initData || webApp.initDataUnsafe?.user || hasTelegramWebAppSession()));
 }
 
 export function getTelegramInitData() {
@@ -259,54 +173,40 @@ export function buildTelegramOrderPath(orderPath, sessionToken = getTelegramEmpl
 export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {}) {
   const webApp = getTelegramWebApp();
   if (!webApp || typeof webApp.showScanQrPopup !== 'function') {
-    onError?.('–°–∫–∞–Ω–∏—Ä–æ–≤–∞–Ω–∏–µ –¥–æ—Å—Ç—É–ø–Ω–æ —Ç–æ–ª—å–∫–æ –≤ –ø—Ä–∏–ª–æ–∂–µ–Ω–∏–∏ Telegram –Ω–∞ –ø–æ–¥–¥–µ—Ä–∂–∏–≤–∞–µ–º–æ–º —É—Å—Ç—Ä–æ–π—Å—Ç–≤–µ.');
+    onError?.('¶·¶¶¶-¶-¶¨T¿¶-¶-¶-¶-¶¨¶¶ ¶+¶-T¡T¬T√¶¨¶-¶- T¬¶-¶¨TÃ¶¶¶- ¶- ¶¨T¿¶¨¶¨¶-¶¶¶¶¶-¶¨¶¨ Telegram ¶-¶- ¶¨¶-¶+¶+¶¶T¿¶¶¶¨¶-¶-¶¶¶-¶-¶- T√T¡T¬T¿¶-¶¶T¡T¬¶-¶¶.');
     return false;
   }
 
   onError?.('');
-  onStatusChange?.('–ù–∞–≤–µ–¥–∏—Ç–µ –∫–∞–º–µ—Ä—É –Ω–∞ QR-–∫–æ–¥ –∑–∞–∫–∞–∑–∞.');
+  onStatusChange?.('¶›¶-¶-¶¶¶+¶¨T¬¶¶ ¶¶¶-¶-¶¶T¿T√ ¶-¶- QR-¶¶¶-¶+ ¶¨¶-¶¶¶-¶¨¶-.');
 
-  try {
-    webApp.showScanQrPopup(
-      { text: '–ù–∞–≤–µ–¥–∏—Ç–µ –∫–∞–º–µ—Ä—É –Ω–∞ QR-–∫–æ–¥ –∑–∞–∫–∞–∑–∞' },
-      (scannedText) => {
-        const orderPath = getOrderPathFromQr(scannedText);
-        if (!orderPath) {
-          onError?.('QR-–∫–æ–¥ –Ω–µ —Ä–∞—Å–ø–æ–∑–Ω–∞–Ω. –ò—Å–ø–æ–ª—å–∑—É–π—Ç–µ QR-–∫–æ–¥ –∑–∞–∫–∞–∑–∞, —Å–≥–µ–Ω–µ—Ä–∏—Ä–æ–≤–∞–Ω–Ω—ã–π –≤ —Å–∏—Å—Ç–µ–º–µ.');
-          return false;
-        }
-
-        try {
-          if (typeof webApp.closeScanQrPopup === 'function') {
-            webApp.closeScanQrPopup();
-          }
-        } catch (_closeErr) { /* WebAppMethodUnsupported tolerance */ }
-
-        onStatusChange?.('–û—Ç–∫—Ä—ã–≤–∞—é —Å—Ç—Ä–∞–Ω–∏—Ü—É –∑–∞–∫–∞–∑–∞...');
-        onSuccess?.(orderPath);
-        return true;
+  webApp.showScanQrPopup(
+    { text: '¶›¶-¶-¶¶¶+¶¨T¬¶¶ ¶¶¶-¶-¶¶T¿T√ ¶-¶- QR-¶¶¶-¶+ ¶¨¶-¶¶¶-¶¨¶-' },
+    (scannedText) => {
+      const orderPath = getOrderPathFromQr(scannedText);
+      if (!orderPath) {
+        onError?.('QR-¶¶¶-¶+ ¶-¶¶ T¿¶-T¡¶¨¶-¶¨¶-¶-¶-. ¶ÿT¡¶¨¶-¶¨TÃ¶¨T√¶¶T¬¶¶ QR-¶¶¶-¶+ ¶¨¶-¶¶¶-¶¨¶-, T¡¶¶¶¶¶-¶¶T¿¶¨T¿¶-¶-¶-¶-¶-TÀ¶¶ ¶- T¡¶¨T¡T¬¶¶¶-¶¶.');
+        return false;
       }
-    );
-  } catch (scannerErr) {
-    const msg = scannerErr?.message || scannerErr?.name || String(scannerErr || '');
-    if (String(msg).includes('Unsupported') || String(msg).includes('not supported')) {
-      onError?.('–ö–∞–º–µ—Ä–∞ —Å–∫–∞–Ω–µ—Ä–∞ QR-–∫–æ–¥–∞ –Ω–µ–¥–æ—Å—Ç—É–ø–Ω–∞ –≤ —ç—Ç–æ–º —Ä–µ–∂–∏–º–µ Telegram. –û—Ç–∫—Ä–æ–π—Ç–µ —Å–∫–∞–Ω–µ—Ä —á–µ—Ä–µ–∑ –∫–Ω–æ–ø–∫—É ¬´–ú–µ–Ω—é –±–æ—Ç–∞¬ª –∏–ª–∏ –ø–µ—Ä–µ–π–¥–∏—Ç–µ –ø–æ –ø—Ä—è–º–æ–π —Å—Å—ã–ª–∫–µ –Ω–∞ –∑–∞–∫–∞–∑.');
-    } else {
-      onError?.(`–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–∫—Ä—ã—Ç—å –∫–∞–º–µ—Ä—É: ${msg}`);
+
+      if (typeof webApp.closeScanQrPopup === 'function') {
+        webApp.closeScanQrPopup();
+      }
+
+      onStatusChange?.('¶ﬁT¬¶¶T¿TÀ¶-¶-TŒ T¡T¬T¿¶-¶-¶¨T∆T√ ¶¨¶-¶¶¶-¶¨¶-...');
+      onSuccess?.(orderPath);
+      return true;
     }
-    return false;
-  }
+  );
 
   return true;
 }
 
 export function closeTelegramWebApp() {
-  try {
-    const webApp = getTelegramWebApp();
-    if (webApp && typeof webApp.close === 'function') {
-      webApp.close();
-      return true;
-    }
-  } catch (_) { /* unsupported */ }
+  const webApp = getTelegramWebApp();
+  if (webApp && typeof webApp.close === 'function') {
+    webApp.close();
+    return true;
+  }
   return false;
 }

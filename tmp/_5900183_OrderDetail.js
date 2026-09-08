@@ -17,22 +17,19 @@ import {
   markTelegramWebAppSession,
   persistTelegramInitData,
   persistTelegramUnsafeUser,
-  bootstrapTelegramInitData,
   setTelegramEmployeeSessionToken,
-  tryExpandTelegramWebApp,
-  tryReadyTelegramWebApp,
 } from './telegramWebApp';
 
 function isRecoverableTelegramSessionMessage(message) {
   const normalized = String(message || '').toLowerCase();
   return normalized.includes('session token telegram web app')
     && (
-      normalized.includes('–∏—Å—Ç–µ–∫')
-      || normalized.includes('–∏—Å—Ç—ë–∫')
-      || normalized.includes('—É—Å—Ç–∞—Ä–µ–ª')
-      || normalized.includes('–Ω–µ –ø—Ä–æ—à')
-      || normalized.includes('–Ω–µ–∫–æ—Ä—Ä–µ–∫—Ç')
-      || normalized.includes('–Ω–µ–ø–æ–ª')
+      normalized.includes('¶¨T¡T¬¶¶¶¶')
+      || normalized.includes('¶¨T¡T¬T—¶¶')
+      || normalized.includes('T√T¡T¬¶-T¿¶¶¶¨')
+      || normalized.includes('¶-¶¶ ¶¨T¿¶-T»')
+      || normalized.includes('¶-¶¶¶¶¶-T¿T¿¶¶¶¶T¬')
+      || normalized.includes('¶-¶¶¶¨¶-¶¨')
     );
 }
 
@@ -61,9 +58,9 @@ function normalizePackageItems(items = [], legacyPackageName = '') {
     .map((token) => token.trim())
     .filter(Boolean)
     .map((token) => {
-      const isCompleted = /^(\+|\[x\]|x\s+|‚úì\s+|‚úî\s+)/i.test(token);
+      const isCompleted = /^(\+|\[x\]|x\s+|Ú‹”\s+|Ú‹‘\s+)/i.test(token);
       const normalizedName = token
-        .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|‚úì\s+|‚úî\s+)/i, '')
+        .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|Ú‹”\s+|Ú‹‘\s+)/i, '')
         .trim();
       return {
         id: createPackageItemId(),
@@ -130,9 +127,9 @@ function normalizeMaterialRequestItems(items = [], legacyRequests = '') {
     .map((token) => token.trim())
     .filter(Boolean)
     .map((token) => {
-      const isCompleted = /^(\+|\[x\]|x\s+|‚úì\s+|‚úî\s+)/i.test(token);
+      const isCompleted = /^(\+|\[x\]|x\s+|Ú‹”\s+|Ú‹‘\s+)/i.test(token);
       const normalizedName = token
-        .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|‚úì\s+|‚úî\s+)/i, '')
+        .replace(/^(\+|\-|\[x\]|\[\s\]|x\s+|Ú‹”\s+|Ú‹‘\s+)/i, '')
         .trim();
       return {
         id: createPackageItemId(),
@@ -161,20 +158,20 @@ function getMaterialRequestStats(items = [], legacyRequests = '') {
 
 function getMaterialRequestItemDisplayName(item = {}) {
   const normalizedName = String(item.name || '').trim();
-  if (normalizedName && normalizedName.toLowerCase() !== '—Ñ–æ—Ç–æ') return normalizedName;
+  if (normalizedName && normalizedName.toLowerCase() !== 'Tƒ¶-T¬¶-') return normalizedName;
   const legacyComment = String(item.comment || '').trim();
   if (legacyComment) return legacyComment;
   const firstAttachmentName = String(item.attachments?.[0]?.name || '').trim();
   if (firstAttachmentName) return firstAttachmentName;
-  return normalizedName || '–§–æ—Ç–æ';
+  return normalizedName || '¶‰¶-T¬¶-';
 }
 
-function getTelegramMaterialRequestErrorMessage(error, fallbackMessage = '–ù–µ —É–¥–∞–ª–æ—Å—å –¥–æ–±–∞–≤–∏—Ç—å –∑–∞—è–≤–∫—É –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏.') {
+function getTelegramMaterialRequestErrorMessage(error, fallbackMessage = '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶+¶-¶-¶-¶-¶¨T¬TÃ ¶¨¶-Tœ¶-¶¶T√ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨.') {
   const rawMessage = String(error?.message || '').trim();
   if (rawMessage && !/^error\.?$/i.test(rawMessage)) {
     return rawMessage;
   }
-  return `${fallbackMessage} –ü—Ä–æ–≤–µ—Ä—å—Ç–µ, —á—Ç–æ —Å–æ—Ç—Ä—É–¥–Ω–∏–∫ –∞–≤—Ç–æ—Ä–∏–∑–æ–≤–∞–Ω –≤ Telegram-–±–æ—Ç–µ, QR –æ—Ç–∫—Ä—ã—Ç –Ω–∞ —Å—É—â–µ—Å—Ç–≤—É—é—â–µ–µ –∏–∑–¥–µ–ª–∏–µ –∏ —Å–µ—Ä–≤–µ—Ä –¥–æ—Å—Ç—É–ø–µ–Ω –¥–ª—è —Å–æ—Ö—Ä–∞–Ω–µ–Ω–∏—è –∑–∞–∫–∞–∑–∞.`;
+  return `${fallbackMessage} ¶ﬂT¿¶-¶-¶¶T¿TÃT¬¶¶, T«T¬¶- T¡¶-T¬T¿T√¶+¶-¶¨¶¶ ¶-¶-T¬¶-T¿¶¨¶¨¶-¶-¶-¶- ¶- Telegram-¶-¶-T¬¶¶, QR ¶-T¬¶¶T¿TÀT¬ ¶-¶- T¡T√T…¶¶T¡T¬¶-T√TŒT…¶¶¶¶ ¶¨¶¨¶+¶¶¶¨¶¨¶¶ ¶¨ T¡¶¶T¿¶-¶¶T¿ ¶+¶-T¡T¬T√¶¨¶¶¶- ¶+¶¨Tœ T¡¶-T≈T¿¶-¶-¶¶¶-¶¨Tœ ¶¨¶-¶¶¶-¶¨¶-.`;
 }
 
 const LEGACY_ORDER_COLUMN_KEY_MAP = {
@@ -304,21 +301,21 @@ function isSpreadsheetAttachment(attachment = {}) {
 }
 
 function getAttachmentKindLabel(attachment = {}) {
-  if (isLinkAttachment(attachment)) return '–°—Å—ã–ª–∫–∞';
+  if (isLinkAttachment(attachment)) return '¶·T¡TÀ¶¨¶¶¶-';
   if (isPdfAttachment(attachment)) return 'PDF';
   if (isDocxAttachment(attachment) || isLegacyWordAttachment(attachment)) return 'Word';
   if (isSpreadsheetAttachment(attachment)) return 'Excel';
-  if (isImageAttachment(attachment)) return '–ò–∑–æ–±—Ä–∞–∂–µ–Ω–∏–µ';
-  return '–§–∞–π–ª';
+  if (isImageAttachment(attachment)) return '¶ÿ¶¨¶-¶-T¿¶-¶¶¶¶¶-¶¨¶¶';
+  return '¶‰¶-¶¶¶¨';
 }
 
 function formatAttachmentSize(size) {
   const numericSize = Number(size) || 0;
   if (numericSize <= 0) return '';
   if (numericSize >= 1024 * 1024) {
-    return `${(numericSize / (1024 * 1024)).toFixed(1)} –ú–ë`;
+    return `${(numericSize / (1024 * 1024)).toFixed(1)} ¶‹¶—`;
   }
-  return `${Math.max(1, Math.round(numericSize / 1024))} –ö–ë`;
+  return `${Math.max(1, Math.round(numericSize / 1024))} ¶⁄¶—`;
 }
 
 function getAttachmentLinkUrl(attachment = {}) {
@@ -331,8 +328,8 @@ function getTelegramReadOnlySection(item, sectionKey) {
   if (sectionKey === 'orderCard') {
     return {
       key: 'orderCard',
-      title: '–ö–∞—Ä—Ç–æ—á–∫–∞ –∑–∞–∫–∞–∑–∞',
-      emptyText: '–§–∞–π–ª—ã –∫–∞—Ä—Ç–æ—á–∫–∏ –∑–∞–∫–∞–∑–∞ –Ω–µ –ø—Ä–∏–∫—Ä–µ–ø–ª–µ–Ω—ã.',
+      title: '¶⁄¶-T¿T¬¶-T«¶¶¶- ¶¨¶-¶¶¶-¶¨¶-',
+      emptyText: '¶‰¶-¶¶¶¨TÀ ¶¶¶-T¿T¬¶-T«¶¶¶¨ ¶¨¶-¶¶¶-¶¨¶- ¶-¶¶ ¶¨T¿¶¨¶¶T¿¶¶¶¨¶¨¶¶¶-TÀ.',
       text: '',
       attachments: Array.isArray(item.attachments) ? item.attachments : [],
     };
@@ -341,8 +338,8 @@ function getTelegramReadOnlySection(item, sectionKey) {
   if (sectionKey === 'paint') {
     return {
       key: 'paint',
-      title: '–ü–æ–∫—Ä–∞—Å–∫–∞',
-      emptyText: '–î–∞–Ω–Ω—ã–µ –ø–æ –ø–æ–∫—Ä–∞—Å–∫–µ –Ω–µ –¥–æ–±–∞–≤–ª–µ–Ω—ã.',
+      title: '¶ﬂ¶-¶¶T¿¶-T¡¶¶¶-',
+      emptyText: '¶‘¶-¶-¶-TÀ¶¶ ¶¨¶- ¶¨¶-¶¶T¿¶-T¡¶¶¶¶ ¶-¶¶ ¶+¶-¶-¶-¶-¶¨¶¶¶-TÀ.',
       text: String(item.paint || '').trim(),
       attachments: Array.isArray(item.paintAttachments) ? item.paintAttachments : [],
     };
@@ -383,35 +380,18 @@ function OrderDetail() {
   const telegramSessionTokenRef = useRef(getTelegramEmployeeSessionToken());
   const activatedItemKeyRef = useRef('');
   const materialRequestInputRef = useRef(null);
-  useGlobalErrorEffect(sessionError, '–û—à–∏–±–∫–∞ –æ–ø—Ä–µ–¥–µ–ª–µ–Ω–∏—è –ø—Ä–æ—Ñ–∏–ª—è –≤ Telegram.');
-  useGlobalErrorEffect(scanActivationError, '–û—à–∏–±–∫–∞ –ø—Ä–∏–Ω—è—Ç–∏—è –∏–∑–¥–µ–ª–∏—è –≤ —Ä–∞–±–æ—Ç—É.');
-  useGlobalErrorEffect(stageError, '–û—à–∏–±–∫–∞ –æ—Ç–º–µ—Ç–∫–∏ —ç—Ç–∞–ø–∞.');
-  useGlobalErrorEffect(packageError, '–û—à–∏–±–∫–∞ –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏.');
-  useGlobalErrorEffect(materialRequestError, '–û—à–∏–±–∫–∞ –∑–∞—è–≤–æ–∫ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏.');
-  useGlobalErrorEffect(telegramActionError, '–û—à–∏–±–∫–∞ –¥–µ–π—Å—Ç–≤–∏—è –≤ Telegram.');
+  useGlobalErrorEffect(sessionError, '¶ﬁT»¶¨¶-¶¶¶- ¶-¶¨T¿¶¶¶+¶¶¶¨¶¶¶-¶¨Tœ ¶¨T¿¶-Tƒ¶¨¶¨Tœ ¶- Telegram.');
+  useGlobalErrorEffect(scanActivationError, '¶ﬁT»¶¨¶-¶¶¶- ¶¨T¿¶¨¶-TœT¬¶¨Tœ ¶¨¶¨¶+¶¶¶¨¶¨Tœ ¶- T¿¶-¶-¶-T¬T√.');
+  useGlobalErrorEffect(stageError, '¶ﬁT»¶¨¶-¶¶¶- ¶-T¬¶-¶¶T¬¶¶¶¨ TÕT¬¶-¶¨¶-.');
+  useGlobalErrorEffect(packageError, '¶ﬁT»¶¨¶-¶¶¶- ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨.');
+  useGlobalErrorEffect(materialRequestError, '¶ﬁT»¶¨¶-¶¶¶- ¶¨¶-Tœ¶-¶-¶¶ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨.');
+  useGlobalErrorEffect(telegramActionError, '¶ﬁT»¶¨¶-¶¶¶- ¶+¶¶¶¶T¡T¬¶-¶¨Tœ ¶- Telegram.');
 
   const telegramMode = isTelegramWebApp();
   const telegramInitData = telegramAuth.initData;
   const telegramUnsafeUser = telegramAuth.unsafeUser;
 
-  const copyToClipboard = useCallback(async (text) => {
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(String(text || ''));
-      } else {
-        const ta = document.createElement('textarea');
-        ta.value = String(text || '');
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); } catch (_) { /* ignore */ }
-        document.body.removeChild(ta);
-      }
-    } catch (_) { /* ignore */ }
-  }, []);
-
-  const refreshTelegramAuth = useCallback(({ fromBootstrap = false } = {}) => {
+  const refreshTelegramAuth = useCallback(() => {
     const nextInitData = persistTelegramInitData() || getTelegramInitData();
     const nextUnsafeUser = persistTelegramUnsafeUser() || getTelegramUnsafeUser();
 
@@ -425,7 +405,6 @@ function OrderDetail() {
         unsafeUser: nextUnsafeUser,
       };
     });
-    return { initData: nextInitData, unsafeUser: nextUnsafeUser };
   }, []);
 
   const updateTelegramSessionToken = useCallback((nextToken = '') => {
@@ -437,138 +416,6 @@ function OrderDetail() {
   const getActiveTelegramSessionToken = useCallback(() => {
     return telegramSessionTokenRef.current || getTelegramEmployeeSessionToken();
   }, []);
-
-  const debugMode = new URLSearchParams(location.search).get('debug') === '1';
-  const [diagnosticsResult, setDiagnosticsResult] = useState(null);
-  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
-  const runTokenDiagnostics = useCallback(async () => {
-    try {
-      setDiagnosticsLoading(true);
-      const currentToken = getActiveTelegramSessionToken();
-      const res = await apiFetch('/api/telegram/diagnostics/token-flow', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionToken: currentToken,
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
-          employeeId: debugMode ? (new URLSearchParams(location.search).get('employeeId') || '') : '',
-        }),
-      });
-      const data = await parseJsonSafely(res);
-      setDiagnosticsResult(data || null);
-    } catch (_err) {
-      setDiagnosticsResult({ ok: false, steps: [], error: String(_err?.message || _err || 'Network error') });
-    } finally {
-      setDiagnosticsLoading(false);
-    }
-  }, [debugMode, getActiveTelegramSessionToken, location.search, telegramInitData, telegramUnsafeUser]);
-
-  const [liveAuthCheckResult, setLiveAuthCheckResult] = useState(null);
-  const [liveAuthCheckLoading, setLiveAuthCheckLoading] = useState(false);
-  const runLiveAuthCheck = useCallback(async () => {
-    try {
-      setLiveAuthCheckLoading(true);
-      const params = new URLSearchParams(location.search);
-      const sessionTokenFromUrl = params.get('employeeSessionToken');
-      const effectiveUrlToken = (sessionTokenFromUrl && !isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl))
-        ? sessionTokenFromUrl
-        : '';
-      const storageToken = getActiveTelegramSessionToken();
-      const sessionToken = effectiveUrlToken || storageToken;
-      const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
-      const preflight = {
-        at: new Date().toISOString(),
-        location: `${location.pathname}${location.search}`,
-        isTelegramWebApp: isTelegramWebApp(),
-        telegramMode,
-        debugMode,
-        urlParamTokenPresent: Boolean(sessionTokenFromUrl),
-        urlParamTokenLength: sessionTokenFromUrl?.length || 0,
-        urlParamTokenValid: Boolean(effectiveUrlToken),
-        storageTokenPresent: Boolean(storageToken),
-        storageTokenLength: storageToken?.length || 0,
-        effectiveTokenPresent: Boolean(sessionToken),
-        effectiveTokenLength: sessionToken?.length || 0,
-        initDataPresent: Boolean(telegramInitData),
-        initDataLength: telegramInitData?.length || 0,
-        unsafeUserId: telegramUnsafeUser?.id ? String(telegramUnsafeUser.id) : '',
-        unsafeUsername: telegramUnsafeUser?.username ? `@${telegramUnsafeUser.username}` : '',
-        hasTelegramAuthPayload,
-        telegramAuthResolved,
-        sessionLoading,
-        sessionError,
-        telegramEmployeePresent: Boolean(telegramEmployee),
-        telegramEmployeeId: telegramEmployee?._id || '',
-        telegramEmployeeRole: telegramEmployee?.role || '',
-        employeeRef: telegramSessionTokenRef.current ? `${telegramSessionTokenRef.current.slice(0, 6)}...(${telegramSessionTokenRef.current.length})` : '',
-      };
-      let sessionResponse = null;
-      let sessionResponseStatus = 0;
-      try {
-        const res = await apiFetch('/api/telegram/webapp/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            initData: telegramInitData,
-            unsafeUser: telegramUnsafeUser,
-            sessionToken,
-          }),
-        });
-        sessionResponseStatus = res.status;
-        const json = await parseJsonSafely(res);
-        sessionResponse = {
-          ok: res.ok,
-          status: res.status,
-          payload: json,
-        };
-      } catch (_fetchErr) {
-        sessionResponse = {
-          ok: false,
-          error: String(_fetchErr?.message || _fetchErr || 'fetch failed'),
-        };
-      }
-      const tokenFlow = (async () => {
-        try {
-          if (!telegramEmployee) return null;
-          const empId = telegramEmployee?._id || '';
-          const res2 = await apiFetch('/api/telegram/diagnostics/token-flow', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionToken,
-              initData: telegramInitData,
-              unsafeUser: telegramUnsafeUser,
-              employeeId: empId,
-            }),
-          });
-          const json2 = await parseJsonSafely(res2);
-          return {
-            ok: res2.ok,
-            status: res2.status,
-            payload: json2,
-          };
-        } catch (_diagErr) {
-          return { ok: false, error: String(_diagErr?.message || _diagErr || '') };
-        }
-      })();
-      const diagnosticsPayload = await tokenFlow;
-      setLiveAuthCheckResult({
-        preflight,
-        sessionResponse,
-        diagnostics: diagnosticsPayload,
-      });
-    } catch (_err2) {
-      setLiveAuthCheckResult({
-        preflight: null,
-        sessionResponse: null,
-        diagnostics: null,
-        error: String(_err2?.message || _err2 || 'Live check failed'),
-      });
-    } finally {
-      setLiveAuthCheckLoading(false);
-    }
-  }, [debugMode, getActiveTelegramSessionToken, location.pathname, location.search, sessionError, sessionLoading, telegramAuthResolved, telegramEmployee, telegramInitData, telegramMode, telegramUnsafeUser]);
 
   const keepMaterialRequestInputVisible = useCallback(({ behavior = 'smooth' } = {}) => {
     const input = materialRequestInputRef.current;
@@ -616,7 +463,7 @@ function OrderDetail() {
       const res = await apiFetch('/api/order-stage-legend-config');
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        throw new Error(data?.message || '–ù–µ —É–¥–∞–ª–æ—Å—å –∑–∞–≥—Ä—É–∑–∏—Ç—å —ç—Ç–∞–ø—ã –ø—Ä–æ–∏–∑–≤–æ–¥—Å—Ç–≤–∞.');
+        throw new Error(data?.message || '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶-¶¶T¿T√¶¨¶¨T¬TÃ TÕT¬¶-¶¨TÀ ¶¨T¿¶-¶¨¶¨¶-¶-¶+T¡T¬¶-¶-.');
       }
       setOrderStageLegendConfig(buildOrderStageLegendConfig(data || {}));
     } catch {
@@ -628,6 +475,65 @@ function OrderDetail() {
     fetchOrder({ showLoader: true });
     fetchOrderStageLegendConfig();
   }, [fetchOrder, fetchOrderStageLegendConfig]);
+
+  const loadTelegramEmployeeSession = useCallback(() => {
+    if (!telegramMode) return;
+    const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
+    const currentSessionToken = getActiveTelegramSessionToken();
+    if (!hasTelegramAuthPayload && !currentSessionToken) {
+      if (!telegramAuthResolved) {
+        setSessionLoading(true);
+        setSessionError('');
+        return;
+      }
+      setTelegramEmployee(null);
+      setSessionLoading(false);
+      setSessionError('¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶-¶+T¬¶-¶¶T¿¶+¶¨T¬TÃ ¶-¶-T» ¶+¶-T¡T¬T√¶¨. ¶ﬁT¬¶¶T¿¶-¶¶T¬¶¶ ¶¨¶-¶¶¶-¶¨ ¶¨¶-¶-¶-¶-¶- T«¶¶T¿¶¶¶¨ ¶¶¶-¶-¶¨¶¶T√ ¶- ¶-¶-T¬¶¶.');
+      return;
+    }
+    setSessionLoading(true);
+    setSessionError('');
+
+    const resolveSession = async (sessionTokenOverride = currentSessionToken) => {
+      const res = await apiFetch('/api/telegram/webapp/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          unsafeUser: telegramUnsafeUser,
+          sessionToken: sessionTokenOverride,
+        }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-¶¨T¿¶¶¶+¶¶¶¨¶¨T¬TÃ ¶-¶-T» ¶¨T¿¶-Tƒ¶¨¶¨TÃ.');
+      }
+      return data;
+    };
+
+    return resolveSession()
+      .catch(async (error) => {
+        const canRetryWithoutToken = currentSessionToken
+          && hasTelegramAuthPayload
+          && isRecoverableTelegramSessionMessage(error.message);
+        if (!canRetryWithoutToken) {
+          throw error;
+        }
+        updateTelegramSessionToken('');
+        return resolveSession('');
+      })
+      .then(data => {
+        const nextSessionToken = data?.sessionToken || '';
+        updateTelegramSessionToken(nextSessionToken);
+        setTelegramEmployee(data?.employee || null);
+        setSessionError('');
+      })
+      .catch(error => {
+        setTelegramEmployee(null);
+        setSessionError(toUserErrorMessage(error, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-¶¨T¿¶¶¶+¶¶¶¨¶¨T¬TÃ ¶-¶-T» ¶¨T¿¶-Tƒ¶¨¶¨TÃ.'));
+      })
+      .finally(() => setSessionLoading(false));
+  }, [getActiveTelegramSessionToken, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
 
   useEffect(() => {
     if (!telegramMode) return;
@@ -650,99 +556,30 @@ function OrderDetail() {
     }, { replace: true });
   }, [location.pathname, location.search, navigate, telegramMode, updateTelegramSessionToken]);
 
-  const loadTelegramEmployeeSession = useCallback(() => {
-    if (!telegramMode) return;
-
-    const params = new URLSearchParams(location.search);
-    const sessionTokenFromUrl = params.get('employeeSessionToken');
-    const effectiveUrlSessionToken = sessionTokenFromUrl && !isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)
-      ? sessionTokenFromUrl
-      : '';
-    const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
-    const storageSessionToken = getActiveTelegramSessionToken();
-    const currentSessionToken = effectiveUrlSessionToken || storageSessionToken;
-
-    if (!hasTelegramAuthPayload && !currentSessionToken) {
-      if (!telegramAuthResolved) {
-        setSessionLoading(true);
-        setSessionError('');
-        return;
-      }
-      setTelegramEmployee(null);
-      setSessionLoading(false);
-      setSessionError('–ù–µ —É–¥–∞–ª–æ—Å—å –ø–æ–¥—Ç–≤–µ—Ä–¥–∏—Ç—å –≤–∞—à –¥–æ—Å—Ç—É–ø. –û—Ç–∫—Ä–æ–π—Ç–µ –∑–∞–∫–∞–∑ –∑–∞–Ω–æ–≤–æ —á–µ—Ä–µ–∑ –∫–Ω–æ–ø–∫—É –≤ –±–æ—Ç–µ.');
-      return;
-    }
-    setSessionLoading(true);
-    setSessionError('');
-
-    const resolveSession = async (sessionTokenOverride = currentSessionToken) => {
-      const res = await apiFetch('/api/telegram/webapp/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initData: telegramInitData,
-          unsafeUser: telegramUnsafeUser,
-          sessionToken: sessionTokenOverride,
-        }),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        throw new Error(data?.message || '–ù–µ —É–¥–∞–ª–æ—Å—å –æ–ø—Ä–µ–¥–µ–ª–∏—Ç—å –≤–∞—à –ø—Ä–æ—Ñ–∏–ª—å.');
-      }
-      return data;
-    };
-
-    return resolveSession()
-      .catch(async (error) => {
-        const canRetryWithoutToken = currentSessionToken
-          && hasTelegramAuthPayload
-          && isRecoverableTelegramSessionMessage(error.message);
-        if (!canRetryWithoutToken) {
-          throw error;
-        }
-        updateTelegramSessionToken('');
-        return resolveSession('');
-      })
-      .then(data => {
-        const nextSessionToken = data?.sessionToken || '';
-        updateTelegramSessionToken(nextSessionToken);
-        setTelegramEmployee(data?.employee || null);
-        setSessionError('');
-        if (effectiveUrlSessionToken) {
-          const nextParams = new URLSearchParams(location.search);
-          nextParams.delete('employeeSessionToken');
-          const nextSearch = nextParams.toString() ? `?${nextParams.toString()}` : '';
-          if (nextSearch !== location.search) {
-            navigate({ pathname: location.pathname, search: nextSearch }, { replace: true });
-          }
-        }
-      })
-      .catch(error => {
-        setTelegramEmployee(null);
-        setSessionError(toUserErrorMessage(error, '–ù–µ —É–¥–∞–ª–æ—Å—å –æ–ø—Ä–µ–¥–µ–ª–∏—Ç—å –≤–∞—à –ø—Ä–æ—Ñ–∏–ª—å.'));
-      })
-      .finally(() => setSessionLoading(false));
-  }, [getActiveTelegramSessionToken, location.pathname, location.search, navigate, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
-
   useEffect(() => {
     loadTelegramEmployeeSession();
-  }, [loadTelegramEmployeeSession, location.pathname, location.search, telegramSessionBootstrapKey]);
+  }, [loadTelegramEmployeeSession, telegramSessionBootstrapKey]);
 
   useEffect(() => {
-    if (!telegramMode) return undefined;
+    if (!telegramMode) return;
+
+    const webApp = getTelegramWebApp();
+    if (!webApp) return;
 
     markTelegramWebAppSession();
-    refreshTelegramAuth({ fromBootstrap: true });
+    refreshTelegramAuth();
 
-    tryReadyTelegramWebApp();
-    tryExpandTelegramWebApp();
+    if (typeof webApp.ready === 'function') {
+      webApp.ready();
+    }
 
-    const retryTimers = [100, 350, 800, 1500].map(delay => (
-      window.setTimeout(() => refreshTelegramAuth({ fromBootstrap: true }), delay)
-    ));
+    if (typeof webApp.expand === 'function') {
+      webApp.expand();
+    }
+
+    const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(refreshTelegramAuth, delay));
     const finishTimer = window.setTimeout(() => {
-      refreshTelegramAuth({ fromBootstrap: true });
+      refreshTelegramAuth();
       setTelegramAuthResolved(true);
     }, 1700);
 
@@ -825,11 +662,11 @@ function OrderDetail() {
   }, [keepMaterialRequestInputVisible]);
 
   const calcDuration = (start, end) => {
-    if (!start || !end) return '‚Äî';
+    if (!start || !end) return 'Ú¿‘';
     const s = new Date(start);
     const e = new Date(end);
     const diff = Math.round((e - s) / (1000 * 60 * 60 * 24));
-    return diff >= 0 ? diff + ' –¥–Ω.' : '‚Äî';
+    return diff >= 0 ? diff + ' ¶+¶-.' : 'Ú¿‘';
   };
 
   const selectedItem = order
@@ -839,12 +676,12 @@ function OrderDetail() {
   const primaryItem = getOrderPrimaryItem(order);
   const statusMeta = getOrderStatusMeta(selectedItem?.overallStatus || getOrderOverallStatus(order));
   const detailItems = order ? [
-    { label: '–ù–æ–º–µ—Ä –∑–∞–∫–∞–∑–∞', value: order.orderNumber || '‚Äî' },
-    { label: '–ó–∞–∫–∞–∑—á–∏–∫', value: order.customer || '‚Äî' },
-    { label: '–ò–∑–¥–µ–ª–∏–µ', value: selectedItem?.name || primaryItem?.name || '‚Äî' },
-    { label: '‚Ññ –∏–∑–¥–µ–ª–∏—è –≤ –∑–∞–∫–∞–∑–µ', value: selectedItem?.itemNumber || '‚Äî' },
-    { label: '–ü–æ–º–µ—â–µ–Ω–∏–µ', value: selectedItem?.room || '‚Äî' },
-    { label: '–ö–æ–ª–∏—á–µ—Å—Ç–≤–æ', value: selectedItem?.quantity || primaryItem?.quantity || 1 },
+    { label: '¶›¶-¶-¶¶T¿ ¶¨¶-¶¶¶-¶¨¶-', value: order.orderNumber || 'Ú¿‘' },
+    { label: '¶◊¶-¶¶¶-¶¨T«¶¨¶¶', value: order.customer || 'Ú¿‘' },
+    { label: '¶ÿ¶¨¶+¶¶¶¨¶¨¶¶', value: selectedItem?.name || primaryItem?.name || 'Ú¿‘' },
+    { label: 'Úƒ÷ ¶¨¶¨¶+¶¶¶¨¶¨Tœ ¶- ¶¨¶-¶¶¶-¶¨¶¶', value: selectedItem?.itemNumber || 'Ú¿‘' },
+    { label: '¶ﬂ¶-¶-¶¶T…¶¶¶-¶¨¶¶', value: selectedItem?.room || 'Ú¿‘' },
+    { label: '¶⁄¶-¶¨¶¨T«¶¶T¡T¬¶-¶-', value: selectedItem?.quantity || primaryItem?.quantity || 1 },
   ] : [];
 
   const allowedColumns = useMemo(() => (
@@ -940,7 +777,7 @@ function OrderDetail() {
         }),
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–º–µ—Ç–∏—Ç—å –∏–∑–¥–µ–ª–∏–µ –∫–∞–∫ –≤–∑—è—Ç–æ–µ –≤ —Ä–∞–±–æ—Ç—É.'));
+        throw new Error(await getErrorMessage(res, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶-¶¶T¬¶¨T¬TÃ ¶¨¶¨¶+¶¶¶¨¶¨¶¶ ¶¶¶-¶¶ ¶-¶¨TœT¬¶-¶¶ ¶- T¿¶-¶-¶-T¬T√.'));
       }
       activatedItemKeyRef.current = activationKey;
       setScanActivationError('');
@@ -948,7 +785,7 @@ function OrderDetail() {
     };
 
     activateItem().catch(error => {
-      setScanActivationError(toUserErrorMessage(error, '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–º–µ—Ç–∏—Ç—å –∏–∑–¥–µ–ª–∏–µ –∫–∞–∫ –≤–∑—è—Ç–æ–µ –≤ —Ä–∞–±–æ—Ç—É.'));
+      setScanActivationError(toUserErrorMessage(error, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶-¶¶T¬¶¨T¬TÃ ¶¨¶¨¶+¶¶¶¨¶¨¶¶ ¶¶¶-¶¶ ¶-¶¨TœT¬¶-¶¶ ¶- T¿¶-¶-¶-T¬T√.'));
     });
   }, [
     fetchOrder,
@@ -987,7 +824,7 @@ function OrderDetail() {
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        throw new Error(data?.message || (clear ? '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–º–µ–Ω–∏—Ç—å –ø—Ä–∏–Ω—è—Ç–∏–µ —ç—Ç–∞–ø–∞.' : '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–º–µ—Ç–∏—Ç—å —ç—Ç–∞–ø.'));
+        throw new Error(data?.message || (clear ? '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶-¶¶¶-¶¨T¬TÃ ¶¨T¿¶¨¶-TœT¬¶¨¶¶ TÕT¬¶-¶¨¶-.' : '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶-¶¶T¬¶¨T¬TÃ TÕT¬¶-¶¨.'));
       }
       setOrder(data?.order || null);
       if (data?.employee) {
@@ -995,7 +832,7 @@ function OrderDetail() {
       }
       await fetchOrder();
     } catch (error) {
-      setStageError(toUserErrorMessage(error, clear ? '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–º–µ–Ω–∏—Ç—å –ø—Ä–∏–Ω—è—Ç–∏–µ —ç—Ç–∞–ø–∞.' : '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–º–µ—Ç–∏—Ç—å —ç—Ç–∞–ø.'));
+      setStageError(toUserErrorMessage(error, clear ? '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶-¶¶¶-¶¨T¬TÃ ¶¨T¿¶¨¶-TœT¬¶¨¶¶ TÕT¬¶-¶¨¶-.' : '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶-¶¶T¬¶¨T¬TÃ TÕT¬¶-¶¨.'));
     } finally {
       setStageActionKey('');
     }
@@ -1086,7 +923,7 @@ function OrderDetail() {
     if (isLinkAttachment(attachment)) {
       const targetUrl = getAttachmentLinkUrl(attachment);
       if (!targetUrl) {
-        setTelegramActionError('–°—Å—ã–ª–∫–∞ –ø—É—Å—Ç–∞—è.');
+        setTelegramActionError('¶·T¡TÀ¶¨¶¶¶- ¶¨T√T¡T¬¶-Tœ.');
         return;
       }
       window.open(targetUrl, '_blank', 'noopener,noreferrer');
@@ -1095,7 +932,7 @@ function OrderDetail() {
 
     const sessionToken = getActiveTelegramSessionToken();
     if (!sessionToken) {
-      setTelegramActionError('–ù–µ —É–¥–∞–ª–æ—Å—å –ø–æ–¥—Ç–≤–µ—Ä–¥–∏—Ç—å Telegram-—Å–µ—Å—Å–∏—é –¥–ª—è –æ—Ç–∫—Ä—ã—Ç–∏—è —Ñ–∞–π–ª–∞.');
+      setTelegramActionError('¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶-¶+T¬¶-¶¶T¿¶+¶¨T¬TÃ Telegram-T¡¶¶T¡T¡¶¨TŒ ¶+¶¨Tœ ¶-T¬¶¶T¿TÀT¬¶¨Tœ Tƒ¶-¶¶¶¨¶-.');
       return;
     }
 
@@ -1112,7 +949,7 @@ function OrderDetail() {
       const previewMeta = {
         attachment,
         kindLabel: getAttachmentKindLabel(attachment),
-        name: attachment.name || '–§–∞–π–ª',
+        name: attachment.name || '¶‰¶-¶¶¶¨',
         sizeLabel: formatAttachmentSize(attachment.size),
         sourceUrl: fileUrl,
       };
@@ -1121,7 +958,7 @@ function OrderDetail() {
         closeTelegramAttachmentPreview();
         const res = await apiFetch(fileUrl);
         if (!res.ok) {
-          setTelegramActionError(await getErrorMessage(res, '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–∫—Ä—ã—Ç—å Excel-—Ñ–∞–π–ª.'));
+          setTelegramActionError(await getErrorMessage(res, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶¶T¿TÀT¬TÃ Excel-Tƒ¶-¶¶¶¨.'));
           return;
         }
         const blob = await res.blob();
@@ -1183,7 +1020,7 @@ function OrderDetail() {
       if (isDocxAttachment(attachment)) {
         const res = await apiFetch(fileUrl);
         if (!res.ok) {
-          setTelegramActionError(await getErrorMessage(res, '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–∫—Ä—ã—Ç—å Word-—Ñ–∞–π–ª.'));
+          setTelegramActionError(await getErrorMessage(res, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶¶T¿TÀT¬TÃ Word-Tƒ¶-¶¶¶¨.'));
           return;
         }
         const blob = await res.blob();
@@ -1195,17 +1032,17 @@ function OrderDetail() {
           mode: 'word',
           url: fileUrl,
           revokeUrl: false,
-          html: result.value || '<p>–ü—É—Å—Ç–æ–π –¥–æ–∫—É–º–µ–Ω—Ç.</p>',
+          html: result.value || '<p>¶ﬂT√T¡T¬¶-¶¶ ¶+¶-¶¶T√¶-¶¶¶-T¬.</p>',
         });
         return;
       }
 
       const opened = openTelegramFileUrl(fileUrl, attachment.name || 'attachment');
       if (!opened) {
-        setTelegramActionError('–ë—Ä–∞—É–∑–µ—Ä –∑–∞–±–ª–æ–∫–∏—Ä–æ–≤–∞–ª –æ—Ç–∫—Ä—ã—Ç–∏–µ —Ñ–∞–π–ª–∞. –†–∞–∑—Ä–µ—à–∏—Ç–µ –æ—Ç–∫—Ä—ã—Ç–∏–µ –Ω–æ–≤–æ–π –≤–∫–ª–∞–¥–∫–∏.');
+        setTelegramActionError('¶—T¿¶-T√¶¨¶¶T¿ ¶¨¶-¶-¶¨¶-¶¶¶¨T¿¶-¶-¶-¶¨ ¶-T¬¶¶T¿TÀT¬¶¨¶¶ Tƒ¶-¶¶¶¨¶-. ¶‡¶-¶¨T¿¶¶T»¶¨T¬¶¶ ¶-T¬¶¶T¿TÀT¬¶¨¶¶ ¶-¶-¶-¶-¶¶ ¶-¶¶¶¨¶-¶+¶¶¶¨.');
       }
     } catch (openError) {
-      setTelegramActionError(toUserErrorMessage(openError, '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–∫—Ä—ã—Ç—å –≤–ª–æ–∂–µ–Ω–∏–µ.'));
+      setTelegramActionError(toUserErrorMessage(openError, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶¶T¿TÀT¬TÃ ¶-¶¨¶-¶¶¶¶¶-¶¨¶¶.'));
     } finally {
       setTelegramAttachmentOpeningKey('');
     }
@@ -1235,7 +1072,7 @@ function OrderDetail() {
 
     const sessionToken = getActiveTelegramSessionToken();
     if (!sessionToken) {
-      setMaterialRequestError('–ù–µ —É–¥–∞–ª–æ—Å—å –ø–æ–¥—Ç–≤–µ—Ä–¥–∏—Ç—å Telegram-—Å–µ—Å—Å–∏—é –¥–ª—è –∑–∞–≥—Ä—É–∑–∫–∏ —Ñ–æ—Ç–æ.');
+      setMaterialRequestError('¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶-¶+T¬¶-¶¶T¿¶+¶¨T¬TÃ Telegram-T¡¶¶T¡T¡¶¨TŒ ¶+¶¨Tœ ¶¨¶-¶¶T¿T√¶¨¶¶¶¨ Tƒ¶-T¬¶-.');
       return;
     }
 
@@ -1252,7 +1089,7 @@ function OrderDetail() {
         body: formData,
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, '–ù–µ —É–¥–∞–ª–æ—Å—å –¥–æ–±–∞–≤–∏—Ç—å —Ñ–æ—Ç–æ –≤ –∑–∞—è–≤–∫–∏ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏.'));
+        throw new Error(await getErrorMessage(res, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶+¶-¶-¶-¶-¶¨T¬TÃ Tƒ¶-T¬¶- ¶- ¶¨¶-Tœ¶-¶¶¶¨ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨.'));
       }
       const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
@@ -1260,7 +1097,7 @@ function OrderDetail() {
         setTelegramEmployee(data.employee);
       }
     } catch (error) {
-      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, '–ù–µ —É–¥–∞–ª–æ—Å—å –¥–æ–±–∞–≤–∏—Ç—å —Ñ–æ—Ç–æ –≤ –∑–∞—è–≤–∫–∏ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏.'));
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶+¶-¶-¶-¶-¶¨T¬TÃ Tƒ¶-T¬¶- ¶- ¶¨¶-Tœ¶-¶¶¶¨ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨.'));
     } finally {
       setMaterialRequestBusyKey('');
     }
@@ -1290,7 +1127,7 @@ function OrderDetail() {
     }
     const fileUrl = getTelegramMaterialRequestAttachmentUrl(requestItemId, attachment.attachmentId);
     if (!fileUrl) {
-      setMaterialRequestError('–ù–µ —É–¥–∞–ª–æ—Å—å –ø–æ–¥–≥–æ—Ç–æ–≤–∏—Ç—å —Å—Å—ã–ª–∫—É –¥–ª—è –æ—Ç–∫—Ä—ã—Ç–∏—è —Ñ–æ—Ç–æ.');
+      setMaterialRequestError('¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶-¶+¶¶¶-T¬¶-¶-¶¨T¬TÃ T¡T¡TÀ¶¨¶¶T√ ¶+¶¨Tœ ¶-T¬¶¶T¿TÀT¬¶¨Tœ Tƒ¶-T¬¶-.');
       return;
     }
 
@@ -1320,10 +1157,10 @@ function OrderDetail() {
 
       const opened = openTelegramFileUrl(fileUrl, attachment.name || 'attachment');
       if (!opened) {
-        setMaterialRequestError('–ë—Ä–∞—É–∑–µ—Ä –∑–∞–±–ª–æ–∫–∏—Ä–æ–≤–∞–ª –æ—Ç–∫—Ä—ã—Ç–∏–µ —Ñ–∞–π–ª–∞. –†–∞–∑—Ä–µ—à–∏—Ç–µ –æ—Ç–∫—Ä—ã—Ç–∏–µ –Ω–æ–≤–æ–π –≤–∫–ª–∞–¥–∫–∏.');
+        setMaterialRequestError('¶—T¿¶-T√¶¨¶¶T¿ ¶¨¶-¶-¶¨¶-¶¶¶¨T¿¶-¶-¶-¶¨ ¶-T¬¶¶T¿TÀT¬¶¨¶¶ Tƒ¶-¶¶¶¨¶-. ¶‡¶-¶¨T¿¶¶T»¶¨T¬¶¶ ¶-T¬¶¶T¿TÀT¬¶¨¶¶ ¶-¶-¶-¶-¶¶ ¶-¶¶¶¨¶-¶+¶¶¶¨.');
       }
     } catch (error) {
-      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, '–ù–µ —É–¥–∞–ª–æ—Å—å –æ—Ç–∫—Ä—ã—Ç—å —Ñ–æ—Ç–æ –∑–∞—è–≤–∫–∏ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏.'));
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶-T¬¶¶T¿TÀT¬TÃ Tƒ¶-T¬¶- ¶¨¶-Tœ¶-¶¶¶¨ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨.'));
     } finally {
       setTelegramAttachmentOpeningKey('');
     }
@@ -1369,7 +1206,7 @@ function OrderDetail() {
 
     const sessionToken = getActiveTelegramSessionToken();
     if (!sessionToken) {
-      setMaterialRequestError('–ù–µ —É–¥–∞–ª–æ—Å—å –ø–æ–¥—Ç–≤–µ—Ä–¥–∏—Ç—å Telegram-—Å–µ—Å—Å–∏—é –¥–ª—è —Å–æ—Ö—Ä–∞–Ω–µ–Ω–∏—è –Ω–∞–∑–≤–∞–Ω–∏—è –∑–∞—è–≤–∫–∏.');
+      setMaterialRequestError('¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶-¶+T¬¶-¶¶T¿¶+¶¨T¬TÃ Telegram-T¡¶¶T¡T¡¶¨TŒ ¶+¶¨Tœ T¡¶-T≈T¿¶-¶-¶¶¶-¶¨Tœ ¶-¶-¶¨¶-¶-¶-¶¨Tœ ¶¨¶-Tœ¶-¶¶¶¨.');
       return;
     }
 
@@ -1392,7 +1229,7 @@ function OrderDetail() {
         }),
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, '–ù–µ —É–¥–∞–ª–æ—Å—å —Å–æ—Ö—Ä–∞–Ω–∏—Ç—å –Ω–∞–∑–≤–∞–Ω–∏–µ –∑–∞—è–≤–∫–∏.'));
+        throw new Error(await getErrorMessage(res, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ T¡¶-T≈T¿¶-¶-¶¨T¬TÃ ¶-¶-¶¨¶-¶-¶-¶¨¶¶ ¶¨¶-Tœ¶-¶¶¶¨.'));
       }
       const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
@@ -1406,7 +1243,7 @@ function OrderDetail() {
       });
       setMaterialRequestEditingItemId((current) => (current === requestItemId ? '' : current));
     } catch (error) {
-      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, '–ù–µ —É–¥–∞–ª–æ—Å—å —Å–æ—Ö—Ä–∞–Ω–∏—Ç—å –Ω–∞–∑–≤–∞–Ω–∏–µ –∑–∞—è–≤–∫–∏.'));
+      setMaterialRequestError(getTelegramMaterialRequestErrorMessage(error, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ T¡¶-T≈T¿¶-¶-¶¨T¬TÃ ¶-¶-¶¨¶-¶-¶-¶¨¶¶ ¶¨¶-Tœ¶-¶¶¶¨.'));
     } finally {
       setMaterialRequestBusyKey('');
     }
@@ -1422,7 +1259,7 @@ function OrderDetail() {
     const nextName = String(packageDraft || '').trim();
     if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
     if (!nextName) {
-      setPackageError('–í–≤–µ–¥–∏—Ç–µ –Ω–∞–∑–≤–∞–Ω–∏–µ –ø–æ–∑–∏—Ü–∏–∏ –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏.');
+      setPackageError('¶“¶-¶¶¶+¶¨T¬¶¶ ¶-¶-¶¨¶-¶-¶-¶¨¶¶ ¶¨¶-¶¨¶¨T∆¶¨¶¨ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨.');
       return;
     }
 
@@ -1442,7 +1279,7 @@ function OrderDetail() {
         }),
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, '–ù–µ —É–¥–∞–ª–æ—Å—å –¥–æ–±–∞–≤–∏—Ç—å –ø–æ–∑–∏—Ü–∏—é –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏.'));
+        throw new Error(await getErrorMessage(res, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶+¶-¶-¶-¶-¶¨T¬TÃ ¶¨¶-¶¨¶¨T∆¶¨TŒ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨.'));
       }
       const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
@@ -1451,7 +1288,7 @@ function OrderDetail() {
       }
       setPackageDraft('');
     } catch (error) {
-      setPackageError(getTelegramMaterialRequestErrorMessage(error, '–ù–µ —É–¥–∞–ª–æ—Å—å –¥–æ–±–∞–≤–∏—Ç—å –ø–æ–∑–∏—Ü–∏—é –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏.'));
+      setPackageError(getTelegramMaterialRequestErrorMessage(error, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶+¶-¶-¶-¶-¶¨T¬TÃ ¶¨¶-¶¨¶¨T∆¶¨TŒ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨.'));
     } finally {
       setPackageBusyKey('');
     }
@@ -1485,7 +1322,7 @@ function OrderDetail() {
         }),
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, '–ù–µ —É–¥–∞–ª–æ—Å—å –∏–∑–º–µ–Ω–∏—Ç—å –ø–æ–∑–∏—Ü–∏—é –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏.'));
+        throw new Error(await getErrorMessage(res, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶¨¶-¶¶¶-¶¨T¬TÃ ¶¨¶-¶¨¶¨T∆¶¨TŒ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨.'));
       }
       const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
@@ -1493,7 +1330,7 @@ function OrderDetail() {
         setTelegramEmployee(data.employee);
       }
     } catch (error) {
-      setPackageError(getTelegramMaterialRequestErrorMessage(error, '–ù–µ —É–¥–∞–ª–æ—Å—å –∏–∑–º–µ–Ω–∏—Ç—å –ø–æ–∑–∏—Ü–∏—é –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏.'));
+      setPackageError(getTelegramMaterialRequestErrorMessage(error, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶¨¶¨¶-¶¶¶-¶¨T¬TÃ ¶¨¶-¶¨¶¨T∆¶¨TŒ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨.'));
     } finally {
       setPackageBusyKey('');
     }
@@ -1511,7 +1348,7 @@ function OrderDetail() {
     const nextName = String(materialRequestDraft || '').trim();
     if (!telegramMode || !telegramEmployee || !selectedItem?.itemId) return;
     if (!nextName) {
-      setMaterialRequestError('–í–≤–µ–¥–∏—Ç–µ –Ω–∞–∑–≤–∞–Ω–∏–µ –∑–∞—è–≤–∫–∏ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏.');
+      setMaterialRequestError('¶“¶-¶¶¶+¶¨T¬¶¶ ¶-¶-¶¨¶-¶-¶-¶¨¶¶ ¶¨¶-Tœ¶-¶¶¶¨ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨.');
       return;
     }
 
@@ -1531,7 +1368,7 @@ function OrderDetail() {
         }),
       });
       if (!res.ok) {
-        throw new Error(await getErrorMessage(res, '–ù–µ —É–¥–∞–ª–æ—Å—å –¥–æ–±–∞–≤–∏—Ç—å –∑–∞—è–≤–∫—É –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏.'));
+        throw new Error(await getErrorMessage(res, '¶›¶¶ T√¶+¶-¶¨¶-T¡TÃ ¶+¶-¶-¶-¶-¶¨T¬TÃ ¶¨¶-Tœ¶-¶¶T√ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨.'));
       }
       const data = await parseJsonSafely(res);
       setOrder(data?.order || null);
@@ -1558,7 +1395,7 @@ function OrderDetail() {
   if (loading) {
     return (
       <div className="card">
-        <h2>–ó–∞–≥—Ä—É–∑–∫–∞ –∑–∞–∫–∞–∑–∞...</h2>
+        <h2>¶◊¶-¶¶T¿T√¶¨¶¶¶- ¶¨¶-¶¶¶-¶¨¶-...</h2>
       </div>
     );
   }
@@ -1566,15 +1403,15 @@ function OrderDetail() {
   if (!order) {
     return (
       <div className="card">
-        <h2>üîç –ó–∞–∫–∞–∑ –Ω–µ –Ω–∞–π–¥–µ–Ω</h2>
-        <p>–ü—Ä–æ–≤–µ—Ä—å—Ç–µ —Å—Å—ã–ª–∫—É –∏–ª–∏ –æ–±—Ä–∞—Ç–∏—Ç–µ—Å—å –∫ –∞–¥–º–∏–Ω–∏—Å—Ç—Ä–∞—Ç–æ—Ä—É —Å–∏—Å—Ç–µ–º—ã</p>
+        <h2>®ﬂ‘Õ ¶◊¶-¶¶¶-¶¨ ¶-¶¶ ¶-¶-¶¶¶+¶¶¶-</h2>
+        <p>¶ﬂT¿¶-¶-¶¶T¿TÃT¬¶¶ T¡T¡TÀ¶¨¶¶T√ ¶¨¶¨¶¨ ¶-¶-T¿¶-T¬¶¨T¬¶¶T¡TÃ ¶¶ ¶-¶+¶-¶¨¶-¶¨T¡T¬T¿¶-T¬¶-T¿T√ T¡¶¨T¡T¬¶¶¶-TÀ</p>
       </div>
     );
   }
 
   return (
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
-      <h2>{telegramMode ? `–ò–∑–¥–µ–ª–∏–µ: ${selectedItem?.name || primaryItem?.name || '‚Äî'}` : `üìã –ò–∑–¥–µ–ª–∏–µ: ${selectedItem?.name || primaryItem?.name || '‚Äî'}`}</h2>
+      <h2>{telegramMode ? `¶ÿ¶¨¶+¶¶¶¨¶¨¶¶: ${selectedItem?.name || primaryItem?.name || 'Ú¿‘'}` : `®ﬂ”À ¶ÿ¶¨¶+¶¶¶¨¶¨¶¶: ${selectedItem?.name || primaryItem?.name || 'Ú¿‘'}`}</h2>
 
       {telegramActionError && (
         <div className="settings-alert settings-alert-error" style={{ marginBottom: 12 }}>
@@ -1592,7 +1429,7 @@ function OrderDetail() {
                 onClick={(event) => openTelegramReadOnlySection('orderCard', event)}
                 disabled={!canViewOrderCard}
               >
-                –ö–∞—Ä—Ç–æ—á–∫–∞ –∑–∞–∫–∞–∑–∞
+                ¶⁄¶-T¿T¬¶-T«¶¶¶- ¶¨¶-¶¶¶-¶¨¶-
               </button>
               <button
                 type="button"
@@ -1600,7 +1437,7 @@ function OrderDetail() {
                 onClick={(event) => openTelegramReadOnlySection('paint', event)}
                 disabled={!canViewPaint}
               >
-                –ü–æ–∫—Ä–∞—Å–∫–∞
+                ¶ﬂ¶-¶¶T¿¶-T¡¶¶¶-
               </button>
             </div>
           </div>
@@ -1610,7 +1447,7 @@ function OrderDetail() {
               <div className="telegram-readonly-panel-header">
                 <div className="telegram-readonly-title">{telegramReadOnlySection.title}</div>
                 <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramReadOnlySection}>
-                  –ó–∞–∫—Ä—ã—Ç—å
+                  ¶◊¶-¶¶T¿TÀT¬TÃ
                 </button>
               </div>
 
@@ -1621,11 +1458,11 @@ function OrderDetail() {
               {telegramReadOnlySection.attachments.length > 0 ? (
                 <div className="telegram-readonly-files">
                   {telegramReadOnlySection.attachments.map((attachment) => {
-                    const attachmentName = String(attachment?.name || '').trim() || '–ë–µ–∑ –Ω–∞–∑–≤–∞–Ω–∏—è';
+                    const attachmentName = String(attachment?.name || '').trim() || '¶—¶¶¶¨ ¶-¶-¶¨¶-¶-¶-¶¨Tœ';
                     const attachmentMeta = [
-                      isLinkAttachment(attachment) ? '–°—Å—ã–ª–∫–∞' : '–§–∞–π–ª',
+                      isLinkAttachment(attachment) ? '¶·T¡TÀ¶¨¶¶¶-' : '¶‰¶-¶¶¶¨',
                       attachment?.uploadedAt ? formatDateTimeDisplay(attachment.uploadedAt) : '',
-                    ].filter(Boolean).join(' ¬∑ ');
+                    ].filter(Boolean).join(' T¨ ');
 
                     return (
                       <div key={String(attachment?.attachmentId || attachmentName)} className="telegram-readonly-file">
@@ -1639,7 +1476,7 @@ function OrderDetail() {
                           disabled={telegramAttachmentOpeningKey === `${telegramReadOnlySection.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`}
                         >
                           {telegramAttachmentOpeningKey === `${telegramReadOnlySection.key === 'paint' ? 'paint' : 'order'}:${attachment.attachmentId}`
-                            ? '–û—Ç–∫—Ä—ã–≤–∞—é...'
+                            ? '¶ﬁT¬¶¶T¿TÀ¶-¶-TŒ...'
                             : attachmentName}
                         </button>
                         {attachmentMeta ? (
@@ -1664,8 +1501,8 @@ function OrderDetail() {
                       <span className="attachment-preview-toolbar-kind">{telegramSpreadsheetPreview.kindLabel || 'Excel'}</span>
                       <span className="attachment-preview-toolbar-size">
                         {telegramSpreadsheetPreview.sizeLabel
-                          ? `${telegramSpreadsheetPreview.name || '–§–∞–π–ª'} ¬∑ ${telegramSpreadsheetPreview.sizeLabel}`
-                          : (telegramSpreadsheetPreview.name || '–§–∞–π–ª')}
+                          ? `${telegramSpreadsheetPreview.name || '¶‰¶-¶¶¶¨'} T¨ ${telegramSpreadsheetPreview.sizeLabel}`
+                          : (telegramSpreadsheetPreview.name || '¶‰¶-¶¶¶¨')}
                       </span>
                     </div>
                     <div className="telegram-readonly-panel-toolbar-actions">
@@ -1678,11 +1515,11 @@ function OrderDetail() {
                             telegramSpreadsheetPreview.name || 'attachment',
                           )}
                         >
-                          –û—Ç–∫—Ä—ã—Ç—å –æ—Ç–¥–µ–ª—å–Ω–æ
+                          ¶ﬁT¬¶¶T¿TÀT¬TÃ ¶-T¬¶+¶¶¶¨TÃ¶-¶-
                         </button>
                       ) : null}
                       <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramSpreadsheetPreview}>
-                        –ó–∞–∫—Ä—ã—Ç—å —Ñ–∞–π–ª
+                        ¶◊¶-¶¶T¿TÀT¬TÃ Tƒ¶-¶¶¶¨
                       </button>
                     </div>
                   </div>
@@ -1711,8 +1548,8 @@ function OrderDetail() {
                         const shownRows = Math.min((activeSheet?.rows || []).length, 100);
                         const totalRows = Number(activeSheet?.totalRows) || 0;
                         return totalRows > shownRows
-                          ? `–ü–æ–∫–∞–∑–∞–Ω—ã –ø–µ—Ä–≤—ã–µ ${shownRows} –∏–∑ ${totalRows} —Å—Ç—Ä–æ–∫`
-                          : `–ü–æ–∫–∞–∑–∞–Ω–æ —Å—Ç—Ä–æ–∫: ${shownRows}`;
+                          ? `¶ﬂ¶-¶¶¶-¶¨¶-¶-TÀ ¶¨¶¶T¿¶-TÀ¶¶ ${shownRows} ¶¨¶¨ ${totalRows} T¡T¬T¿¶-¶¶`
+                          : `¶ﬂ¶-¶¶¶-¶¨¶-¶-¶- T¡T¬T¿¶-¶¶: ${shownRows}`;
                       })()}
                     </div>
                     <div className="attachment-preview-table-wrap">
@@ -1739,11 +1576,11 @@ function OrderDetail() {
                 <div className="attachment-preview-panel telegram-inline-attachment-preview">
                   <div className="attachment-preview-toolbar">
                     <div className="attachment-preview-toolbar-meta">
-                      <span className="attachment-preview-toolbar-kind">{telegramAttachmentPreview.kindLabel || '–§–∞–π–ª'}</span>
+                      <span className="attachment-preview-toolbar-kind">{telegramAttachmentPreview.kindLabel || '¶‰¶-¶¶¶¨'}</span>
                       <span className="attachment-preview-toolbar-size">
                         {telegramAttachmentPreview.sizeLabel
-                          ? `${telegramAttachmentPreview.name || '–§–∞–π–ª'} ¬∑ ${telegramAttachmentPreview.sizeLabel}`
-                          : (telegramAttachmentPreview.name || '–§–∞–π–ª')}
+                          ? `${telegramAttachmentPreview.name || '¶‰¶-¶¶¶¨'} T¨ ${telegramAttachmentPreview.sizeLabel}`
+                          : (telegramAttachmentPreview.name || '¶‰¶-¶¶¶¨')}
                       </span>
                     </div>
                     <div className="telegram-readonly-panel-toolbar-actions">
@@ -1756,11 +1593,11 @@ function OrderDetail() {
                             telegramAttachmentPreview.name || 'attachment',
                           )}
                         >
-                          –û—Ç–∫—Ä—ã—Ç—å –æ—Ç–¥–µ–ª—å–Ω–æ
+                          ¶ﬁT¬¶¶T¿TÀT¬TÃ ¶-T¬¶+¶¶¶¨TÃ¶-¶-
                         </button>
                       ) : null}
                       <button type="button" className="telegram-readonly-close-btn" onClick={closeTelegramAttachmentPreview}>
-                        –ó–∞–∫—Ä—ã—Ç—å —Ñ–∞–π–ª
+                        ¶◊¶-¶¶T¿TÀT¬TÃ Tƒ¶-¶¶¶¨
                       </button>
                     </div>
                   </div>
@@ -1777,7 +1614,7 @@ function OrderDetail() {
                     {telegramAttachmentPreview.mode === 'image' ? (
                       <img
                         src={telegramAttachmentPreview.url}
-                        alt={telegramAttachmentPreview.name || '–ò–∑–æ–±—Ä–∞–∂–µ–Ω–∏–µ'}
+                        alt={telegramAttachmentPreview.name || '¶ÿ¶¨¶-¶-T¿¶-¶¶¶¶¶-¶¨¶¶'}
                         className="attachment-preview-image"
                       />
                     ) : null}
@@ -1791,13 +1628,13 @@ function OrderDetail() {
                     {telegramAttachmentPreview.mode === 'word' ? (
                       <div
                         className="attachment-preview-document"
-                        dangerouslySetInnerHTML={{ __html: telegramAttachmentPreview.html || '<p>–ü—É—Å—Ç–æ–π –¥–æ–∫—É–º–µ–Ω—Ç.</p>' }}
+                        dangerouslySetInnerHTML={{ __html: telegramAttachmentPreview.html || '<p>¶ﬂT√T¡T¬¶-¶¶ ¶+¶-¶¶T√¶-¶¶¶-T¬.</p>' }}
                       />
                     ) : null}
                     {telegramAttachmentPreview.mode === 'word-legacy' ? (
                       <div className="attachment-preview-document">
-                        <p>–§–æ—Ä–º–∞—Ç `.doc` –Ω–µ –≤—Å–µ–≥–¥–∞ —Å—Ç–∞–±–∏–ª—å–Ω–æ —Ä–µ–Ω–¥–µ—Ä–∏—Ç—Å—è –≤–Ω—É—Ç—Ä–∏ Telegram Web App.</p>
-                        <p>–§–∞–π–ª –¥–æ—Å—Ç—É–ø–µ–Ω –ø–æ –∫–Ω–æ–ø–∫–µ ¬´–û—Ç–∫—Ä—ã—Ç—å –æ—Ç–¥–µ–ª—å–Ω–æ¬ª –±–µ–∑ –≤—ã—Ö–æ–¥–∞ –∏–∑ –∫–∞—Ä—Ç–æ—á–∫–∏ –∏–∑–¥–µ–ª–∏—è.</p>
+                        <p>¶‰¶-T¿¶-¶-T¬ `.doc` ¶-¶¶ ¶-T¡¶¶¶¶¶+¶- T¡T¬¶-¶-¶¨¶¨TÃ¶-¶- T¿¶¶¶-¶+¶¶T¿¶¨T¬T¡Tœ ¶-¶-T√T¬T¿¶¨ Telegram Web App.</p>
+                        <p>¶‰¶-¶¶¶¨ ¶+¶-T¡T¬T√¶¨¶¶¶- ¶¨¶- ¶¶¶-¶-¶¨¶¶¶¶ TÎ¶ﬁT¬¶¶T¿TÀT¬TÃ ¶-T¬¶+¶¶¶¨TÃ¶-¶-T¨ ¶-¶¶¶¨ ¶-TÀT≈¶-¶+¶- ¶¨¶¨ ¶¶¶-T¿T¬¶-T«¶¶¶¨ ¶¨¶¨¶+¶¶¶¨¶¨Tœ.</p>
                       </div>
                     ) : null}
                   </div>
@@ -1823,11 +1660,11 @@ function OrderDetail() {
           </div>
 
           <div className="telegram-stage-section">
-            <div className="telegram-section-title">–≠—Ç–∞–ø—ã</div>
+            <div className="telegram-section-title">¶ÌT¬¶-¶¨TÀ</div>
 
             {sessionLoading && (
               <div className="telegram-empty-box">
-                –ü—Ä–æ–≤–µ—Ä—è—é –¥–æ—Å—Ç—É–ø —Å–æ—Ç—Ä—É–¥–Ω–∏–∫–∞...
+                ¶ﬂT¿¶-¶-¶¶T¿TœTŒ ¶+¶-T¡T¬T√¶¨ T¡¶-T¬T¿T√¶+¶-¶¨¶¶¶-...
               </div>
             )}
 
@@ -1839,7 +1676,7 @@ function OrderDetail() {
 
             {!sessionLoading && !sessionError && telegramEmployee && telegramStageOptions.length === 0 && (
               <div className="telegram-empty-box">
-                –î–ª—è —ç—Ç–æ–≥–æ —Å–æ—Ç—Ä—É–¥–Ω–∏–∫–∞ –Ω–µ –Ω–∞—Å—Ç—Ä–æ–µ–Ω—ã —ç—Ç–∞–ø—ã –≤ Telegram Web App.
+                ¶‘¶¨Tœ TÕT¬¶-¶¶¶- T¡¶-T¬T¿T√¶+¶-¶¨¶¶¶- ¶-¶¶ ¶-¶-T¡T¬T¿¶-¶¶¶-TÀ TÕT¬¶-¶¨TÀ ¶- Telegram Web App.
               </div>
             )}
 
@@ -1891,13 +1728,13 @@ function OrderDetail() {
                             </div>
                             <div className="telegram-stage-card-subtitle">
                               {isMarked
-                                ? `–ü—Ä–∏–Ω—è—Ç–æ${stageMark?.updatedBy ? ` ¬∑ ${stageMark.updatedBy}` : ''}${stageMark?.updatedAt ? ` ¬∑ ${formatDateTimeDisplay(stageMark.updatedAt)}` : ''}`
-                                : '–û–∂–∏–¥–∞–µ—Ç –ø—Ä–∏–Ω—è—Ç–∏—è'}
+                                ? `¶ﬂT¿¶¨¶-TœT¬¶-${stageMark?.updatedBy ? ` T¨ ${stageMark.updatedBy}` : ''}${stageMark?.updatedAt ? ` T¨ ${formatDateTimeDisplay(stageMark.updatedAt)}` : ''}`
+                                : '¶ﬁ¶¶¶¨¶+¶-¶¶T¬ ¶¨T¿¶¨¶-TœT¬¶¨Tœ'}
                             </div>
                           </div>
                         </div>
                         <span className={`telegram-stage-pill ${isMarked ? 'telegram-stage-pill-complete' : 'telegram-stage-pill-pending'}`}>
-                          {isMarked ? '–ü—Ä–∏–Ω—è—Ç–æ' : '–û–∂–∏–¥–∞–µ—Ç'}
+                          {isMarked ? '¶ﬂT¿¶¨¶-TœT¬¶-' : '¶ﬁ¶¶¶¨¶+¶-¶¶T¬'}
                         </span>
                       </div>
                       <div className="telegram-stage-card-actions">
@@ -1907,8 +1744,8 @@ function OrderDetail() {
                           disabled={isBusy}
                         >
                           {isBusy
-                            ? (isMarked ? '–û—Ç–º–µ–Ω—è—é...' : '–°–æ—Ö—Ä–∞–Ω—è—é...')
-                            : (isMarked ? '–û—Ç–º–µ–Ω–∏—Ç—å –ø—Ä–∏–Ω—è—Ç–∏–µ' : '–ü—Ä–∏–Ω—è—Ç—å —ç—Ç–∞–ø')}
+                            ? (isMarked ? '¶ﬁT¬¶-¶¶¶-TœTŒ...' : '¶·¶-T≈T¿¶-¶-TœTŒ...')
+                            : (isMarked ? '¶ﬁT¬¶-¶¶¶-¶¨T¬TÃ ¶¨T¿¶¨¶-TœT¬¶¨¶¶' : '¶ﬂT¿¶¨¶-TœT¬TÃ TÕT¬¶-¶¨')}
                         </button>
                       </div>
                     </div>
@@ -1918,189 +1755,20 @@ function OrderDetail() {
             )}
           </div>
 
-          {(telegramMode || debugMode) && (
-            <div style={{
-              marginTop: 12,
-              border: '1px solid #c7d3e8',
-              borderRadius: 10,
-              background: debugMode ? '#f0f4fb' : '#f6f8fc',
-              padding: '10px 12px 12px',
-              fontSize: 13,
-              color: '#243446',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontWeight: 800, fontSize: 14 }}>üîé –î–∏–∞–≥–Ω–æ—Å—Ç–∏–∫–∞ –∞–≤—Ç–æ—Ä–∏–∑–∞—Ü–∏–∏</span>
-                  <span style={{
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    background: sessionError ? '#fde4e4' : (telegramEmployee ? '#e2f5e9' : '#fff2d9'),
-                    color: sessionError ? '#9b2b2b' : (telegramEmployee ? '#1e7041' : '#7a5d10'),
-                    border: `1px solid ${sessionError ? '#f0b5b5' : (telegramEmployee ? '#b9e7cb' : '#eadca5')}`,
-                    fontWeight: 700,
-                    fontSize: 12,
-                  }}>
-                    {sessionError ? '‚ùå –û—à–∏–±–∫–∞' : (telegramEmployee ? '‚úÖ –ê–≤—Ç–æ—Ä–∏–∑–æ–≤–∞–Ω' : '‚ö†Ô∏è –ù–µ—Ç —Å–µ—Å—Å–∏–∏')}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button className="btn btn-primary" onClick={runLiveAuthCheck} disabled={liveAuthCheckLoading}>
-                    {liveAuthCheckLoading ? '–ü—Ä–æ–≤–µ—Ä—è—é...' : 'üîé –ü—Ä–æ–≤–µ—Ä–∏—Ç—å –∞–≤—Ç–æ—Ä–∏–∑–∞—Ü–∏—é —Å–µ–π—á–∞—Å'}
-                  </button>
-                  {debugMode && (
-                    <button className="btn btn-secondary" onClick={runTokenDiagnostics} disabled={diagnosticsLoading}>
-                      {diagnosticsLoading ? '–î–∏–∞–≥–Ω–æ—Å—Ç–∏–∫–∞...' : 'üî¨ Full token-flow'}
-                    </button>
-                  )}
-                  <button className="btn btn-secondary" onClick={() => {
-                    const params = new URLSearchParams(location.search);
-                    if (params.get('debug') === '1') {
-                      params.delete('debug');
-                    } else {
-                      params.set('debug', '1');
-                    }
-                    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
-                  }}>
-                    {debugMode ? '–°–∫—Ä—ã—Ç—å —Ä–∞—Å—à–∏—Ä–µ–Ω–Ω—É—é' : '–†–∞—Å—à–∏—Ä–µ–Ω–Ω–∞—è'}
-                  </button>
-                </div>
-              </div>
-
-              <div style={{
-                marginTop: 10,
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                gap: 8,
-                fontSize: 12,
-              }}>
-                {(() => {
-                  const params = new URLSearchParams(location.search);
-                  const urlTok = params.get('employeeSessionToken');
-                  const storageTok = getActiveTelegramSessionToken();
-                  const hasAuth = Boolean(telegramInitData || telegramUnsafeUser?.id);
-                  const row = (k, v) => (
-                    <div key={k} style={{
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f2',
-                      borderRadius: 8,
-                      padding: '6px 8px',
-                      minWidth: 0,
-                    }}>
-                      <div style={{ color: '#73849b', fontWeight: 700, fontSize: 11, letterSpacing: 0.2 }}>{k}</div>
-                      <div style={{
-                        wordBreak: 'break-all',
-                        fontFamily: v && v.length > 24 ? 'monospace' : 'system-ui, sans-serif',
-                        color: '#23374f',
-                        fontWeight: 600,
-                        fontSize: 12,
-                      }}>{v || '‚Äî'}</div>
-                    </div>
-                  );
-                  return [
-                    row('URL ?employeeSessionToken', urlTok ? `${urlTok.slice(0, 18)}...(${urlTok.length})` : '–ù–ï–¢'),
-                    row('Storage sessionToken', storageTok ? `${storageTok.slice(0, 18)}...(${storageTok.length})` : '–ù–ï–¢'),
-                    row('initData length', `${String(telegramInitData || '').length} —Å–∏–º–≤.`),
-                    row('unsafeUser Telegram ID', telegramUnsafeUser?.id ? `${String(telegramUnsafeUser.id)}${telegramUnsafeUser?.username ? ` (@${telegramUnsafeUser.username})` : ''}` : '–ù–ï–¢'),
-                    row('hasTelegramAuthPayload', hasAuth ? '‚úÖ –ï—Å—Ç—å initData/unsafeUser' : '‚ùå –ù–µ—ÇÁ≠æÂêç –∞–≤—Ç–æ—Ä–∏–∑–∞—Ü–∏–∏ Telegram'),
-                    row('telegramMode / isTelegramWebApp', `${String(telegramMode)} / ${String(isTelegramWebApp())}`),
-                    row('telegramAuthResolved (after 1.7s)', telegramAuthResolved ? '‚úÖ –î–∞' : '‚è≥ –ï—â—ë —Ä–∞–Ω–æ'),
-                    row('–°–æ—Ç—Ä—É–¥–Ω–∏–∫ –≤ —Å–µ—Å—Å–∏–∏', telegramEmployee ? `${telegramEmployee.fullName} ¬∑ ${telegramEmployee.role}` : '‚ùå –ù–ï–¢'),
-                    sessionError ? row('–¢–µ–∫—Å—Ç –æ—à–∏–±–∫–∏ sessionError', sessionError) : null,
-                  ].filter(Boolean);
-                })()}
-              </div>
-
-              {liveAuthCheckResult && (
-                <div style={{
-                  marginTop: 10,
-                  background: '#ffffff',
-                  border: '1px solid #dde6f3',
-                  borderRadius: 10,
-                  padding: 10,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ fontWeight: 800, fontSize: 13 }}>
-                      –†–µ–∑—É–ª—å—Ç–∞—Ç Live-–ø—Ä–æ–≤–µ—Ä–∫–∏{' '}
-                      {liveAuthCheckResult.sessionResponse?.ok
-                        ? <span style={{ color: '#1e7041' }}>‚úÖ –ü–†–û–ô–î–ï–ù–ê</span>
-                        : <span style={{ color: '#9b2b2b' }}>‚ùå –û–®–ò–ë–ö–ê</span>}
-                    </div>
-                    <button className="btn btn-secondary" onClick={() => copyToClipboard(JSON.stringify(liveAuthCheckResult, null, 2))}>
-                      üìã –°–∫–æ–ø–∏—Ä–æ–≤–∞—Ç—å JSON
-                    </button>
-                  </div>
-                  <div style={{
-                    marginTop: 8,
-                    background: '#f5f7fb',
-                    border: '1px solid #d9dfeb',
-                    borderRadius: 8,
-                    padding: 8,
-                    fontFamily: 'monospace',
-                    fontSize: 11.5,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
-                    maxHeight: debugMode ? 520 : 280,
-                    overflowY: 'auto',
-                    color: '#22314a',
-                  }}>
-                    {JSON.stringify(liveAuthCheckResult, null, 2)}
-                  </div>
-                </div>
-              )}
-
-              {debugMode && diagnosticsResult && (
-                <div style={{
-                  marginTop: 10,
-                  background: '#ffffff',
-                  border: '1px solid #dde6f3',
-                  borderRadius: 10,
-                  padding: 10,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ fontWeight: 800, fontSize: 13 }}>
-                      Full token-flow diagnostics{' '}
-                      {diagnosticsResult.ok ? <span style={{ color: '#1e7041' }}>‚úÖ OK</span> : <span style={{ color: '#9b2b2b' }}>‚ùå FAIL</span>}
-                    </div>
-                    <button className="btn btn-secondary" onClick={() => copyToClipboard(JSON.stringify(diagnosticsResult, null, 2))}>
-                      üìã –°–∫–æ–ø–∏—Ä–æ–≤–∞—Ç—å JSON
-                    </button>
-                  </div>
-                  <div style={{
-                    marginTop: 8,
-                    background: '#f5f7fb',
-                    border: '1px solid #d9dfeb',
-                    borderRadius: 8,
-                    padding: 8,
-                    fontFamily: 'monospace',
-                    fontSize: 11.5,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
-                    maxHeight: 360,
-                    overflowY: 'auto',
-                    color: '#22314a',
-                  }}>
-                    {JSON.stringify(diagnosticsResult, null, 2)}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {(sessionLoading || sessionError || canManagePackage) && (
             <div className="telegram-package-section">
-              <div className="telegram-section-title">–£–∫–æ–º–ø–ª–µ–∫—Ç–æ–≤–∞–Ω–æ</div>
+              <div className="telegram-section-title">¶„¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-¶-¶-¶-¶-</div>
 
               {sessionLoading && (
                 <div className="telegram-empty-box">
-                  –ü—Ä–æ–≤–µ—Ä—è—é –¥–æ—Å—Ç—É–ø –∫ –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏...
+                  ¶ﬂT¿¶-¶-¶¶T¿TœTŒ ¶+¶-T¡T¬T√¶¨ ¶¶ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨...
                 </div>
               )}
 
               {canManagePackage && (
                 <>
                   <div className="telegram-package-meta">
-                    –ö–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏—è: {packageStats.completed}/{packageStats.total || 0}
+                    ¶⁄¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨Tœ: {packageStats.completed}/{packageStats.total || 0}
                   </div>
 
                   <div className="telegram-package-input-row">
@@ -2117,7 +1785,7 @@ function OrderDetail() {
                           addTelegramPackageItem();
                         }
                       }}
-                      placeholder="–î–æ–±–∞–≤–∏—Ç—å –ø–æ–∑–∏—Ü–∏—é –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏"
+                      placeholder="¶‘¶-¶-¶-¶-¶¨T¬TÃ ¶¨¶-¶¨¶¨T∆¶¨TŒ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨"
                       disabled={packageBusyKey === 'add'}
                     />
                     <button
@@ -2125,7 +1793,7 @@ function OrderDetail() {
                       onClick={addTelegramPackageItem}
                       disabled={packageBusyKey === 'add'}
                     >
-                      {packageBusyKey === 'add' ? '–î–æ–±–∞–≤–ª—è—é...' : '–î–æ–±–∞–≤–∏—Ç—å'}
+                      {packageBusyKey === 'add' ? '¶‘¶-¶-¶-¶-¶¨TœTŒ...' : '¶‘¶-¶-¶-¶-¶¨T¬TÃ'}
                     </button>
                   </div>
 
@@ -2157,13 +1825,13 @@ function OrderDetail() {
                                   </div>
                                   <div className="telegram-stage-card-subtitle">
                                     {packageItem.isCompleted
-                                      ? `–£–∫–æ–º–ø–ª–µ–∫—Ç–æ–≤–∞–Ω–æ${packageItem.completedAt ? ` ¬∑ ${formatDateDisplay(packageItem.completedAt)}` : ''}`
-                                      : '–û–∂–∏–¥–∞–µ—Ç –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏'}
+                                      ? `¶„¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-¶-¶-¶-¶-${packageItem.completedAt ? ` T¨ ${formatDateDisplay(packageItem.completedAt)}` : ''}`
+                                      : '¶ﬁ¶¶¶¨¶+¶-¶¶T¬ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨'}
                                   </div>
                                 </div>
                               </div>
                               <span className={`telegram-stage-pill ${packageItem.isCompleted ? 'telegram-stage-pill-complete' : 'telegram-stage-pill-pending'}`}>
-                                {packageItem.isCompleted ? '–ì–æ—Ç–æ–≤–æ' : '–û–∂–∏–¥–∞–µ—Ç'}
+                                {packageItem.isCompleted ? '¶”¶-T¬¶-¶-¶-' : '¶ﬁ¶¶¶¨¶+¶-¶¶T¬'}
                               </span>
                             </div>
                             <div className="telegram-stage-card-actions">
@@ -2173,8 +1841,8 @@ function OrderDetail() {
                                 disabled={isBusy}
                               >
                                 {isBusy
-                                  ? '–°–æ—Ö—Ä–∞–Ω—è—é...'
-                                  : (packageItem.isCompleted ? '–°–Ω—è—Ç—å –æ—Ç–º–µ—Ç–∫—É' : '–û—Ç–º–µ—Ç–∏—Ç—å')}
+                                  ? '¶·¶-T≈T¿¶-¶-TœTŒ...'
+                                  : (packageItem.isCompleted ? '¶·¶-TœT¬TÃ ¶-T¬¶-¶¶T¬¶¶T√' : '¶ﬁT¬¶-¶¶T¬¶¨T¬TÃ')}
                               </button>
                             </div>
                           </div>
@@ -2183,7 +1851,7 @@ function OrderDetail() {
                     </div>
                   ) : (
                     <div className="telegram-empty-box">
-                      –ü–æ–∑–∏—Ü–∏–∏ –∫–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏–∏ –ø–æ–∫–∞ –Ω–µ –¥–æ–±–∞–≤–ª–µ–Ω—ã.
+                      ¶ﬂ¶-¶¨¶¨T∆¶¨¶¨ ¶¶¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨¶¨ ¶¨¶-¶¶¶- ¶-¶¶ ¶+¶-¶-¶-¶-¶¨¶¶¶-TÀ.
                     </div>
                   )}
                 </>
@@ -2193,18 +1861,18 @@ function OrderDetail() {
 
           {(sessionLoading || sessionError || canManageMaterialRequests) && (
             <div className="telegram-package-section telegram-material-request-section">
-              <div className="telegram-section-title">–ó–∞—è–≤–∫–∏ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏</div>
+              <div className="telegram-section-title">¶◊¶-Tœ¶-¶¶¶¨ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨</div>
 
               {sessionLoading && (
                 <div className="telegram-empty-box">
-                  –ü—Ä–æ–≤–µ—Ä—è—é –¥–æ—Å—Ç—É–ø –∫ –∑–∞—è–≤–∫–∞–º –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏...
+                  ¶ﬂT¿¶-¶-¶¶T¿TœTŒ ¶+¶-T¡T¬T√¶¨ ¶¶ ¶¨¶-Tœ¶-¶¶¶-¶- ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨...
                 </div>
               )}
 
               {canManageMaterialRequests && (
                 <>
                   <div className="telegram-package-meta telegram-material-request-meta">
-                    –í–∞–∂–Ω—ã–µ –∑–∞—è–≤–∫–∏: –¥–æ–±–∞–≤–ª–µ–Ω–æ {materialRequestStats.total}
+                    ¶“¶-¶¶¶-TÀ¶¶ ¶¨¶-Tœ¶-¶¶¶¨: ¶+¶-¶-¶-¶-¶¨¶¶¶-¶- {materialRequestStats.total}
                   </div>
 
                   <div className="telegram-package-input-row telegram-material-request-input-row">
@@ -2223,7 +1891,7 @@ function OrderDetail() {
                           addTelegramMaterialRequestItem();
                         }
                       }}
-                      placeholder="–î–æ–±–∞–≤–∏—Ç—å –∑–∞—è–≤–∫—É, –Ω–∞–ø—Ä–∏–º–µ—Ä —Å–≤–µ—Ä–ª–æ"
+                      placeholder="¶‘¶-¶-¶-¶-¶¨T¬TÃ ¶¨¶-Tœ¶-¶¶T√, ¶-¶-¶¨T¿¶¨¶-¶¶T¿ T¡¶-¶¶T¿¶¨¶-"
                       disabled={materialRequestBusyKey === 'add'}
                     />
                     <button
@@ -2231,7 +1899,7 @@ function OrderDetail() {
                       onClick={addTelegramMaterialRequestItem}
                       disabled={materialRequestBusyKey === 'add'}
                     >
-                      {materialRequestBusyKey === 'add' ? '–î–æ–±–∞–≤–ª—è—é...' : '–î–æ–±–∞–≤–∏—Ç—å'}
+                      {materialRequestBusyKey === 'add' ? '¶‘¶-¶-¶-¶-¶¨TœTŒ...' : '¶‘¶-¶-¶-¶-¶¨T¬TÃ'}
                     </button>
                   </div>
 
@@ -2244,7 +1912,7 @@ function OrderDetail() {
                         disabled={Boolean(materialRequestBusyKey)}
                       />
                       <span>
-                        {materialRequestBusyKey === 'add-photo:gallery' ? '–ó–∞–≥—Ä—É–∂–∞—é...' : '–î–æ–±–∞–≤–∏—Ç—å –∏–∑ –≥–∞–ª–µ—Ä–µ–∏'}
+                        {materialRequestBusyKey === 'add-photo:gallery' ? '¶◊¶-¶¶T¿T√¶¶¶-TŒ...' : '¶‘¶-¶-¶-¶-¶¨T¬TÃ ¶¨¶¨ ¶¶¶-¶¨¶¶T¿¶¶¶¨'}
                       </span>
                     </label>
                   </div>
@@ -2324,19 +1992,19 @@ function OrderDetail() {
                                                 className="telegram-material-request-edit-btn"
                                                 onClick={() => startTelegramMaterialRequestNameEdit(requestItem)}
                                                 disabled={isNameBusy}
-                                                aria-label="–†–µ–¥–∞–∫—Ç–∏—Ä–æ–≤–∞—Ç—å –Ω–∞–∑–≤–∞–Ω–∏–µ –∑–∞—è–≤–∫–∏"
+                                                aria-label="¶‡¶¶¶+¶-¶¶T¬¶¨T¿¶-¶-¶-T¬TÃ ¶-¶-¶¨¶-¶-¶-¶¨¶¶ ¶¨¶-Tœ¶-¶¶¶¨"
                                               >
-                                                ‚úé
+                                                Ú‹Œ
                                               </button>
                                             </div>
                                           )}
                                           <div className="telegram-stage-card-subtitle">
-                                            {attachment?.uploadedAt ? `–î–æ–±–∞–≤–ª–µ–Ω–æ ¬∑ ${formatDateTimeDisplay(attachment.uploadedAt)}` : '–î–æ–±–∞–≤–ª–µ–Ω–æ –≤ –∑–∞—è–≤–∫–∏ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏'}
+                                            {attachment?.uploadedAt ? `¶‘¶-¶-¶-¶-¶¨¶¶¶-¶- T¨ ${formatDateTimeDisplay(attachment.uploadedAt)}` : '¶‘¶-¶-¶-¶-¶¨¶¶¶-¶- ¶- ¶¨¶-Tœ¶-¶¶¶¨ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨'}
                                           </div>
                                         </div>
                                       </div>
                                       <span className="telegram-stage-pill telegram-material-request-pill">
-                                        –§–æ—Ç–æ
+                                        ¶‰¶-T¬¶-
                                       </span>
                                     </div>
                                     {photoUrl ? (
@@ -2352,7 +2020,7 @@ function OrderDetail() {
                                       >
                                         <img
                                           src={photoUrl}
-                                          alt={attachment?.name || '–§–æ—Ç–æ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∞'}
+                                          alt={attachment?.name || '¶‰¶-T¬¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶-'}
                                           className="telegram-material-request-photo-image"
                                         />
                                       </button>
@@ -2361,7 +2029,7 @@ function OrderDetail() {
                                       <div className="telegram-material-request-inline-preview">
                                         <img
                                           src={telegramAttachmentPreview.url}
-                                          alt={telegramAttachmentPreview.name || '–§–æ—Ç–æ'}
+                                          alt={telegramAttachmentPreview.name || '¶‰¶-T¬¶-'}
                                           className="telegram-material-request-inline-preview-image"
                                         />
                                       </div>
@@ -2415,19 +2083,19 @@ function OrderDetail() {
                                       className="telegram-material-request-edit-btn"
                                       onClick={() => startTelegramMaterialRequestNameEdit(requestItem)}
                                       disabled={materialRequestBusyKey === `name:${requestItem.id}`}
-                                      aria-label="–†–µ–¥–∞–∫—Ç–∏—Ä–æ–≤–∞—Ç—å –Ω–∞–∑–≤–∞–Ω–∏–µ –∑–∞—è–≤–∫–∏"
+                                      aria-label="¶‡¶¶¶+¶-¶¶T¬¶¨T¿¶-¶-¶-T¬TÃ ¶-¶-¶¨¶-¶-¶-¶¨¶¶ ¶¨¶-Tœ¶-¶¶¶¨"
                                     >
-                                      ‚úé
+                                      Ú‹Œ
                                     </button>
                                   </div>
                                 )}
                                 <div className="telegram-stage-card-subtitle">
-                                  –î–æ–±–∞–≤–ª–µ–Ω–æ –≤ –∑–∞—è–≤–∫—É –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏
+                                  ¶‘¶-¶-¶-¶-¶¨¶¶¶-¶- ¶- ¶¨¶-Tœ¶-¶¶T√ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨
                                 </div>
                               </div>
                             </div>
                             <span className="telegram-stage-pill telegram-material-request-pill">
-                              –°—Ä–æ—á–Ω–æ
+                              ¶·T¿¶-T«¶-¶-
                             </span>
                           </div>
                             </>
@@ -2437,7 +2105,7 @@ function OrderDetail() {
                     </div>
                   ) : (
                     <div className="telegram-empty-box">
-                      –ó–∞—è–≤–∫–∏ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏ –ø–æ–∫–∞ –Ω–µ –¥–æ–±–∞–≤–ª–µ–Ω—ã.
+                      ¶◊¶-Tœ¶-¶¶¶¨ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨ ¶¨¶-¶¶¶- ¶-¶¶ ¶+¶-¶-¶-¶-¶¨¶¶¶-TÀ.
                     </div>
                   )}
                 </>
@@ -2450,22 +2118,22 @@ function OrderDetail() {
         <div className="table-scroll">
           <table>
             <tbody>
-              <tr><td><strong>–ù–æ–º–µ—Ä –∑–∞–∫–∞–∑–∞</strong></td><td>{order.orderNumber || '‚Äî'}</td></tr>
-              <tr><td><strong>–ó–∞–∫–∞–∑—á–∏–∫</strong></td><td>{order.customer || '‚Äî'}</td></tr>
-              <tr><td><strong>–ò–∑–¥–µ–ª–∏–µ</strong></td><td>{selectedItem?.name || primaryItem?.name || '‚Äî'}</td></tr>
-              <tr><td><strong>‚Ññ –∏–∑–¥–µ–ª–∏—è –≤ –∑–∞–∫–∞–∑–µ</strong></td><td>{selectedItem?.itemNumber || '‚Äî'}</td></tr>
-              <tr><td><strong>–ü–æ–º–µ—â–µ–Ω–∏–µ</strong></td><td>{selectedItem?.room || '‚Äî'}</td></tr>
-              <tr><td><strong>‚Ññ –ø–æ–º–µ—â–µ–Ω–∏—è</strong></td><td>{selectedItem?.roomNumber || '‚Äî'}</td></tr>
-              <tr><td><strong>–ö–æ–ª-–≤–æ –∏–∑–¥–µ–ª–∏–π</strong></td><td>{selectedItem?.quantity || primaryItem?.quantity || 1}</td></tr>
-              <tr><td><strong>–ú–∞—Ç–µ—Ä–∏–∞–ª</strong></td><td>{selectedItem?.material || primaryItem?.material || '‚Äî'}</td></tr>
-              <tr><td><strong>–ö–æ–º–ø–ª–µ–∫—Ç–∞—Ü–∏—è</strong></td><td>{selectedItem?.packageName || '‚Äî'}</td></tr>
-              <tr><td><strong>–ó–∞—è–≤–∫–∏ –Ω–∞ —Ä–∞—Å—Ö–æ–¥–Ω–∏–∫–∏</strong></td><td>{materialRequestStats.total > 0 ? `${materialRequestStats.completed}/${materialRequestStats.total}` : '‚Äî'}</td></tr>
-              <tr><td><strong>–ü—Ä–∏–º–µ—á–∞–Ω–∏—è</strong></td><td>{selectedItem?.notes || primaryItem?.notes || '‚Äî'}</td></tr>
-              <tr><td><strong>–î–∞—Ç–∞ –∑–∞–∫–∞–∑–∞</strong></td><td>{formatDateDisplay(order.orderDate)}</td></tr>
-              <tr><td><strong>–ù–∞—á–∞–ª–æ –∏–∑–≥–æ—Ç–æ–≤–ª–µ–Ω–∏—è</strong></td><td>{formatDateDisplay(order.startDate)}</td></tr>
-              <tr><td><strong>–û–∫–æ–Ω—á–∞–Ω–∏–µ –∏–∑–≥–æ—Ç–æ–≤–ª–µ–Ω–∏—è</strong></td><td>{formatDateDisplay(order.endDate)}</td></tr>
-              <tr><td><strong>–í—Ä–µ–º—è –∏–∑–≥–æ—Ç–æ–≤–ª–µ–Ω–∏—è</strong></td><td>{calcDuration(order.startDate, order.endDate)}</td></tr>
-              <tr><td><strong>–°—Ç–∞—Ç—É—Å</strong></td><td><span className={statusMeta.className}>{statusMeta.label}</span></td></tr>
+              <tr><td><strong>¶›¶-¶-¶¶T¿ ¶¨¶-¶¶¶-¶¨¶-</strong></td><td>{order.orderNumber || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>¶◊¶-¶¶¶-¶¨T«¶¨¶¶</strong></td><td>{order.customer || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>¶ÿ¶¨¶+¶¶¶¨¶¨¶¶</strong></td><td>{selectedItem?.name || primaryItem?.name || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>Úƒ÷ ¶¨¶¨¶+¶¶¶¨¶¨Tœ ¶- ¶¨¶-¶¶¶-¶¨¶¶</strong></td><td>{selectedItem?.itemNumber || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>¶ﬂ¶-¶-¶¶T…¶¶¶-¶¨¶¶</strong></td><td>{selectedItem?.room || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>Úƒ÷ ¶¨¶-¶-¶¶T…¶¶¶-¶¨Tœ</strong></td><td>{selectedItem?.roomNumber || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>¶⁄¶-¶¨-¶-¶- ¶¨¶¨¶+¶¶¶¨¶¨¶¶</strong></td><td>{selectedItem?.quantity || primaryItem?.quantity || 1}</td></tr>
+              <tr><td><strong>¶‹¶-T¬¶¶T¿¶¨¶-¶¨</strong></td><td>{selectedItem?.material || primaryItem?.material || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>¶⁄¶-¶-¶¨¶¨¶¶¶¶T¬¶-T∆¶¨Tœ</strong></td><td>{selectedItem?.packageName || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>¶◊¶-Tœ¶-¶¶¶¨ ¶-¶- T¿¶-T¡T≈¶-¶+¶-¶¨¶¶¶¨</strong></td><td>{materialRequestStats.total > 0 ? `${materialRequestStats.completed}/${materialRequestStats.total}` : 'Ú¿‘'}</td></tr>
+              <tr><td><strong>¶ﬂT¿¶¨¶-¶¶T«¶-¶-¶¨Tœ</strong></td><td>{selectedItem?.notes || primaryItem?.notes || 'Ú¿‘'}</td></tr>
+              <tr><td><strong>¶‘¶-T¬¶- ¶¨¶-¶¶¶-¶¨¶-</strong></td><td>{formatDateDisplay(order.orderDate)}</td></tr>
+              <tr><td><strong>¶›¶-T«¶-¶¨¶- ¶¨¶¨¶¶¶-T¬¶-¶-¶¨¶¶¶-¶¨Tœ</strong></td><td>{formatDateDisplay(order.startDate)}</td></tr>
+              <tr><td><strong>¶ﬁ¶¶¶-¶-T«¶-¶-¶¨¶¶ ¶¨¶¨¶¶¶-T¬¶-¶-¶¨¶¶¶-¶¨Tœ</strong></td><td>{formatDateDisplay(order.endDate)}</td></tr>
+              <tr><td><strong>¶“T¿¶¶¶-Tœ ¶¨¶¨¶¶¶-T¬¶-¶-¶¨¶¶¶-¶¨Tœ</strong></td><td>{calcDuration(order.startDate, order.endDate)}</td></tr>
+              <tr><td><strong>¶·T¬¶-T¬T√T¡</strong></td><td><span className={statusMeta.className}>{statusMeta.label}</span></td></tr>
             </tbody>
           </table>
         </div>
