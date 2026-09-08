@@ -315,6 +315,86 @@ router.post('/telegram/webapp/bootstrap', (req, res) => {
   }
 });
 
+router.post('/webapp/employee-link-by-code', express.json({ limit: '16kb' }), async (req, res) => {
+  try {
+    const rawCode = String((req.body || {}).code || '').trim().toLowerCase();
+    if (!rawCode || rawCode.length < 2) {
+      return res.status(400).json({ ok: false, retryable: true, message: 'Введите код сотрудника (минимум 2 символа).' });
+    }
+    const employees = (EmployeeStore.list && EmployeeStore.list()) || EmployeeStore.findAll() || [];
+    const match = (employees.find((emp) => {
+      const code = String(emp.code || emp.employeeCode || '').toLowerCase();
+      const username = String(emp.telegramUsername || '').toLowerCase().replace(/^@/, '');
+      const name = String(emp.fullName || emp.name || '').toLowerCase();
+      const id6 = String(emp._id || '').slice(-6).toLowerCase();
+      if (!code && !username && !name) return false;
+      return (code && code === rawCode)
+        || (username && username === rawCode)
+        || (id6 && id6 === rawCode)
+        || (name && rawCode.length >= 3 && name.includes(rawCode));
+    }) || null);
+
+    if (!match) {
+      addTelegramDiagnosticLog({
+        scope: 'telegram-auth',
+        level: 'warn',
+        event: 'employee-link-by-code.not-found',
+        details: { code: rawCode, searched: employees.length },
+      });
+      return res.status(404).json({ ok: false, retryable: true, message: 'Сотрудник с таким кодом не найден. Проверьте код и попробуйте ещё раз.' });
+    }
+
+    addTelegramDiagnosticLog({
+      scope: 'telegram-auth',
+      level: 'info',
+      event: 'employee-link-by-code.found',
+      details: {
+        code: rawCode,
+        employeeId: match._id ? String(match._id).slice(-8) : '',
+        employeeRole: String(match.role || '').slice(0, 80),
+        hasTelegramUserId: Boolean(match.telegramUserId),
+      },
+    });
+
+    const token = getConfiguredBotToken();
+    const issuedAt = Date.now();
+    const employeeLink = signTelegramEmployeeDirectLink(token, match._id, {
+      scope: 'qr-code-employee',
+      issuedAt,
+    });
+
+    const sessionToken = createTelegramEmployeeSessionToken(token, {
+      employeeId: match._id,
+      telegramUserId: match.telegramUserId || undefined,
+      issuedAt,
+    });
+
+    res.json({
+      ok: true,
+      authPath: 'employee-code',
+      employee: {
+        _id: match._id,
+        fullName: match.fullName,
+        role: match.role,
+        telegramUsername: match.telegramUsername || '',
+        telegramUserId: match.telegramUserId || '',
+        code: match.code || match.employeeCode || '',
+      },
+      employeeLink,
+      sessionToken,
+      expiresInDays: { employeeLink: 5 * 365, sessionToken: 365 },
+    });
+  } catch (error) {
+    addTelegramDiagnosticLog({
+      scope: 'telegram-auth',
+      level: 'error',
+      event: 'employee-link-by-code.error',
+      details: { message: String(error.message || '').slice(0, 255) },
+    });
+    res.status(error.status || 400).json({ ok: false, message: error.message || 'Не удалось получить доступ по коду сотрудника.' });
+  }
+});
+
 function getConfiguredBotToken() {
   return String(SettingsStore.get().telegramBotToken || '').trim();
 }

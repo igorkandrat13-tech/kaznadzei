@@ -44,6 +44,9 @@ function TelegramScannerPage() {
   const [bootstrappingSession, setBootstrappingSession] = useState(true);
   const [openingScanner, setOpeningScanner] = useState(false);
   const [bootstrapProgress, setBootstrapProgress] = useState({ step: 0, total: 12, ready: false, note: '' });
+  const [fallbackEmployeeCode, setFallbackEmployeeCode] = useState('');
+  const [submittingFallback, setSubmittingFallback] = useState(false);
+  const [fallbackEmployeeName, setFallbackEmployeeName] = useState('');
   useGlobalErrorEffect(error, 'Ошибка Telegram Web App.');
 
   const isReadyForScan = Boolean(
@@ -51,6 +54,60 @@ function TelegramScannerPage() {
       || getTelegramEmployeeDirectLink()
       || getTelegramEmployeeSessionToken()
   );
+
+  const stuckAtMax = bootstrapProgress.step >= bootstrapProgress.total && !isReadyForScan;
+
+  const submitFallbackEmployeeCode = useCallback(async () => {
+    const code = String(fallbackEmployeeCode || '').trim();
+    if (!code) {
+      setError('Введите код сотрудника.');
+      return;
+    }
+    setSubmittingFallback(true);
+    setError('');
+    try {
+      writeClientTelegramDiagnosticsLog('scanner.fallback.code-submit', {
+        codeLength: code.length,
+        codeTail: String(code).slice(-4),
+      }, 'telegram-scanner');
+      const res = await apiFetch('/api/telegram/webapp/employee-link-by-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message || 'Не удалось получить доступ.');
+      }
+      if (data?.employeeLink) {
+        setTelegramEmployeeDirectLink(String(data.employeeLink || ''));
+      }
+      if (data?.sessionToken) {
+        setTelegramEmployeeSessionToken(String(data.sessionToken || ''));
+      }
+      const empName = data?.employee?.fullName || data?.employee?.name || '';
+      setFallbackEmployeeName(empName);
+      writeClientTelegramDiagnosticsLog('scanner.fallback.success', {
+        employeeId: data?.employee?._id ? String(data.employee._id).slice(-6) : '',
+        employeeRole: String(data?.employee?.role || '').slice(0, 80),
+        hasLink: Boolean(data?.employeeLink),
+        hasSession: Boolean(data?.sessionToken),
+      }, 'telegram-scanner');
+      setBootstrapProgress(prev => ({
+        ...prev,
+        step: prev.total,
+        ready: true,
+        note: empName ? `Доступ получен: ${empName}. Можно сканировать.` : 'Доступ готов. Можно сканировать.',
+      }));
+    } catch (fallbackErr) {
+      setError(fallbackErr.message || 'Не удалось получить доступ по коду сотрудника.');
+      writeClientTelegramDiagnosticsLog('scanner.fallback.error', {
+        message: String(fallbackErr.message || '').slice(0, 255),
+      }, 'telegram-scanner');
+    } finally {
+      setSubmittingFallback(false);
+    }
+  }, [fallbackEmployeeCode]);
 
   const bootstrapTelegramSession = useCallback(async ({ retries = 12 } = {}) => {
     markTelegramWebAppSession();
@@ -383,6 +440,76 @@ function TelegramScannerPage() {
       {error && (
         <div className="settings-alert settings-alert-error mb-16" style={{ textAlign: 'left' }}>
           {error}
+        </div>
+      )}
+
+      {stuckAtMax && (
+        <div className="card" style={{
+          margin: '16px 0',
+          padding: '16px 18px',
+          background: 'linear-gradient(180deg,#fff8ed,#fff4de)',
+          border: '1px solid #f1d8a2',
+          borderRadius: 10,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: '#965c0c' }}>
+            ⚠️ Telegram не передал данные сотрудника (возможно после долгого неиспользования). Используйте резервный вход:
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 180px', minWidth: 180 }}>
+              <label style={{
+                fontSize: 12,
+                color: 'var(--muted,#555)',
+                display: 'block',
+                marginBottom: 4,
+              }}>
+                Ваш код сотрудника (например, fvams2):
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={fallbackEmployeeCode}
+                onChange={(e) => setFallbackEmployeeCode(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitFallbackEmployeeCode(); }}
+                placeholder="код сотрудника или логин в ТГ"
+                style={{ width: '100%', padding: '8px 10px', fontSize: 15 }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+              />
+              <div style={{ fontSize: 11, color: 'var(--muted,#777)', marginTop: 4 }}>
+                Можно ввести: персональный код сотрудника, username ТГ, или первые 3 буквы ФИО.
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 170 }}>
+              <button
+                className="btn btn-success"
+                onClick={submitFallbackEmployeeCode}
+                disabled={submittingFallback || !fallbackEmployeeCode}
+                style={{ minWidth: 170 }}
+              >
+                {submittingFallback ? 'Получаю доступ...' : 'Получить доступ'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={retryBootstrap}
+                disabled={submittingFallback}
+                style={{ minWidth: 170 }}
+              >
+                ↻ Ещё раз попробовать Telegram
+              </button>
+            </div>
+          </div>
+          {fallbackEmployeeName && (
+            <div style={{
+              marginTop: 12,
+              fontSize: 13,
+              color: 'var(--success,#2d7a4a)',
+              fontWeight: 600,
+            }}>
+              ✅ Авторизован как: {fallbackEmployeeName}
+            </div>
+          )}
         </div>
       )}
 
