@@ -74,6 +74,7 @@ function formatDateRu(isoDate) {
 
 function EmployeeModal({
   mode,
+  employee,
   employeeForm,
   setEmployeeForm,
   onAdd,
@@ -140,6 +141,9 @@ function EmployeeModal({
     try {
       setDiagnosticsLoading(true);
       const sessionToken = lastRefreshResult?.sessionToken || lastSendResult?.sessionToken || '';
+      const effectiveEmployeeId = String(
+        employee?._id || employeeForm?._id || '',
+      ).trim();
       const res = await apiFetch('/api/telegram/diagnostics/token-flow', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,7 +151,7 @@ function EmployeeModal({
           sessionToken,
           initData: '',
           unsafeUser: null,
-          employeeId: employee?._id || '',
+          employeeId: effectiveEmployeeId,
         }),
       });
       const data = await parseJsonSafely(res);
@@ -157,7 +161,7 @@ function EmployeeModal({
     } finally {
       setDiagnosticsLoading(false);
     }
-  }, [employee?._id, lastRefreshResult?.sessionToken, lastSendResult?.sessionToken]);
+  }, [employee?._id, employeeForm?._id, lastRefreshResult?.sessionToken, lastSendResult?.sessionToken]);
   const sendStatusLabel = (() => {
     if (!lastSendResult) return null;
     if (lastSendResult.sent) return { icon: '✅', text: 'Ссылка отправлена сотруднику в личку Telegram', style: { color: '#2d7a4a', background: '#eefbf2', border: '1px solid #c9ecd5' } };
