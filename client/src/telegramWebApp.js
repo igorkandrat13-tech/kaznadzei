@@ -82,9 +82,20 @@ export function hasTelegramWebAppSession() {
 export function isTelegramWebApp() {
   const webApp = getTelegramWebApp();
   const hasEmployeeSessionToken = Boolean(getTelegramEmployeeSessionToken());
+  let hasEmployeeSessionTokenInUrl = false;
+  try {
+    if (typeof window !== 'undefined' && window.location?.search) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const raw = urlParams.get('employeeSessionToken');
+      if (raw && String(raw).trim().length > 64) {
+        hasEmployeeSessionTokenInUrl = true;
+      }
+    }
+  } catch (_) { /* ignore */ }
   return Boolean(
     (webApp && (webApp.initData || webApp.initDataUnsafe?.user || hasTelegramWebAppSession()))
-    || hasEmployeeSessionToken,
+    || hasEmployeeSessionToken
+    || hasEmployeeSessionTokenInUrl,
   );
 }
 

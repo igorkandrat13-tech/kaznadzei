@@ -504,10 +504,39 @@ function OrderDetail() {
     fetchOrderStageLegendConfig();
   }, [fetchOrder, fetchOrderStageLegendConfig]);
 
+  useEffect(() => {
+    if (!telegramMode) return;
+
+    const params = new URLSearchParams(location.search);
+    const sessionTokenFromUrl = params.get('employeeSessionToken');
+    if (!sessionTokenFromUrl) return;
+
+    if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
+      updateTelegramSessionToken(sessionTokenFromUrl);
+    } else {
+      updateTelegramSessionToken('');
+    }
+    setTelegramSessionBootstrapKey(current => current + 1);
+    params.delete('employeeSessionToken');
+
+    navigate({
+      pathname: location.pathname,
+      search: params.toString() ? `?${params.toString()}` : '',
+    }, { replace: true });
+  }, [location.pathname, location.search, navigate, telegramMode, updateTelegramSessionToken]);
+
   const loadTelegramEmployeeSession = useCallback(() => {
     if (!telegramMode) return;
+
+    const params = new URLSearchParams(location.search);
+    const sessionTokenFromUrl = params.get('employeeSessionToken');
+    const effectiveUrlSessionToken = sessionTokenFromUrl && !isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)
+      ? sessionTokenFromUrl
+      : '';
     const hasTelegramAuthPayload = Boolean(telegramInitData || telegramUnsafeUser?.id);
-    const currentSessionToken = getActiveTelegramSessionToken();
+    const storageSessionToken = getActiveTelegramSessionToken();
+    const currentSessionToken = effectiveUrlSessionToken || storageSessionToken;
+
     if (!hasTelegramAuthPayload && !currentSessionToken) {
       if (!telegramAuthResolved) {
         setSessionLoading(true);
@@ -555,38 +584,25 @@ function OrderDetail() {
         updateTelegramSessionToken(nextSessionToken);
         setTelegramEmployee(data?.employee || null);
         setSessionError('');
+        if (effectiveUrlSessionToken) {
+          const nextParams = new URLSearchParams(location.search);
+          nextParams.delete('employeeSessionToken');
+          const nextSearch = nextParams.toString() ? `?${nextParams.toString()}` : '';
+          if (nextSearch !== location.search) {
+            navigate({ pathname: location.pathname, search: nextSearch }, { replace: true });
+          }
+        }
       })
       .catch(error => {
         setTelegramEmployee(null);
         setSessionError(toUserErrorMessage(error, 'Не удалось определить ваш профиль.'));
       })
       .finally(() => setSessionLoading(false));
-  }, [getActiveTelegramSessionToken, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
-
-  useEffect(() => {
-    if (!telegramMode) return;
-
-    const params = new URLSearchParams(location.search);
-    const sessionTokenFromUrl = params.get('employeeSessionToken');
-    if (!sessionTokenFromUrl) return;
-
-    if (!isTelegramEmployeeSessionTokenExpired(sessionTokenFromUrl)) {
-      updateTelegramSessionToken(sessionTokenFromUrl);
-    } else {
-      updateTelegramSessionToken('');
-    }
-    setTelegramSessionBootstrapKey(current => current + 1);
-    params.delete('employeeSessionToken');
-
-    navigate({
-      pathname: location.pathname,
-      search: params.toString() ? `?${params.toString()}` : '',
-    }, { replace: true });
-  }, [location.pathname, location.search, navigate, telegramMode, updateTelegramSessionToken]);
+  }, [getActiveTelegramSessionToken, location.pathname, location.search, navigate, telegramAuthResolved, telegramInitData, telegramMode, telegramUnsafeUser, updateTelegramSessionToken]);
 
   useEffect(() => {
     loadTelegramEmployeeSession();
-  }, [loadTelegramEmployeeSession, telegramSessionBootstrapKey]);
+  }, [loadTelegramEmployeeSession, location.pathname, location.search, telegramSessionBootstrapKey]);
 
   useEffect(() => {
     if (!telegramMode) return;
