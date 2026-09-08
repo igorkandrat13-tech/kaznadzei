@@ -89,6 +89,9 @@ function EmployeeModal({
   sendingTelegram = false,
   onSendTelegramDirectLink = null,
   lastSendResult = null,
+  menuButtonCheckLoading = false,
+  onCheckMenuButton = null,
+  lastMenuButtonCheck = null,
 }) {
   if (!mode) return null;
 
@@ -337,6 +340,13 @@ function EmployeeModal({
                 >
                   {diagnosticsLoading ? 'Диагностика...' : '🔍 Диагностика токена'}
                 </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => onCheckMenuButton && onCheckMenuButton()}
+                  disabled={menuButtonCheckLoading || saving || !onCheckMenuButton}
+                >
+                  {menuButtonCheckLoading ? 'Проверка...' : '☰ Проверить Menu Button'}
+                </Button>
               </div>
 
               {diagnosticsResult && (
@@ -363,6 +373,43 @@ function EmployeeModal({
                     </Button>
                   </div>
                   {JSON.stringify(diagnosticsResult, null, 2)}
+                </div>
+              )}
+
+              {lastMenuButtonCheck && (
+                <div style={{
+                  marginTop: 10,
+                  background: lastMenuButtonCheck.hasEmployeeToken ? '#eefbf2' : '#fff8e5',
+                  border: `1px solid ${lastMenuButtonCheck.hasEmployeeToken ? '#c9ecd5' : '#f3e0a3'}`,
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 12.5,
+                  lineHeight: 1.55,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700, color: lastMenuButtonCheck.hasEmployeeToken ? '#2d7a4a' : '#8a6a11' }}>
+                    {lastMenuButtonCheck.hasEmployeeToken ? '✅ Menu Button настроен (с токеном)' : lastMenuButtonCheck.type === 'web_app' ? '🟡 Menu Button web_app (но токен отсутствует в URL!)' : lastMenuButtonCheck.type === 'default' ? '🔴 Menu Button по умолчанию (не web_app!)' : lastMenuButtonCheck.hasChatId ? '⚪ Menu Button: нет настроен' : '⚪ Сотрудник не связан с Telegram'}
+                    </div>
+                    <Button variant="secondary" onClick={() => copyLink(JSON.stringify(lastMenuButtonCheck, null, 2))}>
+                      📋 JSON
+                    </Button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '6px 14px', fontFamily: 'system-ui, sans-serif' }}>
+                    <div>
+                      <strong>Тип:</strong> {lastMenuButtonCheck.type || '—'}
+                    </div>
+                    <div>
+                      <strong>Chat ID:</strong> {lastMenuButtonCheck.chatId || '—'}
+                    </div>
+                    <div>
+                      <strong>Токен в URL:</strong> {lastMenuButtonCheck.hasEmployeeToken ? '✅ Есть' : '❌ Нет'}
+                    </div>
+                  </div>
+                  {lastMenuButtonCheck.urlPreview && (
+                    <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 11, background: '#fff', border: '1px solid #d9dfeb', borderRadius: 6, padding: '6px 8px', wordBreak: 'break-all', color: '#1f3046' }}>
+                      <strong>URL:</strong> {lastMenuButtonCheck.urlPreview}
+                    </div>
+                  )}
                 </div>
               )}
 

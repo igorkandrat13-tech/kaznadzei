@@ -135,6 +135,8 @@ function Admin() {
   const [employeeSessionLastRefresh, setEmployeeSessionLastRefresh] = useState(null);
   const [employeeSessionSendingTelegram, setEmployeeSessionSendingTelegram] = useState(false);
   const [employeeSessionLastSendResult, setEmployeeSessionLastSendResult] = useState(null);
+  const [employeeSessionMenuButtonCheckLoading, setEmployeeSessionMenuButtonCheckLoading] = useState(false);
+  const [employeeSessionLastMenuButtonCheck, setEmployeeSessionLastMenuButtonCheck] = useState(null);
   const backupImportInputRef = useRef(null);
   const settingsTabs = buildSettingsTabs();
   const settingsTabKeySet = useMemo(() => new Set(settingsTabs.map((tab) => tab.key)), [settingsTabs]);
@@ -490,12 +492,14 @@ function Admin() {
       setEmployeeSessionStatus(null);
       setEmployeeSessionLastRefresh(null);
       setEmployeeSessionLastSendResult(null);
+      setEmployeeSessionLastMenuButtonCheck(null);
       return undefined;
     }
     let cancelled = false;
     setEmployeeSessionStatus(null);
     setEmployeeSessionLastRefresh(null);
     setEmployeeSessionLastSendResult(null);
+    setEmployeeSessionLastMenuButtonCheck(null);
     fetchEmployeeSessionStatus(editEmployee._id).then(() => { if (cancelled) return null; return null; }).catch(() => {});
     return () => { cancelled = true; };
   }, [employeeModalMode, editEmployee?._id, fetchEmployeeSessionStatus]);
@@ -564,6 +568,40 @@ function Admin() {
       setEmployeeSessionSendingTelegram(false);
     }
   }, [editEmployee?._id, fetchEmployeeSessionStatus]);
+
+  const handleCheckEmployeeMenuButton = useCallback(async () => {
+    const employeeId = String(editEmployee?._id || '').trim();
+    if (!employeeId) return;
+    setEmployeeSessionMenuButtonCheckLoading(true);
+    setSettingsError('');
+    setEmployeeSessionLastMenuButtonCheck(null);
+    try {
+      const res = await apiFetch('/api/telegram/employee/get-menu-button', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId }),
+      });
+      const data = await parseJsonSafely(res);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message || 'Не удалось проверить Menu Button.');
+      }
+      setEmployeeSessionLastMenuButtonCheck(data || null);
+      if (data?.hasEmployeeToken) {
+        setSettingsSuccess('✅ Menu Button сотрудника настроен: URL содержит employeeSessionToken!');
+      } else if (data?.type === 'web_app') {
+        setSettingsError('⚠️ Menu Button = web_app, но токен employeeSessionToken отсутствует в URL.');
+      } else if (data?.type === 'default' || !data?.type) {
+        setSettingsError('❌ Menu Button не настроен (default / none).');
+      } else {
+        setSettingsSuccess('Menu Button проверен.');
+      }
+    } catch (err) {
+      const msg = err?.message || err?.toString?.() || 'Не удалось проверить Menu Button.';
+      setSettingsError(msg || 'Ошибка проверки Menu Button.');
+    } finally {
+      setEmployeeSessionMenuButtonCheckLoading(false);
+    }
+  }, [editEmployee?._id]);
 
   const fetchSteps = async () => {
     const res = await apiFetch('/api/processSteps');
@@ -981,6 +1019,26 @@ function Admin() {
       setSettingsError(toUserErrorMessage(error, 'Не удалось установить webhook Telegram-бота.'));
     } finally {
       setSettingTelegramWebhook(false);
+    }
+  };
+
+  const [refreshingAuthorizedMenuButtons, setRefreshingAuthorizedMenuButtons] = useState(false);
+
+  const refreshAuthorizedTelegramMenuButtons = async () => {
+    setRefreshingAuthorizedMenuButtons(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/refresh-authorized', { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось обновить кнопки Telegram сотрудникам.');
+      }
+      setSettingsSuccess(data?.message || 'Кнопки Telegram для сотрудников обновлены.');
+    } catch (error) {
+      setSettingsError(toUserErrorMessage(error, 'Не удалось обновить кнопки Telegram сотрудникам.'));
+    } finally {
+      setRefreshingAuthorizedMenuButtons(false);
     }
   };
 
@@ -1599,6 +1657,9 @@ function Admin() {
         sendingTelegram={employeeSessionSendingTelegram}
         onSendTelegramDirectLink={handleSendEmployeeDirectLink}
         lastSendResult={employeeSessionLastSendResult}
+        menuButtonCheckLoading={employeeSessionMenuButtonCheckLoading}
+        onCheckMenuButton={handleCheckEmployeeMenuButton}
+        lastMenuButtonCheck={employeeSessionLastMenuButtonCheck}
       />
 
       {stageManagerRoleKey ? (
@@ -1976,6 +2037,13 @@ function Admin() {
               </button>
               <button className="btn" onClick={setupTelegramWebhook} disabled={settingTelegramWebhook || savingAppSettings}>
                 {settingTelegramWebhook ? 'Установка...' : 'Установить webhook'}
+              </button>
+              <button
+                className="btn btn-info"
+                onClick={refreshAuthorizedTelegramMenuButtons}
+                disabled={refreshingAuthorizedMenuButtons || settingTelegramWebhook || savingAppSettings}
+              >
+                {refreshingAuthorizedMenuButtons ? 'Обновление...' : '🔄 Обновить кнопки ТГ'}
               </button>
               <button className="btn btn-secondary" onClick={() => fetchTelegramLogs({ openModal: true })} disabled={telegramLogsLoading}>
                 {telegramLogsLoading ? 'Загрузка логов...' : 'Логи ТГ бота'}

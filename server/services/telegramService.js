@@ -134,11 +134,20 @@ async function setChatMenuButton(token, { chatId, text, url, type } = {}) {
   return telegramRequest(token, 'setChatMenuButton', payload);
 }
 
+async function getChatMenuButton(token, { chatId } = {}) {
+  const payload = {};
+  if (chatId) {
+    payload.chat_id = chatId;
+  }
+  return telegramRequest(token, 'getChatMenuButton', payload);
+}
+
 module.exports = {
   getBotInfo,
   getWebhookInfo,
   setWebhook,
   setChatMenuButton,
+  getChatMenuButton,
   sendMessage,
   createForumTopic,
   answerCallbackQuery,

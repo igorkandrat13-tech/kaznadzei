@@ -9,7 +9,9 @@ const {
   getWebhookInfo,
   setWebhook,
   setChatMenuButton,
+  getChatMenuButton,
   sendMessage,
+  createForumTopic,
   answerCallbackQuery,
   getFile,
   downloadTelegramFile,
@@ -1299,6 +1301,19 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
     const employeeWebAppUrl = publicBase
       ? `${publicBase.replace(/\/$/, '')}/telegram-app?employeeSessionToken=${encodeURIComponent(sessionToken)}`
       : '';
+
+    let menuButtonUpdated = false;
+    let menuButtonError = '';
+    const chatId = String(freshEmployee.telegramChatId || '').trim();
+    if (chatId) {
+      try {
+        await syncTelegramMenuButton(token, chatId);
+        menuButtonUpdated = true;
+      } catch (mbErr) {
+        menuButtonError = String(mbErr?.message || mbErr || '');
+      }
+    }
+
     res.json({
       ok: true,
       employeeId,
@@ -1316,9 +1331,57 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
       daysLeft: info?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
       ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
       employeeWebAppUrl,
+      menuButtonUpdated,
+      menuButtonError,
     });
   } catch (error) {
     res.status(400).json({ ok: false, message: String(error.message || 'Не удалось продлить токен сотрудника.') });
+  }
+});
+
+router.post('/telegram/employee/get-menu-button', requireAdminAccess(), express.json({ limit: '16kb' }), async (req, res) => {
+  const token = getConfiguredBotToken();
+  try {
+    if (!token) {
+      return res.status(400).json({ ok: false, message: 'Сначала сохраните токен Telegram-бота в Настройки.' });
+    }
+    const employeeId = String((req.body || {}).employeeId || '').trim();
+    if (!employeeId) {
+      return res.status(400).json({ ok: false, message: 'Отсутствует employeeId.' });
+    }
+    const employee = EmployeeStore.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
+    }
+    const chatId = String(employee.telegramChatId || employee.telegramUserId || '').trim();
+    if (!chatId) {
+      return res.json({
+        ok: true,
+        employeeId,
+        chatId: '',
+        menuButton: null,
+        type: 'none',
+        hasChatId: false,
+        hasEmployeeToken: false,
+        urlPreview: '',
+      });
+    }
+    const menuButton = await getChatMenuButton(token, { chatId });
+    const type = String(menuButton?.type || (menuButton ? 'default' : 'none'));
+    const urlPreview = String(menuButton?.web_app?.url || '');
+    const hasEmployeeToken = /[?&]employeeSessionToken=/.test(urlPreview);
+    res.json({
+      ok: true,
+      employeeId,
+      chatId,
+      menuButton,
+      type,
+      hasChatId: true,
+      hasEmployeeToken,
+      urlPreview,
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, message: String(error.message || 'Не удалось проверить кнопку меню сотрудника.') });
   }
 });
 
