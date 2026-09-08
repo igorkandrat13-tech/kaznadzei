@@ -14,6 +14,8 @@ import {
   persistTelegramInitData,
   persistTelegramUnsafeUser,
   setTelegramEmployeeSessionToken,
+  tryExpandTelegramWebApp,
+  tryReadyTelegramWebApp,
 } from './telegramWebApp';
 import { useGlobalErrorEffect } from './globalErrors';
 
@@ -146,18 +148,14 @@ function TelegramScannerPage() {
 
   useEffect(() => {
     const webApp = getTelegramWebApp();
-    if (!webApp) return;
+    const hasStoredToken = Boolean(getTelegramEmployeeSessionToken());
+    if (!webApp && !hasStoredToken) return;
 
     bootstrapTelegramSession()
       .finally(() => setBootstrappingSession(false));
 
-    if (typeof webApp.ready === 'function') {
-      webApp.ready();
-    }
-
-    if (typeof webApp.expand === 'function') {
-      webApp.expand();
-    }
+    tryReadyTelegramWebApp();
+    tryExpandTelegramWebApp();
   }, [bootstrapTelegramSession]);
 
   useEffect(() => {

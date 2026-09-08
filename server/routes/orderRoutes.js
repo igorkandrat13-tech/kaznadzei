@@ -31,6 +31,7 @@ const { ensureOrderSupergroupTopic } = require('../services/telegramSupergroupSe
 const {
   resolveTelegramWebAppUser,
   verifyTelegramEmployeeSessionToken,
+  getTelegramEmployeeSessionTokenInfo,
 } = require('../services/telegramWebAppAuth');
 const { getRoleDefinitions } = require('../config/roles');
 const router = express.Router();
@@ -449,30 +450,47 @@ function getEmployeeAllowedColumns(employee = {}) {
 
 function resolveTelegramEmployee(token, payload, context = {}) {
   const payloadDebug = getTelegramPayloadDebug(payload);
+  let employee = null;
+  let telegramUser = null;
   if (payload?.sessionToken) {
+    const tokenInfo = getTelegramEmployeeSessionTokenInfo(payload.sessionToken);
     try {
       const sessionPayload = verifyTelegramEmployeeSessionToken(token, payload.sessionToken);
       const employeeBySession = EmployeeStore.findById(sessionPayload.employeeId);
-      if (!employeeBySession || String(employeeBySession.telegramUserId || '') !== String(sessionPayload.telegramUserId || '')) {
+      const sessionTelegramUserId = String(sessionPayload.telegramUserId || '');
+      const employeeTelegramUserId = String(employeeBySession?.telegramUserId || '');
+      const telegramUserIdMatch = !sessionTelegramUserId
+        || !employeeTelegramUserId
+        || sessionTelegramUserId === employeeTelegramUserId;
+      if (!employeeBySession || !telegramUserIdMatch) {
         logTelegramOrderDebug('resolve.session-mismatch', {
           ...context,
           ...payloadDebug,
           employeeId: sessionPayload.employeeId,
-          telegramUserId: String(sessionPayload.telegramUserId || ''),
+          telegramUserId: sessionTelegramUserId,
           employeeFound: Boolean(employeeBySession),
-          employeeTelegramUserId: String(employeeBySession?.telegramUserId || ''),
+          employeeTelegramUserId,
+          telegramUserIdMatch,
         });
-        throw new Error('Сотрудник Telegram не найден или session token устарел.');
+        if (!employeeBySession
+          || (employeeTelegramUserId && sessionTelegramUserId && sessionTelegramUserId !== employeeTelegramUserId)) {
+          throw new Error('Сотрудник Telegram не найден или session token устарел.');
+        }
       }
+      employee = employeeBySession;
       logTelegramOrderDebug('resolve.session-token-ok', {
         ...context,
         ...payloadDebug,
-        employeeId: employeeBySession._id,
-        employeeRole: employeeBySession.role,
+        employeeId: employee._id,
+        employeeRole: employee.role,
+        tokenDaysLeft: tokenInfo?.daysLeft,
+        tokenExpired: tokenInfo?.expired,
       });
-      return {
-        ...employeeBySession,
-        fullName: getTelegramEmployeeDisplayName(employeeBySession),
+      telegramUser = {
+        id: employee.telegramUserId || sessionTelegramUserId || undefined,
+        username: employee.telegramUsername || '',
+        first_name: employee.telegramFirstName || '',
+        last_name: employee.telegramLastName || '',
       };
     } catch (sessionError) {
       const hasTelegramAuthPayload = Boolean(String(payload?.initData || '').trim() || payload?.unsafeUser?.id);
@@ -481,24 +499,54 @@ function resolveTelegramEmployee(token, payload, context = {}) {
         ...payloadDebug,
         hasTelegramAuthPayload,
         message: sessionError.message || 'Session token validation failed.',
+        tokenDaysLeft: tokenInfo?.daysLeft,
+        tokenExpired: tokenInfo?.expired,
       });
       if (!hasTelegramAuthPayload) {
         throw sessionError;
       }
+      telegramUser = resolveTelegramWebAppUser(token, payload || {});
+      employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+      if (!employee) {
+        const existingByTokenEmployee = tokenInfo?.employeeId ? EmployeeStore.findById(tokenInfo.employeeId) : null;
+        if (existingByTokenEmployee
+          && String(existingByTokenEmployee.telegramUserId || '') === String(telegramUser.id || '')) {
+          employee = existingByTokenEmployee;
+          logTelegramOrderDebug('resolve.token-userid-match-fallback', {
+            ...context,
+            ...payloadDebug,
+            employeeId: employee._id,
+            resolvedTelegramUserId: String(telegramUser.id || ''),
+          });
+        }
+      }
+      logTelegramOrderDebug('resolve.payload-fallback', {
+        ...context,
+        ...payloadDebug,
+        resolvedTelegramUserId: String(telegramUser?.id || ''),
+        employeeFound: Boolean(employee),
+      });
     }
+  } else {
+    telegramUser = resolveTelegramWebAppUser(token, payload || {});
+    employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
+    logTelegramOrderDebug('resolve.payload', {
+      ...context,
+      ...payloadDebug,
+      resolvedTelegramUserId: String(telegramUser?.id || ''),
+      employeeFound: Boolean(employee),
+      employeeId: employee?._id || '',
+      employeeRole: employee?.role || '',
+    });
   }
 
-  const telegramUser = resolveTelegramWebAppUser(token, payload || {});
-  const employee = EmployeeStore.findByTelegramUserId(telegramUser.id);
-  logTelegramOrderDebug('resolve.payload', {
-    ...context,
-    ...payloadDebug,
-    resolvedTelegramUserId: String(telegramUser?.id || ''),
-    employeeFound: Boolean(employee),
-    employeeId: employee?._id || '',
-    employeeRole: employee?.role || '',
-  });
   if (!employee) return employee;
+
+  EmployeeStore.touchTelegramUser(employee._id, {
+    telegramUsername: telegramUser?.username ? `@${String(telegramUser.username).replace(/^@+/, '')}` : employee.telegramUsername || '',
+    telegramFirstName: telegramUser?.first_name || employee.telegramFirstName || '',
+    telegramLastName: telegramUser?.last_name || employee.telegramLastName || '',
+  });
 
   return {
     ...employee,

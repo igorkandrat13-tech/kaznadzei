@@ -81,7 +81,37 @@ export function hasTelegramWebAppSession() {
 
 export function isTelegramWebApp() {
   const webApp = getTelegramWebApp();
-  return Boolean(webApp && (webApp.initData || webApp.initDataUnsafe?.user || hasTelegramWebAppSession()));
+  const hasEmployeeSessionToken = Boolean(getTelegramEmployeeSessionToken());
+  return Boolean(
+    (webApp && (webApp.initData || webApp.initDataUnsafe?.user || hasTelegramWebAppSession()))
+    || hasEmployeeSessionToken,
+  );
+}
+
+export function hasValidTelegramEmployeeSession() {
+  return Boolean(getTelegramEmployeeSessionToken());
+}
+
+export function tryReadyTelegramWebApp() {
+  try {
+    const webApp = getTelegramWebApp();
+    if (webApp && typeof webApp.ready === 'function') {
+      webApp.ready();
+      return true;
+    }
+  } catch (_) { /* WebAppMethodUnsupported or similar — ignore */ }
+  return false;
+}
+
+export function tryExpandTelegramWebApp() {
+  try {
+    const webApp = getTelegramWebApp();
+    if (webApp && typeof webApp.expand === 'function') {
+      webApp.expand();
+      return true;
+    }
+  } catch (_) { /* WebAppMethodUnsupported or similar — ignore */ }
+  return false;
 }
 
 export function getTelegramInitData() {

@@ -18,6 +18,8 @@ import {
   persistTelegramInitData,
   persistTelegramUnsafeUser,
   setTelegramEmployeeSessionToken,
+  tryExpandTelegramWebApp,
+  tryReadyTelegramWebApp,
 } from './telegramWebApp';
 
 function isRecoverableTelegramSessionMessage(message) {
@@ -563,19 +565,11 @@ function OrderDetail() {
   useEffect(() => {
     if (!telegramMode) return;
 
-    const webApp = getTelegramWebApp();
-    if (!webApp) return;
-
     markTelegramWebAppSession();
     refreshTelegramAuth();
 
-    if (typeof webApp.ready === 'function') {
-      webApp.ready();
-    }
-
-    if (typeof webApp.expand === 'function') {
-      webApp.expand();
-    }
+    tryReadyTelegramWebApp();
+    tryExpandTelegramWebApp();
 
     const retryTimers = [100, 350, 800, 1500].map(delay => window.setTimeout(refreshTelegramAuth, delay));
     const finishTimer = window.setTimeout(() => {
