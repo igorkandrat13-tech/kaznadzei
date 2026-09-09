@@ -350,9 +350,10 @@ function findAttachmentIndexByName(attachments = [], attachmentName = '') {
 }
 
 function getAttachmentFieldName(scope = '') {
-  return String(scope || '').trim().toLowerCase() === 'paint'
-    ? 'paintAttachments'
-    : 'attachments';
+  const normalized = String(scope || '').trim().toLowerCase();
+  if (normalized === 'paint') return 'paintAttachments';
+  if (normalized === 'render') return 'renderImages';
+  return 'attachments';
 }
 
 function getManualStageLegendKey(manualStageMarks = {}) {
@@ -685,6 +686,7 @@ function buildOrderItem(source = {}, options = {}) {
     notes: String(source.notes || '').trim(),
     attachments: normalizeOrderAttachments(source.attachments),
     paintAttachments: normalizeOrderAttachments(source.paintAttachments),
+    renderImages: normalizeOrderAttachments(source.renderImages),
     comments: normalizeComments(source.comments),
     workerAssignments,
     manualStageMarks,

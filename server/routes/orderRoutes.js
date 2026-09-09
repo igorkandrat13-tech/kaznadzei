@@ -130,15 +130,16 @@ function normalizeOrderColumnKey(columnKey = '') {
 }
 
 function getAttachmentScope(req = {}) {
-  return String(req.query?.scope || req.body?.scope || '').trim().toLowerCase() === 'paint'
-    ? 'paint'
-    : 'order';
+  const raw = String(req.query?.scope || req.body?.scope || '').trim().toLowerCase();
+  if (raw === 'paint') return 'paint';
+  if (raw === 'render') return 'render';
+  return 'order';
 }
 
 function getAttachmentScopeLabel(scope = '') {
-  return scope === 'paint'
-    ? 'покраски'
-    : 'карточки заказа';
+  if (scope === 'paint') return 'покраски';
+  if (scope === 'render') return 'изображения изделия';
+  return 'карточки заказа';
 }
 
 function ensureDirectoryExists(directoryPath) {

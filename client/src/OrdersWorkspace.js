@@ -103,6 +103,7 @@ function escapeHtml(value = '') {
 const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
 const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
+const RENDER_IMAGE_ATTACHMENT_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp';
 const ATTACHMENT_SCOPE_CONFIG = {
   order: {
     field: 'attachments',
@@ -119,6 +120,15 @@ const ATTACHMENT_SCOPE_CONFIG = {
     openButtonTitle: 'Открыть файлы покраски',
     emptyTitle: 'Файлы и ссылки покраски не прикреплены',
     deleteMessage: 'Файл будет удален из раздела покраски без возможности восстановления.',
+  },
+  render: {
+    field: 'renderImages',
+    dialogTitle: 'Изображение изделия',
+    addButtonTitle: 'Загрузить рендер или фото изделия',
+    openButtonTitle: 'Изображение изделия',
+    emptyTitle: 'Изображение изделия не загружено',
+    deleteMessage: 'Изображение изделия будет удалено без возможности восстановления.',
+    accept: RENDER_IMAGE_ATTACHMENT_ACCEPT,
   },
 };
 
@@ -908,6 +918,8 @@ function OrdersWorkspace() {
   const [manualDateDraft, setManualDateDraft] = useState('');
   const [manualOrderDateDraft, setManualOrderDateDraft] = useState({ startDate: '', endDate: '' });
   const [qrPreview, setQrPreview] = useState(null);
+  const [itemChooser, setItemChooser] = useState(null);
+  const [itemImagePreview, setItemImagePreview] = useState(null);
   const [orderPreview, setOrderPreview] = useState(null);
   const [orderActionsOrder, setOrderActionsOrder] = useState(null);
   const [ensuringTelegramTopicOrderId, setEnsuringTelegramTopicOrderId] = useState('');
@@ -2053,6 +2065,30 @@ function OrdersWorkspace() {
     });
   };
 
+  const openItemChooser = (order, item) => {
+    setItemChooser({
+      orderId: order._id,
+      itemId: item.itemId,
+      orderNumber: order.orderNumber || '',
+      itemNumber: item.itemNumber || '',
+      itemName: item.name || '',
+      order,
+      item,
+    });
+  };
+
+  const openItemImagePreview = (order, item) => {
+    setItemImagePreview({
+      orderId: order._id,
+      itemId: item.itemId,
+      orderNumber: order.orderNumber || '',
+      itemNumber: item.itemNumber || '',
+      itemName: item.name || '',
+      order,
+      item,
+    });
+  };
+
   const handlePrintQr = async () => {
     if (!qrPreview?.orderId || !qrPreview?.itemId) return;
     const printWindow = window.open('', '_blank', 'width=720,height=900');
@@ -2278,10 +2314,18 @@ function OrdersWorkspace() {
       setQrPreview(null);
       return;
     }
+    if (itemChooser) {
+      setItemChooser(null);
+      return;
+    }
+    if (itemImagePreview) {
+      setItemImagePreview(null);
+      return;
+    }
     if (showForm && !savingOrder) {
       closeForm();
     }
-  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || confirmInlineDelete || roomEditor || packageEditor || materialRequestEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || customerEditor || orderPreview || orderActionsOrder || qrPreview || showForm));
+  }, Boolean(selectedStageCellKeys.length > 0 || confirmDelete || confirmInlineDelete || roomEditor || packageEditor || materialRequestEditor || confirmAttachmentDelete || confirmAttachmentOverwrite || attachmentPreview || attachmentsDialog || customerEditor || orderPreview || orderActionsOrder || qrPreview || itemChooser || itemImagePreview || showForm));
 
   const closeForm = () => {
     if (savingOrder) return;
@@ -4009,10 +4053,10 @@ function OrdersWorkspace() {
                             className="order-primary-title-button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              openQrPreview(order, item);
+                              openItemChooser(order, item);
                             }}
-                            title="Открыть QR-код изделия"
-                            aria-label="Открыть QR-код изделия"
+                            title="Открыть QR-код или изображение изделия"
+                            aria-label="Открыть QR-код или изображение изделия"
                           >
                             <span className="order-primary-title-button-text"><strong>{item.name || '—'}</strong></span>
                             <span className="order-primary-title-button-badge" aria-hidden="true" />
@@ -5173,6 +5217,163 @@ function OrdersWorkspace() {
           </div>
         </Modal>
       ) : null}
+
+      {itemChooser ? (
+        <Modal open={Boolean(itemChooser)} onClose={() => setItemChooser(null)} size="sm">
+          <div className="modal-title mb-8">{itemChooser.itemName || 'Изделие'}</div>
+          <div className="modal-subtitle mb-24">
+            {itemChooser.orderNumber ? `Заказ № ${itemChooser.orderNumber}` : 'Без номера'}
+            {itemChooser.itemNumber ? ` · позиция ${itemChooser.itemNumber}` : ''}
+          </div>
+          <div className="item-chooser-grid">
+            <button
+              type="button"
+              className="item-chooser-tile"
+              onClick={() => {
+                const chooserOrder = itemChooser.order;
+                const chooserItem = itemChooser.item;
+                setItemChooser(null);
+                setTimeout(() => openQrPreview(chooserOrder, chooserItem), 0);
+              }}
+              title="Открыть QR-код для печати"
+              aria-label="Открыть QR-код для печати"
+            >
+              <div className="item-chooser-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <path d="M14 14h3v3h-3zM17 17h4M14 20h4M20 14v4" />
+                </svg>
+              </div>
+              <div className="item-chooser-label">QR-код</div>
+              <div className="item-chooser-hint">Для печати и упаковки</div>
+            </button>
+            <button
+              type="button"
+              className="item-chooser-tile"
+              onClick={() => {
+                const chooserOrder = itemChooser.order;
+                const chooserItem = itemChooser.item;
+                setItemChooser(null);
+                setTimeout(() => openItemImagePreview(chooserOrder, chooserItem), 0);
+              }}
+              title="Открыть рендер или фото изделия"
+              aria-label="Открыть рендер или фото изделия"
+            >
+              <div className="item-chooser-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <circle cx="9" cy="11" r="2" />
+                  <path d="m21 17-4.5-4.5a1.5 1.5 0 0 0-2.12 0L3 19" />
+                </svg>
+              </div>
+              <div className="item-chooser-label">Изображение</div>
+              <div className="item-chooser-hint">Рендер или фото изделия</div>
+            </button>
+          </div>
+          <div className="modal-actions mt-24">
+            <Button variant="secondary" onClick={() => setItemChooser(null)}>Закрыть</Button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {itemImagePreview ? (() => {
+        const previewOrder = itemImagePreview.order;
+        const previewItem = itemImagePreview.item;
+        const renderAttachments = getItemAttachments(previewItem, 'render');
+        const firstImage = Array.isArray(renderAttachments) ? renderAttachments[0] : null;
+        const imageUploadingKey = getAttachmentTargetKey(itemImagePreview.orderId, itemImagePreview.itemId, 'render');
+        const isUploading = attachmentUploadingTargetKey === imageUploadingKey;
+        return (
+          <Modal open={Boolean(itemImagePreview)} onClose={() => setItemImagePreview(null)} closeDisabled={isUploading} size="md">
+            <div className="modal-title mb-8">Изображение изделия</div>
+            <div className="modal-subtitle mb-16">
+              {itemImagePreview.itemName || 'Изделие'}
+              {itemImagePreview.orderNumber ? ` · заказ № ${itemImagePreview.orderNumber}` : ''}
+              {itemImagePreview.itemNumber ? ` · позиция ${itemImagePreview.itemNumber}` : ''}
+            </div>
+            {firstImage ? (
+              <div className="render-image-wrapper">
+                <img
+                  src={`/api/orders/${itemImagePreview.orderId}/items/${itemImagePreview.itemId}/attachments/${firstImage.attachmentId}/file?scope=render`}
+                  alt={firstImage.name || itemImagePreview.itemName || 'Изображение изделия'}
+                  className="render-image"
+                  loading="lazy"
+                />
+                {firstImage.name ? (
+                  <div className="render-image-caption muted-text small-text mt-8">{firstImage.name}</div>
+                ) : null}
+              </div>
+            ) : (
+              <label
+                className={cn(
+                  'render-image-placeholder',
+                  isUploading && 'render-image-placeholder-loading',
+                )}
+                htmlFor="render-image-file-input"
+              >
+                <input
+                  id="render-image-file-input"
+                  type="file"
+                  accept={RENDER_IMAGE_ATTACHMENT_ACCEPT}
+                  style={{ display: 'none' }}
+                  disabled={isUploading}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    if (file && previewOrder && previewItem) {
+                      handleUploadOrderAttachment(previewOrder, previewItem, file, { scope: 'render' });
+                    }
+                    event.target.value = '';
+                  }}
+                />
+                <div className="render-image-placeholder-icon" aria-hidden="true">
+                  {isUploading ? (
+                    <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
+                      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                    </svg>
+                  )}
+                </div>
+                <div className="render-image-placeholder-title">
+                  {isUploading ? 'Загрузка изображения...' : 'Загрузить изображение изделия'}
+                </div>
+                <div className="render-image-placeholder-hint muted-text small-text">
+                  PNG, JPG, WEBP — до 30 МБ
+                </div>
+              </label>
+            )}
+            <div className="modal-actions modal-actions-between mt-24">
+              <Button variant="secondary" onClick={() => setItemImagePreview(null)} disabled={isUploading}>
+                Закрыть
+              </Button>
+              {firstImage && previewOrder && previewItem ? (
+                <label className="btn btn-secondary m-0" htmlFor="render-image-replace-input" style={{ cursor: isUploading ? 'not-allowed' : 'pointer', opacity: isUploading ? 0.7 : 1 }}>
+                  <input
+                    id="render-image-replace-input"
+                    type="file"
+                    accept={RENDER_IMAGE_ATTACHMENT_ACCEPT}
+                    style={{ display: 'none' }}
+                    disabled={isUploading}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      if (file) {
+                        handleUploadOrderAttachment(previewOrder, previewItem, file, { scope: 'render', overwrite: true });
+                      }
+                      event.target.value = '';
+                    }}
+                  />
+                  Заменить изображение
+                </label>
+              ) : null}
+            </div>
+          </Modal>
+        );
+      })() : null}
 
       {qrPreview ? (
         <Modal open={Boolean(qrPreview)} onClose={() => setQrPreview(null)} closeDisabled={Boolean(downloadingKey)} size="sm" className="qr-preview-modal">
