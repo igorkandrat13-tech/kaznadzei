@@ -4036,8 +4036,24 @@ function OrdersWorkspace() {
                     const roomCellContent = isInlineEditing ? (
                       <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} />
                     ) : (
-                      <div className="room-cell-content">
-                        <div className="room-cell-text">{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</div>
+                      <div className="order-primary-title">
+                        {item.itemId && !isPlaceholder ? (
+                          <button
+                            type="button"
+                            className="order-primary-title-button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openItemImagePreview(order, item);
+                            }}
+                            title="Открыть изображение изделия"
+                            aria-label="Открыть изображение изделия"
+                          >
+                            <span className="order-primary-title-button-text"><strong>{item.room || '—'}</strong></span>
+                            <span className="order-primary-title-button-badge" aria-hidden="true" />
+                          </button>
+                        ) : (
+                          <strong>{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</strong>
+                        )}
                       </div>
                     );
                     const roomNumberCellContent = isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—');
@@ -4053,10 +4069,10 @@ function OrdersWorkspace() {
                             className="order-primary-title-button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              openItemChooser(order, item);
+                              openQrPreview(order, item);
                             }}
-                            title="Открыть QR-код или изображение изделия"
-                            aria-label="Открыть QR-код или изображение изделия"
+                            title="Открыть QR-код изделия"
+                            aria-label="Открыть QR-код изделия"
                           >
                             <span className="order-primary-title-button-text"><strong>{item.name || '—'}</strong></span>
                             <span className="order-primary-title-button-badge" aria-hidden="true" />
