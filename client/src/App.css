@@ -6975,10 +6975,17 @@ body .role-allowed-column-marker {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(94, 171, 225, 0.18), rgba(109, 161, 122, 0.14));
-  border: 1px solid rgba(133, 186, 247, 0.18);
-  color: var(--link-color);
+  background: linear-gradient(135deg, #4a6991, #6484ae);
+  border: 1px solid rgba(125, 162, 214, 0.32);
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(30, 60, 100, 0.22);
   margin-bottom: 4px;
+}
+
+.item-chooser-tile:nth-child(2) .item-chooser-icon {
+  background: linear-gradient(135deg, #6da17a, #8cc098);
+  border: 1px solid rgba(142, 200, 162, 0.32);
+  box-shadow: 0 8px 20px rgba(40, 100, 70, 0.22);
 }
 
 .item-chooser-label {
@@ -7051,9 +7058,10 @@ body .role-allowed-column-marker {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(94, 171, 225, 0.14), rgba(109, 161, 122, 0.1));
-  border: 1px solid rgba(133, 186, 247, 0.16);
-  color: var(--link-color);
+  background: linear-gradient(135deg, #4a6991, #6484ae);
+  border: 1px solid rgba(125, 162, 214, 0.32);
+  color: #ffffff;
+  box-shadow: 0 8px 22px rgba(30, 60, 100, 0.22);
 }
 
 .render-image-placeholder-title {
