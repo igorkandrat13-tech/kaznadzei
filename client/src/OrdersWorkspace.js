@@ -4043,10 +4043,10 @@ function OrdersWorkspace() {
                             className="order-primary-title-button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              openItemImagePreview(order, item);
+                              openQrPreview(order, item);
                             }}
-                            title="Открыть изображение изделия"
-                            aria-label="Открыть изображение изделия"
+                            title="Открыть QR-код изделия"
+                            aria-label="Открыть QR-код изделия"
                           >
                             <span className="order-primary-title-button-text"><strong>{item.room || '—'}</strong></span>
                             <span className="order-primary-title-button-badge" aria-hidden="true" />
@@ -4069,10 +4069,10 @@ function OrdersWorkspace() {
                             className="order-primary-title-button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              openQrPreview(order, item);
+                              openItemImagePreview(order, item);
                             }}
-                            title="Открыть QR-код изделия"
-                            aria-label="Открыть QR-код изделия"
+                            title="Открыть изображение изделия"
+                            aria-label="Открыть изображение изделия"
                           >
                             <span className="order-primary-title-button-text"><strong>{item.name || '—'}</strong></span>
                             <span className="order-primary-title-button-badge" aria-hidden="true" />
