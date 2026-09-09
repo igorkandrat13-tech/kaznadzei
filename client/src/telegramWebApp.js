@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
+﻿﻿﻿﻿﻿﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
 const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
 const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
@@ -257,17 +257,65 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
   onError?.('');
   onStatusChange?.('Подготовка камеры для сканирования QR-кода изделия.');
 
+  const IGNORE_EVENTS = new Set([
+    'WebAppScanQrPopupOpened',
+    'WebAppScanQrPopupClosed',
+    'qrTextReceived',
+    'popupOpened',
+    'scanQrPopupClosed',
+  ]);
+
+  let popupClosed = false;
+  let succeeded = false;
+  let closedHandler = null;
+  try {
+    closedHandler = () => { popupClosed = true; };
+    webApp.onEvent?.('scanQrPopupClosed', closedHandler);
+  } catch (_e) { /* ignore */ }
+
   webApp.showScanQrPopup(
     { text: 'Подготовка камеры для сканирования QR-кода изделия' },
-    (scannedText) => {
+    (rawScannedText) => {
+      try {
+        if (webApp.offEvent && closedHandler) {
+          try { webApp.offEvent('scanQrPopupClosed', closedHandler); } catch (_) { /* ignore */ }
+        }
+      } catch (_offErr) { /* ignore */ }
+
+      if (popupClosed) return false;
+      if (succeeded) return false;
+
+      let scannedText = rawScannedText;
+
+      if (typeof scannedText === 'string') {
+        const trimmed = scannedText.trim();
+        if (!trimmed) return false;
+        if (IGNORE_EVENTS.has(trimmed)) return false;
+        if (/^WebApp[A-Za-z]+$/.test(trimmed)) return false;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object') {
+            if (typeof parsed.data === 'string' && parsed.data) {
+              scannedText = parsed.data;
+            } else if (typeof parsed.text === 'string' && parsed.text) {
+              scannedText = parsed.text;
+            } else {
+              return false;
+            }
+          }
+        } catch (_jsonErr) { /* не JSON, используем как есть */ }
+      }
+
       const orderPath = getOrderPathFromQr(scannedText);
       if (!orderPath) {
         onError?.('QR-код не распознан. Используйте QR-код изделия, расположенный на упаковке.');
         return false;
       }
 
+      succeeded = true;
+
       if (typeof webApp.closeScanQrPopup === 'function') {
-        webApp.closeScanQrPopup();
+        try { webApp.closeScanQrPopup(); } catch (_) { /* ignore */ }
       }
 
       onStatusChange?.('Переход к найденному изделию...');
