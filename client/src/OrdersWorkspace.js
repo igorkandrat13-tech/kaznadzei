@@ -18,23 +18,7 @@ import {
 import { Button, Modal, ModalHeader, cn } from './ui';
 import useEscapeKey from './useEscapeKey';
 
-const ORDER_PRIMARY_HEADERS = DEFAULT_ORDER_PRIMARY_HEADERS;
-const ORDER_CARD_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа');
-const ORDER_PACKAGE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа');
-const ORDER_CARPENTER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР');
-const ORDER_PAINT_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Покраска');
-const ORDER_ITEM_START_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления изделия');
-const ORDER_ITEM_END_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия');
-const ORDER_ITEM_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий');
-const ORDER_DURATION_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа');
-const ORDER_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Номер заказа');
-const ORDER_CUSTOMER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заказчик');
-const ORDER_ROOM_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Помещение');
-const ORDER_ROOM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ помещения');
-const ORDER_ITEM_NUMBER_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('№ изделия в заказе');
-const ORDER_QUANTITY_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Кол-во изделй');
-const ORDER_DELIVERY_DATE_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
-const ORDER_MATERIAL_REQUESTS_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники');
+const FALLBACK_ORDER_PRIMARY_HEADERS = DEFAULT_ORDER_PRIMARY_HEADERS;
 const ITEM_START_DATE_STAGE_MARK_COLUMN_KEY = 'itemStartDateStageMark';
 const ITEM_END_DATE_STAGE_MARK_COLUMN_KEY = 'itemEndDateStageMark';
 const LEGACY_ORDER_COLUMN_KEY_MAP = {
@@ -100,8 +84,6 @@ function escapeHtml(value = '') {
     .replace(/'/g, '&#39;');
 }
 
-const ORDER_NAME_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Наименование');
-const ORDER_NOTES_COLUMN_INDEX = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
 const ORDER_CARD_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp';
 const RENDER_IMAGE_ATTACHMENT_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp';
 const ATTACHMENT_SCOPE_CONFIG = {
@@ -132,44 +114,66 @@ const ATTACHMENT_SCOPE_CONFIG = {
   },
 };
 
-function getPrimaryColumnIndexForManualStageColumn(columnKey = '') {
+function getPrimaryColumnIndexForManualStageColumn(columnKey = '', primaryHeaders = DEFAULT_ORDER_PRIMARY_HEADERS) {
+  const headers = Array.isArray(primaryHeaders) && primaryHeaders.length ? primaryHeaders : DEFAULT_ORDER_PRIMARY_HEADERS;
+  const findIndex = (label) => {
+    const idx = headers.findIndex((x) => String(x ?? '').trim() === label);
+    if (idx >= 0) return idx;
+    return DEFAULT_ORDER_PRIMARY_HEADERS.indexOf(label);
+  };
+  const findPreAssemblyIndex = () => {
+    const notes = findIndex('Примечания');
+    const delivery = findIndex('Отгрузка до');
+    if (notes >= 0 && delivery >= 0 && delivery - notes > 1) {
+      for (let i = notes + 1; i < delivery; i += 1) {
+        if (String(headers[i] ?? '').trim() === '') return i;
+      }
+    }
+    return DEFAULT_ORDER_PRIMARY_HEADERS.findIndex((label, idx) => (
+      idx > DEFAULT_ORDER_PRIMARY_HEADERS.indexOf('Примечания')
+      && idx < DEFAULT_ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до')
+      && String(label || '').trim() === ''
+    ));
+  };
   switch (normalizeOrderColumnKey(columnKey)) {
     case 'orderNumber':
-      return ORDER_NUMBER_COLUMN_INDEX;
+      return findIndex('Номер заказа');
     case 'customer':
-      return ORDER_CUSTOMER_COLUMN_INDEX;
+      return findIndex('Заказчик');
     case 'room':
-      return ORDER_ROOM_COLUMN_INDEX;
+      return findIndex('Помещение');
     case 'roomNumber':
-      return ORDER_ROOM_NUMBER_COLUMN_INDEX;
+      return findIndex('№ помещения');
     case 'itemNumber':
-      return ORDER_ITEM_NUMBER_COLUMN_INDEX;
+      return findIndex('№ изделия в заказе');
     case 'quantity':
-      return ORDER_QUANTITY_COLUMN_INDEX;
+      return findIndex('Кол-во изделй');
     case 'name':
-      return ORDER_NAME_COLUMN_INDEX;
+      return findIndex('Наименование');
     case 'orderCard':
-      return ORDER_CARD_COLUMN_INDEX;
+      return findIndex('Карточка заказа');
     case 'packageName':
-      return ORDER_PACKAGE_COLUMN_INDEX;
+      return findIndex('Комплектация заказа');
     case 'notes':
-      return ORDER_NOTES_COLUMN_INDEX;
+      return findIndex('Примечания');
+    case 'preAssembly':
+      return findPreAssemblyIndex();
     case 'deliveryDate':
-      return ORDER_DELIVERY_DATE_COLUMN_INDEX;
+      return findIndex('Отгрузка до');
     case 'materialRequests':
-      return ORDER_MATERIAL_REQUESTS_COLUMN_INDEX;
+      return findIndex('Заявки на расходники');
     case 'carpenter':
-      return ORDER_CARPENTER_COLUMN_INDEX;
+      return findIndex('СТОЛЯР');
     case 'paint':
-      return ORDER_PAINT_COLUMN_INDEX;
+      return findIndex('Покраска');
     case 'itemStartDate':
-      return ORDER_ITEM_START_COLUMN_INDEX;
+      return findIndex('Начало изготовления изделия');
     case 'itemEndDate':
-      return ORDER_ITEM_END_COLUMN_INDEX;
+      return findIndex('Окончание изготовления изделия');
     case 'itemDuration':
-      return ORDER_ITEM_DURATION_COLUMN_INDEX;
+      return findIndex('Время изготовления изделий');
     case 'duration':
-      return ORDER_DURATION_COLUMN_INDEX;
+      return findIndex('Время изготовления заказа');
     default:
       return -1;
   }
@@ -1102,7 +1106,52 @@ function OrdersWorkspace() {
   }, [fetchOrderStageLegendConfig, fetchOrders, inlineDrafts, inlineSavingKey, manualStageSaving, selectedStageCellKeys.length, showForm]);
 
   const stageLegend = useMemo(() => orderStageLegendConfig.stages || [], [orderStageLegendConfig]);
-  const primaryHeaderLabels = useMemo(() => orderStageLegendConfig.primaryHeaders || DEFAULT_ORDER_PRIMARY_HEADERS, [orderStageLegendConfig]);
+  const primaryHeaderLabels = useMemo(() => (
+    Array.isArray(orderStageLegendConfig.primaryHeaders) && orderStageLegendConfig.primaryHeaders.length
+      ? orderStageLegendConfig.primaryHeaders
+      : DEFAULT_ORDER_PRIMARY_HEADERS
+  ), [orderStageLegendConfig]);
+  const primaryIndexes = useMemo(() => {
+    const findIndex = (label) => {
+      const idx = primaryHeaderLabels.findIndex((x) => String(x ?? '').trim() === label);
+      if (idx >= 0) return idx;
+      return FALLBACK_ORDER_PRIMARY_HEADERS.indexOf(label);
+    };
+    const findNotesEmpty = () => {
+      const notes = findIndex('Примечания');
+      const delivery = findIndex('Отгрузка до');
+      if (notes >= 0 && delivery >= 0 && delivery - notes > 1) {
+        for (let i = notes + 1; i < delivery; i += 1) {
+          if (String(primaryHeaderLabels[i] ?? '').trim() === '') return i;
+        }
+      }
+      return FALLBACK_ORDER_PRIMARY_HEADERS.findIndex((label, idx) => (
+        idx > FALLBACK_ORDER_PRIMARY_HEADERS.indexOf('Примечания')
+        && idx < FALLBACK_ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до')
+        && String(label || '').trim() === ''
+      ));
+    };
+    return {
+      card: findIndex('Карточка заказа'),
+      package: findIndex('Комплектация заказа'),
+      carpenter: findIndex('СТОЛЯР'),
+      paint: findIndex('Покраска'),
+      itemStart: findIndex('Начало изготовления изделия'),
+      itemEnd: findIndex('Окончание изготовления изделия'),
+      itemDuration: findIndex('Время изготовления изделий'),
+      duration: findIndex('Время изготовления заказа'),
+      orderNumber: findIndex('Номер заказа'),
+      customer: findIndex('Заказчик'),
+      room: findIndex('Помещение'),
+      roomNumber: findIndex('№ помещения'),
+      itemNumber: findIndex('№ изделия в заказе'),
+      quantity: findIndex('Кол-во изделй'),
+      deliveryDate: findIndex('Отгрузка до'),
+      notes: findIndex('Примечания'),
+      preAssembly: findNotesEmpty(),
+      materialRequests: findIndex('Заявки на расходники'),
+    };
+  }, [primaryHeaderLabels]);
   const secondaryHeaderSchema = useMemo(() => orderStageLegendConfig.secondaryHeaders || [], [orderStageLegendConfig]);
   const columnStageMeta = useMemo(() => {
     const createColumnMeta = (columnIndex) => {
@@ -1117,17 +1166,17 @@ function OrdersWorkspace() {
     };
 
     return {
-      carpenter: createColumnMeta(ORDER_CARPENTER_COLUMN_INDEX),
-      materialRequests: createColumnMeta(ORDER_MATERIAL_REQUESTS_COLUMN_INDEX),
-      itemStart: createColumnMeta(ORDER_ITEM_START_COLUMN_INDEX),
-      itemEnd: createColumnMeta(ORDER_ITEM_END_COLUMN_INDEX),
-      itemDuration: createColumnMeta(ORDER_ITEM_DURATION_COLUMN_INDEX),
-      duration: createColumnMeta(ORDER_DURATION_COLUMN_INDEX),
-      card: createColumnMeta(ORDER_CARD_COLUMN_INDEX),
-      package: createColumnMeta(ORDER_PACKAGE_COLUMN_INDEX),
-      paint: createColumnMeta(ORDER_PAINT_COLUMN_INDEX),
+      carpenter: createColumnMeta(primaryIndexes.carpenter),
+      materialRequests: createColumnMeta(primaryIndexes.materialRequests),
+      itemStart: createColumnMeta(primaryIndexes.itemStart),
+      itemEnd: createColumnMeta(primaryIndexes.itemEnd),
+      itemDuration: createColumnMeta(primaryIndexes.itemDuration),
+      duration: createColumnMeta(primaryIndexes.duration),
+      card: createColumnMeta(primaryIndexes.card),
+      package: createColumnMeta(primaryIndexes.package),
+      paint: createColumnMeta(primaryIndexes.paint),
     };
-  }, [secondaryHeaderSchema]);
+  }, [secondaryHeaderSchema, primaryIndexes]);
 
   const secondaryHeaderCells = useMemo(() => {
     let startIndex = 0;
@@ -2017,6 +2066,7 @@ function OrdersWorkspace() {
       <col className="col-item-actions" />
       <col className="col-package" />
       <col className="col-notes" />
+      <col className="col-pre-assembly" />
       <col className="col-delivery-date" />
       <col className="col-carpenter" />
       <col className="col-material-requests" />
@@ -3929,6 +3979,8 @@ function OrdersWorkspace() {
                       className: cn(materialRequestCellPropsBase.className, 'package-cell'),
                     };
                     const notesCellProps = getManualStageCellProps(key, item, 'notes', `notes-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
+                    const preAssemblyCellContent = '\u00a0';
+                    const preAssemblyCellProps = getManualStageCellProps(key, item, 'preAssembly', `notes-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
                     const carpenterCellProps = getManualStageCellProps(key, item, 'carpenter', carpenterCellClassName, carpenterCellStyle, { disabled: isInlineEditing });
                     const orderNumberCellProps = getManualStageCellProps(
                       key,
@@ -4205,6 +4257,7 @@ function OrdersWorkspace() {
                         <td {...orderCardCellProps}>{renderManualStageCellContent(item, 'orderCard', orderCardCellContent)}</td>
                         <td {...packageCellProps}>{renderManualStageCellContent(item, 'packageName', packageCellContent)}</td>
                         <td {...notesCellProps}>{renderManualStageCellContent(item, 'notes', notesCellContent)}</td>
+                        <td {...preAssemblyCellProps}>{preAssemblyCellContent}</td>
                         <td {...deliveryDateCellProps}>{renderManualStageCellContent(item, 'deliveryDate', deliveryDateCellContent)}</td>
                         <td {...carpenterCellProps} title={workerCellTitle}>
                           {carpenterCellContent}
@@ -4224,7 +4277,7 @@ function OrdersWorkspace() {
                   })}
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={18} className="empty-cell">Нет изделий по выбранным фильтрам</td>
+                      <td colSpan={19} className="empty-cell">Нет изделий по выбранным фильтрам</td>
                     </tr>
                   ) : null}
                 </tbody>

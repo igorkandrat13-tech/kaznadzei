@@ -2827,21 +2827,22 @@ body .order-primary-title-button-badge {
   --orders-header-primary-height: 56px;
   --orders-header-secondary-height: 42px;
   --orders-group-border-width: 1.35px;
-  --orders-col-order-number-width: 64px;
-  --orders-col-customer-width: 150px;
-  --orders-col-room-width: 88px;
-  --orders-col-number-width: 48px;
-  --orders-col-quantity-width: 76px;
-  --orders-col-name-width: 128px;
-  --orders-col-item-actions-width: 96px;
-  --orders-col-delivery-date-width: 96px;
-  --orders-col-package-width: 96px;
-  --orders-col-paint-width: 92px;
-  --orders-col-material-requests-width: 96px;
-  --orders-col-notes-width: 220px;
-  --orders-col-meta-width: 84px;
-  --orders-col-carpenter-width: 96px;
-  --orders-table-min-width: 1720px;
+  --orders-col-order-number-width: 56px;
+  --orders-col-customer-width: 128px;
+  --orders-col-room-width: 80px;
+  --orders-col-number-width: 44px;
+  --orders-col-quantity-width: 60px;
+  --orders-col-name-width: 120px;
+  --orders-col-item-actions-width: 92px;
+  --orders-col-delivery-date-width: 88px;
+  --orders-col-package-width: 84px;
+  --orders-col-paint-width: 78px;
+  --orders-col-material-requests-width: 88px;
+  --orders-col-notes-width: 140px;
+  --orders-col-pre-assembly-width: 70px;
+  --orders-col-meta-width: 68px;
+  --orders-col-carpenter-width: 84px;
+  --orders-table-min-width: 1600px;
   --orders-cell-padding-y: 5px;
   --orders-cell-padding-x: 6px;
   --orders-body-font-size: 16px;
@@ -3798,6 +3799,10 @@ body .order-primary-title-button-badge {
 
 .unified-orders-table col.col-notes {
   width: var(--orders-col-notes-width);
+}
+
+.unified-orders-table col.col-pre-assembly {
+  width: var(--orders-col-pre-assembly-width);
 }
 
 .unified-orders-table col.col-item-start-date,
@@ -7862,21 +7867,22 @@ body .role-allowed-column-marker {
   .unified-orders-table {
     --orders-header-primary-height: 60px;
     --orders-header-secondary-height: 44px;
-    --orders-col-order-number-width: 72px;
-    --orders-col-customer-width: 160px;
-    --orders-col-room-width: 96px;
-    --orders-col-number-width: 54px;
-    --orders-col-quantity-width: 84px;
-    --orders-col-name-width: 150px;
-    --orders-col-item-actions-width: 104px;
-    --orders-col-delivery-date-width: 102px;
-    --orders-col-package-width: 104px;
-    --orders-col-paint-width: 98px;
-    --orders-col-material-requests-width: 104px;
-    --orders-col-notes-width: 260px;
-    --orders-col-meta-width: 94px;
-    --orders-col-carpenter-width: 104px;
-    --orders-table-min-width: 1940px;
+    --orders-col-order-number-width: 64px;
+    --orders-col-customer-width: 140px;
+    --orders-col-room-width: 88px;
+    --orders-col-number-width: 48px;
+    --orders-col-quantity-width: 68px;
+    --orders-col-name-width: 140px;
+    --orders-col-item-actions-width: 100px;
+    --orders-col-delivery-date-width: 96px;
+    --orders-col-package-width: 92px;
+    --orders-col-paint-width: 86px;
+    --orders-col-material-requests-width: 96px;
+    --orders-col-notes-width: 160px;
+    --orders-col-pre-assembly-width: 80px;
+    --orders-col-meta-width: 76px;
+    --orders-col-carpenter-width: 92px;
+    --orders-table-min-width: 1780px;
     --orders-body-font-size: 17px;
     --orders-header-font-size: 14px;
     --orders-secondary-header-font-size: 13px;

@@ -9,6 +9,7 @@ const ROLE_COLUMN_ACCESS_OPTIONS = [
   { key: 'orderCard', label: 'Карточка заказа', description: 'Файлы и карточка заказа.' },
   { key: 'packageName', label: 'Комплектация заказа', description: 'Комплектация и готовность комплектовки.' },
   { key: 'notes', label: 'Примечания', description: 'Текстовые примечания по изделию.' },
+  { key: 'preAssembly', label: 'Предварительная сборка', description: 'Промежуточный столбец между примечаниями и отгрузкой до.' },
   { key: 'deliveryDate', label: 'Отгрузка до', description: 'Плановая дата отгрузки.' },
   { key: 'materialRequests', label: 'Заявки на расходники', description: 'Заявки на расходники по изделию с чекбоксами исполнения.' },
   { key: 'carpenter', label: 'Столяр', description: 'Работа столярного этапа.' },

@@ -9,6 +9,7 @@ const DEFAULT_ORDER_PRIMARY_HEADERS = [
   'Карточка заказа',
   'Комплектация заказа',
   'Примечания',
+  '',
   'Отгрузка до',
   'СТОЛЯР',
   'Заявки на расходники',
@@ -88,6 +89,7 @@ const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
   { label: 'Утверждено заказчиком', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', hex: '#A8D7B6' },
   { label: 'Укомплектовано', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', hex: '#A8D7B6' },
   { label: 'Набирается заготовка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F', hex: '#99E5FF' },
+  { label: 'Предварительная сборка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F', hex: '#99E5FF' },
   { label: 'Промежуточная шлифовка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F', hex: '#99E5FF' },
   { label: 'Собирается', legendKey: 'assembly', colSpan: 1, textHex: '#1F1F1F', hex: '#F4C2A4' },
   { label: 'Шлифуется', legendKey: 'assembly', colSpan: 1, textHex: '#1F1F1F', hex: '#F4C2A4' },
@@ -131,13 +133,45 @@ function normalizeOrderStageLegendConfig(source = {}) {
   const sourceHeaders = Array.isArray(source?.secondaryHeaders) ? source.secondaryHeaders : [];
   const sourcePrimaryHeaders = Array.isArray(source?.primaryHeaders) ? source.primaryHeaders : [];
 
-  const primaryHeaders = DEFAULT_ORDER_PRIMARY_HEADERS.map((fallbackLabel, index) => {
-    const sourceLabel = sourcePrimaryHeaders[index];
-    const normalizedSourceLabel = String(sourceLabel ?? '').trim();
-    return sourceLabel === undefined || (!normalizedSourceLabel && fallbackLabel)
-      ? String(fallbackLabel ?? '').trim()
-      : normalizedSourceLabel;
-  });
+  const buildNormalizedPrimaryHeaders = () => {
+    if (!Array.isArray(sourcePrimaryHeaders) || sourcePrimaryHeaders.length === 0) {
+      return DEFAULT_ORDER_PRIMARY_HEADERS.map((x) => String(x ?? '').trim());
+    }
+    const saved = sourcePrimaryHeaders.map((item) => String(item ?? '').trim());
+    const fallback = DEFAULT_ORDER_PRIMARY_HEADERS.map((x) => String(x ?? '').trim());
+    const notesIndexDefault = fallback.indexOf('Примечания');
+    const notesIndexSaved = saved.indexOf('Примечания');
+    const deliveryIndexDefault = fallback.indexOf('Отгрузка до');
+    const deliveryIndexSaved = saved.indexOf('Отгрузка до');
+    const result = saved.slice();
+    if (
+      notesIndexDefault >= 0 && notesIndexSaved >= 0
+      && deliveryIndexDefault >= 0 && deliveryIndexSaved >= 0
+      && (deliveryIndexDefault - notesIndexDefault) > 1
+      && (deliveryIndexSaved - notesIndexSaved) === 1
+    ) {
+      let insertAt = notesIndexSaved + 1;
+      const extras = fallback.slice(notesIndexDefault + 1, deliveryIndexDefault);
+      extras.forEach((label) => {
+        const alreadyAtInsert = String(result[insertAt] || '').trim();
+        if (alreadyAtInsert === label) {
+          insertAt += 1;
+          return;
+        }
+        result.splice(insertAt, 0, label);
+        insertAt += 1;
+      });
+    }
+    while (result.length < fallback.length) {
+      result.push(fallback[result.length]);
+    }
+    return fallback.map((fbLabel, idx) => {
+      const savedLabel = String(result[idx] ?? '').trim();
+      return (savedLabel === '' && fbLabel) ? fbLabel : (savedLabel || fbLabel || '');
+    });
+  };
+
+  const primaryHeaders = buildNormalizedPrimaryHeaders();
 
   const stages = DEFAULT_ORDER_STAGE_LEGEND.map((fallbackStage) => {
     const matched = sourceStages.find((item) => String(item?.key || '').trim() === fallbackStage.key) || {};
@@ -150,15 +184,62 @@ function normalizeOrderStageLegendConfig(source = {}) {
     return acc;
   }, {});
 
-  const secondaryHeaders = DEFAULT_ORDER_STAGE_SECONDARY_HEADERS.map((fallbackHeader, index) => {
-    const matched = sourceHeaders[index] || {};
-    const nextHeader = normalizeSecondaryHeader(matched, fallbackHeader, stageColorMap);
-    if (nextHeader.legendKey && !validLegendKeys.has(nextHeader.legendKey)) {
-      nextHeader.legendKey = fallbackHeader.legendKey || '';
+  const buildNormalizedSecondaryHeaders = () => {
+    const fallback = DEFAULT_ORDER_STAGE_SECONDARY_HEADERS.map((item) => ({ ...item }));
+    const labelsFallback = fallback.map((item) => String(item.label ?? '').trim());
+    const saved = Array.isArray(sourceHeaders) && sourceHeaders.length ? sourceHeaders.slice() : [];
+    const labelsSaved = saved.map((item) => String(item?.label ?? '').trim());
+    const stockDefault = labelsFallback.indexOf('Набирается заготовка');
+    const polishDefault = labelsFallback.indexOf('Промежуточная шлифовка');
+    const stockSaved = labelsSaved.indexOf('Набирается заготовка');
+    const polishSaved = labelsSaved.indexOf('Промежуточная шлифовка');
+    if (
+      stockDefault >= 0 && polishDefault >= 0 && stockSaved >= 0 && polishSaved >= 0
+      && (polishDefault - stockDefault) > 1
+      && (polishSaved - stockSaved) === 1
+    ) {
+      let insertAt = stockSaved + 1;
+      const extras = fallback.slice(stockDefault + 1, polishDefault);
+      extras.forEach((item) => {
+        const alreadyLabel = String(saved[insertAt]?.label || '').trim();
+        if (alreadyLabel === String(item.label || '').trim()) {
+          insertAt += 1;
+          return;
+        }
+        saved.splice(insertAt, 0, { label: item.label, legendKey: item.legendKey, hex: item.hex, textHex: item.textHex, colSpan: item.colSpan || 1, useTableBackground: false });
+        insertAt += 1;
+      });
     }
-    return nextHeader;
-  });
+    while (saved.length < fallback.length) {
+      saved.push(fallback[saved.length]);
+    }
+    const buildFallbacksForLabel = (label) => {
+      const idx = labelsFallback.indexOf(String(label || '').trim());
+      if (idx >= 0) {
+        const item = fallback[idx];
+        return { item, idx };
+      }
+      const matchedFuzzy = fallback.find(
+        (fb) => String(fb.label ?? '').trim() === String(label ?? '').trim(),
+      );
+      if (matchedFuzzy) {
+        return { item: matchedFuzzy, idx: fallback.indexOf(matchedFuzzy) };
+      }
+      return { item: null, idx: -1 };
+    };
+    return fallback.map((fbHeader, fbIndex) => {
+      const savedObj = saved.find((s) => String(s?.label ?? '').trim() === String(fbHeader.label ?? '').trim());
+      const matched = savedObj ? savedObj : (saved[fbIndex] && typeof saved[fbIndex] === 'object' ? saved[fbIndex] : {});
+      const fbSource = !matched && !savedObj ? fbHeader : (buildFallbacksForLabel(matched?.label ?? fbHeader.label).item || fbHeader);
+      const nextHeader = normalizeSecondaryHeader(matched, fbSource, stageColorMap);
+      if (nextHeader.legendKey && !validLegendKeys.has(nextHeader.legendKey)) {
+        nextHeader.legendKey = fbSource.legendKey || fbHeader.legendKey || '';
+      }
+      return nextHeader;
+    });
+  };
 
+  const secondaryHeaders = buildNormalizedSecondaryHeaders();
   return { primaryHeaders, stages, secondaryHeaders };
 }
 
