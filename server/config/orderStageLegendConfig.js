@@ -112,9 +112,9 @@ const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
   { label: 'Заказ не обработан', legendKey: 'unprocessed', colSpan: 1, textHex: '#000000', stickyCol: 'sticky-col-2', useTableBackground: true, hex: '' },
   { label: 'ТЗ от заказчика', legendKey: 'brief', colSpan: 1, textHex: '#000000', hex: '#D3EAD9' },
   { label: 'ТЗ для чертежей', legendKey: 'brief', colSpan: 2, textHex: '#000000', hex: '#D3EAD9' },
-  { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', noWrap: true, hex: '#A8D7B6' },
-  { label: 'Начерчен', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', hex: '#A8D7B6' },
+  { label: 'Начерчен', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', noWrap: true, hex: '#A8D7B6' },
   { label: 'Утверждено заказчиком', legendKey: 'approved', colSpan: 1, textHex: '#1F1F1F', hex: '#9BC5A7' },
+  { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', hex: '#A8D7B6' },
   { label: 'Укомплектовано', legendKey: 'kitting', colSpan: 1, textHex: '#1F1F1F', hex: '#DFC590' },
   { label: 'Набирается заготовка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F', hex: '#9EB4F5' },
   { label: 'Предварительная сборка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F', hex: '#9EB4F5' },
@@ -274,21 +274,34 @@ function normalizeOrderStageLegendConfig(source = {}) {
       }
       return { item: null, idx: -1 };
     };
-    const fallbackPlannedIdx = fallback.findIndex((h) => String(h.label || '').trim() === 'Расписан');
     const fallbackDraftedIdx = fallback.findIndex((h) => String(h.label || '').trim() === 'Начерчен');
-    const savedPlannedIdxRaw = saved.findIndex((s) => String(s?.label || '').trim() === 'Расписан');
+    const fallbackApprovedIdx = fallback.findIndex((h) => String(h.label || '').trim() === 'Утверждено заказчиком');
+    const fallbackPlannedIdx = fallback.findIndex((h) => String(h.label || '').trim() === 'Расписан');
     const savedDraftedIdxRaw = saved.findIndex((s) => String(s?.label || '').trim() === 'Начерчен');
-    if (
-      fallbackPlannedIdx >= 0 &&
+    const savedApprovedIdxRaw = saved.findIndex((s) => String(s?.label || '').trim() === 'Утверждено заказчиком');
+    const savedPlannedIdxRaw = saved.findIndex((s) => String(s?.label || '').trim() === 'Расписан');
+    const expectedCorrectOrder =
       fallbackDraftedIdx >= 0 &&
-      savedPlannedIdxRaw >= 0 &&
-      savedDraftedIdxRaw >= 0 &&
-      fallbackPlannedIdx < fallbackDraftedIdx &&
-      savedDraftedIdxRaw < savedPlannedIdxRaw
-    ) {
-      const tmp = saved[savedPlannedIdxRaw];
-      saved[savedPlannedIdxRaw] = saved[savedDraftedIdxRaw];
-      saved[savedDraftedIdxRaw] = tmp;
+      fallbackApprovedIdx >= 0 &&
+      fallbackPlannedIdx >= 0 &&
+      fallbackDraftedIdx < fallbackApprovedIdx &&
+      fallbackApprovedIdx < fallbackPlannedIdx;
+    const hasAllSaved =
+      savedDraftedIdxRaw >= 0 && savedApprovedIdxRaw >= 0 && savedPlannedIdxRaw >= 0;
+    if (expectedCorrectOrder && hasAllSaved) {
+      const sequenceIsCorrect = savedDraftedIdxRaw < savedApprovedIdxRaw && savedApprovedIdxRaw < savedPlannedIdxRaw;
+      if (!sequenceIsCorrect) {
+        const minIdx = Math.min(savedDraftedIdxRaw, savedApprovedIdxRaw, savedPlannedIdxRaw);
+        const draftedEntry = saved[savedDraftedIdxRaw];
+        const approvedEntry = saved[savedApprovedIdxRaw];
+        const plannedEntry = saved[savedPlannedIdxRaw];
+        const sortedUniqueIndices = [savedDraftedIdxRaw, savedApprovedIdxRaw, savedPlannedIdxRaw].sort((a, b) => a - b);
+        const removeTheseAsc = sortedUniqueIndices.slice().reverse();
+        for (const i of removeTheseAsc) {
+          saved.splice(i, 1);
+        }
+        saved.splice(minIdx, 0, draftedEntry, approvedEntry, plannedEntry);
+      }
     }
     const normalized = fallback.map((fbHeader, fbIndex) => {
       const savedObj = saved.find((s) => String(s?.label ?? '').trim() === String(fbHeader.label ?? '').trim());
