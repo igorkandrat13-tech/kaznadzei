@@ -124,8 +124,8 @@ const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
   { label: 'Красится', legendKey: 'paint', colSpan: 1, textHex: '#000000', hex: '#D3A6D5' },
   { label: 'Сборка после покраски', legendKey: 'postpaint', colSpan: 1, textHex: '#000000', hex: '#C198C3' },
   { label: 'Контроль качества', legendKey: 'qc', colSpan: 1, textHex: '#000000', hex: '#B49BCA' },
-  { label: 'Доставка/Монтаж', legendKey: 'logistics', colSpan: 1, textHex: '#FFFFFF', hex: '#7CA287' },
-  { label: 'Заказ готов', legendKey: 'ready', colSpan: 1, textHex: '#FFFFFF', hex: '#61896D' },
+  { label: 'Доставка/Монтаж', legendKey: 'logistics', colSpan: 1, textHex: '#000000', hex: '#7CA287' },
+  { label: 'Заказ готов', legendKey: 'ready', colSpan: 1, textHex: '#000000', hex: '#61896D' },
 ];
 
 function normalizeStage(source = {}, fallback) {
