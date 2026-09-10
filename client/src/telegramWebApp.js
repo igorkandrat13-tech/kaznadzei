@@ -264,65 +264,200 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
     'popupOpened',
     'scanQrPopupClosed',
   ]);
+  const CAMERA_PERMISSION_HINT =
+    'Телефон не дал доступ Telegram к камере. Что сделать:\n' +
+    '1. Настройки → Приложения → Telegram → Разрешения → Камера = Разрешено\n' +
+    '2. Уберите фоновые приложения, которые используют камеру (Камера, Zoom, Face Unlock, Google Lens)\n' +
+    '3. Перезапустите Telegram и попробуйте снова.\n' +
+    'Если MIUI/HyperOS: дополнительно Настройки → Приложения → Telegram → Батарея → Без ограничений.';
 
   let popupClosed = false;
   let succeeded = false;
   let closedHandler = null;
+  let scannerInvoked = false;
   try {
     closedHandler = () => { popupClosed = true; };
     webApp.onEvent?.('scanQrPopupClosed', closedHandler);
   } catch (_e) { /* ignore */ }
 
-  webApp.showScanQrPopup(
-    { text: 'Подготовка камеры для сканирования QR-кода изделия' },
-    (rawScannedText) => {
-      try {
-        if (webApp.offEvent && closedHandler) {
-          try { webApp.offEvent('scanQrPopupClosed', closedHandler); } catch (_) { /* ignore */ }
-        }
-      } catch (_offErr) { /* ignore */ }
-
-      if (popupClosed) return false;
-      if (succeeded) return false;
-
-      let scannedText = rawScannedText;
-
-      if (typeof scannedText === 'string') {
-        const trimmed = scannedText.trim();
-        if (!trimmed) return false;
-        if (IGNORE_EVENTS.has(trimmed)) return false;
-        if (/^WebApp[A-Za-z]+$/.test(trimmed)) return false;
-        try {
-          const parsed = JSON.parse(trimmed);
-          if (parsed && typeof parsed === 'object') {
-            if (typeof parsed.data === 'string' && parsed.data) {
-              scannedText = parsed.data;
-            } else if (typeof parsed.text === 'string' && parsed.text) {
-              scannedText = parsed.text;
-            } else {
-              return false;
-            }
-          }
-        } catch (_jsonErr) { /* не JSON, используем как есть */ }
+  function cleanupClosedHandler() {
+    try {
+      if (webApp.offEvent && closedHandler) {
+        try { webApp.offEvent('scanQrPopupClosed', closedHandler); } catch (_) { /* ignore */ }
       }
+    } catch (_offErr) { /* ignore */ }
+  }
 
-      const orderPath = getOrderPathFromQr(scannedText);
+  function detectCameraPermissionError(raw) {
+    const text = String(raw || '').toLowerCase();
+    if (!text) return false;
+    return (
+      /camera|permission|denied|разреш|камер|доступ|запрет|security|notallow|error_camera/i.test(text) ||
+      /permission|denied/i.test(text)
+    );
+  }
+
+  function unwrapScannedValue(raw) {
+    if (raw == null || raw === undefined) return { value: '', ignore: false, isError: false };
+    let candidate = raw;
+    let ignore = false;
+    let isErrorPayload = false;
+    if (typeof candidate === 'object') {
+      const obj = candidate;
+      const possible = [obj.data, obj.text, obj.message, obj.description, obj.error, obj.result, obj.value].find(
+        (v) => typeof v === 'string' && v.trim().length > 0
+      );
+      if (possible) {
+        candidate = possible;
+      } else {
+        const objStr = JSON.stringify(obj);
+        if (IGNORE_EVENTS.has(objStr)) {
+          ignore = true;
+        }
+        if (obj && (obj.event || obj.type || obj.name || obj.error)) {
+          isErrorPayload = true;
+          const eventName = String(obj.event || obj.type || obj.name || obj.error || '').trim();
+          if (eventName) candidate = eventName;
+        }
+      }
+    }
+    if (typeof candidate === 'string') {
+      let trimmed = candidate.trim();
+      if (!trimmed) return { value: '', ignore: false, isError: isErrorPayload };
+      if (IGNORE_EVENTS.has(trimmed)) ignore = true;
+      if (/^WebApp[A-Za-z]+$/.test(trimmed)) ignore = true;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.error) {
+            isErrorPayload = true;
+            candidate = String(parsed.error);
+            const innerTrim = String(parsed.error || '').trim();
+            if (innerTrim) trimmed = innerTrim;
+            if (IGNORE_EVENTS.has(innerTrim)) ignore = true;
+            if (/^WebApp[A-Za-z]+$/.test(innerTrim)) ignore = true;
+          } else if (typeof parsed.data === 'string' && parsed.data) {
+            candidate = parsed.data;
+          } else if (typeof parsed.text === 'string' && parsed.text) {
+            candidate = parsed.text;
+          } else if (typeof parsed.message === 'string' && parsed.message) {
+            isErrorPayload = true;
+            candidate = parsed.message;
+          } else if (typeof parsed.description === 'string' && parsed.description) {
+            isErrorPayload = true;
+            candidate = parsed.description;
+          } else {
+            return { value: '', ignore: true, isError: isErrorPayload };
+          }
+        }
+      } catch (_jsonErr) { /* не JSON */ }
+      return { value: typeof candidate === 'string' ? candidate.trim() : String(candidate || ''), ignore, isError: isErrorPayload };
+    }
+    return { value: '', ignore, isError: isErrorPayload };
+  }
+
+  function handleSuccessCallback(rawScannedText) {
+    if (scannerInvoked) return false;
+    if (popupClosed) return false;
+    if (succeeded) return false;
+    try {
+      const { value, ignore } = unwrapScannedValue(rawScannedText);
+      if (ignore) return false;
+      if (!value) return false;
+      const orderPath = getOrderPathFromQr(value);
       if (!orderPath) {
         onError?.('QR-код не распознан. Используйте QR-код изделия, расположенный на упаковке.');
         return false;
       }
-
+      scannerInvoked = true;
       succeeded = true;
-
+      cleanupClosedHandler();
       if (typeof webApp.closeScanQrPopup === 'function') {
         try { webApp.closeScanQrPopup(); } catch (_) { /* ignore */ }
       }
-
       onStatusChange?.('Переход к найденному изделию...');
       onSuccess?.(orderPath);
       return true;
+    } catch (e) {
+      onError?.(e?.message || 'Не удалось обработать результат сканирования.');
+      return false;
     }
-  );
+  }
+
+  function handleErrorCallback(rawError) {
+    if (scannerInvoked) return;
+    try {
+      const { value, ignore } = unwrapScannedValue(rawError);
+      if (ignore) return;
+      if (!value) return;
+      if (IGNORE_EVENTS.has(value)) return;
+      if (/^WebApp[A-Za-z]+$/.test(value)) return;
+      if (detectCameraPermissionError(value)) {
+        onError?.(CAMERA_PERMISSION_HINT);
+        return;
+      }
+      onError?.(`Не удалось открыть камеру: ${value}`);
+    } catch (_e) {
+      onError?.('Не удалось открыть камеру. Проверьте разрешения для Telegram в настройках телефона.');
+    }
+  }
+
+  function tryInvokeNativeShowScanQrPopup() {
+    try {
+      const params = { text: 'Подготовка камеры для сканирования QR-кода изделия' };
+      webApp.showScanQrPopup.call(webApp, params, handleSuccessCallback, handleErrorCallback);
+      setTimeout(() => {
+        try {
+          webApp.showScanQrPopup(params, handleSuccessCallback, handleErrorCallback);
+        } catch (_e2) { /* fallback ignore */ }
+      }, 20);
+      return true;
+    } catch (showErr) {
+      try {
+        handleErrorCallback(showErr);
+      } catch (_errOnErr) { /* ignore */ }
+      return false;
+    }
+  }
+
+  (async function requestCameraThenInvoke() {
+    if (typeof navigator !== 'undefined' && navigator?.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+      try {
+        onStatusChange?.('Запрос разрешения на использование камеры...');
+        const timeoutMs = 8000;
+        const stream = await Promise.race([
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('CAMERA_TIMEOUT')), timeoutMs)),
+        ]);
+        if (stream && typeof stream.getTracks === 'function') {
+          try {
+            stream.getTracks().forEach((t) => t.stop());
+          } catch (_cl) { /* ignore */ }
+        }
+      } catch (permErr) {
+        const name = permErr?.name || '';
+        const msg = String(permErr?.message || '').toLowerCase();
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || /denied|permission|notallow/i.test(msg)) {
+          onError?.(CAMERA_PERMISSION_HINT);
+          return;
+        }
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          onError?.('На телефоне не найдена камера. Перезапустите Telegram и попробуйте снова.');
+          return;
+        }
+        if (name === 'NotReadableError' || name === 'TrackStartError' || /camera.*use|занят|in use/i.test(msg)) {
+          onError?.('Камера занята другим приложением (Камера, Zoom, Face Unlock, Google Lens). Закройте их и попробуйте снова.');
+          return;
+        }
+        if (name === 'SecurityError' || name === 'CAMERA_TIMEOUT') {
+          onError?.('Система не передала доступ к камере. Перезапустите Telegram полностью (уберите из недавних приложений), затем попробуйте снова.');
+          return;
+        }
+      }
+    }
+    onStatusChange?.('Подготовка камеры для сканирования QR-кода изделия.');
+    tryInvokeNativeShowScanQrPopup();
+  })();
 
   return true;
 }
