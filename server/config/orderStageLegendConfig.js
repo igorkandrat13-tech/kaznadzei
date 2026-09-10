@@ -40,14 +40,14 @@ const DEFAULT_ORDER_STAGE_LEGEND = [
     storeName: 'Легенда этапов: чертежи',
     label: 'Чертежи',
     description: 'Начерчен, Расписан, Размеры, Готово ТЗ',
-    defaultHex: '#A8D7B6',
+    defaultHex: '#9BC5A7',
   },
   {
     key: 'approved',
     storeName: 'Легенда этапов: утверждено',
     label: 'Утверждено',
     description: 'Утверждено заказчиком',
-    defaultHex: '#9BC5A7',
+    defaultHex: '#A8D7B6',
   },
   {
     key: 'kitting',
@@ -113,8 +113,8 @@ const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
   { label: 'ТЗ от заказчика', legendKey: 'brief', colSpan: 1, textHex: '#000000', hex: '#D3EAD9' },
   { label: 'ТЗ для чертежей', legendKey: 'brief', colSpan: 2, textHex: '#000000', hex: '#D3EAD9' },
   { label: 'Начерчен', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', noWrap: true, hex: '#A8D7B6' },
-  { label: 'Утверждено заказчиком', legendKey: 'approved', colSpan: 1, textHex: '#1F1F1F', hex: '#9BC5A7' },
-  { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', hex: '#A8D7B6' },
+  { label: 'Утверждено заказчиком', legendKey: 'approved', colSpan: 1, textHex: '#1F1F1F', hex: '#A8D7B6' },
+  { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', hex: '#9BC5A7' },
   { label: 'Укомплектовано', legendKey: 'kitting', colSpan: 1, textHex: '#1F1F1F', hex: '#DFC590' },
   { label: 'Набирается заготовка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F', hex: '#9EB4F5' },
   { label: 'Предварительная сборка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F', hex: '#9EB4F5' },
@@ -325,6 +325,16 @@ function normalizeOrderStageLegendConfig(source = {}) {
       target.colSpan = left.colSpan || target.colSpan || 1;
       target.useTableBackground = Boolean(left.useTableBackground);
     }
+    normalized.forEach((h) => {
+      const label = String(h?.label || '').trim();
+      if (label === 'Утверждено заказчиком') {
+        h.hex = '#A8D7B6';
+        h.legendKey = 'approved';
+      } else if (label === 'Расписан') {
+        h.hex = '#9BC5A7';
+        h.legendKey = 'drafting';
+      }
+    });
     return normalized;
   };
 
