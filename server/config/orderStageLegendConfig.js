@@ -112,8 +112,8 @@ const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
   { label: 'Заказ не обработан', legendKey: 'unprocessed', colSpan: 1, textHex: '#000000', stickyCol: 'sticky-col-2', useTableBackground: true, hex: '' },
   { label: 'ТЗ от заказчика', legendKey: 'brief', colSpan: 1, textHex: '#000000', hex: '#D3EAD9' },
   { label: 'ТЗ для чертежей', legendKey: 'brief', colSpan: 2, textHex: '#000000', hex: '#D3EAD9' },
-  { label: 'Начерчен', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', noWrap: true, hex: '#A8D7B6' },
-  { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', hex: '#A8D7B6' },
+  { label: 'Расписан', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', noWrap: true, hex: '#A8D7B6' },
+  { label: 'Начерчен', legendKey: 'drafting', colSpan: 1, textHex: '#1F1F1F', hex: '#A8D7B6' },
   { label: 'Утверждено заказчиком', legendKey: 'approved', colSpan: 1, textHex: '#1F1F1F', hex: '#9BC5A7' },
   { label: 'Укомплектовано', legendKey: 'kitting', colSpan: 1, textHex: '#1F1F1F', hex: '#DFC590' },
   { label: 'Набирается заготовка', legendKey: 'stock', colSpan: 1, textHex: '#1F1F1F', hex: '#9EB4F5' },
@@ -274,6 +274,22 @@ function normalizeOrderStageLegendConfig(source = {}) {
       }
       return { item: null, idx: -1 };
     };
+    const fallbackPlannedIdx = fallback.findIndex((h) => String(h.label || '').trim() === 'Расписан');
+    const fallbackDraftedIdx = fallback.findIndex((h) => String(h.label || '').trim() === 'Начерчен');
+    const savedPlannedIdxRaw = saved.findIndex((s) => String(s?.label || '').trim() === 'Расписан');
+    const savedDraftedIdxRaw = saved.findIndex((s) => String(s?.label || '').trim() === 'Начерчен');
+    if (
+      fallbackPlannedIdx >= 0 &&
+      fallbackDraftedIdx >= 0 &&
+      savedPlannedIdxRaw >= 0 &&
+      savedDraftedIdxRaw >= 0 &&
+      fallbackPlannedIdx < fallbackDraftedIdx &&
+      savedDraftedIdxRaw < savedPlannedIdxRaw
+    ) {
+      const tmp = saved[savedPlannedIdxRaw];
+      saved[savedPlannedIdxRaw] = saved[savedDraftedIdxRaw];
+      saved[savedDraftedIdxRaw] = tmp;
+    }
     const normalized = fallback.map((fbHeader, fbIndex) => {
       const savedObj = saved.find((s) => String(s?.label ?? '').trim() === String(fbHeader.label ?? '').trim());
       const matched = savedObj ? savedObj : (saved[fbIndex] && typeof saved[fbIndex] === 'object' ? saved[fbIndex] : {});
