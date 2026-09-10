@@ -1,7 +1,8 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿const TELEGRAM_SESSION_STORAGE_KEY = 'kaznadzei.telegram_webapp';
 const TELEGRAM_INIT_DATA_STORAGE_KEY = 'kaznadzei.telegram_init_data';
 const TELEGRAM_UNSAFE_USER_STORAGE_KEY = 'kaznadzei.telegram_unsafe_user';
 const TELEGRAM_EMPLOYEE_SESSION_TOKEN_KEY = 'kaznadzei.telegram_employee_session_token';
+const TELEGRAM_CAMERA_PERMISSION_KEY = 'kaznadzei.telegram_camera_permission_granted';
 
 function decodeBase64Url(value) {
   const normalized = String(value || '')
@@ -74,6 +75,49 @@ export function persistTelegramUnsafeUser() {
 export function hasTelegramWebAppSession() {
   try {
     return window.sessionStorage?.getItem(TELEGRAM_SESSION_STORAGE_KEY) === '1';
+  } catch (error) {
+    return false;
+  }
+}
+
+export function isCameraPermissionRememberedAsGranted() {
+  try {
+    const key = TELEGRAM_CAMERA_PERMISSION_KEY;
+    const rawSession = window.sessionStorage?.getItem(key);
+    if (rawSession === '1') return true;
+    const rawLocal = window.localStorage?.getItem(key);
+    if (!rawLocal) return false;
+    let parsed = null;
+    try { parsed = JSON.parse(rawLocal); } catch (_e) { return false; }
+    if (!parsed || typeof parsed !== 'object') return false;
+    if (parsed.granted !== true) return false;
+    const ageDays = parsed.ts ? Math.max(0, Math.floor((Date.now() - Number(parsed.ts || 0)) / 86400000)) : 0;
+    return ageDays <= 180;
+  } catch (error) {
+    return false;
+  }
+}
+
+export function rememberCameraPermissionAsGranted() {
+  try {
+    const key = TELEGRAM_CAMERA_PERMISSION_KEY;
+    try { window.sessionStorage?.setItem(key, '1'); } catch (_s) { /* ignore */ }
+    try {
+      const payload = JSON.stringify({ granted: true, ts: Date.now(), v: 1 });
+      window.localStorage?.setItem(key, payload);
+    } catch (_l) { /* ignore */ }
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+export function clearCameraPermissionRemembered() {
+  try {
+    const key = TELEGRAM_CAMERA_PERMISSION_KEY;
+    try { window.sessionStorage?.removeItem(key); } catch (_s) { /* ignore */ }
+    try { window.localStorage?.removeItem(key); } catch (_l) { /* ignore */ }
+    return true;
   } catch (error) {
     return false;
   }
@@ -371,6 +415,7 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
       }
       scannerInvoked = true;
       succeeded = true;
+      rememberCameraPermissionAsGranted();
       cleanupClosedHandler();
       if (typeof webApp.closeScanQrPopup === 'function') {
         try { webApp.closeScanQrPopup(); } catch (_) { /* ignore */ }
@@ -393,6 +438,7 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
       if (IGNORE_EVENTS.has(value)) return;
       if (/^WebApp[A-Za-z]+$/.test(value)) return;
       if (detectCameraPermissionError(value)) {
+        clearCameraPermissionRemembered();
         onError?.(CAMERA_PERMISSION_HINT);
         return;
       }
@@ -421,6 +467,12 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
   }
 
   (async function requestCameraThenInvoke() {
+    const alreadyGranted = isCameraPermissionRememberedAsGranted();
+    if (alreadyGranted) {
+      onStatusChange?.('Подготовка камеры для сканирования QR-кода изделия.');
+      tryInvokeNativeShowScanQrPopup();
+      return;
+    }
     if (typeof navigator !== 'undefined' && navigator?.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
       try {
         onStatusChange?.('Запрос разрешения на использование камеры...');
@@ -429,6 +481,7 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
           navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('CAMERA_TIMEOUT')), timeoutMs)),
         ]);
+        rememberCameraPermissionAsGranted();
         if (stream && typeof stream.getTracks === 'function') {
           try {
             stream.getTracks().forEach((t) => t.stop());
@@ -438,6 +491,7 @@ export function openTelegramQrScanner({ onSuccess, onError, onStatusChange } = {
         const name = permErr?.name || '';
         const msg = String(permErr?.message || '').toLowerCase();
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || /denied|permission|notallow/i.test(msg)) {
+          clearCameraPermissionRemembered();
           onError?.(CAMERA_PERMISSION_HINT);
           return;
         }
