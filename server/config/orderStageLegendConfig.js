@@ -200,13 +200,32 @@ function normalizeOrderStageLegendConfig(source = {}) {
     ) {
       let insertAt = stockSaved + 1;
       const extras = fallback.slice(stockDefault + 1, polishDefault);
+      const leftNeighbor = saved[stockSaved] || {};
+      const leftStyle = {
+        legendKey: leftNeighbor.legendKey || 'stock',
+        hex: leftNeighbor.hex || '#99E5FF',
+        textHex: leftNeighbor.textHex || undefined,
+        colSpan: leftNeighbor.colSpan || 1,
+        useTableBackground: Boolean(leftNeighbor.useTableBackground),
+        stickyCol: leftNeighbor.stickyCol || '',
+        noWrap: Boolean(leftNeighbor.noWrap),
+      };
       extras.forEach((item) => {
         const alreadyLabel = String(saved[insertAt]?.label || '').trim();
         if (alreadyLabel === String(item.label || '').trim()) {
           insertAt += 1;
           return;
         }
-        saved.splice(insertAt, 0, { label: item.label, legendKey: item.legendKey, hex: item.hex, textHex: item.textHex, colSpan: item.colSpan || 1, useTableBackground: false });
+        saved.splice(insertAt, 0, {
+          label: item.label,
+          legendKey: leftStyle.legendKey,
+          hex: leftStyle.hex,
+          textHex: leftStyle.textHex,
+          colSpan: leftStyle.colSpan,
+          useTableBackground: leftStyle.useTableBackground,
+          stickyCol: leftStyle.stickyCol,
+          noWrap: leftStyle.noWrap,
+        });
         insertAt += 1;
       });
     }
@@ -227,7 +246,7 @@ function normalizeOrderStageLegendConfig(source = {}) {
       }
       return { item: null, idx: -1 };
     };
-    return fallback.map((fbHeader, fbIndex) => {
+    const normalized = fallback.map((fbHeader, fbIndex) => {
       const savedObj = saved.find((s) => String(s?.label ?? '').trim() === String(fbHeader.label ?? '').trim());
       const matched = savedObj ? savedObj : (saved[fbIndex] && typeof saved[fbIndex] === 'object' ? saved[fbIndex] : {});
       const fbSource = !matched && !savedObj ? fbHeader : (buildFallbacksForLabel(matched?.label ?? fbHeader.label).item || fbHeader);
@@ -237,6 +256,19 @@ function normalizeOrderStageLegendConfig(source = {}) {
       }
       return nextHeader;
     });
+    const preAssemblyIdx = normalized.findIndex((h) => /Предварительная/.test(String(h.label || '').trim()));
+    if (preAssemblyIdx > 0) {
+      const left = normalized[preAssemblyIdx - 1] || {};
+      const target = normalized[preAssemblyIdx];
+      target.legendKey = left.legendKey || target.legendKey || 'stock';
+      target.hex = left.hex || target.hex || '#99E5FF';
+      if (left.textHex) {
+        target.textHex = left.textHex;
+      }
+      target.colSpan = left.colSpan || target.colSpan || 1;
+      target.useTableBackground = Boolean(left.useTableBackground);
+    }
+    return normalized;
   };
 
   const secondaryHeaders = buildNormalizedSecondaryHeaders();
