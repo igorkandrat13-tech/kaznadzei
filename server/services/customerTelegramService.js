@@ -950,16 +950,24 @@ async function sendCustomerTelegramMessage({
     }
     await setChatMenuButton(token, { chatId: effectiveChatId, type: 'default' }).catch(() => null);
     const photoUrl = String(extra?.photoUrl || '').trim();
-    const photoCaption = String(extra?.photoCaption || '').trim();
+    const photoCaptionHint = String(extra?.photoCaption || '').trim();
     const cleanedExtra = { ...(extra || {}) };
     delete cleanedExtra.photoUrl;
     delete cleanedExtra.photoCaption;
-    const textOnlyExtra = { ...cleanedExtra };
     let mainSendResult = null;
+    const TELEGRAM_CAPTION_MAX = 1024;
     if (photoUrl) {
+      const textFitsInCaption = normalizedText && normalizedText.length <= TELEGRAM_CAPTION_MAX;
       const photoPayload = {};
-      if (photoCaption) {
-        photoPayload.caption = photoCaption;
+      if (textFitsInCaption) {
+        photoPayload.caption = normalizedText;
+        if (cleanedExtra.reply_markup) {
+          photoPayload.reply_markup = cleanedExtra.reply_markup;
+        }
+      } else if (photoCaptionHint) {
+        photoPayload.caption = photoCaptionHint;
+      } else if (normalizedText) {
+        photoPayload.caption = normalizedText.slice(0, TELEGRAM_CAPTION_MAX);
       }
       addTelegramDiagnosticLog('customer-telegram', 'send.request-photo', {
         accessId: normalizedAccess._id,
@@ -968,10 +976,12 @@ async function sendCustomerTelegramMessage({
         chatId: effectiveChatId,
         telegramUserId: effectiveTelegramUserId,
         photoUrlTail: photoUrl.slice(-60),
-        captionLength: photoCaption.length,
+        captionLength: String(photoPayload.caption || '').length,
+        textFitsInCaption: Boolean(textFitsInCaption),
       });
       mainSendResult = await sendPhoto(token, effectiveChatId, photoUrl, photoPayload);
-      if (normalizedText) {
+      if (normalizedText && !textFitsInCaption) {
+        const textPayload = { ...cleanedExtra };
         addTelegramDiagnosticLog('customer-telegram', 'send.request-text-follow-up', {
           accessId: normalizedAccess._id,
           orderId: normalizedAccess.orderId,
@@ -979,7 +989,7 @@ async function sendCustomerTelegramMessage({
           chatId: effectiveChatId,
           textLength: normalizedText.length,
         });
-        mainSendResult = await sendMessage(token, effectiveChatId, normalizedText, textOnlyExtra);
+        mainSendResult = await sendMessage(token, effectiveChatId, normalizedText, textPayload);
       }
     } else {
       addTelegramDiagnosticLog('customer-telegram', 'send.request', {
@@ -1007,6 +1017,7 @@ async function sendCustomerTelegramMessage({
       chatId: effectiveChatId,
       telegramUserId: effectiveTelegramUserId,
       withPhoto: Boolean(photoUrl),
+      messagesCount: (photoUrl && normalizedText && normalizedText.length > TELEGRAM_CAPTION_MAX) ? 2 : 1,
     });
     const logEntry = CustomerTelegramLogStore.add({
       customerId: normalizedAccess.customerId,
