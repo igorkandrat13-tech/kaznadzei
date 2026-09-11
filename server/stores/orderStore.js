@@ -3,7 +3,7 @@ const ProcessStepStore = require('./processStepStore');
 const RoleStore = require('./roleStore');
 const EmployeeStore = require('./employeeStore');
 
-const MANUAL_STAGE_ORDER = ['unprocessed', 'brief', 'drafting', 'stock', 'assembly', 'paint', 'postpaint', 'ready'];
+const MANUAL_STAGE_ORDER = ['unprocessed', 'brief', 'drafting', 'approved', 'kitting', 'stock', 'assembly', 'paint', 'postpaint', 'qc', 'logistics', 'ready'];
 const MANUAL_STAGE_STATUS = {
   unprocessed: 'pending',
   ready: 'completed',
