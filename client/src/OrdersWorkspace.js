@@ -4088,24 +4088,26 @@ function OrdersWorkspace() {
                     const roomCellContent = isInlineEditing ? (
                       <input className="table-inline-input" value={inlineDraft.room} onChange={handleInlineChange(key, 'room')} />
                     ) : (
-                      <div className="order-primary-title">
-                        {item.itemId && !isPlaceholder ? (
-                          <button
-                            type="button"
-                            className="order-primary-title-button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openQrPreview(order, item);
-                            }}
-                            title="Открыть QR-код изделия"
-                            aria-label="Открыть QR-код изделия"
-                          >
-                            <span className="order-primary-title-button-text"><strong>{item.room || '—'}</strong></span>
-                            <span className="order-primary-title-button-badge" aria-hidden="true" />
-                          </button>
-                        ) : (
-                          <strong>{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</strong>
-                        )}
+                      <div className="manual-stage-cell-padding">
+                        <div className="order-primary-title">
+                          {item.itemId && !isPlaceholder ? (
+                            <button
+                              type="button"
+                              className="order-primary-title-button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openQrPreview(order, item);
+                              }}
+                              title="Открыть QR-код изделия"
+                              aria-label="Открыть QR-код изделия"
+                            >
+                              <span className="order-primary-title-button-text"><strong>{item.room || '—'}</strong></span>
+                              <span className="order-primary-title-button-badge" aria-hidden="true" />
+                            </button>
+                          ) : (
+                            <strong>{item.room || (isPlaceholder ? 'Добавьте помещение' : '—')}</strong>
+                          )}
+                        </div>
                       </div>
                     );
                     const roomNumberCellContent = isInlineEditing ? <input className="table-inline-input table-inline-input-narrow" value={inlineDraft.roomNumber} onChange={handleInlineChange(key, 'roomNumber')} /> : (item.roomNumber || '—');
@@ -4114,24 +4116,26 @@ function OrdersWorkspace() {
                     const nameCellContent = isInlineEditing ? (
                       <input className="table-inline-input" value={inlineDraft.name} onChange={handleInlineChange(key, 'name')} />
                     ) : (
-                      <div className="order-primary-title">
-                        {item.itemId && !isPlaceholder ? (
-                          <button
-                            type="button"
-                            className="order-primary-title-button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openItemImagePreview(order, item);
-                            }}
-                            title="Открыть изображение изделия"
-                            aria-label="Открыть изображение изделия"
-                          >
-                            <span className="order-primary-title-button-text"><strong>{item.name || '—'}</strong></span>
-                            <span className="order-primary-title-button-badge" aria-hidden="true" />
-                          </button>
-                        ) : (
-                          <strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong>
-                        )}
+                      <div className="manual-stage-cell-padding">
+                        <div className="order-primary-title">
+                          {item.itemId && !isPlaceholder ? (
+                            <button
+                              type="button"
+                              className="order-primary-title-button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openItemImagePreview(order, item);
+                              }}
+                              title="Открыть изображение изделия"
+                              aria-label="Открыть изображение изделия"
+                            >
+                              <span className="order-primary-title-button-text"><strong>{item.name || '—'}</strong></span>
+                              <span className="order-primary-title-button-badge" aria-hidden="true" />
+                            </button>
+                          ) : (
+                            <strong>{item.name || (isPlaceholder ? 'В заказе пока нет изделий' : '—')}</strong>
+                          )}
+                        </div>
                       </div>
                     );
                     const orderCardCellContent = renderAttachmentCellControls({

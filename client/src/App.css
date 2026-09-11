@@ -1448,6 +1448,21 @@ body .order-primary-title-button {
   border-color: rgba(21, 106, 168, 0.16);
 }
 
+body .manual-stage-cell-marked .order-primary-title-button,
+body .manual-stage-cell-marked .merged-order-customer-button {
+  background: transparent;
+}
+
+body .manual-stage-cell-marked .order-primary-title-button-badge {
+  background: transparent;
+}
+
+.manual-stage-cell-padding {
+  padding: 6px 8px;
+  width: 100%;
+  min-height: 32px;
+}
+
 body .order-primary-title-button-badge {
   background: rgba(21, 106, 168, 0.08);
   border-color: rgba(21, 106, 168, 0.22);
