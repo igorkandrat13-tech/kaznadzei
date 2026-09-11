@@ -5,7 +5,7 @@ const OrderStore = require('../stores/orderStore');
 const CustomerStore = require('../stores/customerStore');
 const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
 const CustomerTelegramLogStore = require('../stores/customerTelegramLogStore');
-const { getBotInfo, sendMessage, setChatMenuButton } = require('./telegramService');
+const { getBotInfo, sendMessage, sendPhoto, setChatMenuButton } = require('./telegramService');
 const { addTelegramDiagnosticLog } = require('./telegramDiagnostics');
 
 const CUSTOMER_START_PREFIX = 'customer_';
@@ -523,6 +523,23 @@ function getCustomerOrderCardMessage(access = {}) {
   };
 }
 
+function buildPublicRenderAttachmentUrl(order = {}, item = {}, attachment = {}) {
+  const attachmentId = String(attachment?.attachmentId || '').trim();
+  const orderId = String(order?._id || '').trim();
+  const itemId = String(item?.itemId || '').trim();
+  if (!attachmentId || !orderId || !itemId) return '';
+  const baseUrl = String(SettingsStore.get()?.publicBaseUrl || '').trim();
+  if (!baseUrl) return '';
+  try {
+    const endpointPath = `/api/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/attachments/${encodeURIComponent(attachmentId)}/file`;
+    const url = new URL(endpointPath, baseUrl);
+    url.searchParams.set('scope', 'render');
+    return url.toString();
+  } catch (error) {
+    return '';
+  }
+}
+
 function getCustomerItemCardMessage(access = {}, itemId = '') {
   const { order } = getCustomerAccessContext(access);
   const items = Array.isArray(order?.items) ? order.items : [];
@@ -553,19 +570,32 @@ function getCustomerItemCardMessage(access = {}, itemId = '') {
   const stageLines = getItemTrackedStageProgress(order, item).map((stage) => {
     return `${getStageStatusMarker(stage.status, stage.legendKey)} ${stage.label}`;
   });
+  const itemName = String(item?.name || '').trim() || `Изделие ${itemNumber}`;
+  const firstRenderImage = Array.isArray(item.renderImages) ? item.renderImages[0] : null;
+  const publicRenderImageUrl = firstRenderImage ? buildPublicRenderAttachmentUrl(order, item, firstRenderImage) : '';
+  const shortPhotoCaption = [
+    'Карточка изделия',
+    `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
+    `Изделие № ${itemNumber}`,
+    itemName,
+    `Готовность: ${itemProgress.bar} ${itemProgress.percent}%`,
+  ].filter(Boolean).join('\n');
+  const fullText = [
+    'Карточка изделия',
+    `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
+    `Изделие № ${itemNumber}`,
+    itemName,
+    'Готовность изделия:',
+    `${itemProgress.bar} ${itemProgress.percent}%`,
+    'Стадии:',
+    ...stageLines,
+  ].filter(Boolean).join('\n');
 
   return {
-    text: [
-      'Карточка изделия',
-      `Заказ № ${String(order?.orderNumber || '').trim() || 'не указан'}`,
-      `Изделие № ${itemNumber}`,
-      `${String(item?.name || '').trim() || `Изделие ${itemNumber}`}`,
-      'Готовность изделия:',
-      `${itemProgress.bar} ${itemProgress.percent}%`,
-      'Стадии:',
-      ...stageLines,
-    ].filter(Boolean).join('\n'),
+    text: fullText,
     extra: {
+      photoUrl: publicRenderImageUrl,
+      photoCaption: shortPhotoCaption,
       reply_markup: {
         inline_keyboard: [
           [{
@@ -919,29 +949,57 @@ async function sendCustomerTelegramMessage({
       rememberCustomerChatOrderContext(effectiveChatId, normalizedAccess);
     }
     await setChatMenuButton(token, { chatId: effectiveChatId, type: 'default' }).catch(() => null);
-    addTelegramDiagnosticLog('customer-telegram', 'send.request', {
-      accessId: normalizedAccess._id,
-      orderId: normalizedAccess.orderId,
-      type,
-      chatId: effectiveChatId,
-      telegramUserId: effectiveTelegramUserId,
-      replyMarkupKind: extra?.reply_markup?.force_reply
-        ? 'force_reply'
-        : extra?.reply_markup?.keyboard
-          ? 'keyboard'
-          : extra?.reply_markup?.inline_keyboard
-            ? 'inline_keyboard'
-          : extra?.reply_markup?.remove_keyboard
-            ? 'remove_keyboard'
-            : '',
-    });
-    await sendMessage(token, effectiveChatId, normalizedText, extra);
+    const photoUrl = String(extra?.photoUrl || '').trim();
+    const photoCaption = String(extra?.photoCaption || '').trim() || normalizedText.slice(0, 1023);
+    const cleanedExtra = { ...(extra || {}) };
+    delete cleanedExtra.photoUrl;
+    delete cleanedExtra.photoCaption;
+    let mainSendResult = null;
+    if (photoUrl) {
+      addTelegramDiagnosticLog('customer-telegram', 'send.request-photo', {
+        accessId: normalizedAccess._id,
+        orderId: normalizedAccess.orderId,
+        type,
+        chatId: effectiveChatId,
+        telegramUserId: effectiveTelegramUserId,
+        photoUrlTail: photoUrl.slice(-60),
+      });
+      const photoPayload = {
+        ...cleanedExtra,
+      };
+      if (photoCaption) {
+        photoPayload.caption = photoCaption;
+      }
+      mainSendResult = await sendPhoto(token, effectiveChatId, photoUrl, photoPayload);
+      if (normalizedText && normalizedText.length > 1024) {
+        await sendMessage(token, effectiveChatId, normalizedText, cleanedExtra);
+      }
+    } else {
+      addTelegramDiagnosticLog('customer-telegram', 'send.request', {
+        accessId: normalizedAccess._id,
+        orderId: normalizedAccess.orderId,
+        type,
+        chatId: effectiveChatId,
+        telegramUserId: effectiveTelegramUserId,
+        replyMarkupKind: extra?.reply_markup?.force_reply
+          ? 'force_reply'
+          : extra?.reply_markup?.keyboard
+            ? 'keyboard'
+            : extra?.reply_markup?.inline_keyboard
+              ? 'inline_keyboard'
+              : extra?.reply_markup?.remove_keyboard
+                ? 'remove_keyboard'
+                : '',
+      });
+      mainSendResult = await sendMessage(token, effectiveChatId, normalizedText, cleanedExtra);
+    }
     addTelegramDiagnosticLog('customer-telegram', 'send.success', {
       accessId: normalizedAccess._id,
       orderId: normalizedAccess.orderId,
       type,
       chatId: effectiveChatId,
       telegramUserId: effectiveTelegramUserId,
+      withPhoto: Boolean(photoUrl),
     });
     const logEntry = CustomerTelegramLogStore.add({
       customerId: normalizedAccess.customerId,

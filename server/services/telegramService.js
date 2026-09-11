@@ -60,6 +60,14 @@ async function sendMessage(token, chatId, text, extra = {}) {
   });
 }
 
+async function sendPhoto(token, chatId, photoUrlOrFileId, extra = {}) {
+  return telegramRequest(token, 'sendPhoto', {
+    chat_id: chatId,
+    photo: photoUrlOrFileId,
+    ...extra,
+  });
+}
+
 async function createForumTopic(token, chatId, name) {
   return telegramRequest(token, 'createForumTopic', {
     chat_id: chatId,
@@ -156,6 +164,7 @@ module.exports = {
   setChatMenuButton,
   getChatMenuButton,
   sendMessage,
+  sendPhoto,
   deleteMessage,
   createForumTopic,
   answerCallbackQuery,

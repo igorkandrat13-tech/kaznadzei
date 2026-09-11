@@ -2152,6 +2152,7 @@ function OrdersWorkspace() {
       orderNumber: order.orderNumber || '',
       itemNumber: item.itemNumber || '',
       itemName: item.name || '',
+      rowKey: `${order._id}:${item.itemId || '__empty__'}`,
       order,
       item,
     });
@@ -5370,11 +5371,20 @@ function OrdersWorkspace() {
       ) : null}
 
       {itemImagePreview ? (() => {
-        const previewOrder = itemImagePreview.order;
-        const previewItem = itemImagePreview.item;
+        const previewOrderId = String(itemImagePreview.orderId || '').trim();
+        const previewItemId = String(itemImagePreview.itemId || '').trim();
+        let liveRow = null;
+        if (previewOrderId && previewItemId && rows && rows.length) {
+          liveRow = rows.find((r) => String(r?.orderId || '').trim() === previewOrderId && String(r?.item?.itemId || '').trim() === previewItemId) || null;
+        }
+        if (!liveRow && itemImagePreview.rowKey && rowsByKey && rowsByKey[itemImagePreview.rowKey]) {
+          liveRow = rowsByKey[itemImagePreview.rowKey] || null;
+        }
+        const previewOrder = liveRow?.order || itemImagePreview.order || null;
+        const previewItem = liveRow?.item || itemImagePreview.item || null;
         const renderAttachments = getItemAttachments(previewItem, 'render');
         const firstImage = Array.isArray(renderAttachments) ? renderAttachments[0] : null;
-        const imageUploadingKey = getAttachmentTargetKey(itemImagePreview.orderId, itemImagePreview.itemId, 'render');
+        const imageUploadingKey = getAttachmentTargetKey(previewOrderId, previewItemId, 'render');
         const isUploading = attachmentUploadingTargetKey === imageUploadingKey;
         return (
           <Modal open={Boolean(itemImagePreview)} onClose={() => setItemImagePreview(null)} closeDisabled={isUploading} size="md">

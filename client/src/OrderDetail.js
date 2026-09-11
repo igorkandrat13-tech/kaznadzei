@@ -1620,12 +1620,12 @@ function OrderDetail() {
 
   return (
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
-      {firstRenderImage ? (
-        <div className={telegramMode ? 'item-render-image-wrapper item-render-image-wrapper-telegram' : 'item-render-image-wrapper'} style={{ marginBottom: 16 }}>
+      {!telegramMode && firstRenderImage ? (
+        <div className="item-render-image-wrapper" style={{ marginBottom: 16 }}>
           <img
-            src={`/api/orders/${orderId}/items/${renderItem.itemId}/attachments/${firstRenderImage.attachmentId}/file?scope=render`}
+            src={`/api/orders/${id}/items/${renderItem.itemId}/attachments/${firstRenderImage.attachmentId}/file?scope=render`}
             alt={firstRenderImage.name || renderItem?.name || 'Изображение изделия'}
-            className={telegramMode ? 'item-render-image item-render-image-telegram' : 'item-render-image'}
+            className="item-render-image"
             loading="lazy"
           />
           {firstRenderImage.name ? (
@@ -1645,6 +1645,24 @@ function OrderDetail() {
 
       {telegramMode ? (
         <>
+          {firstRenderImage ? (
+            <div className="item-render-image-wrapper item-render-image-wrapper-telegram" style={{ margin: '0 auto 20px' }}>
+              <div className="render-image-label muted-text small-text" style={{ marginBottom: 6, textAlign: 'center' }}>
+                Визуализация изделия
+              </div>
+              <img
+                src={`/api/orders/${id}/items/${renderItem.itemId}/attachments/${firstRenderImage.attachmentId}/file?scope=render`}
+                alt={firstRenderImage.name || renderItem?.name || 'Изображение изделия'}
+                className="item-render-image item-render-image-telegram"
+                loading="lazy"
+              />
+              {firstRenderImage.name ? (
+                <div className="render-image-caption muted-text small-text mt-8" style={{ textAlign: 'center' }}>
+                  {firstRenderImage.name}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="telegram-order-summary">
             <div className="telegram-order-summary-actions">
               <button
@@ -1677,6 +1695,25 @@ function OrderDetail() {
 
               {telegramReadOnlySection.text ? (
                 <div className="telegram-readonly-text">{telegramReadOnlySection.text}</div>
+              ) : null}
+
+              {telegramReadOnlySection.key === 'orderCard' && firstRenderImage ? (
+                <div className="item-render-image-wrapper item-render-image-wrapper-telegram" style={{ margin: '8px auto 20px' }}>
+                  <div className="render-image-label muted-text small-text" style={{ marginBottom: 6, textAlign: 'center' }}>
+                    Визуализация изделия
+                  </div>
+                  <img
+                    src={`/api/orders/${id}/items/${renderItem.itemId}/attachments/${firstRenderImage.attachmentId}/file?scope=render`}
+                    alt={firstRenderImage.name || renderItem?.name || 'Изображение изделия'}
+                    className="item-render-image item-render-image-telegram"
+                    loading="lazy"
+                  />
+                  {firstRenderImage.name ? (
+                    <div className="render-image-caption muted-text small-text mt-8" style={{ textAlign: 'center' }}>
+                      {firstRenderImage.name}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               {telegramReadOnlySection.attachments.length > 0 ? (
