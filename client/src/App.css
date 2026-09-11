@@ -1463,6 +1463,12 @@ body .manual-stage-cell-marked .order-primary-title-button-badge {
   min-height: 32px;
 }
 
+.manual-stage-cell-padding > .order-primary-title > .order-primary-title-button {
+  width: auto;
+  max-width: 100%;
+  display: inline-flex;
+}
+
 body .order-primary-title-button-badge {
   background: rgba(21, 106, 168, 0.08);
   border-color: rgba(21, 106, 168, 0.22);

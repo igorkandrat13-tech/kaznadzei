@@ -2009,16 +2009,34 @@ function OrdersWorkspace() {
       canSelectCell ? 'manual-stage-cell-selectable' : '',
       isSelected ? 'manual-stage-cell-selected' : '',
     );
+    const resolveManualMarkColors = () => {
+      if (!visualManualMark?.legendKey) return null;
+      const legendKey = String(visualManualMark.legendKey || '').trim();
+      const stage = legendKey ? stageLegend.find((s) => String(s?.key || '').trim() === legendKey) : null;
+      if (stage) {
+        const hex = String(stage?.hex || stage?.defaultHex || '').trim();
+        if (hex) {
+          return {
+            background: hex,
+            color: String(columnHeader?.textHex || stage?.textHex || stage?.textColor || '#000000').trim() || '#000000',
+          };
+        }
+      }
+      return {
+        background: getSecondaryHeaderBackground(columnHeader),
+        color: getSecondaryHeaderTextColor(columnHeader),
+      };
+    };
     const style = manualClear
       ? baseStyle
       : manualMark
       ? {
           ...(baseStyle || {}),
           ...(visualManualMark?.legendKey
-            ? {
+            ? (resolveManualMarkColors() || {
                 background: getSecondaryHeaderBackground(columnHeader),
                 color: getSecondaryHeaderTextColor(columnHeader),
-              }
+              })
             : {}),
         }
       : baseStyle;
@@ -2037,7 +2055,7 @@ function OrdersWorkspace() {
       'data-manual-stage-cell-key': buildManualStageCellKey(rowKey, columnKey),
       title,
     };
-  }, [canEditManualColumn, handleManualStageCellClick, secondaryHeaderSchema, selectedStageCellKeys]);
+  }, [canEditManualColumn, handleManualStageCellClick, secondaryHeaderSchema, selectedStageCellKeys, stageLegend]);
 
   const bindManualDateInputProps = useCallback((valueSetter) => ({
     onFocus: () => {

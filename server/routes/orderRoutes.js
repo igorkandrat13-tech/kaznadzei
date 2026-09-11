@@ -91,6 +91,7 @@ const ORDER_PRIMARY_HEADERS = [
   'Карточка заказа',
   'Комплектация заказа',
   'Примечания',
+  '',
   'Отгрузка до',
   'СТОЛЯР',
   'Заявки на расходники',
@@ -111,6 +112,16 @@ const ORDER_COLUMN_KEY_TO_PRIMARY_INDEX = {
   orderCard: ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа'),
   packageName: ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа'),
   notes: ORDER_PRIMARY_HEADERS.indexOf('Примечания'),
+  preAssembly: (() => {
+    const notes = ORDER_PRIMARY_HEADERS.indexOf('Примечания');
+    const delivery = ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до');
+    if (notes >= 0 && delivery >= 0 && delivery - notes > 1) {
+      for (let i = notes + 1; i < delivery; i += 1) {
+        if (String(ORDER_PRIMARY_HEADERS[i] ?? '').trim() === '') return i;
+      }
+    }
+    return -1;
+  })(),
   deliveryDate: ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до'),
   carpenter: ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР'),
   materialRequests: ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники'),
