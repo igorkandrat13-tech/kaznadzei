@@ -1614,8 +1614,27 @@ function OrderDetail() {
     );
   }
 
+  const renderItem = selectedItem || primaryItem;
+  const renderItemImages = Array.isArray(renderItem?.renderImages) ? renderItem.renderImages : [];
+  const firstRenderImage = renderItemImages[0] || null;
+
   return (
     <div className={`card order-detail-card${telegramMode ? ' telegram-order-card' : ''}`}>
+      {firstRenderImage ? (
+        <div className={telegramMode ? 'item-render-image-wrapper item-render-image-wrapper-telegram' : 'item-render-image-wrapper'} style={{ marginBottom: 16 }}>
+          <img
+            src={`/api/orders/${orderId}/items/${renderItem.itemId}/attachments/${firstRenderImage.attachmentId}/file?scope=render`}
+            alt={firstRenderImage.name || renderItem?.name || 'Изображение изделия'}
+            className={telegramMode ? 'item-render-image item-render-image-telegram' : 'item-render-image'}
+            loading="lazy"
+          />
+          {firstRenderImage.name ? (
+            <div className="render-image-caption muted-text small-text mt-8" style={{ textAlign: 'center' }}>
+              {firstRenderImage.name}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <h2>{telegramMode ? `Изделие: ${selectedItem?.name || primaryItem?.name || '—'}` : `📋 Изделие: ${selectedItem?.name || primaryItem?.name || '—'}`}</h2>
 
       {telegramActionError && (

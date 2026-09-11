@@ -3000,7 +3000,7 @@ function OrdersWorkspace() {
       formData.append('file', file);
       const query = new URLSearchParams();
       if (overwrite) query.set('overwrite', '1');
-      if (attachmentScope === 'paint') query.set('scope', 'paint');
+      if (attachmentScope && attachmentScope !== 'order') query.set('scope', attachmentScope);
       const res = await apiFetch(`/api/orders/${order._id}/items/${item.itemId}/attachments${query.toString() ? `?${query.toString()}` : ''}`, {
         method: 'POST',
         body: formData,
@@ -3049,7 +3049,7 @@ function OrdersWorkspace() {
     try {
       const query = new URLSearchParams();
       if (overwrite) query.set('overwrite', '1');
-      if (attachmentScope === 'paint') query.set('scope', 'paint');
+      if (attachmentScope && attachmentScope !== 'order') query.set('scope', attachmentScope);
       const res = await apiFetch(`/api/orders/${orderId}/items/${itemId}/attachments/link${query.toString() ? `?${query.toString()}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
