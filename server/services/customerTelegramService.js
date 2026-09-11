@@ -950,12 +950,17 @@ async function sendCustomerTelegramMessage({
     }
     await setChatMenuButton(token, { chatId: effectiveChatId, type: 'default' }).catch(() => null);
     const photoUrl = String(extra?.photoUrl || '').trim();
-    const photoCaption = String(extra?.photoCaption || '').trim() || normalizedText.slice(0, 1023);
+    const photoCaption = String(extra?.photoCaption || '').trim();
     const cleanedExtra = { ...(extra || {}) };
     delete cleanedExtra.photoUrl;
     delete cleanedExtra.photoCaption;
+    const textOnlyExtra = { ...cleanedExtra };
     let mainSendResult = null;
     if (photoUrl) {
+      const photoPayload = {};
+      if (photoCaption) {
+        photoPayload.caption = photoCaption;
+      }
       addTelegramDiagnosticLog('customer-telegram', 'send.request-photo', {
         accessId: normalizedAccess._id,
         orderId: normalizedAccess.orderId,
@@ -963,16 +968,18 @@ async function sendCustomerTelegramMessage({
         chatId: effectiveChatId,
         telegramUserId: effectiveTelegramUserId,
         photoUrlTail: photoUrl.slice(-60),
+        captionLength: photoCaption.length,
       });
-      const photoPayload = {
-        ...cleanedExtra,
-      };
-      if (photoCaption) {
-        photoPayload.caption = photoCaption;
-      }
       mainSendResult = await sendPhoto(token, effectiveChatId, photoUrl, photoPayload);
-      if (normalizedText && normalizedText.length > 1024) {
-        await sendMessage(token, effectiveChatId, normalizedText, cleanedExtra);
+      if (normalizedText) {
+        addTelegramDiagnosticLog('customer-telegram', 'send.request-text-follow-up', {
+          accessId: normalizedAccess._id,
+          orderId: normalizedAccess.orderId,
+          type,
+          chatId: effectiveChatId,
+          textLength: normalizedText.length,
+        });
+        mainSendResult = await sendMessage(token, effectiveChatId, normalizedText, textOnlyExtra);
       }
     } else {
       addTelegramDiagnosticLog('customer-telegram', 'send.request', {
