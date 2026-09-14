@@ -1880,9 +1880,24 @@ const OrderStore = {
       return { status: 'invalid' };
     }
 
+    const normalizedScope = String(scope || '').trim().toLowerCase();
     const attachmentFieldName = getAttachmentFieldName(scope);
+    const isSingleImageField = normalizedScope === 'render';
     const currentAttachments = normalizeOrderAttachments(item[attachmentFieldName]);
     const duplicateIndex = findAttachmentIndexByName(currentAttachments, normalizedAttachment.name);
+
+    if (isSingleImageField && overwrite) {
+      const existingAttachment = Array.isArray(currentAttachments) && currentAttachments.length ? currentAttachments[0] : null;
+      item[attachmentFieldName] = normalizeOrderAttachments([normalizedAttachment]);
+      item.updatedAt = new Date().toISOString();
+      syncOrderStatus(order);
+      save();
+      return {
+        status: existingAttachment ? 'overwritten' : 'created',
+        attachment: normalizedAttachment,
+        replacedAttachment: existingAttachment,
+      };
+    }
 
     if (duplicateIndex !== -1) {
       const existingAttachment = currentAttachments[duplicateIndex];
