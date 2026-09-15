@@ -188,9 +188,8 @@ function normalizeManualStageMarks(source = {}) {
     const normalizedColumnKey = normalizeOrderColumnKey(columnKey);
     if (!normalizedColumnKey || !mark || typeof mark !== 'object') return acc;
 
-    const allowsEmptyLegendKey = normalizedColumnKey === 'itemStartDate' || normalizedColumnKey === 'itemEndDate';
-    const legendKey = allowsEmptyLegendKey ? '' : String(mark.legendKey || '').trim();
-    if ((!legendKey || !MANUAL_STAGE_ORDER.includes(legendKey)) && !allowsEmptyLegendKey) return acc;
+    const legendKey = String(mark.legendKey || '').trim();
+    if (!legendKey || !MANUAL_STAGE_ORDER.includes(legendKey)) return acc;
 
     acc[normalizedColumnKey] = {
       legendKey,
@@ -1648,12 +1647,7 @@ const OrderStore = {
       item.manualStageClears = { ...currentClears };
       const currentMark = item.manualStageMarks[columnKey];
       const currentClear = item.manualStageClears[columnKey];
-      const isManualDateColumn = displayColumnKey === 'itemStartDate' || displayColumnKey === 'itemEndDate';
       let itemChanged = false;
-
-      if (isManualDateColumn && columnKey === displayColumnKey) {
-        continue;
-      }
 
       if (shouldClear) {
         if (currentMark) {
