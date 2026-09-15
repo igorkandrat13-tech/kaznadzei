@@ -497,14 +497,11 @@ function getItemAssignedStage(item) {
 
 function getItemManualStageMark(item, columnKey) {
   if (!item?.manualStageMarks || typeof item.manualStageMarks !== 'object') return null;
-  const mark = item.manualStageMarks[columnKey] || null;
+  const normalizedColumnKey = normalizeOrderColumnKey(columnKey);
+  const mark = normalizedColumnKey
+    ? (item.manualStageMarks[normalizedColumnKey] || item.manualStageMarks[columnKey] || null)
+    : (item.manualStageMarks[columnKey] || null);
   if (!mark) return null;
-  if (columnKey === 'itemStartDate' || columnKey === 'itemEndDate') {
-    return {
-      ...mark,
-      legendKey: '',
-    };
-  }
   return mark;
 }
 
@@ -512,13 +509,8 @@ function isManualDateColumn(columnKey) {
   return columnKey === 'itemStartDate' || columnKey === 'itemEndDate';
 }
 
-function getManualStageVisualColumnKey(columnKey, legendKey = '') {
-  if (!isManualDateColumn(columnKey) || !String(legendKey || '').trim()) {
-    return columnKey;
-  }
-  if (columnKey === 'itemStartDate') return ITEM_START_DATE_STAGE_MARK_COLUMN_KEY;
-  if (columnKey === 'itemEndDate') return ITEM_END_DATE_STAGE_MARK_COLUMN_KEY;
-  return columnKey;
+function getManualStageVisualColumnKey(columnKey, _legendKey = '') {
+  return normalizeOrderColumnKey(columnKey) || columnKey;
 }
 
 function getItemManualStageClear(item, columnKey) {
