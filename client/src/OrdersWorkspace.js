@@ -2002,21 +2002,11 @@ function OrdersWorkspace() {
       isSelected ? 'manual-stage-cell-selected' : '',
     );
     const resolveManualMarkColors = () => {
-      if (!visualManualMark?.legendKey) return null;
-      const legendKey = String(visualManualMark.legendKey || '').trim();
-      const stage = legendKey ? stageLegend.find((s) => String(s?.key || '').trim() === legendKey) : null;
-      if (stage) {
-        const hex = String(stage?.hex || stage?.defaultHex || '').trim();
-        if (hex) {
-          return {
-            background: hex,
-            color: String(columnHeader?.textHex || stage?.textHex || stage?.textColor || '#000000').trim() || '#000000',
-          };
-        }
-      }
+      const columnBackground = getSecondaryHeaderBackground(columnHeader);
+      const columnTextColor = getSecondaryHeaderTextColor(columnHeader);
       return {
-        background: getSecondaryHeaderBackground(columnHeader),
-        color: getSecondaryHeaderTextColor(columnHeader),
+        background: columnBackground || '#FFFFFF',
+        color: columnTextColor || '#000000',
       };
     };
     const style = manualClear
@@ -3892,7 +3882,7 @@ function OrdersWorkspace() {
                     const workerCellTitle = workerStageForText?.stepName || activeStage?.stepName || '';
                     const carpenterCellStyle = hasCarpenterAutoHighlight
                       ? {
-                          background: columnStageMeta.carpenter.hex || '#C37C8E',
+                          background: columnStageMeta.carpenter.hex || getSecondaryHeaderBackground(columnStageMeta.carpenter.header),
                           color: columnStageMeta.carpenter.textHex,
                         }
                       : undefined;
@@ -3921,7 +3911,7 @@ function OrdersWorkspace() {
                     const hasItemStartStageMark = Boolean(itemStartDateManualMark?.legendKey && !itemStartDateManualClear);
                     const itemStartDateCellStyle = hasItemStartStageMark
                       ? {
-                          background: columnStageMeta.itemStart.hex || '#C37C8E',
+                          background: columnStageMeta.itemStart.hex || getSecondaryHeaderBackground(columnStageMeta.itemStart.header),
                           color: columnStageMeta.itemStart.textHex,
                         }
                       : undefined;
@@ -3939,7 +3929,7 @@ function OrdersWorkspace() {
                     const hasItemEndStageMark = Boolean(itemEndDateManualMark?.legendKey && !itemEndDateManualClear);
                     const itemEndDateCellStyle = hasItemEndStageMark
                       ? {
-                          background: columnStageMeta.itemEnd.hex || '#C37C8E',
+                          background: columnStageMeta.itemEnd.hex || getSecondaryHeaderBackground(columnStageMeta.itemEnd.header),
                           color: columnStageMeta.itemEnd.textHex,
                         }
                       : undefined;
@@ -3956,11 +3946,11 @@ function OrdersWorkspace() {
                       className: cn(itemEndDateCellPropsBase.className, 'item-end-date-cell'),
                     };
                     const orderCardActionStyle = {
-                      background: columnStageMeta.card.hex || '#A8D7B6',
+                      background: columnStageMeta.card.hex || getSecondaryHeaderBackground(columnStageMeta.card.header),
                       color: columnStageMeta.card.textHex,
                     };
                     const paintActionStyle = {
-                      background: columnStageMeta.paint.hex || '#BDA6D5',
+                      background: columnStageMeta.paint.hex || getSecondaryHeaderBackground(columnStageMeta.paint.header),
                       color: columnStageMeta.paint.textHex,
                     };
                     const packageCellStyle = undefined;
@@ -3970,7 +3960,7 @@ function OrdersWorkspace() {
                           color: getSecondaryHeaderTextColor(packageStageHeader),
                         }
                       : {
-                          background: columnStageMeta.package.hex || '#99E5FF',
+                          background: columnStageMeta.package.hex || getSecondaryHeaderBackground(columnStageMeta.package.header),
                           color: columnStageMeta.package.textHex,
                         };
                     const packageCellPropsBase = getManualStageCellProps(key, item, 'packageName', regularOrderClass, packageCellStyle, { disabled: isInlineEditing });
@@ -3980,7 +3970,7 @@ function OrdersWorkspace() {
                     };
                     const materialRequestCellStyle = undefined;
                     const materialRequestSummaryBadgeStyle = {
-                      background: columnStageMeta.materialRequests.hex || '#F4C2A4',
+                      background: columnStageMeta.materialRequests.hex || getSecondaryHeaderBackground(columnStageMeta.materialRequests.header),
                       color: columnStageMeta.materialRequests.textHex,
                     };
                     const paintCellProps = getManualStageCellProps(key, item, 'paint', `order-card-cell ${regularOrderClass}`, undefined, { disabled: isInlineEditing });
@@ -4039,7 +4029,7 @@ function OrdersWorkspace() {
                     const hasManufacturingDuration = Boolean(orderManufacturingMeta.isCompleted);
                     const durationMetaCellStyle = hasManufacturingDuration
                       ? {
-                          background: columnStageMeta.duration.hex || '#F4C2A4',
+                          background: columnStageMeta.duration.hex || getSecondaryHeaderBackground(columnStageMeta.duration.header),
                           color: columnStageMeta.duration.textHex,
                         }
                       : undefined;

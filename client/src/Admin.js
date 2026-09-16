@@ -1560,14 +1560,29 @@ function Admin() {
       if (!legendEditForm.useTableBackground && !HEX_COLOR_PATTERN.test(normalizedHex)) {
         throw new Error(`Цвет ячейки "${legendEditForm.label || 'Без названия'}" должен быть в формате #RRGGBB.`);
       }
+      const targetLegendKey = String(
+        orderStageLegendConfig.secondaryHeaders?.[legendEditForm.headerIndex]?.legendKey
+        || legendEditForm.legendKey
+        || ''
+      ).trim();
 
-      const normalizedStages = (orderStageLegendConfig.stages || []).map((stage) => ({
-        key: stage.key,
-        label: String(stage.label || '').trim(),
-        description: String(stage.description || '').trim(),
-        storeName: stage.storeName,
-        defaultHex: String(stage.defaultHex || '').trim().toUpperCase() || '#000000',
-      }));
+      const normalizedStages = (orderStageLegendConfig.stages || []).map((stage) => {
+        const baseHex = String(stage.hex || stage.defaultHex || '').trim().toUpperCase() || '#FFFFFF';
+        const syncedHex = targetLegendKey && targetLegendKey === String(stage.key || '').trim() && !legendEditForm.useTableBackground
+          ? normalizedHex
+          : baseHex;
+        const defaultHexOut = targetLegendKey && targetLegendKey === String(stage.key || '').trim() && !legendEditForm.useTableBackground
+          ? normalizedHex
+          : String(stage.defaultHex || baseHex || '').trim().toUpperCase() || '#FFFFFF';
+        return {
+          key: stage.key,
+          label: String(stage.label || '').trim(),
+          description: String(stage.description || '').trim(),
+          storeName: stage.storeName,
+          defaultHex: defaultHexOut,
+          hex: syncedHex || defaultHexOut,
+        };
+      });
 
       const configPayload = {
         primaryHeaders: (orderStageLegendConfig.primaryHeaders || []).map((label) => String(label ?? '')),
@@ -2327,7 +2342,39 @@ function Admin() {
                       <input
                         type="checkbox"
                         checked={Boolean(appSettings.strictStageOwnershipEnabled)}
-                        onChange={(e) => setAppSettings({ ...appSettings, strictStageOwnershipEnabled: e.target.checked })}
+                        onChange={async (e) => {
+                          const nextValue = e.target.checked;
+                          if (savingStageOwnership) return;
+                          setAppSettings({ ...appSettings, strictStageOwnershipEnabled: nextValue });
+                          setSavingStageOwnership(true);
+                          setSettingsError('');
+                          setSettingsSuccess('');
+                          try {
+                            const nextSettings = { ...appSettings, strictStageOwnershipEnabled: nextValue };
+                            const res = await apiFetch('/api/settings', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(nextSettings),
+                            });
+                            if (!res.ok) {
+                              setAppSettings({ ...appSettings });
+                              const body = await parseJsonSafely(res);
+                              throw new Error(getErrorMessage(body) || 'Не удалось сохранить настройки');
+                            }
+                            const payload = await parseJsonSafely(res);
+                            const persisted = payload?.data?.settings || payload?.settings || payload || {};
+                            setAppSettings({
+                              ...appSettings,
+                              strictStageOwnershipEnabled: Boolean(persisted.strictStageOwnershipEnabled ?? nextValue),
+                            });
+                            setSettingsSuccess('Настройки сохранены');
+                          } catch (err) {
+                            setSettingsError(toUserErrorMessage(err));
+                          } finally {
+                            setSavingStageOwnership(false);
+                          }
+                        }}
+                        disabled={savingStageOwnership}
                       />
                       <span className="settings-switch-track" aria-hidden="true">
                         <span className="settings-switch-thumb" />
@@ -2337,41 +2384,11 @@ function Admin() {
                 </div>
 
                 <div className="modal-actions">
+                  <div />
                   <button className="btn" onClick={() => {
                     if (!savingStageOwnership) setShowStageOwnershipModal(false);
                   }} disabled={savingStageOwnership}>
                     Закрыть
-                  </button>
-                  <button
-                    className="btn btn-success"
-                    onClick={async () => {
-                      if (savingStageOwnership) return;
-                      setSavingStageOwnership(true);
-                      setSettingsError('');
-                      setSettingsSuccess('');
-                      try {
-                        const res = await apiFetch('/api/settings', {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(appSettings),
-                        });
-                        if (!res.ok) {
-                          const body = await parseJsonSafely(res);
-                          throw new Error(getErrorMessage(body) || 'Не удалось сохранить настройки');
-                        }
-                        const payload = await parseJsonSafely(res);
-                        const next = payload?.data?.settings || payload?.settings || payload || appSettings;
-                        setAppSettings({ ...appSettings, strictStageOwnershipEnabled: Boolean(next.strictStageOwnershipEnabled) });
-                        setSettingsSuccess('Настройки сохранены');
-                      } catch (err) {
-                        setSettingsError(toUserErrorMessage(err));
-                      } finally {
-                        setSavingStageOwnership(false);
-                      }
-                    }}
-                    disabled={savingStageOwnership}
-                  >
-                    {savingStageOwnership ? 'Сохранение...' : 'Сохранить'}
                   </button>
                 </div>
               </div>
