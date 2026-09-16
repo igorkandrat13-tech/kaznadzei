@@ -497,6 +497,9 @@ function sanitizeSettingsInput(payload, options = {}) {
   if (!partial || payload.selfUpdateEnabled !== undefined) {
     data.selfUpdateEnabled = normalizeBoolean(payload.selfUpdateEnabled, 'selfUpdateEnabled');
   }
+  if (!partial || payload.strictStageOwnershipEnabled !== undefined) {
+    data.strictStageOwnershipEnabled = normalizeBoolean(payload.strictStageOwnershipEnabled, 'strictStageOwnershipEnabled');
+  }
   if (!partial || payload.updateBranch !== undefined) {
     data.updateBranch = normalizeString(payload.updateBranch, 'updateBranch', { required: !partial, maxLength: 80 });
   }

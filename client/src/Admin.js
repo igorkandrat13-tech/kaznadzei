@@ -139,6 +139,8 @@ function Admin() {
   const [employeeSessionMenuButtonCheckLoading, setEmployeeSessionMenuButtonCheckLoading] = useState(false);
   const [employeeSessionLastMenuButtonCheck, setEmployeeSessionLastMenuButtonCheck] = useState(null);
   const backupImportInputRef = useRef(null);
+  const stageOwnershipRequestRef = useRef(0);
+  const stageOwnershipSaveTimerRef = useRef(null);
   const settingsTabs = buildSettingsTabs();
   const settingsTabKeySet = useMemo(() => new Set(settingsTabs.map((tab) => tab.key)), [settingsTabs]);
   const requestedSettingsTab = useMemo(() => {
@@ -486,6 +488,16 @@ function Admin() {
       document.removeEventListener('visibilitychange', handleVisibilityRefresh);
     };
   }, [hasSettingsAccess]);
+
+  useEffect(() => {
+    return () => {
+      stageOwnershipRequestRef.current = 0;
+      if (stageOwnershipSaveTimerRef.current != null) {
+        window.clearTimeout(stageOwnershipSaveTimerRef.current);
+        stageOwnershipSaveTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const fetchEmployeeSessionStatus = useCallback(async (employeeId) => {
     try {
@@ -2347,52 +2359,65 @@ function Admin() {
                       <input
                         type="checkbox"
                         checked={Boolean(appSettings.strictStageOwnershipEnabled)}
-                        onChange={async (e) => {
+                        onChange={(e) => {
                           const nextValue = e.target.checked;
-                          if (savingStageOwnership) return;
+                          let mergedSnapshot;
                           setAppSettings((prev) => {
-                            const merged = { ...prev, strictStageOwnershipEnabled: nextValue };
-                            queueMicrotask(async () => {
-                              setSavingStageOwnership(true);
-                              setSettingsError('');
-                              setSettingsSuccess('');
-                              try {
-                                const res = await apiFetch('/api/settings', {
-                                  method: 'PUT',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify(merged),
-                                });
-                                if (!res.ok) {
-                                  const body = await parseJsonSafely(res);
-                                  setAppSettings((prevRollback) => ({ ...prevRollback, strictStageOwnershipEnabled: !nextValue }));
-                                  throw new Error(getErrorMessage(body) || 'Не удалось сохранить настройки');
-                                }
-                                const payload = await parseJsonSafely(res);
-                                const persisted = payload?.data?.settings || payload?.settings || payload || {};
-                                setAppSettings((prevPersist) => ({
-                                  ...prevPersist,
-                                  strictStageOwnershipEnabled: Boolean(persisted.strictStageOwnershipEnabled ?? nextValue),
-                                  publicBaseUrl: typeof persisted.publicBaseUrl === 'string' ? persisted.publicBaseUrl : prevPersist.publicBaseUrl,
-                                  telegramBotToken: typeof persisted.telegramBotToken === 'string' ? persisted.telegramBotToken : prevPersist.telegramBotToken,
-                                  telegramSupergroupChatId: typeof persisted.telegramSupergroupChatId === 'string' ? persisted.telegramSupergroupChatId : prevPersist.telegramSupergroupChatId,
-                                  telegramSupergroupEnabled: typeof persisted.telegramSupergroupEnabled === 'boolean' ? persisted.telegramSupergroupEnabled : prevPersist.telegramSupergroupEnabled,
-                                  telegramRequestNotificationEmployeeIds: Array.isArray(persisted.telegramRequestNotificationEmployeeIds) ? persisted.telegramRequestNotificationEmployeeIds : prevPersist.telegramRequestNotificationEmployeeIds,
-                                  selfUpdateEnabled: typeof persisted.selfUpdateEnabled === 'boolean' ? persisted.selfUpdateEnabled : prevPersist.selfUpdateEnabled,
-                                  updateBranch: typeof persisted.updateBranch === 'string' ? persisted.updateBranch : prevPersist.updateBranch,
-                                  updateRepositoryUrl: typeof persisted.updateRepositoryUrl === 'string' ? persisted.updateRepositoryUrl : prevPersist.updateRepositoryUrl,
-                                  roleLabels: persisted.roleLabels && typeof persisted.roleLabels === 'object' ? persisted.roleLabels : prevPersist.roleLabels,
+                            mergedSnapshot = { ...prev, strictStageOwnershipEnabled: nextValue };
+                            return mergedSnapshot;
+                          });
+                          setSettingsError('');
+                          setSettingsSuccess('');
+                          if (stageOwnershipSaveTimerRef.current != null) {
+                            window.clearTimeout(stageOwnershipSaveTimerRef.current);
+                            stageOwnershipSaveTimerRef.current = null;
+                          }
+                          const requestId = ++stageOwnershipRequestRef.current;
+                          stageOwnershipSaveTimerRef.current = window.setTimeout(async () => {
+                            setSavingStageOwnership(true);
+                            try {
+                              const res = await apiFetch('/api/settings', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(mergedSnapshot),
+                              });
+                              if (requestId !== stageOwnershipRequestRef.current) {
+                                return;
+                              }
+                              if (!res.ok) {
+                                const body = await parseJsonSafely(res);
+                                setAppSettings((prevRollback) => ({
+                                  ...prevRollback,
+                                  strictStageOwnershipEnabled: Boolean(prevRollback.strictStageOwnershipEnabled ?? !nextValue),
                                 }));
-                                setSettingsSuccess('Настройки сохранены');
-                              } catch (err) {
+                                throw new Error(await getErrorMessage(res, 'Не удалось сохранить настройки'));
+                              }
+                              const payload = await parseJsonSafely(res);
+                              const persisted = payload?.data?.settings || payload?.settings || payload || {};
+                              setAppSettings((prevPersist) => ({
+                                publicBaseUrl: typeof persisted.publicBaseUrl === 'string' ? persisted.publicBaseUrl : prevPersist.publicBaseUrl,
+                                telegramBotToken: typeof persisted.telegramBotToken === 'string' ? persisted.telegramBotToken : prevPersist.telegramBotToken,
+                                telegramSupergroupChatId: typeof persisted.telegramSupergroupChatId === 'string' ? persisted.telegramSupergroupChatId : prevPersist.telegramSupergroupChatId,
+                                telegramSupergroupEnabled: typeof persisted.telegramSupergroupEnabled === 'boolean' ? persisted.telegramSupergroupEnabled : prevPersist.telegramSupergroupEnabled,
+                                telegramRequestNotificationEmployeeIds: Array.isArray(persisted.telegramRequestNotificationEmployeeIds) ? persisted.telegramRequestNotificationEmployeeIds : prevPersist.telegramRequestNotificationEmployeeIds,
+                                selfUpdateEnabled: typeof persisted.selfUpdateEnabled === 'boolean' ? persisted.selfUpdateEnabled : prevPersist.selfUpdateEnabled,
+                                strictStageOwnershipEnabled: typeof persisted.strictStageOwnershipEnabled === 'boolean' ? persisted.strictStageOwnershipEnabled : prevPersist.strictStageOwnershipEnabled,
+                                updateBranch: typeof persisted.updateBranch === 'string' ? persisted.updateBranch : prevPersist.updateBranch,
+                                updateRepositoryUrl: typeof persisted.updateRepositoryUrl === 'string' ? persisted.updateRepositoryUrl : prevPersist.updateRepositoryUrl,
+                                roleLabels: persisted.roleLabels && typeof persisted.roleLabels === 'object' ? persisted.roleLabels : prevPersist.roleLabels,
+                              }));
+                              setSettingsSuccess('Настройки сохранены');
+                            } catch (err) {
+                              if (requestId === stageOwnershipRequestRef.current) {
                                 setSettingsError(toUserErrorMessage(err));
-                              } finally {
+                              }
+                            } finally {
+                              if (requestId === stageOwnershipRequestRef.current) {
                                 setSavingStageOwnership(false);
                               }
-                            });
-                            return merged;
-                          });
+                            }
+                          }, 220);
                         }}
-                        disabled={savingStageOwnership}
                       />
                       <span className="settings-switch-track" aria-hidden="true">
                         <span className="settings-switch-thumb" />

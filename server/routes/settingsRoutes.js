@@ -12,7 +12,7 @@ router.get('/settings', requireAdminAccess(), (req, res) => {
 
 router.put('/settings', requireAdminAccess(), (req, res) => {
   try {
-    const updates = sanitizeSettingsInput(req.body || {});
+    const updates = sanitizeSettingsInput(req.body || {}, { partial: true });
     const settings = SettingsStore.update(updates);
     addActivityLog({
       action: 'settings.update',
