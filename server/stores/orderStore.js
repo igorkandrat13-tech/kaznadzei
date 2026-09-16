@@ -1,4 +1,5 @@
 const { load, save, id } = require('./store');
+const SettingsStore = require('./settingsStore');
 const ProcessStepStore = require('./processStepStore');
 const RoleStore = require('./roleStore');
 const EmployeeStore = require('./employeeStore');
@@ -1651,6 +1652,30 @@ const OrderStore = {
 
       if (shouldClear) {
         if (currentMark) {
+          const settings = SettingsStore.get();
+          if (Boolean(settings?.strictStageOwnershipEnabled)) {
+            const actorLabel = String(actor || '').trim();
+            const ownerLabel = String(currentMark.updatedBy || '').trim();
+            if (ownerLabel && actorLabel !== ownerLabel) {
+              let ownerDisplayName = ownerLabel;
+              try {
+                const matchedOwner = EmployeeStore.findAll().find((emp) => {
+                  const empName = String(emp?.fullName || '').trim();
+                  const empDisplay = getEmployeeDisplayName(emp) || '';
+                  return empName === ownerLabel || empDisplay === ownerLabel || String(emp?._id || '').trim() === ownerLabel;
+                }) || null;
+                if (matchedOwner) {
+                  ownerDisplayName = getEmployeeDisplayName(matchedOwner) || matchedOwner.fullName || ownerLabel;
+                }
+              } catch (lookupErr) {
+                ownerDisplayName = ownerLabel;
+              }
+              const err = new Error(`Отменить этап может только исполнитель: ${ownerDisplayName}.`);
+              err.status = 403;
+              err.ownershipError = true;
+              throw err;
+            }
+          }
           delete item.manualStageMarks[columnKey];
           itemChanged = true;
         }

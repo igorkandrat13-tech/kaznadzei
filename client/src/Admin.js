@@ -101,6 +101,8 @@ function Admin() {
   const [importingBackup, setImportingBackup] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [showTelegramNotificationModal, setShowTelegramNotificationModal] = useState(false);
+  const [showStageOwnershipModal, setShowStageOwnershipModal] = useState(false);
+  const [savingStageOwnership, setSavingStageOwnership] = useState(false);
   const [telegramNotificationDraftIds, setTelegramNotificationDraftIds] = useState([]);
   const [employeeModalMode, setEmployeeModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
@@ -149,10 +151,37 @@ function Admin() {
     return orderStageLegendConfig.stages.map((item) => {
       return {
         ...item,
-        hex: item.defaultHex,
+        hex: String(item.hex || item.defaultHex || '').trim() || item.defaultHex || '#FFFFFF',
       };
     });
   }, [orderStageLegendConfig]);
+  const generalSubTabKeySet = useMemo(() => new Set(['updates', 'bot', 'access']), []);
+  const [generalSubTab, setGeneralSubTab] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    const sub = String(params.get('sub') || '').trim();
+    const tab = String(params.get('tab') || '').trim();
+    if (tab !== '' && tab !== 'general') return 'updates';
+    return generalSubTabKeySet.has(sub) ? sub : 'updates';
+  });
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = String(params.get('tab') || '').trim();
+    if (tab !== '' && tab !== 'general') {
+      return;
+    }
+    const nextSub = String(params.get('sub') || '').trim();
+    const normalizedSub = generalSubTabKeySet.has(nextSub) ? nextSub : 'updates';
+    setGeneralSubTab(current => current === normalizedSub ? current : normalizedSub);
+  }, [location.search, generalSubTabKeySet]);
+  const handleGeneralSubTabChange = useCallback((nextSub) => {
+    const normalizedSub = generalSubTabKeySet.has(nextSub) ? nextSub : 'updates';
+    setGeneralSubTab(normalizedSub);
+    const params = new URLSearchParams(location.search);
+    params.set('tab', 'general');
+    params.set('sub', normalizedSub);
+    const search = params.toString();
+    navigate(`/settings?${search}`, { replace: true });
+  }, [navigate, location.search, generalSubTabKeySet]);
   const stageLegendMap = useMemo(() => {
     return legendItems.reduce((acc, item) => {
       acc[item.key] = item;
@@ -180,6 +209,7 @@ function Admin() {
     || showTelegramLogs
     || showActivityLogs
     || showTelegramNotificationModal
+    || showStageOwnershipModal
     || confirmAction,
   );
   const hasSettingsAccess = !settingsPinStatus.loading && (!settingsPinStatus.configured || settingsPinStatus.accessGranted);
@@ -1900,6 +1930,29 @@ function Admin() {
       <div>
         <SettingsHeader title="⚙️ Настройки — Общие параметры" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />
 
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="tabs">
+            <button className={`tab ${generalSubTab === 'updates' ? 'tab-active' : ''}`} onClick={() => handleGeneralSubTabChange('updates')} type="button">
+              🔄 Обновления
+            </button>
+            <button className={`tab ${generalSubTab === 'bot' ? 'tab-active' : ''}`} onClick={() => handleGeneralSubTabChange('bot')} type="button">
+              🤖 Телеграм бот
+            </button>
+            <button className={`tab ${generalSubTab === 'access' ? 'tab-active' : ''}`} onClick={() => handleGeneralSubTabChange('access')} type="button">
+              🔑 Доступ
+            </button>
+          </div>
+        </div>
+
+        <input
+          ref={backupImportInputRef}
+          type="file"
+          accept="application/json,.json"
+          onChange={handleBackupImport}
+          style={{ display: 'none' }}
+        />
+
+        {generalSubTab === 'updates' && (
           <UpdatesOverview
             updateStatus={updateStatus}
             installJob={installJob}
@@ -1914,17 +1967,12 @@ function Admin() {
             onSaveUpdateSettings={saveUpdateSettings}
             savingUpdateSettings={savingUpdateSettings}
           />
+        )}
 
+        {generalSubTab === 'bot' && (
           <div className="card">
             <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
-            <input
-              ref={backupImportInputRef}
-              type="file"
-              accept="application/json,.json"
-              onChange={handleBackupImport}
-              style={{ display: 'none' }}
-            />
 
             <div className="form-group">
               <label className="helper-label">
@@ -2004,15 +2052,6 @@ function Admin() {
               <button className="btn btn-secondary" onClick={() => fetchTelegramLogs({ openModal: true })} disabled={telegramLogsLoading}>
                 {telegramLogsLoading ? 'Загрузка логов...' : 'Логи ТГ бота'}
               </button>
-              <button className="btn btn-secondary" onClick={() => fetchActivityLogs({ openModal: true })} disabled={activityLogsLoading}>
-                {activityLogsLoading ? 'Загрузка журнала...' : 'Журнал действий'}
-              </button>
-              <button className="btn btn-secondary" onClick={exportBackup} disabled={exportingBackup}>
-                {exportingBackup ? 'Экспорт...' : 'Экспорт данных'}
-              </button>
-              <button className="btn btn-secondary" onClick={openBackupImportPicker} disabled={importingBackup}>
-                {importingBackup ? 'Импорт...' : 'Импорт данных'}
-              </button>
             </SettingsActions>
 
             {telegramCheckResult && (
@@ -2039,100 +2078,128 @@ function Admin() {
             )}
 
           </div>
+        )}
 
-          {showTelegramLogs && (
-            <div className="modal-overlay" onClick={() => setShowTelegramLogs(false)}>
-              <div className="modal-window modal-window-xl" onClick={(event) => event.stopPropagation()}>
-                <div className="modal-header">
-                  <div>
-                    <div className="modal-title">Логи ТГ бота</div>
-                    <div className="modal-subtitle">
-                      Здесь сохраняются диагностические события Telegram Web App и Telegram-заказов.
-                    </div>
-                  </div>
-                  <button className="btn btn-small modal-close-btn" onClick={() => setShowTelegramLogs(false)}>
-                    ✕
-                  </button>
+        {generalSubTab === 'access' && (
+          <div className="card">
+            <p>Управление доступом к настройкам, журнал действий и резервное копирование данных.</p>
+            <SettingsFeedback error={settingsError} success={settingsSuccess} />
+            <div className="form-group">
+              <label className="helper-label">PIN-доступ к настройкам</label>
+              <div className="panel-info" style={{ marginBottom: 0 }}>
+                <div className="panel-info-grid">
+                  <div><strong>Статус:</strong> {settingsPinStatus.configured ? (settingsPinStatus.accessGranted ? 'Настроен, доступ выдан' : 'Настроен, требуется ввод') : 'Не настроен, доступ открыт'}</div>
+                  <div><strong>Загрузка:</strong> {settingsPinStatus.loading ? 'Инициализация...' : 'Готово'}</div>
                 </div>
-
-                <div className="modal-actions modal-actions-between">
-                  <div className="modal-actions-group">
-                    <button className="btn btn-secondary" onClick={() => fetchTelegramLogs()} disabled={telegramLogsLoading}>
-                      {telegramLogsLoading ? 'Обновление...' : 'Обновить'}
-                    </button>
-                    <button className="btn btn-danger" onClick={requestClearTelegramLogs} disabled={clearingTelegramLogs || confirmLoading}>
-                      {clearingTelegramLogs ? 'Очистка...' : 'Очистить лог'}
-                    </button>
-                  </div>
-                  <div className="text-small text-subtle">
-                    Записей: {telegramLogs.length}
-                  </div>
-                </div>
-
-                {telegramLogs.length > 0 ? (
-                  <div className="telegram-log-list">
-                    {telegramLogs.map((entry) => (
-                      <pre key={entry.id || `${entry.createdAt}-${entry.event}`} className="service-details-console service-details-console-status telegram-log-entry">
-                        {formatTelegramLogEntry(entry)}
-                      </pre>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mobile-empty-state">
-                    {telegramLogsLoading ? 'Загружаю логи ТГ бота...' : 'Логи пока пусты.'}
-                  </div>
-                )}
               </div>
             </div>
-          )}
+            <SettingsActions>
+              <button className="btn btn-secondary" onClick={() => fetchActivityLogs({ openModal: true })} disabled={activityLogsLoading}>
+                {activityLogsLoading ? 'Загрузка журнала...' : 'Журнал действий'}
+              </button>
+              <button className="btn btn-secondary" onClick={exportBackup} disabled={exportingBackup}>
+                {exportingBackup ? 'Экспорт...' : 'Экспорт данных'}
+              </button>
+              <button className="btn btn-secondary" onClick={openBackupImportPicker} disabled={importingBackup}>
+                {importingBackup ? 'Импорт...' : 'Импорт данных'}
+              </button>
+            </SettingsActions>
 
-          {showActivityLogs && (
-            <div className="modal-overlay" onClick={() => setShowActivityLogs(false)}>
-              <div className="modal-window modal-window-xl" onClick={(event) => event.stopPropagation()}>
-                <div className="modal-header">
-                  <div>
-                    <div className="modal-title">Журнал действий</div>
-                    <div className="modal-subtitle">
-                      Здесь сохраняются изменения по заказам, сотрудникам, настройкам и справочникам.
-                    </div>
+            <AdminTokenControls />
+          </div>
+        )}
+
+        {showTelegramLogs && (
+          <div className="modal-overlay" onClick={() => setShowTelegramLogs(false)}>
+            <div className="modal-window modal-window-xl" onClick={(event) => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <div className="modal-title">Логи ТГ бота</div>
+                  <div className="modal-subtitle">
+                    Здесь сохраняются диагностические события Telegram Web App и Telegram-заказов.
                   </div>
-                  <button className="btn btn-small modal-close-btn" onClick={() => setShowActivityLogs(false)}>
-                    ✕
+                </div>
+                <button className="btn btn-small modal-close-btn" onClick={() => setShowTelegramLogs(false)}>
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-actions modal-actions-between">
+                <div className="modal-actions-group">
+                  <button className="btn btn-secondary" onClick={() => fetchTelegramLogs()} disabled={telegramLogsLoading}>
+                    {telegramLogsLoading ? 'Обновление...' : 'Обновить'}
+                  </button>
+                  <button className="btn btn-danger" onClick={requestClearTelegramLogs} disabled={clearingTelegramLogs || confirmLoading}>
+                    {clearingTelegramLogs ? 'Очистка...' : 'Очистить лог'}
                   </button>
                 </div>
+                <div className="text-small text-subtle">
+                  Записей: {telegramLogs.length}
+                </div>
+              </div>
 
-                <div className="modal-actions modal-actions-between">
-                  <div className="modal-actions-group">
-                    <button className="btn btn-secondary" onClick={() => fetchActivityLogs()} disabled={activityLogsLoading}>
-                      {activityLogsLoading ? 'Обновление...' : 'Обновить'}
-                    </button>
-                    <button className="btn btn-danger" onClick={requestClearActivityLogs} disabled={clearingActivityLogs || confirmLoading}>
-                      {clearingActivityLogs ? 'Очистка...' : 'Очистить журнал'}
-                    </button>
-                  </div>
-                  <div className="text-small text-subtle">
-                    Записей: {activityLogs.length}
+              {telegramLogs.length > 0 ? (
+                <div className="telegram-log-list">
+                  {telegramLogs.map((entry) => (
+                    <pre key={entry.id || `${entry.createdAt}-${entry.event}`} className="service-details-console service-details-console-status telegram-log-entry">
+                      {formatTelegramLogEntry(entry)}
+                    </pre>
+                  ))}
+                </div>
+              ) : (
+                <div className="mobile-empty-state">
+                  {telegramLogsLoading ? 'Загружаю логи ТГ бота...' : 'Логи пока пусты.'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {showActivityLogs && (
+          <div className="modal-overlay" onClick={() => setShowActivityLogs(false)}>
+            <div className="modal-window modal-window-xl" onClick={(event) => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <div className="modal-title">Журнал действий</div>
+                  <div className="modal-subtitle">
+                    Здесь сохраняются изменения по заказам, сотрудникам, настройкам и справочникам.
                   </div>
                 </div>
-
-                {activityLogs.length > 0 ? (
-                  <div className="telegram-log-list">
-                    {activityLogs.map((entry) => (
-                      <pre key={entry._id || `${entry.createdAt}-${entry.action}`} className="service-details-console service-details-console-status telegram-log-entry">
-                        {formatActivityLogEntry(entry)}
-                      </pre>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mobile-empty-state">
-                    {activityLogsLoading ? 'Загружаю журнал действий...' : 'Журнал действий пока пуст.'}
-                  </div>
-                )}
+                <button className="btn btn-small modal-close-btn" onClick={() => setShowActivityLogs(false)}>
+                  ✕
+                </button>
               </div>
-            </div>
-          )}
 
-          <AdminTokenControls />
+              <div className="modal-actions modal-actions-between">
+                <div className="modal-actions-group">
+                  <button className="btn btn-secondary" onClick={() => fetchActivityLogs()} disabled={activityLogsLoading}>
+                    {activityLogsLoading ? 'Обновление...' : 'Обновить'}
+                  </button>
+                  <button className="btn btn-danger" onClick={requestClearActivityLogs} disabled={clearingActivityLogs || confirmLoading}>
+                    {clearingActivityLogs ? 'Очистка...' : 'Очистить журнал'}
+                  </button>
+                </div>
+                <div className="text-small text-subtle">
+                  Записей: {activityLogs.length}
+                </div>
+              </div>
+
+              {activityLogs.length > 0 ? (
+                <div className="telegram-log-list">
+                  {activityLogs.map((entry) => (
+                    <pre key={entry._id || `${entry.createdAt}-${entry.action}`} className="service-details-console service-details-console-status telegram-log-entry">
+                      {formatActivityLogEntry(entry)}
+                    </pre>
+                  ))}
+                </div>
+              ) : (
+                <div className="mobile-empty-state">
+                  {activityLogsLoading ? 'Загружаю журнал действий...' : 'Журнал действий пока пуст.'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2153,6 +2220,7 @@ function Admin() {
 
             <SettingsActions>
               <button className="btn btn-success" onClick={openCreateEmployeeModal}>Добавить сотрудника</button>
+              <button className="btn" onClick={() => setShowStageOwnershipModal(true)}>⚙️ Управление этапами</button>
               <button className="btn" onClick={openTelegramNotificationModal}>Уведомления в ТГ</button>
             </SettingsActions>
 
@@ -2225,6 +2293,90 @@ function Admin() {
               {employees.length === 0 && <div className="mobile-empty-state">Сотрудники пока не добавлены</div>}
             </div>
           </div>
+
+          {showStageOwnershipModal && (
+            <div className="modal-overlay" onClick={() => {
+              if (!savingStageOwnership) setShowStageOwnershipModal(false);
+            }}>
+              <div className="modal-window" onClick={(event) => event.stopPropagation()} style={{ maxWidth: 520 }}>
+                <div className="modal-header">
+                  <div>
+                    <div className="modal-title">Управление этапами</div>
+                    <div className="modal-subtitle">
+                      Глобальные правила отмены этапов. Зависит от того, кто принял этап.
+                    </div>
+                  </div>
+                  <button className="btn btn-small modal-close-btn" onClick={() => {
+                    if (!savingStageOwnership) setShowStageOwnershipModal(false);
+                  }} disabled={savingStageOwnership}>
+                    ✕
+                  </button>
+                </div>
+
+                <div className="form-group">
+                  <label className="settings-switch">
+                    <div className="settings-switch-copy">
+                      <span className="settings-switch-title">Управление этапами</span>
+                      <span className="settings-switch-subtitle">
+                        {Boolean(appSettings.strictStageOwnershipEnabled)
+                          ? 'Только тот, кто принял этап, может его отменить'
+                          : 'Все сотрудники с доступом к этапу могут его принимать и отменять'}
+                      </span>
+                    </div>
+                    <span className={`settings-switch-control ${Boolean(appSettings.strictStageOwnershipEnabled) ? 'settings-switch-control-on' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(appSettings.strictStageOwnershipEnabled)}
+                        onChange={(e) => setAppSettings({ ...appSettings, strictStageOwnershipEnabled: e.target.checked })}
+                      />
+                      <span className="settings-switch-track" aria-hidden="true">
+                        <span className="settings-switch-thumb" />
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                <div className="modal-actions">
+                  <button className="btn" onClick={() => {
+                    if (!savingStageOwnership) setShowStageOwnershipModal(false);
+                  }} disabled={savingStageOwnership}>
+                    Закрыть
+                  </button>
+                  <button
+                    className="btn btn-success"
+                    onClick={async () => {
+                      if (savingStageOwnership) return;
+                      setSavingStageOwnership(true);
+                      setSettingsError('');
+                      setSettingsSuccess('');
+                      try {
+                        const res = await apiFetch('/api/settings', {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(appSettings),
+                        });
+                        if (!res.ok) {
+                          const body = await parseJsonSafely(res);
+                          throw new Error(getErrorMessage(body) || 'Не удалось сохранить настройки');
+                        }
+                        const payload = await parseJsonSafely(res);
+                        const next = payload?.data?.settings || payload?.settings || payload || appSettings;
+                        setAppSettings({ ...appSettings, strictStageOwnershipEnabled: Boolean(next.strictStageOwnershipEnabled) });
+                        setSettingsSuccess('Настройки сохранены');
+                      } catch (err) {
+                        setSettingsError(toUserErrorMessage(err));
+                      } finally {
+                        setSavingStageOwnership(false);
+                      }
+                    }}
+                    disabled={savingStageOwnership}
+                  >
+                    {savingStageOwnership ? 'Сохранение...' : 'Сохранить'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {settingsCrudModals}
       </div>

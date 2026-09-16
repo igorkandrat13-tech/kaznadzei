@@ -2964,7 +2964,6 @@ body .order-primary-title-button-badge {
 .unified-orders-table .xlsx-header-secondary-cell {
   top: calc(var(--orders-sticky-offset) + var(--orders-header-primary-height));
   z-index: 3;
-  background: linear-gradient(180deg, rgba(235, 241, 247, 0.98), rgba(228, 236, 244, 0.98));
   color: #000000;
   font-size: var(--orders-secondary-header-font-size);
   white-space: normal;
@@ -2976,6 +2975,7 @@ body .order-primary-title-button-badge {
   word-break: break-word;
   border-bottom: 1px solid var(--orders-cell-divider-color);
   text-align: center;
+  background-image: none !important;
 }
 
 .unified-orders-table .xlsx-header-secondary-cell-colored {

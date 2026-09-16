@@ -129,12 +129,18 @@ export const DEFAULT_ORDER_STAGE_SECONDARY_HEADERS = [
 ];
 
 function normalizeStage(source = {}, fallback = {}) {
+  const baseDefaultHex = String(source.defaultHex ?? fallback.defaultHex ?? '#FFFFFF').trim() || '#FFFFFF';
+  const savedHex = String(source.hex ?? '').trim();
+  const fallbackSavedHex = String(fallback.hex ?? '').trim();
   return {
     key: String(fallback.key || source.key || '').trim(),
     storeName: String(fallback.storeName || source.storeName || '').trim(),
     label: String(source.label ?? fallback.label ?? '').trim(),
     description: String(source.description ?? fallback.description ?? '').trim(),
-    defaultHex: String(source.defaultHex ?? fallback.defaultHex ?? '#FFFFFF').trim() || '#FFFFFF',
+    defaultHex: baseDefaultHex,
+    hex: savedHex || fallbackSavedHex || baseDefaultHex,
+    textHex: String(source.textHex ?? fallback.textHex ?? '#000000').trim() || '#000000',
+    textColor: String(source.textColor ?? fallback.textColor ?? '#000000').trim() || '#000000',
   };
 }
 
@@ -142,13 +148,13 @@ function normalizeSecondaryHeader(source = {}, fallback = {}, stageColorMap = {}
   const nextLegendKey = String(source.legendKey ?? fallback.legendKey ?? '').trim();
   const fallbackHex = fallback.useTableBackground
     ? ''
-    : (stageColorMap[nextLegendKey] || fallback.hex || '');
+    : (String(source.hex ?? '').trim() || stageColorMap[nextLegendKey] || String(fallback.hex || '').trim() || '');
   return {
     label: String(source.label ?? fallback.label ?? '').trim(),
     legendKey: nextLegendKey,
     colSpan: Number(fallback.colSpan) || 1,
-    hex: String(source.hex ?? fallbackHex).trim(),
-    textHex: String(fallback.textHex || '#000000').trim() || '#000000',
+    hex: fallback.useTableBackground ? '' : (String(source.hex ?? fallbackHex).trim() || fallbackHex),
+    textHex: String(source.textHex ?? fallback.textHex ?? '#000000').trim() || '#000000',
     stickyCol: String(fallback.stickyCol || '').trim(),
     useTableBackground: Boolean(fallback.useTableBackground),
     noWrap: Boolean(fallback.noWrap),
@@ -207,7 +213,7 @@ export function buildOrderStageLegendConfig(source = {}) {
 
   const validLegendKeys = new Set(stages.map((item) => item.key));
   const stageColorMap = stages.reduce((acc, item) => {
-    acc[item.key] = item.defaultHex || '#FFFFFF';
+    acc[item.key] = String(item.hex || item.defaultHex || '#FFFFFF').trim() || '#FFFFFF';
     return acc;
   }, {});
 

@@ -56,7 +56,7 @@ function getSecondaryHeaderForPrimaryColumn(columnIndex = -1, secondaryHeaders =
 function getSecondaryHeaderBackground(header = null) {
   if (!header) return '#FFFFFF';
   if (header.useTableBackground) return 'var(--orders-table-cell-background)';
-  return String(header.hex || '').trim() || '#FFFFFF';
+  return String(header.hex || header.defaultHex || '').trim() || '#FFFFFF';
 }
 function getSecondaryHeaderTextColor(header = null) {
   if (!header) return '#000000';
