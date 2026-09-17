@@ -3,6 +3,7 @@ const SettingsStore = require('./settingsStore');
 const ProcessStepStore = require('./processStepStore');
 const RoleStore = require('./roleStore');
 const EmployeeStore = require('./employeeStore');
+const { canAccessRole } = require('../services/appAuth');
 
 const MANUAL_STAGE_ORDER = ['unprocessed', 'brief', 'drafting', 'approved', 'kitting', 'stock', 'assembly', 'paint', 'postpaint', 'qc', 'logistics', 'ready'];
 const MANUAL_STAGE_STATUS = {
@@ -1612,7 +1613,7 @@ const OrderStore = {
     };
   },
 
-  setManualStageMarks(entries = [], legendKey = '', actor = '') {
+  setManualStageMarks(entries = [], legendKey = '', actor = '', options = {}) {
     const db = load();
     ensureOrders(db);
     const normalizedLegendKey = String(legendKey || '').trim();
@@ -1620,6 +1621,12 @@ const OrderStore = {
     if (hasGlobalLegendKey && !MANUAL_STAGE_ORDER.includes(normalizedLegendKey)) {
       return false;
     }
+
+    const actorRole = String(options?.actorRole || '').trim() || '';
+    const isAdminActor = actorRole === 'admin'
+      || String(actor || '').trim() === 'Администратор'
+      || String(actor || '').trim().toLowerCase() === 'admin';
+    const actorCanBypassOwnership = Boolean(isAdminActor) || canAccessRole(actorRole, 'admin');
 
     let changed = false;
     const touchedOrderIds = new Set();
@@ -1653,7 +1660,7 @@ const OrderStore = {
       if (shouldClear) {
         if (currentMark) {
           const settings = SettingsStore.get();
-          if (Boolean(settings?.strictStageOwnershipEnabled)) {
+          if (Boolean(settings?.strictStageOwnershipEnabled) && !actorCanBypassOwnership) {
             const actorLabel = String(actor || '').trim();
             const ownerLabel = String(currentMark.updatedBy || '').trim();
             if (ownerLabel && actorLabel !== ownerLabel) {

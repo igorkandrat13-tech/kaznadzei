@@ -805,7 +805,8 @@ function handleManualStageMarks(req, res) {
     const updatedOrders = OrderStore.setManualStageMarks(
       normalizedSelections,
       legendKey,
-      requestActor.label || req.auth?.role || 'admin'
+      requestActor.label || req.auth?.role || 'admin',
+      { actorRole: req.auth?.role || requestActor.role || 'admin' }
     );
 
     if (updatedOrders === false) {
@@ -1155,7 +1156,7 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
       return res.status(400).json({ message: 'Для выбранной колонки не найден цветовой этап.' });
     }
 
-    const updatedOrders = OrderStore.setManualStageMarks(selections, '', stageActorName);
+    const updatedOrders = OrderStore.setManualStageMarks(selections, '', stageActorName, { actorRole: employee.role || '' });
 
     if (!Array.isArray(updatedOrders) || updatedOrders.length === 0) {
       if (context.clear) {
