@@ -18,7 +18,7 @@ const {
 } = require('../utils/validators');
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
-const { notifyMaterialRequestWatchers, notifyOrderCreated } = require('../services/orderNotifications');
+const { notifyMaterialRequestWatchers, notifyOrderCreated, notifyStageWatchers } = require('../services/orderNotifications');
 const {
   getCustomerOrderChangedItemsText,
   getCustomerOrderUpdateItemText,
@@ -1056,6 +1056,26 @@ function handleManualStageMarks(req, res) {
       }))
     ).catch(() => {});
 
+    Promise.allSettled(
+      (Array.isArray(updatedOrders) ? updatedOrders : []).map((order) => {
+        const orderItemsUpdate = normalizedSelections
+          .filter((selection) => String(selection?.orderId || '').trim() === String(order?._id || '').trim())
+          .map((selection) => {
+            const targetItem = OrderStore.getOrderItem(order, selection.itemId);
+            return {
+              room: targetItem?.room || '',
+              itemNumber: targetItem?.itemNumber || '',
+              itemName: targetItem?.name || '',
+              stageLabel: getManualStageCellLabel(selection.columnKey, settings) || selection.columnKey,
+            };
+          });
+        return notifyStageWatchers(order, orderItemsUpdate, {
+          source: 'manager',
+          clear: !isApplyAction,
+        });
+      })
+    ).catch(() => {});
+
     res.json({
       ok: true,
       updatedOrders,
@@ -1432,6 +1452,20 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
         type: context.clear ? 'order.stage.telegram.clear' : 'order.stage.telegram.apply',
         meta: { source: 'telegram' },
       }))
+    ).catch(() => {});
+
+    notifyStageWatchers(
+      updatedOrder,
+      selections.map((selection) => ({
+        room: updatedItem?.room || '',
+        itemNumber: updatedItem?.itemNumber || '',
+        itemName: updatedItem?.name || '',
+        stageLabel: getManualStageCellLabel(selection.columnKey, settings) || selection.columnKey,
+      })),
+      {
+        source: 'telegram',
+        clear: context.clear,
+      }
     ).catch(() => {});
 
     res.json({
@@ -1869,15 +1903,25 @@ router.post('/orders/:id/telegram-material-request-photo-items', (req, res) => {
         },
       });
 
-      notifyMaterialRequestWatchers([
-        'Новая заявка: Заявки на расходники',
-        `Заказ: ${updatedOrder.orderNumber || 'не указан'}`,
-        `Заказчик: ${updatedOrder.customer || 'не указан'}`,
-        `Помещение / изделие: ${[updatedItem.room, updatedItem.itemNumber ? `изд. ${updatedItem.itemNumber}` : '', updatedItem.name].filter(Boolean).join(' • ') || 'не указано'}`,
-        `Заявка: ${createdPhotoItem?.name || attachment.name || normalizedFileName || 'Фото'}`,
-        'Тип: Фото',
-        `Добавил: ${employee.fullName || 'Сотрудник'}`,
-      ].join('\n')).catch(() => {});
+      notifyMaterialRequestWatchers(
+        [
+          'Новая заявка: Заявки на расходники',
+          `Заказ: ${updatedOrder.orderNumber || 'не указан'}`,
+          `Заказчик: ${updatedOrder.customer || 'не указан'}`,
+          `Помещение / изделие: ${[updatedItem.room, updatedItem.itemNumber ? `изд. ${updatedItem.itemNumber}` : '', updatedItem.name].filter(Boolean).join(' • ') || 'не указано'}`,
+          `Заявка: ${createdPhotoItem?.name || attachment.name || normalizedFileName || 'Фото'}`,
+          'Тип: Фото',
+          `Добавил: ${employee.fullName || 'Сотрудник'}`,
+        ].join('\n'),
+        {
+          attachments: (Array.isArray(createdPhotoItem?.attachments) ? createdPhotoItem.attachments : []).map((itemAttachment) => ({
+            relativePath: String(itemAttachment.relativePath || '').trim(),
+            resolver: resolveOrderAttachmentAbsolutePath,
+            name: String(itemAttachment.name || 'Фото заявки').trim(),
+            mimeType: String(itemAttachment.type || 'image/jpeg').trim() || 'image/jpeg',
+          })),
+        }
+      ).catch(() => {});
 
       return res.status(201).json({
         ok: true,

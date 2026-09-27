@@ -1975,7 +1975,6 @@ function Admin() {
             const isTelegramReady = telegramReadyEmployeeIds.has(employeeId);
             const draftList = telegramNotificationActiveTab === 'stages' ? telegramStageNotificationDraftIds : telegramNotificationDraftIds;
             const checked = draftList.includes(employeeId);
-            const botKindLabel = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'бот снабжения' : 'основной бот';
             return (
               <label key={employeeId} className={`telegram-notification-row ${!isTelegramReady ? 'telegram-notification-row-disabled' : ''}`}>
                 <input
@@ -1987,7 +1986,7 @@ function Admin() {
                 <div className="telegram-notification-row-body">
                   <div className="telegram-notification-row-title">
                     <strong>{employee.fullName || 'Без имени'}</strong>
-                    <span>{getRoleLabel(employee.role) || 'Без должности'} · {botKindLabel}</span>
+                    <span>{getRoleLabel(employee.role) || 'Без должности'}</span>
                   </div>
                   <div className="telegram-notification-row-meta">
                     {isTelegramReady

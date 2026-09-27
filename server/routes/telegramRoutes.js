@@ -24,7 +24,7 @@ const {
   getTelegramDiagnosticLogs,
 } = require('../services/telegramDiagnostics');
 const { notifyMaterialRequestWatchers } = require('../services/orderNotifications');
-const { createWorkshopRequestAttachment } = require('../services/workshopRequestAttachments');
+const { createWorkshopRequestAttachment, resolveWorkshopRequestAttachmentAbsolutePath } = require('../services/workshopRequestAttachments');
 const {
   createTelegramEmployeeSessionToken,
   getTelegramEmployeeSessionTokenInfo,
@@ -671,12 +671,22 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
     console.error('Workshop request activity log error:', activityLogError.message);
   }
 
-  notifyMaterialRequestWatchers([
-    'Новая заявка: ТГ бот сотрудников',
-    `Сотрудник: ${employee.fullName || 'Сотрудник'}`,
-    attachments.length > 0 ? 'Тип: С фото' : 'Тип: Текст',
-    `Текст: ${createdRequest.text || 'без текста'}`,
-  ].join('\n')).catch(() => {});
+  notifyMaterialRequestWatchers(
+    [
+      'Новая заявка: ТГ бот сотрудников',
+      `Сотрудник: ${employee.fullName || 'Сотрудник'}`,
+      attachments.length > 0 ? 'Тип: С фото' : 'Тип: Текст',
+      `Текст: ${createdRequest.text || 'без текста'}`,
+    ].join('\n'),
+    {
+      attachments: (Array.isArray(createdRequest.attachments) ? createdRequest.attachments : []).map((attachment) => ({
+        relativePath: String(attachment.relativePath || '').trim(),
+        resolver: resolveWorkshopRequestAttachmentAbsolutePath,
+        name: String(attachment.name || 'Фото заявки').trim(),
+        mimeType: String(attachment.type || 'image/jpeg').trim() || 'image/jpeg',
+      })),
+    }
+  ).catch(() => {});
 
   await sendAuthorizedMessage(
     token,
