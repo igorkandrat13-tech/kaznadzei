@@ -1064,9 +1064,11 @@ function handleManualStageMarks(req, res) {
             const targetItem = OrderStore.getOrderItem(order, selection.itemId);
             return {
               room: targetItem?.room || '',
+              roomNumber: targetItem?.roomNumber || '',
               itemNumber: targetItem?.itemNumber || '',
               itemName: targetItem?.name || '',
               stageLabel: getManualStageCellLabel(selection.columnKey, settings) || selection.columnKey,
+              legendKey: (selection.legendKey || legendKey || '') || '',
               actorName: requestActor?.label || requestActor?.name || '',
             };
           });
@@ -1459,9 +1461,11 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
       updatedOrder,
       selections.map((selection) => ({
         room: updatedItem?.room || '',
+        roomNumber: updatedItem?.roomNumber || '',
         itemNumber: updatedItem?.itemNumber || '',
         itemName: updatedItem?.name || '',
         stageLabel: getManualStageCellLabel(selection.columnKey, settings) || selection.columnKey,
+        legendKey: selection.legendKey || legendKey || '',
         actorName: employee?.fullName || stageActorName || '',
       })),
       {

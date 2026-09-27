@@ -4,6 +4,25 @@ const SettingsStore = require('../stores/settingsStore');
 const { sendMessage, sendPhotoWithAttachment, sendMediaGroupWithAttachments } = require('./telegramService');
 const { normalizeEmployeeBotKinds } = require('../stores/employeeStore');
 
+const STAGE_STATUS_LABELS = {
+  pending: 'Ожидает',
+  in_progress: 'В работе',
+  completed: 'Готово',
+};
+
+function getOrderItemsCount(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  return items.length;
+}
+
+function getStageStatusByLegendKey(legendKey = '') {
+  const normalized = String(legendKey || '').trim();
+  if (normalized === 'ready') return STAGE_STATUS_LABELS.completed;
+  if (normalized === 'unprocessed') return STAGE_STATUS_LABELS.pending;
+  if (!normalized) return STAGE_STATUS_LABELS.pending;
+  return STAGE_STATUS_LABELS.in_progress;
+}
+
 function getEmployeeTelegramBotTokens(employee, { notificationType = 'any' } = {}) {
   const settings = SettingsStore.get() || {};
   const kinds = normalizeEmployeeBotKinds(employee);
@@ -135,19 +154,29 @@ function buildStageWatcherText(order, itemsUpdate = [], options = {}) {
   if (!order) return '';
   const list = Array.isArray(itemsUpdate) ? itemsUpdate : [];
   if (!list.length) return '';
-  const orderNum = String(order?.orderNumber || 'не указан').trim();
-  const rows = list.map((update) => {
-    const itemParts = [
-      String(update?.room || '').trim(),
-      String(update?.itemNumber || '').trim() ? `изд. ${String(update?.itemNumber || '').trim()}` : '',
-      String(update?.itemName || '').trim(),
-    ].filter(Boolean);
-    const itemLabel = itemParts.length > 0 ? itemParts.join(' • ') : 'не указано';
-    const stage = String(update?.stageLabel || '').trim() || 'Этап производства';
-    const actor = String(update?.actorName || '').trim() || 'не указан';
-    return `Заказ №${orderNum}. Изделие: ${itemLabel}. Этап производства: ${stage}. Сотрудник: ${actor}.`;
+  const count = getOrderItemsCount(order);
+  const pluralSuffix = count === 1 ? 'е' : (count >= 2 && count <= 4 ? 'ия' : 'ий');
+  const orderNumberLine = [
+    `Заказ: ${String(order?.orderNumber || 'не указан').trim()}`,
+    `(${count} издели${pluralSuffix})`,
+  ].join(' ');
+  const blocks = list.map((update) => {
+    const roomParts = [];
+    const roomNumber = String(update?.roomNumber || update?.roomNo || '').trim();
+    const roomName = String(update?.room || '').trim();
+    if (roomNumber) roomParts.push(`№${roomNumber}`);
+    if (roomName) roomParts.push(roomName);
+    const roomLine = roomParts.length > 0 ? `Помещение: ${roomParts.join(' ')}` : 'Помещение: не указано';
+    const stageLine = String(update?.stageLabel || '').trim() || 'Этап производства';
+    const effectiveLegendKey = String(update?.legendKey || '').trim();
+    const clear = Boolean(options?.clear) || Boolean(update?.clear);
+    const statusLabel = clear
+      ? STAGE_STATUS_LABELS.pending
+      : getStageStatusByLegendKey(effectiveLegendKey);
+    const statusLine = `Статус изделия: ${statusLabel}`;
+    return [orderNumberLine, roomLine, stageLine, statusLine].join('\n');
   }).filter(Boolean);
-  return rows.join('\n');
+  return blocks.join('\n\n');
 }
 
 async function notifyStageWatchers(order, itemsUpdate, options = {}) {
