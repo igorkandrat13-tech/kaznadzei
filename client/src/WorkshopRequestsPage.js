@@ -225,9 +225,11 @@ function buildRequestRows(orders = [], workshopRequests = []) {
           attachmentsCount: 0,
           openUrl: '',
           requestId: '',
+          orderId: String(order._id || '').trim(),
+          itemId: String(item.itemId || '').trim(),
           packageItemId: String(packageItem.id || '').trim(),
-          toggleKind: '',
-          canToggleStatus: false,
+          toggleKind: 'package',
+          canToggleStatus: true,
           canDelete: true,
           sortTimestamp: String(order.createdAt || '').trim(),
         }));
@@ -406,6 +408,14 @@ function WorkshopRequestsPage() {
         });
       } else if (row.toggleKind === 'material') {
         res = await apiFetch(`/api/orders/${row.orderId}/material-request-items/${row.materialRequestItemId}/toggle`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ itemId: row.itemId }),
+        });
+      } else if (row.toggleKind === 'package') {
+        res = await apiFetch(`/api/orders/${row.orderId}/package-items/${row.packageItemId}/toggle`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',

@@ -715,16 +715,29 @@ function sanitizeOrderItemsPayload(payload) {
 function diffAddedItemsByName(prevItems = [], nextItems = []) {
   const prevList = Array.isArray(prevItems) ? prevItems : [];
   const nextList = Array.isArray(nextItems) ? nextItems : [];
+  const prevIdSet = new Set(
+    prevList
+      .map((it) => String(it?.id || '').trim())
+      .filter(Boolean)
+  );
   const prevKeySet = new Set(
     prevList.map((it) => String((it?.name || '') + '|' + (it?.kind || '')).trim().toLowerCase())
   );
   const added = [];
   const seen = new Set();
   for (const item of nextList) {
-    const key = String((item?.name || '') + '|' + (item?.kind || '')).trim().toLowerCase();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    if (!prevKeySet.has(key)) added.push(item);
+    const idKey = String(item?.id || '').trim();
+    if (idKey && seen.has('id::' + idKey)) continue;
+    const nameKey = String((item?.name || '') + '|' + (item?.kind || '')).trim().toLowerCase();
+    if (!idKey && seen.has('name::' + nameKey)) continue;
+    if (idKey) seen.add('id::' + idKey);
+    else seen.add('name::' + nameKey);
+    if (idKey && !prevIdSet.has(idKey)) {
+      added.push(item);
+      continue;
+    }
+    if (!nameKey) continue;
+    if (!prevKeySet.has(nameKey)) added.push(item);
   }
   return added;
 }
@@ -1930,6 +1943,63 @@ router.patch('/orders/:id/material-request-items/:materialRequestItemId/toggle',
   } catch (error) {
     return res.status(error.status || 400).json({
       message: error.message || 'Не удалось изменить статус заявки на расходники.',
+    });
+  }
+});
+
+router.patch('/orders/:id/package-items/:packageItemId/toggle', requireManagerAccess(), (req, res) => {
+  try {
+    const orderId = String(req.params.id || '').trim();
+    const itemId = String(req.body?.itemId || '').trim();
+    const packageItemId = String(req.params.packageItemId || '').trim();
+
+    if (!orderId) {
+      return res.status(400).json({ message: 'Не указан заказ.' });
+    }
+    if (!itemId) {
+      return res.status(400).json({ message: 'Не указан идентификатор изделия.' });
+    }
+    if (!packageItemId) {
+      return res.status(400).json({ message: 'Не указана позиция комплектации.' });
+    }
+
+    const updatedOrder = OrderStore.togglePackageItem(orderId, itemId, packageItemId);
+    if (updatedOrder === null) {
+      return res.status(404).json({ message: 'Заказ не найден.' });
+    }
+    if (updatedOrder === false) {
+      return res.status(404).json({ message: 'Изделие заказа не найдено.' });
+    }
+    if (updatedOrder === 'invalid') {
+      return res.status(400).json({ message: 'Некорректная позиция комплектации.' });
+    }
+    if (updatedOrder === 'package_item_not_found') {
+      return res.status(404).json({ message: 'Позиция комплектации не найдена.' });
+    }
+
+    const updatedItem = getOrderItemOrFail(updatedOrder, itemId);
+    addActivityLog({
+      action: 'order.package-item.manager.toggle',
+      entityType: 'orderItem',
+      entityId: updatedItem.itemId,
+      entityName: updatedItem.name || '',
+      actor: getRequestActor(req),
+      message: 'Статус позиции комплектации изменен из сводной таблицы.',
+      details: {
+        orderId,
+        itemId: updatedItem.itemId,
+        packageItemId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      order: updatedOrder,
+      item: updatedItem,
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({
+      message: error.message || 'Не удалось изменить статус позиции комплектации.',
     });
   }
 });
