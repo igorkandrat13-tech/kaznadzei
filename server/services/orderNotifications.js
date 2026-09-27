@@ -3,6 +3,15 @@ const OrderStore = require('../stores/orderStore');
 const SettingsStore = require('../stores/settingsStore');
 const { sendMessage } = require('./telegramService');
 
+function getEmployeeTelegramBotToken(employee) {
+  const settings = SettingsStore.get() || {};
+  const botKind = String(employee?.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+  if (botKind === 'supply') {
+    return String(settings.telegramSupplyBotToken || '').trim();
+  }
+  return String(settings.telegramBotToken || '').trim();
+}
+
 function getTelegramReadyEmployeesByRole(role) {
   return EmployeeStore.findAll().filter(employee => (
     employee.role === role
@@ -26,25 +35,31 @@ function getTelegramReadyEmployeesByIds(employeeIds = []) {
 }
 
 async function notifyEmployeesByRole(role, text) {
-  const token = String(SettingsStore.get().telegramBotToken || '').trim();
-  if (!token || !role || !text) return;
+  if (!role || !text) return;
 
   const employees = getTelegramReadyEmployeesByRole(role);
   await Promise.allSettled(
-    employees.map(employee => sendMessage(token, employee.telegramChatId, text))
+    employees.map((employee) => {
+      const token = getEmployeeTelegramBotToken(employee);
+      if (!token) return null;
+      return sendMessage(token, employee.telegramChatId, text);
+    }).filter(Boolean),
   );
 }
 
 async function notifyEmployeesByIds(employeeIds = [], text = '') {
-  const token = String(SettingsStore.get().telegramBotToken || '').trim();
   const normalizedText = String(text || '').trim();
-  if (!token || !normalizedText) return;
+  if (!normalizedText) return;
 
   const employees = getTelegramReadyEmployeesByIds(employeeIds);
   if (!employees.length) return;
 
   await Promise.allSettled(
-    employees.map((employee) => sendMessage(token, employee.telegramChatId, normalizedText))
+    employees.map((employee) => {
+      const token = getEmployeeTelegramBotToken(employee);
+      if (!token) return null;
+      return sendMessage(token, employee.telegramChatId, normalizedText);
+    }).filter(Boolean),
   );
 }
 

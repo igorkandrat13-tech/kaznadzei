@@ -204,6 +204,21 @@ function EmployeeModal({
         />
       </div>
 
+      <div className="form-group">
+        <label>Привязка к Telegram-боту</label>
+        <select
+          value={String(employeeForm?.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary'}
+          onChange={(e) => setEmployeeForm({ ...employeeForm, telegramBotKind: e.target.value })}
+          disabled={saving}
+        >
+          <option value="primary">Основной бот (этапы / статусы заказов)</option>
+          <option value="supply">Бот отдела снабжения (заявки / закупки)</option>
+        </select>
+        <div className="text-small text-subtle" style={{ marginTop: 6 }}>
+          Выберите, через какого бота сотрудник будет авторизовываться и получать свои уведомления.
+        </div>
+      </div>
+
       <div className="form-group" style={{ marginBottom: 0 }}>
           <label>PIN-код</label>
           <div className="modal-actions-group">

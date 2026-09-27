@@ -61,13 +61,25 @@ const EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT = 'Заявки';
 const EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT = 'Отмена заявки';
 const EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST = 'create_workshop_request';
 
-function getConfiguredBotToken() {
-  return String(SettingsStore.get().telegramBotToken || '').trim();
+function getConfiguredBotToken(botKind = 'primary') {
+  const normalized = botKind === 'supply' ? 'supply' : 'primary';
+  const settings = SettingsStore.get();
+  return normalized === 'supply'
+    ? String(settings.telegramSupplyBotToken || '').trim()
+    : String(settings.telegramBotToken || '').trim();
 }
 
-function getRecommendedWebhookUrl() {
+function getRecommendedWebhookUrl(botKind = 'primary') {
   const baseUrl = SettingsStore.get().publicBaseUrl;
-  return new URL('/api/telegram/webhook', baseUrl).toString();
+  const normalized = botKind === 'supply' ? 'supply' : 'primary';
+  const pathname = normalized === 'supply' ? '/api/telegram/supply/webhook' : '/api/telegram/webhook';
+  return new URL(pathname, baseUrl).toString();
+}
+
+function getBotKindFromRoute(routePath = '') {
+  const normalized = String(routePath || '').trim();
+  if (normalized.startsWith('/supply/') || normalized.startsWith('/supply')) return 'supply';
+  return 'primary';
 }
 
 function getTelegramWebAppUrl() {
@@ -87,7 +99,8 @@ function buildEmployeeWebAppUrl(employee) {
   try {
     const url = new URL(baseUrl);
     if (employee && employee._id) {
-      const token = getConfiguredBotToken();
+      const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+      const token = getConfiguredBotToken(botKind);
       if (token) {
         try {
           const sessionToken = createTelegramEmployeeSessionToken(token, employee);
@@ -105,12 +118,14 @@ function buildEmployeeWebAppUrl(employee) {
   }
 }
 
-function getEmployeeByTelegramChatId(chatId) {
+function getEmployeeByTelegramChatId(chatId, options = {}) {
   if (!chatId) return null;
   const normalized = String(chatId);
-  return EmployeeStore.findAll().find(emp =>
-    String(emp.telegramChatId || '') === normalized
-  ) || null;
+  const botKind = options?.botKind === 'supply' ? 'supply' : 'primary';
+  return EmployeeStore.findAll().find(emp => {
+    const empBotKind = String(emp.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+    return String(emp.telegramChatId || '') === normalized && empBotKind === botKind;
+  }) || null;
 }
 
 function getEmployeeRoleLabel(role) {
@@ -359,10 +374,13 @@ async function sendGuestMessage(token, chatId, text) {
   await sendMessage(token, chatId, text, { reply_markup: getUnauthorizedReplyMarkup() });
 }
 
-async function refreshAuthorizedEmployeeAccess(token) {
-  const employees = EmployeeStore.findAll().filter(employee =>
-    String(employee.telegramChatId || '').trim()
-  );
+async function refreshAuthorizedEmployeeAccess(token, options = {}) {
+  const botKind = options?.botKind === 'supply' ? 'supply' : 'primary';
+  const employees = EmployeeStore.findAll().filter(employee => {
+    if (!String(employee.telegramChatId || '').trim()) return false;
+    const employeeBotKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+    return employeeBotKind === botKind;
+  });
 
   let refreshedCount = 0;
   const errors = [];
@@ -643,7 +661,8 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
   return true;
 }
 
-async function processTelegramMessage(token, message) {
+async function processTelegramMessage(token, message, options = {}) {
+  const botKind = options?.botKind === 'supply' ? 'supply' : 'primary';
   const text = getTelegramMessageText(message);
   const hasPhoto = Boolean(getTelegramMessageImageAttachment(message));
   const normalizedPinInput = normalizeTelegramPinInput(text);
@@ -682,7 +701,7 @@ async function processTelegramMessage(token, message) {
     }
     return Array.from(uniqueById.values());
   })();
-  let existingEmployee = EmployeeStore.findByTelegramUserId(from.id);
+  let existingEmployee = EmployeeStore.findByTelegramUserId(from.id, { botKind });
   if (existingEmployee) {
     await syncTelegramMenuButton(token, chatId);
   } else {
@@ -853,7 +872,7 @@ async function processTelegramMessage(token, message) {
     return;
   }
 
-  const employee = EmployeeStore.findByPinCode(normalizedPinInput);
+  const employee = EmployeeStore.findByPinCode(normalizedPinInput, { botKind });
   if (!employee) {
     await sendGuestMessage(token, chatId, 'Доступ к заказу выдается только по личной ссылке или QR-коду от менеджера. Сотрудники могут войти по PIN-коду.');
     return;
@@ -951,7 +970,8 @@ async function processTelegramCallbackQuery(token, callbackQuery) {
 }
 
 router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
-  const token = getConfiguredBotToken();
+  const botKind = getBotKindFromRoute(req.route?.path || req.path);
+  const token = getConfiguredBotToken(botKind);
   if (!token) {
     return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
   }
@@ -961,10 +981,11 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
       getBotInfo(token),
       getWebhookInfo(token).catch(() => null),
     ]);
-    const refreshResult = await refreshAuthorizedEmployeeAccess(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token, { botKind });
 
     res.json({
       ok: true,
+      botKind,
       bot: {
         id: bot.id,
         username: bot.username,
@@ -978,7 +999,7 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
         lastErrorMessage: webhook.last_error_message || '',
         lastErrorDate: webhook.last_error_date || null,
       } : null,
-      recommendedWebhookUrl: getRecommendedWebhookUrl(),
+      recommendedWebhookUrl: getRecommendedWebhookUrl(botKind),
       telegramWebAppUrl: getTelegramWebAppUrl(),
       refreshedAuthorizedEmployees: refreshResult,
     });
@@ -987,16 +1008,54 @@ router.post('/telegram/check', requireAdminAccess(), async (req, res) => {
   }
 });
 
+router.post('/telegram/supply/check', requireAdminAccess(), async (req, res) => {
+  const token = getConfiguredBotToken('supply');
+  if (!token) {
+    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота снабжения.' });
+  }
+
+  try {
+    const [bot, webhook] = await Promise.all([
+      getBotInfo(token),
+      getWebhookInfo(token).catch(() => null),
+    ]);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token, { botKind: 'supply' });
+    res.json({
+      ok: true,
+      botKind: 'supply',
+      bot: {
+        id: bot.id,
+        username: bot.username,
+        firstName: bot.first_name,
+        canJoinGroups: Boolean(bot.can_join_groups),
+        supportsInlineQueries: Boolean(bot.supports_inline_queries),
+      },
+      webhook: webhook ? {
+        url: webhook.url || '',
+        pendingUpdateCount: webhook.pending_update_count || 0,
+        lastErrorMessage: webhook.last_error_message || '',
+        lastErrorDate: webhook.last_error_date || null,
+      } : null,
+      recommendedWebhookUrl: getRecommendedWebhookUrl('supply'),
+      telegramWebAppUrl: getTelegramWebAppUrl(),
+      refreshedAuthorizedEmployees: refreshResult,
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Не удалось проверить Telegram-бота снабжения.' });
+  }
+});
+
 router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) => {
-  const token = getConfiguredBotToken();
+  const botKind = getBotKindFromRoute(req.route?.path || req.path);
+  const token = getConfiguredBotToken(botKind);
   if (!token) {
     return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
   }
 
   try {
-    const webhookUrl = getRecommendedWebhookUrl();
+    const webhookUrl = getRecommendedWebhookUrl(botKind);
     await setWebhook(token, webhookUrl);
-    const refreshResult = await refreshAuthorizedEmployeeAccess(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token, { botKind });
     const [bot, webhook] = await Promise.all([
       getBotInfo(token),
       getWebhookInfo(token),
@@ -1004,6 +1063,7 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
 
     res.json({
       ok: true,
+      botKind,
       message: 'Webhook успешно установлен.',
       bot: {
         id: bot.id,
@@ -1025,17 +1085,57 @@ router.post('/telegram/webhook/setup', requireAdminAccess(), async (req, res) =>
   }
 });
 
+router.post('/telegram/supply/webhook/setup', requireAdminAccess(), async (req, res) => {
+  const token = getConfiguredBotToken('supply');
+  if (!token) {
+    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота снабжения.' });
+  }
+
+  try {
+    const webhookUrl = getRecommendedWebhookUrl('supply');
+    await setWebhook(token, webhookUrl);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token, { botKind: 'supply' });
+    const [bot, webhook] = await Promise.all([
+      getBotInfo(token),
+      getWebhookInfo(token),
+    ]);
+    res.json({
+      ok: true,
+      botKind: 'supply',
+      message: 'Webhook бота снабжения успешно установлен.',
+      bot: {
+        id: bot.id,
+        username: bot.username,
+        firstName: bot.first_name,
+      },
+      webhook: {
+        url: webhook.url || '',
+        pendingUpdateCount: webhook.pending_update_count || 0,
+        lastErrorMessage: webhook.last_error_message || '',
+        lastErrorDate: webhook.last_error_date || null,
+      },
+      recommendedWebhookUrl: webhookUrl,
+      telegramWebAppUrl: getTelegramWebAppUrl(),
+      refreshedAuthorizedEmployees: refreshResult,
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Не удалось установить webhook бота снабжения.' });
+  }
+});
+
 router.post('/telegram/refresh-authorized', requireAdminAccess(), async (req, res) => {
-  const token = getConfiguredBotToken();
+  const botKind = getBotKindFromRoute(req.route?.path || req.path);
+  const token = getConfiguredBotToken(botKind);
   if (!token) {
     return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота.' });
   }
 
   try {
     await syncTelegramMenuButton(token);
-    const refreshResult = await refreshAuthorizedEmployeeAccess(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token, { botKind });
     res.json({
       ok: true,
+      botKind,
       message: refreshResult.refreshedCount > 0
         ? 'Кнопки Telegram для авторизованных сотрудников обновлены.'
         : 'Не найдено сотрудников с привязанным Telegram chat id.',
@@ -1044,6 +1144,28 @@ router.post('/telegram/refresh-authorized', requireAdminAccess(), async (req, re
     });
   } catch (error) {
     res.status(400).json({ message: error.message || 'Не удалось обновить кнопки Telegram для сотрудников.' });
+  }
+});
+
+router.post('/telegram/supply/refresh-authorized', requireAdminAccess(), async (req, res) => {
+  const token = getConfiguredBotToken('supply');
+  if (!token) {
+    return res.status(400).json({ message: 'Сначала сохраните токен Telegram-бота снабжения.' });
+  }
+  try {
+    await syncTelegramMenuButton(token);
+    const refreshResult = await refreshAuthorizedEmployeeAccess(token, { botKind: 'supply' });
+    res.json({
+      ok: true,
+      botKind: 'supply',
+      message: refreshResult.refreshedCount > 0
+        ? 'Кнопки бота снабжения для авторизованных сотрудников обновлены.'
+        : 'Не найдено сотрудников снабжения с привязанным Telegram chat id.',
+      telegramWebAppUrl: getTelegramWebAppUrl(),
+      refreshedAuthorizedEmployees: refreshResult,
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Не удалось обновить кнопки бота снабжения.' });
   }
 });
 
@@ -1354,11 +1476,7 @@ router.get('/telegram/employee/:id/session-status', requireAdminAccess(), async 
 });
 
 router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), express.json({ limit: '16kb' }), async (req, res) => {
-  const token = getConfiguredBotToken();
   try {
-    if (!token) {
-      return res.status(400).json({ ok: false, message: 'Сначала сохраните токен Telegram-бота в Настройки.' });
-    }
     const employeeId = String((req.body || {}).employeeId || '').trim();
     if (!employeeId) {
       return res.status(400).json({ ok: false, message: 'Отсутствует employeeId.' });
@@ -1366,6 +1484,11 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
     const employee = EmployeeStore.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
+    }
+    const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+    const token = getConfiguredBotToken(botKind);
+    if (!token) {
+      return res.status(400).json({ ok: false, message: `Сначала сохраните токен ${botKind === 'supply' ? 'Telegram-бота снабжения' : 'Telegram-бота'} в Настройки.` });
     }
     const now = Date.now();
     const authorizedAt = new Date(now).toISOString();
@@ -1444,11 +1567,7 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
 });
 
 router.post('/telegram/employee/get-menu-button', requireAdminAccess(), express.json({ limit: '16kb' }), async (req, res) => {
-  const token = getConfiguredBotToken();
   try {
-    if (!token) {
-      return res.status(400).json({ ok: false, message: 'Сначала сохраните токен Telegram-бота в Настройки.' });
-    }
     const employeeId = String((req.body || {}).employeeId || '').trim();
     if (!employeeId) {
       return res.status(400).json({ ok: false, message: 'Отсутствует employeeId.' });
@@ -1456,6 +1575,11 @@ router.post('/telegram/employee/get-menu-button', requireAdminAccess(), express.
     const employee = EmployeeStore.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
+    }
+    const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+    const token = getConfiguredBotToken(botKind);
+    if (!token) {
+      return res.status(400).json({ ok: false, message: `Сначала сохраните токен ${botKind === 'supply' ? 'Telegram-бота снабжения' : 'Telegram-бота'} в Настройки.` });
     }
     const chatId = String(employee.telegramChatId || employee.telegramUserId || '').trim();
     if (!chatId) {
@@ -1501,11 +1625,7 @@ router.post('/telegram/employee/get-menu-button', requireAdminAccess(), express.
 });
 
 router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express.json({ limit: '16kb' }), async (req, res) => {
-  const token = getConfiguredBotToken();
   try {
-    if (!token) {
-      return res.status(400).json({ ok: false, message: 'Сначала сохраните токен Telegram-бота в Настройки.' });
-    }
     const employeeId = String((req.body || {}).employeeId || '').trim();
     if (!employeeId) {
       return res.status(400).json({ ok: false, message: 'Отсутствует employeeId.' });
@@ -1513,6 +1633,11 @@ router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express
     const employee = EmployeeStore.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
+    }
+    const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+    const token = getConfiguredBotToken(botKind);
+    if (!token) {
+      return res.status(400).json({ ok: false, message: `Сначала сохраните токен ${botKind === 'supply' ? 'Telegram-бота снабжения' : 'Telegram-бота'} в Настройки.` });
     }
     const now = Date.now();
     const authorizedAt = new Date(now).toISOString();
@@ -1867,23 +1992,43 @@ router.post('/telegram/webapp/session', async (req, res) => {
 });
 
 router.post('/telegram/webhook', async (req, res) => {
-  const token = getConfiguredBotToken();
+  const token = getConfiguredBotToken('primary');
   if (!token) {
     return res.json({ ok: true, ignored: true });
   }
 
   try {
     if (req.body?.message) {
-      await processTelegramMessage(token, req.body.message);
+      await processTelegramMessage(token, req.body.message, { botKind: 'primary' });
     }
     if (req.body?.callback_query) {
-      await processTelegramCallbackQuery(token, req.body.callback_query);
+      await processTelegramCallbackQuery(token, req.body.callback_query, { botKind: 'primary' });
     }
   } catch (error) {
     console.error('Telegram webhook error:', error.message);
   }
 
   res.json({ ok: true });
+});
+
+router.post('/telegram/supply/webhook', async (req, res) => {
+  const token = getConfiguredBotToken('supply');
+  if (!token) {
+    return res.json({ ok: true, ignored: true });
+  }
+
+  try {
+    if (req.body?.message) {
+      await processTelegramMessage(token, req.body.message, { botKind: 'supply' });
+    }
+    if (req.body?.callback_query) {
+      await processTelegramCallbackQuery(token, req.body.callback_query, { botKind: 'supply' });
+    }
+  } catch (error) {
+    console.error('Telegram supply webhook error:', error.message);
+  }
+
+  res.json({ ok: true, botKind: 'supply' });
 });
 
 module.exports = router;

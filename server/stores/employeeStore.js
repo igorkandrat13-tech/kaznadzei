@@ -9,12 +9,20 @@ const EmployeeStore = {
     return load().employees.find(item => item._id === employeeId) || null;
   },
 
-  findByPinCode(pinCode) {
-    return load().employees.find(item => String(item.pinCode || '').trim() === String(pinCode || '').trim()) || null;
+  findByPinCode(pinCode, options = {}) {
+    const botKind = options?.botKind === 'supply' ? 'supply' : 'primary';
+    return load().employees.find(item => {
+      const itemBotKind = String(item.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+      return String(item.pinCode || '').trim() === String(pinCode || '').trim() && itemBotKind === botKind;
+    }) || null;
   },
 
-  findByTelegramUserId(telegramUserId) {
-    return load().employees.find(item => String(item.telegramUserId || '') === String(telegramUserId || '')) || null;
+  findByTelegramUserId(telegramUserId, options = {}) {
+    const botKind = options?.botKind === 'supply' ? 'supply' : 'primary';
+    return load().employees.find(item => {
+      const itemBotKind = String(item.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+      return String(item.telegramUserId || '') === String(telegramUserId || '') && itemBotKind === botKind;
+    }) || null;
   },
 
   create(data) {

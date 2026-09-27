@@ -478,11 +478,24 @@ function sanitizeSettingsInput(payload, options = {}) {
   if (!partial || payload.telegramBotToken !== undefined) {
     data.telegramBotToken = normalizeString(payload.telegramBotToken, 'telegramBotToken', { maxLength: 200 });
   }
+  if (!partial || payload.telegramSupplyBotToken !== undefined) {
+    data.telegramSupplyBotToken = normalizeString(payload.telegramSupplyBotToken, 'telegramSupplyBotToken', { maxLength: 200 });
+  }
   if (!partial || payload.telegramSupergroupChatId !== undefined) {
     data.telegramSupergroupChatId = normalizeString(payload.telegramSupergroupChatId, 'telegramSupergroupChatId', { maxLength: 40 });
   }
   if (!partial || payload.telegramSupergroupEnabled !== undefined) {
     data.telegramSupergroupEnabled = normalizeBoolean(payload.telegramSupergroupEnabled, 'telegramSupergroupEnabled');
+  }
+  if (!partial || payload.telegramStageNotificationEmployeeIds !== undefined) {
+    const employeeIds = normalizeStringArray(payload.telegramStageNotificationEmployeeIds, 'telegramStageNotificationEmployeeIds', {
+      allowUndefined: partial,
+      maxItems: 200,
+      maxLength: 80,
+    });
+    if (employeeIds !== undefined) {
+      data.telegramStageNotificationEmployeeIds = Array.from(new Set(employeeIds.filter(Boolean)));
+    }
   }
   if (!partial || payload.telegramRequestNotificationEmployeeIds !== undefined) {
     const employeeIds = normalizeStringArray(payload.telegramRequestNotificationEmployeeIds, 'telegramRequestNotificationEmployeeIds', {
@@ -538,6 +551,10 @@ function sanitizeEmployeeInput(payload, options = {}) {
   if (!partial || payload.telegramUsername !== undefined) {
     const username = normalizeString(payload.telegramUsername, 'telegramUsername', { maxLength: 80 });
     data.telegramUsername = username ? username.replace(/^@+/, '@') : '';
+  }
+  if (!partial || payload.telegramBotKind !== undefined) {
+    const rawBotKind = String(payload.telegramBotKind || 'primary').trim();
+    data.telegramBotKind = rawBotKind === 'supply' ? 'supply' : 'primary';
   }
   if (!partial || payload.pinCode !== undefined) {
     const pinCode = normalizeString(payload.pinCode, 'pinCode', { required: !partial, maxLength: 20 });

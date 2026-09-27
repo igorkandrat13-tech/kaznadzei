@@ -78,16 +78,31 @@ router.delete('/employees/:id', requireAdminAccess(), (req, res) => {
     details: { role: employee.role || '' },
   });
 
-  const selectedNotificationEmployeeIds = Array.isArray(SettingsStore.get().telegramRequestNotificationEmployeeIds)
-    ? SettingsStore.get().telegramRequestNotificationEmployeeIds
+  const settings = SettingsStore.get();
+  const selectedStageEmployeeIds = Array.isArray(settings.telegramStageNotificationEmployeeIds)
+    ? settings.telegramStageNotificationEmployeeIds
     : [];
-  if (selectedNotificationEmployeeIds.includes(String(employee._id || '').trim())) {
+  const selectedRequestEmployeeIds = Array.isArray(settings.telegramRequestNotificationEmployeeIds)
+    ? settings.telegramRequestNotificationEmployeeIds
+    : [];
+  const employeeId = String(employee._id || '').trim();
+  const shouldUpdateStageIds = selectedStageEmployeeIds.includes(employeeId);
+  const shouldUpdateRequestIds = selectedRequestEmployeeIds.includes(employeeId);
+  if (shouldUpdateStageIds || shouldUpdateRequestIds) {
     SettingsStore.update({
-      telegramRequestNotificationEmployeeIds: selectedNotificationEmployeeIds.filter((item) => item !== String(employee._id || '').trim()),
+      ...(shouldUpdateStageIds
+        ? { telegramStageNotificationEmployeeIds: selectedStageEmployeeIds.filter((item) => item !== employeeId) }
+        : {}),
+      ...(shouldUpdateRequestIds
+        ? { telegramRequestNotificationEmployeeIds: selectedRequestEmployeeIds.filter((item) => item !== employeeId) }
+        : {}),
     });
   }
 
-  const token = String(SettingsStore.get().telegramBotToken || '').trim();
+  const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
+  const token = botKind === 'supply'
+    ? String(settings.telegramSupplyBotToken || '').trim()
+    : String(settings.telegramBotToken || '').trim();
   const chatId = String(employee.telegramChatId || '').trim();
 
   const finishResponse = (warningMessage = '') => {

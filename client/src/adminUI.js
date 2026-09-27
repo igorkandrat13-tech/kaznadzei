@@ -7,6 +7,7 @@ export const emptyEmployeeForm = {
   role: '',
   allowedColumns: [],
   telegramUsername: '',
+  telegramBotKind: 'primary',
   pinCode: '',
 };
 

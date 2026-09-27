@@ -7,6 +7,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { useGlobalErrorEffect } from './globalErrors';
 import {
   HelpTooltip,
+  SectionHeader,
   SettingsActions,
   SettingsFeedback,
   SettingsHeader,
@@ -78,8 +79,10 @@ function Admin() {
   const [appSettings, setAppSettings] = useState({
     publicBaseUrl: '',
     telegramBotToken: '',
+    telegramSupplyBotToken: '',
     telegramSupergroupChatId: '',
     telegramSupergroupEnabled: false,
+    telegramStageNotificationEmployeeIds: [],
     telegramRequestNotificationEmployeeIds: [],
     selfUpdateEnabled: false,
     updateBranch: 'main',
@@ -90,6 +93,9 @@ function Admin() {
   const [telegramCheckResult, setTelegramCheckResult] = useState(null);
   const [checkingTelegramBot, setCheckingTelegramBot] = useState(false);
   const [settingTelegramWebhook, setSettingTelegramWebhook] = useState(false);
+  const [telegramSupplyCheckResult, setTelegramSupplyCheckResult] = useState(null);
+  const [checkingTelegramSupplyBot, setCheckingTelegramSupplyBot] = useState(false);
+  const [settingTelegramSupplyWebhook, setSettingTelegramSupplyWebhook] = useState(false);
   const [showTelegramLogs, setShowTelegramLogs] = useState(false);
   const [telegramLogs, setTelegramLogs] = useState([]);
   const [telegramLogsLoading, setTelegramLogsLoading] = useState(false);
@@ -105,6 +111,8 @@ function Admin() {
   const [showStageOwnershipModal, setShowStageOwnershipModal] = useState(false);
   const [savingStageOwnership, setSavingStageOwnership] = useState(false);
   const [telegramNotificationDraftIds, setTelegramNotificationDraftIds] = useState([]);
+  const [telegramStageNotificationDraftIds, setTelegramStageNotificationDraftIds] = useState([]);
+  const [telegramNotificationActiveTab, setTelegramNotificationActiveTab] = useState('stages');
   const [employeeModalMode, setEmployeeModalMode] = useState('');
   const [stepModalMode, setStepModalMode] = useState('');
   const [showLegendColorModal, setShowLegendColorModal] = useState(false);
@@ -629,8 +637,10 @@ function Admin() {
     setAppSettings({
       publicBaseUrl: data?.publicBaseUrl || '',
       telegramBotToken: data?.telegramBotToken || '',
+      telegramSupplyBotToken: data?.telegramSupplyBotToken || '',
       telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
       telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
+      telegramStageNotificationEmployeeIds: Array.isArray(data?.telegramStageNotificationEmployeeIds) ? data.telegramStageNotificationEmployeeIds : [],
       telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
       selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
       updateBranch: data?.updateBranch || 'main',
@@ -870,11 +880,17 @@ function Admin() {
   ), [appSettings.telegramRequestNotificationEmployeeIds]);
 
   const openTelegramNotificationModal = () => {
+    setTelegramStageNotificationDraftIds(
+      (Array.isArray(appSettings.telegramStageNotificationEmployeeIds) ? appSettings.telegramStageNotificationEmployeeIds : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean),
+    );
     setTelegramNotificationDraftIds(
       (Array.isArray(appSettings.telegramRequestNotificationEmployeeIds) ? appSettings.telegramRequestNotificationEmployeeIds : [])
         .map((item) => String(item || '').trim())
         .filter(Boolean),
     );
+    setTelegramNotificationActiveTab((current) => (current === 'stages' || current === 'requests' ? current : 'stages'));
     setShowTelegramNotificationModal(true);
     setSettingsError('');
     setSettingsSuccess('');
@@ -888,6 +904,18 @@ function Admin() {
   const toggleTelegramNotificationEmployee = (employeeId, enabled) => {
     const normalizedEmployeeId = String(employeeId || '').trim();
     if (!normalizedEmployeeId) return;
+    if (telegramNotificationActiveTab === 'stages') {
+      setTelegramStageNotificationDraftIds((current) => {
+        const next = new Set((Array.isArray(current) ? current : []).map((item) => String(item || '').trim()).filter(Boolean));
+        if (enabled) {
+          next.add(normalizedEmployeeId);
+        } else {
+          next.delete(normalizedEmployeeId);
+        }
+        return Array.from(next);
+      });
+      return;
+    }
     setTelegramNotificationDraftIds((current) => {
       const next = new Set((Array.isArray(current) ? current : []).map((item) => String(item || '').trim()).filter(Boolean));
       if (enabled) {
@@ -905,13 +933,15 @@ function Admin() {
     setSettingsError('');
     setSettingsSuccess('');
     try {
-      const filteredIds = telegramNotificationDraftIds.filter((employeeId) => telegramReadyEmployeeIds.has(String(employeeId || '').trim()));
+      const filteredStageIds = telegramStageNotificationDraftIds.filter((employeeId) => telegramReadyEmployeeIds.has(String(employeeId || '').trim()));
+      const filteredRequestIds = telegramNotificationDraftIds.filter((employeeId) => telegramReadyEmployeeIds.has(String(employeeId || '').trim()));
       const res = await apiFetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...appSettings,
-          telegramRequestNotificationEmployeeIds: filteredIds,
+          telegramStageNotificationEmployeeIds: filteredStageIds,
+          telegramRequestNotificationEmployeeIds: filteredRequestIds,
         }),
       });
       const data = await parseJsonSafely(res);
@@ -922,8 +952,10 @@ function Admin() {
       setAppSettings({
         publicBaseUrl: data?.publicBaseUrl || '',
         telegramBotToken: data?.telegramBotToken || '',
+        telegramSupplyBotToken: data?.telegramSupplyBotToken || '',
         telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
         telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
+        telegramStageNotificationEmployeeIds: Array.isArray(data?.telegramStageNotificationEmployeeIds) ? data.telegramStageNotificationEmployeeIds : [],
         telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
         selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
         updateBranch: data?.updateBranch || 'main',
@@ -931,6 +963,7 @@ function Admin() {
         strictStageOwnershipEnabled: Boolean(data?.strictStageOwnershipEnabled),
         roleLabels: data?.roleLabels || {},
       });
+      setTelegramStageNotificationDraftIds(Array.isArray(data?.telegramStageNotificationEmployeeIds) ? data.telegramStageNotificationEmployeeIds : []);
       setTelegramNotificationDraftIds(Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : []);
       setShowTelegramNotificationModal(false);
       setSettingsSuccess('Получатели уведомлений в Telegram сохранены.');
@@ -970,8 +1003,10 @@ function Admin() {
       setAppSettings({
         publicBaseUrl: data?.publicBaseUrl || '',
         telegramBotToken: data?.telegramBotToken || '',
+        telegramSupplyBotToken: data?.telegramSupplyBotToken || '',
         telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
         telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
+        telegramStageNotificationEmployeeIds: Array.isArray(data?.telegramStageNotificationEmployeeIds) ? data.telegramStageNotificationEmployeeIds : [],
         telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
         selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
         updateBranch: data?.updateBranch || 'main',
@@ -1045,6 +1080,65 @@ function Admin() {
       setSettingsError(toUserErrorMessage(error, 'Не удалось обновить кнопки Telegram сотрудникам.'));
     } finally {
       setRefreshingAuthorizedMenuButtons(false);
+    }
+  };
+
+  const checkTelegramSupplyBot = async () => {
+    setCheckingTelegramSupplyBot(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/supply/check', { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось проверить Telegram-бота снабжения.');
+      }
+      setTelegramSupplyCheckResult(data);
+      setSettingsSuccess(`Бот снабжения ${data?.bot?.firstName || ''} @${data?.bot?.username || ''} успешно проверен.`.trim());
+    } catch (error) {
+      setTelegramSupplyCheckResult(null);
+      setSettingsError(toUserErrorMessage(error, 'Не удалось проверить Telegram-бота снабжения.'));
+    } finally {
+      setCheckingTelegramSupplyBot(false);
+    }
+  };
+
+  const setupTelegramSupplyWebhook = async () => {
+    setSettingTelegramSupplyWebhook(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/supply/webhook/setup', { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось установить webhook бота снабжения.');
+      }
+      setTelegramSupplyCheckResult(data);
+      setSettingsSuccess(data?.message || 'Webhook бота снабжения установлен.');
+    } catch (error) {
+      setSettingsError(toUserErrorMessage(error, 'Не удалось установить webhook бота снабжения.'));
+    } finally {
+      setSettingTelegramSupplyWebhook(false);
+    }
+  };
+
+  const [refreshingAuthorizedSupplyMenuButtons, setRefreshingAuthorizedSupplyMenuButtons] = useState(false);
+
+  const refreshAuthorizedSupplyTelegramMenuButtons = async () => {
+    setRefreshingAuthorizedSupplyMenuButtons(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await apiFetch('/api/telegram/supply/refresh-authorized', { method: 'POST' });
+      const data = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(data?.message || 'Не удалось обновить кнопки бота снабжения.');
+      }
+      setSettingsSuccess(data?.message || 'Кнопки бота снабжения для сотрудников обновлены.');
+    } catch (error) {
+      setSettingsError(toUserErrorMessage(error, 'Не удалось обновить кнопки бота снабжения.'));
+    } finally {
+      setRefreshingAuthorizedSupplyMenuButtons(false);
     }
   };
 
@@ -1477,9 +1571,15 @@ function Admin() {
         resetEmployeeForm();
       }
       await fetchEmployees();
+      setTelegramStageNotificationDraftIds((current) => (Array.isArray(current) ? current : []).filter((item) => item !== id));
       setTelegramNotificationDraftIds((current) => current.filter((item) => item !== id));
       setAppSettings((current) => ({
         ...current,
+        telegramStageNotificationEmployeeIds: (
+          Array.isArray(current.telegramStageNotificationEmployeeIds)
+            ? current.telegramStageNotificationEmployeeIds
+            : []
+        ).filter((item) => item !== id),
         telegramRequestNotificationEmployeeIds: (
           Array.isArray(current.telegramRequestNotificationEmployeeIds)
             ? current.telegramRequestNotificationEmployeeIds
@@ -1834,15 +1934,40 @@ function Admin() {
       >
         <ModalHeader
           title="Уведомления в ТГ"
-          subtitle="Выберите сотрудников, которым будут приходить уведомления о новых заявках из комплектации, расходников и ТГ-бота сотрудников."
+          subtitle="Разделите получателей по типам уведомлений: этапы/статусы заказов и заявки снабжения."
           onClose={closeTelegramNotificationModal}
           closeDisabled={savingTelegramNotifications}
         />
+        <div className="tabs" style={{ marginBottom: 12 }}>
+          <button
+            key="stages"
+            type="button"
+            className={`tab ${telegramNotificationActiveTab === 'stages' ? 'tab-active' : ''}`}
+            onClick={() => setTelegramNotificationActiveTab('stages')}
+          >
+            📋 Статусы (этапы заказов)
+          </button>
+          <button
+            key="requests"
+            type="button"
+            className={`tab ${telegramNotificationActiveTab === 'requests' ? 'tab-active' : ''}`}
+            onClick={() => setTelegramNotificationActiveTab('requests')}
+          >
+            📦 Заявки (снабжение)
+          </button>
+        </div>
+        <div className="text-small text-subtle" style={{ marginBottom: 10 }}>
+          {telegramNotificationActiveTab === 'stages'
+            ? 'Эти сотрудники будут получать уведомления об изменениях этапов и статусов заказов (от основного бота).'
+            : 'Эти сотрудники будут получать уведомления о новых заявках на закупку расходников, запчастей и деталей (от бота снабжения).'}
+        </div>
         <div className="telegram-notification-list">
           {employees.length > 0 ? employees.map((employee) => {
             const employeeId = String(employee._id || '').trim();
             const isTelegramReady = telegramReadyEmployeeIds.has(employeeId);
-            const checked = telegramNotificationDraftIds.includes(employeeId);
+            const draftList = telegramNotificationActiveTab === 'stages' ? telegramStageNotificationDraftIds : telegramNotificationDraftIds;
+            const checked = draftList.includes(employeeId);
+            const botKindLabel = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'бот снабжения' : 'основной бот';
             return (
               <label key={employeeId} className={`telegram-notification-row ${!isTelegramReady ? 'telegram-notification-row-disabled' : ''}`}>
                 <input
@@ -1854,7 +1979,7 @@ function Admin() {
                 <div className="telegram-notification-row-body">
                   <div className="telegram-notification-row-title">
                     <strong>{employee.fullName || 'Без имени'}</strong>
-                    <span>{getRoleLabel(employee.role) || 'Без должности'}</span>
+                    <span>{getRoleLabel(employee.role) || 'Без должности'} · {botKindLabel}</span>
                   </div>
                   <div className="telegram-notification-row-meta">
                     {isTelegramReady
@@ -1870,7 +1995,7 @@ function Admin() {
         </div>
         <div className="modal-actions">
           <Button variant="success" onClick={saveTelegramNotificationSettings} disabled={savingTelegramNotifications}>
-            {savingTelegramNotifications ? 'Сохранение...' : 'Сохранить'}
+            {savingTelegramNotifications ? 'Сохранение...' : 'Сохранить оба списка'}
           </Button>
           <Button onClick={closeTelegramNotificationModal} disabled={savingTelegramNotifications}>Отмена</Button>
         </div>
@@ -2003,7 +2128,7 @@ function Admin() {
 
         {generalSubTab === 'bot' && (
           <div className="card">
-            <p>Здесь можно настроить адрес проекта для QR-кодов и токен Telegram-бота.</p>
+            <p>Здесь можно настроить адрес проекта для QR-кодов и токены Telegram-ботов.</p>
             <SettingsFeedback error={settingsError} success={settingsSuccess} />
 
             <div className="form-group">
@@ -2018,9 +2143,14 @@ function Admin() {
               />
             </div>
 
+            <SectionHeader
+              title="🤖 Основной Telegram-бот"
+              description="Используется для уведомлений об этапах заказов, авторизации мастеров и других рабочих процессов."
+            />
+
             <div className="form-group">
               <label className="helper-label">
-                Токен Telegram-бота
+                Токен основного Telegram-бота
                 <HelpTooltip text="Вставьте bot token, полученный у BotFather, в формате 123456789:AA.... Этот токен нужен для проверки бота, установки webhook и отправки ответов сотрудникам." />
               </label>
               <input
@@ -2030,6 +2160,113 @@ function Admin() {
                 placeholder="Например: 123456789:AA..."
               />
             </div>
+
+            <SettingsActions>
+              <button className="btn btn-success" onClick={saveAppSettings} disabled={savingAppSettings}>
+                {savingAppSettings ? 'Сохранение...' : 'Сохранить настройки'}
+              </button>
+              <button className="btn btn-primary" onClick={checkTelegramBot} disabled={checkingTelegramBot || savingAppSettings}>
+                {checkingTelegramBot ? 'Проверка...' : 'Проверить бота'}
+              </button>
+              <button className="btn" onClick={setupTelegramWebhook} disabled={settingTelegramWebhook || savingAppSettings}>
+                {settingTelegramWebhook ? 'Установка...' : 'Установить webhook'}
+              </button>
+              <button
+                className="btn btn-info"
+                onClick={refreshAuthorizedTelegramMenuButtons}
+                disabled={refreshingAuthorizedMenuButtons || settingTelegramWebhook || savingAppSettings}
+              >
+                {refreshingAuthorizedMenuButtons ? 'Обновление...' : '🔄 Обновить кнопки ТГ'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => fetchTelegramLogs({ openModal: true })} disabled={telegramLogsLoading}>
+                {telegramLogsLoading ? 'Загрузка логов...' : 'Логи ТГ бота'}
+              </button>
+            </SettingsActions>
+
+            {telegramCheckResult && (
+              <div className="panel-info">
+                <div className="panel-info-title">Основной Telegram-бот подключен</div>
+                <div className="panel-info-grid">
+                  <div><strong>Бот:</strong> {telegramCheckResult?.bot?.firstName || '—'}</div>
+                  <div><strong>Username:</strong> {telegramCheckResult?.bot?.username ? `@${telegramCheckResult.bot.username}` : '—'}</div>
+                  <div><strong>Webhook:</strong> {telegramCheckResult?.webhook?.url || 'не настроен'}</div>
+                  <div><strong>Ожидает обновлений:</strong> {telegramCheckResult?.webhook?.pendingUpdateCount ?? 0}</div>
+                </div>
+                <div className="panel-info-text">
+                  Для авторизации сотрудников webhook должен указывать на адрес:
+                  <div className="panel-info-code text-mono">
+                    {telegramCheckResult.recommendedWebhookUrl}
+                  </div>
+                </div>
+                {telegramCheckResult?.webhook?.lastErrorMessage && (
+                  <div className="mt-10 text-danger text-small-13">
+                    Последняя ошибка webhook: {telegramCheckResult.webhook.lastErrorMessage}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <SectionHeader
+              title="📦 Telegram-бот отдела снабжения"
+              description="Отдельный бот для заявок на закупку расходников, запчастей, деталей и прочих нужд снабжения."
+            />
+
+            <div className="form-group">
+              <label className="helper-label">
+                Токен Telegram-бота снабжения
+                <HelpTooltip text="Вставьте bot token отдельного бота для отдела снабжения. На этот токен будут приходить уведомления о новых заявках на расходники и запчасти." />
+              </label>
+              <input
+                type="password"
+                value={appSettings.telegramSupplyBotToken}
+                onChange={e => setAppSettings({ ...appSettings, telegramSupplyBotToken: e.target.value })}
+                placeholder="Например: 987654321:BB..."
+              />
+            </div>
+
+            <SettingsActions>
+              <button className="btn btn-primary" onClick={checkTelegramSupplyBot} disabled={checkingTelegramSupplyBot || savingAppSettings}>
+                {checkingTelegramSupplyBot ? 'Проверка...' : 'Проверить бота снабжения'}
+              </button>
+              <button className="btn" onClick={setupTelegramSupplyWebhook} disabled={settingTelegramSupplyWebhook || savingAppSettings}>
+                {settingTelegramSupplyWebhook ? 'Установка...' : 'Установить webhook снабжения'}
+              </button>
+              <button
+                className="btn btn-info"
+                onClick={refreshAuthorizedSupplyTelegramMenuButtons}
+                disabled={refreshingAuthorizedSupplyMenuButtons || settingTelegramSupplyWebhook || savingAppSettings}
+              >
+                {refreshingAuthorizedSupplyMenuButtons ? 'Обновление...' : '🔄 Обновить кнопки снабжения'}
+              </button>
+            </SettingsActions>
+
+            {telegramSupplyCheckResult && (
+              <div className="panel-info">
+                <div className="panel-info-title">Telegram-бот снабжения подключен</div>
+                <div className="panel-info-grid">
+                  <div><strong>Бот:</strong> {telegramSupplyCheckResult?.bot?.firstName || '—'}</div>
+                  <div><strong>Username:</strong> {telegramSupplyCheckResult?.bot?.username ? `@${telegramSupplyCheckResult.bot.username}` : '—'}</div>
+                  <div><strong>Webhook:</strong> {telegramSupplyCheckResult?.webhook?.url || 'не настроен'}</div>
+                  <div><strong>Ожидает обновлений:</strong> {telegramSupplyCheckResult?.webhook?.pendingUpdateCount ?? 0}</div>
+                </div>
+                <div className="panel-info-text">
+                  Webhook бота снабжения должен указывать на адрес:
+                  <div className="panel-info-code text-mono">
+                    {telegramSupplyCheckResult.recommendedWebhookUrl}
+                  </div>
+                </div>
+                {telegramSupplyCheckResult?.webhook?.lastErrorMessage && (
+                  <div className="mt-10 text-danger text-small-13">
+                    Последняя ошибка webhook: {telegramSupplyCheckResult.webhook.lastErrorMessage}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <SectionHeader
+              title="💬 Супергруппа Telegram (общая)"
+              description="Используется основным ботом для автоматического создания topic-групп к каждому новому заказу."
+            />
 
             <div className="form-group">
               <label className="helper-label">
@@ -2063,51 +2300,6 @@ function Admin() {
                 </span>
               </label>
             </div>
-
-            <SettingsActions>
-              <button className="btn btn-success" onClick={saveAppSettings} disabled={savingAppSettings}>
-                {savingAppSettings ? 'Сохранение...' : 'Сохранить настройки'}
-              </button>
-              <button className="btn btn-primary" onClick={checkTelegramBot} disabled={checkingTelegramBot || savingAppSettings}>
-                {checkingTelegramBot ? 'Проверка...' : 'Проверить бота'}
-              </button>
-              <button className="btn" onClick={setupTelegramWebhook} disabled={settingTelegramWebhook || savingAppSettings}>
-                {settingTelegramWebhook ? 'Установка...' : 'Установить webhook'}
-              </button>
-              <button
-                className="btn btn-info"
-                onClick={refreshAuthorizedTelegramMenuButtons}
-                disabled={refreshingAuthorizedMenuButtons || settingTelegramWebhook || savingAppSettings}
-              >
-                {refreshingAuthorizedMenuButtons ? 'Обновление...' : '🔄 Обновить кнопки ТГ'}
-              </button>
-              <button className="btn btn-secondary" onClick={() => fetchTelegramLogs({ openModal: true })} disabled={telegramLogsLoading}>
-                {telegramLogsLoading ? 'Загрузка логов...' : 'Логи ТГ бота'}
-              </button>
-            </SettingsActions>
-
-            {telegramCheckResult && (
-              <div className="panel-info">
-                <div className="panel-info-title">Telegram-бот подключен</div>
-                <div className="panel-info-grid">
-                  <div><strong>Бот:</strong> {telegramCheckResult?.bot?.firstName || '—'}</div>
-                  <div><strong>Username:</strong> {telegramCheckResult?.bot?.username ? `@${telegramCheckResult.bot.username}` : '—'}</div>
-                  <div><strong>Webhook:</strong> {telegramCheckResult?.webhook?.url || 'не настроен'}</div>
-                  <div><strong>Ожидает обновлений:</strong> {telegramCheckResult?.webhook?.pendingUpdateCount ?? 0}</div>
-                </div>
-                <div className="panel-info-text">
-                  Для авторизации сотрудников webhook должен указывать на адрес:
-                  <div className="panel-info-code text-mono">
-                    {telegramCheckResult.recommendedWebhookUrl}
-                  </div>
-                </div>
-                {telegramCheckResult?.webhook?.lastErrorMessage && (
-                  <div className="mt-10 text-danger text-small-13">
-                    Последняя ошибка webhook: {telegramCheckResult.webhook.lastErrorMessage}
-                  </div>
-                )}
-              </div>
-            )}
 
           </div>
         )}
@@ -2397,8 +2589,10 @@ function Admin() {
                               setAppSettings((prevPersist) => ({
                                 publicBaseUrl: typeof persisted.publicBaseUrl === 'string' ? persisted.publicBaseUrl : prevPersist.publicBaseUrl,
                                 telegramBotToken: typeof persisted.telegramBotToken === 'string' ? persisted.telegramBotToken : prevPersist.telegramBotToken,
+                                telegramSupplyBotToken: typeof persisted.telegramSupplyBotToken === 'string' ? persisted.telegramSupplyBotToken : prevPersist.telegramSupplyBotToken,
                                 telegramSupergroupChatId: typeof persisted.telegramSupergroupChatId === 'string' ? persisted.telegramSupergroupChatId : prevPersist.telegramSupergroupChatId,
                                 telegramSupergroupEnabled: typeof persisted.telegramSupergroupEnabled === 'boolean' ? persisted.telegramSupergroupEnabled : prevPersist.telegramSupergroupEnabled,
+                                telegramStageNotificationEmployeeIds: Array.isArray(persisted.telegramStageNotificationEmployeeIds) ? persisted.telegramStageNotificationEmployeeIds : prevPersist.telegramStageNotificationEmployeeIds,
                                 telegramRequestNotificationEmployeeIds: Array.isArray(persisted.telegramRequestNotificationEmployeeIds) ? persisted.telegramRequestNotificationEmployeeIds : prevPersist.telegramRequestNotificationEmployeeIds,
                                 selfUpdateEnabled: typeof persisted.selfUpdateEnabled === 'boolean' ? persisted.selfUpdateEnabled : prevPersist.selfUpdateEnabled,
                                 strictStageOwnershipEnabled: typeof persisted.strictStageOwnershipEnabled === 'boolean' ? persisted.strictStageOwnershipEnabled : prevPersist.strictStageOwnershipEnabled,
