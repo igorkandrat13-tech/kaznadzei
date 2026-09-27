@@ -874,6 +874,48 @@ function hasMaterialRequestChangesBetweenOrders(prevOrder, nextOrder) {
   return serialize(prevItems) !== serialize(nextItems);
 }
 
+function buildSupplyNotifyFromIncomingPayload(orderNumber, customer, incomingItems, { notifySource, notifyItemId } = {}) {
+  const source = String(notifySource || '').trim().toLowerCase();
+  const itemId = String(notifyItemId || '').trim();
+  if (!source || !itemId || !Array.isArray(incomingItems)) return '';
+
+  const targetItem = incomingItems.find((it) => String(it?.itemId || '').trim() === itemId) || null;
+  if (!targetItem) return '';
+
+  const header = [
+    targetItem.room,
+    targetItem.itemNumber ? `изд. ${targetItem.itemNumber}` : '',
+    targetItem.name,
+  ].filter(Boolean).join(' • ');
+
+  const rows = [];
+  if (source === 'package') {
+    const list = Array.isArray(targetItem.packageItems) ? targetItem.packageItems : [];
+    if (!list.length) return '';
+    rows.push(`— Позиции комплектации${header ? ` (${header})` : ''}:`);
+    list.forEach((p, i) => {
+      rows.push(`  ${i + 1}. ${String(p?.name || '—').trim()}${p?.isCompleted ? ' ✔️' : ''}`);
+    });
+  } else if (source === 'material') {
+    const list = Array.isArray(targetItem.materialRequestItems) ? targetItem.materialRequestItems : [];
+    if (!list.length) return '';
+    rows.push(`— Заявки на расходники${header ? ` (${header})` : ''}:`);
+    list.forEach((p, i) => {
+      const displayName = String(p?.name || '—').trim();
+      rows.push(`  ${i + 1}. ${displayName}${String(p?.kind || '').trim().toLowerCase() === 'photo' ? ' (Фото)' : ''}${p?.isCompleted ? ' ✔️' : ''}`);
+    });
+  }
+
+  if (!rows.length) return '';
+  return [
+    'Обновление заявок на закупку (админка):',
+    `Заказ: ${String(orderNumber || 'не указан').trim()}`,
+    `Заказчик: ${String(customer || 'не указан').trim()}`,
+    '',
+    ...rows,
+  ].join('\n');
+}
+
 
 function getOrderItemOrFail(order, itemId) {
   const item = OrderStore.getOrderItem(order, itemId);
@@ -2787,9 +2829,24 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
         notesChanged: OrderStore.getOrderPrimaryNotes(previousOrder) !== OrderStore.getOrderPrimaryNotes(nextOrder),
       },
     });
-    if (items) {
+
+    let notifyText = '';
+    const supplyNotifySource = String(req.body?._supplyNotifySource || '').trim().toLowerCase();
+    const supplyNotifyItemId = String(req.body?._supplyNotifyItemId || '').trim();
+    if (supplyNotifySource && supplyNotifyItemId && Array.isArray(req.body?.items)) {
+      const displayOrderNumber = String(req.body?.orderNumber || nextOrder?.orderNumber || previousOrder?.orderNumber || '').trim();
+      const displayCustomer = String(req.body?.customer || nextOrder?.customer || previousOrder?.customer || '').trim();
+      notifyText = buildSupplyNotifyFromIncomingPayload(
+        displayOrderNumber,
+        displayCustomer,
+        req.body.items,
+        { notifySource: supplyNotifySource, notifyItemId: supplyNotifyItemId }
+      );
+    }
+
+    if (!notifyText && items) {
       const addedDiff = diffOrderItemsAddedMaterialData(previousOrder, nextOrder);
-      let notifyText = buildMaterialRequestWatchersManagerUpdateText(nextOrder, addedDiff);
+      notifyText = buildMaterialRequestWatchersManagerUpdateText(nextOrder, addedDiff);
       if (!notifyText && hasMaterialRequestChangesBetweenOrders(previousOrder, nextOrder)) {
         notifyText = [
           'Обновление заявок на закупку (админка):',
@@ -2798,10 +2855,12 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
           'Состав комплектации или заявок на расходники был изменен.',
         ].join('\n');
       }
-      if (notifyText) {
-        notifyMaterialRequestWatchers(notifyText).catch(() => {});
-      }
     }
+
+    if (notifyText) {
+      notifyMaterialRequestWatchers(notifyText).catch(() => {});
+    }
+
     res.json(nextOrder);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });

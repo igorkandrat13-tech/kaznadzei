@@ -2693,6 +2693,8 @@ function OrdersWorkspace() {
       orderNumber: order.orderNumber || '',
       customer: order.customer || '',
       orderDate: order.orderDate || '',
+      _supplyNotifySource: 'package',
+      _supplyNotifyItemId: packageEditor.itemId,
       items: buildOrderItemsPayload((order.items || []).map((item) => (
         item.itemId === packageEditor.itemId
           ? {
@@ -2789,6 +2791,8 @@ function OrdersWorkspace() {
       orderNumber: order.orderNumber || '',
       customer: order.customer || '',
       orderDate: order.orderDate || '',
+      _supplyNotifySource: 'material',
+      _supplyNotifyItemId: materialRequestEditor.itemId,
       items: buildOrderItemsPayload((order.items || []).map((item) => (
         item.itemId === materialRequestEditor.itemId
           ? {
