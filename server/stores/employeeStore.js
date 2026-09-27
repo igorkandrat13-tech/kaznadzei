@@ -68,7 +68,7 @@ const EmployeeStore = {
     const db = load();
     const employee = db.employees.find(item => item._id === employeeId);
     if (!employee) return null;
-    Object.assign(employee, {
+    const patch = {
       telegramUserId: String(telegramData.userId),
       telegramChatId: String(telegramData.chatId),
       telegramUsername: telegramData.username || employee.telegramUsername || '',
@@ -76,9 +76,18 @@ const EmployeeStore = {
       telegramLastName: telegramData.lastName || '',
       telegramAuthorizedAt: new Date().toISOString(),
       telegramLastSeenAt: new Date().toISOString(),
-      pinCode: '',
       updatedAt: new Date().toISOString(),
+    };
+    const kinds = normalizeEmployeeBotKinds({ ...employee, ...patch });
+    const hasUnlinkedKind = kinds.some((k) => {
+      if (!String(patch.telegramUserId || '').trim()) return true;
+      const alreadyLinkedForKind = EmployeeStore.findByTelegramUserId(patch.telegramUserId, { botKind: k });
+      return !alreadyLinkedForKind || String(alreadyLinkedForKind._id || '') !== String(employeeId);
     });
+    if (!hasUnlinkedKind) {
+      patch.pinCode = '';
+    }
+    Object.assign(employee, patch);
     save();
     return { ...employee, telegramBotKinds: normalizeEmployeeBotKinds(employee) };
   },

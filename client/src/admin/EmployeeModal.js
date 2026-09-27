@@ -136,6 +136,41 @@ function EmployeeModal({
     : 'primary';
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const [diagnosticsResult, setDiagnosticsResult] = useState(null);
+  const [botKindsDropdownOpen, setBotKindsDropdownOpen] = useState(false);
+
+  const BOT_KIND_OPTIONS = [
+    {
+      key: 'primary',
+      title: 'Основной бот (этапы / статусы заказов)',
+      subtitle: 'Мастерские, производственные этапы, уведомления о статусах заказов.',
+    },
+    {
+      key: 'supply',
+      title: 'Бот отдела снабжения (заявки / закупки)',
+      subtitle: 'Заявки на расходники, запчасти, детали и другие закупки.',
+    },
+  ];
+
+  const currentBotKinds = Array.isArray(employeeForm?.telegramBotKinds)
+    ? employeeForm.telegramBotKinds.slice()
+    : (String(employeeForm?.telegramBotKind || 'primary').trim() === 'supply' ? ['supply'] : ['primary']);
+  const botKindsSummary = (() => {
+    if (currentBotKinds.length >= BOT_KIND_OPTIONS.length) return 'Выбраны все боты';
+    if (currentBotKinds.length === 0) return 'Не выбран ни один бот';
+    return currentBotKinds
+      .map((k) => (BOT_KIND_OPTIONS.find((o) => o.key === k)?.title || k))
+      .join(' + ');
+  })();
+
+  const toggleBotKind = (kind) => {
+    const current = Array.isArray(employeeForm?.telegramBotKinds) ? [...employeeForm.telegramBotKinds] : [];
+    const exists = current.includes(kind);
+    let next = exists ? current.filter((k) => k !== kind) : Array.from(new Set([...current, kind]));
+    if (!next.length) next = ['primary'];
+    const singleKind = next.includes('supply') && !next.includes('primary') ? 'supply' : 'primary';
+    setEmployeeForm({ ...employeeForm, telegramBotKinds: next, telegramBotKind: singleKind });
+  };
+
   const runEmployeeTokenDiagnostics = useCallback(async () => {
     try {
       setDiagnosticsLoading(true);
@@ -206,54 +241,99 @@ function EmployeeModal({
 
       <div className="form-group">
         <label>Привязка к Telegram-ботам</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '6px 2px' }}>
-          <label className="checkbox-row" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <input
-              type="checkbox"
-              checked={Array.isArray(employeeForm?.telegramBotKinds) && employeeForm.telegramBotKinds.includes('primary')}
-              onChange={(e) => {
-                const current = Array.isArray(employeeForm?.telegramBotKinds) ? [...employeeForm.telegramBotKinds] : [];
-                let next = e.target.checked
-                  ? Array.from(new Set([...current, 'primary']))
-                  : current.filter((k) => k !== 'primary');
-                if (!next.length) next = ['primary'];
-                const singleKind = next.includes('supply') && !next.includes('primary') ? 'supply' : 'primary';
-                setEmployeeForm({ ...employeeForm, telegramBotKinds: next, telegramBotKind: singleKind });
+        <div
+          className="telegram-bot-kind-dropdown"
+          style={{
+            position: 'relative',
+            width: '100%',
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setBotKindsDropdownOpen((v) => !v)}
+            disabled={saving}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              textAlign: 'left',
+              padding: '10px 12px',
+            }}
+          >
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {botKindsSummary}
+            </span>
+            <span aria-hidden="true" style={{ paddingLeft: 12, flexShrink: 0 }}>
+              {botKindsDropdownOpen ? '▲' : '▼'}
+            </span>
+          </button>
+          {botKindsDropdownOpen ? (
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 'calc(100% + 6px)',
+                zIndex: 20,
+                background: '#ffffff',
+                border: '1px solid #d7e3f1',
+                borderRadius: 8,
+                boxShadow: '0 6px 14px rgba(23, 56, 87, 0.10)',
+                overflow: 'hidden',
               }}
-              disabled={saving}
-            />
-            <div>
-              <div style={{ fontWeight: 600 }}>Основной бот (этапы / статусы заказов)</div>
-              <div className="text-small text-subtle" style={{ marginTop: 4 }}>
-                Мастерские, производственные этапы, уведомления о статусах заказов.
-              </div>
+              onClick={(e) => e.stopPropagation()}
+            >
+              {BOT_KIND_OPTIONS.map((opt) => {
+                const checked = currentBotKinds.includes(opt.key);
+                return (
+                  <label
+                    key={opt.key}
+                    className="telegram-bot-kind-row"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 12,
+                      padding: '12px 14px',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      borderBottom:
+                        opt.key !== BOT_KIND_OPTIONS[BOT_KIND_OPTIONS.length - 1].key
+                          ? '1px solid #eaf1fa'
+                          : 'none',
+                      userSelect: 'none',
+                      background: checked ? '#f5faff' : '#ffffff',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleBotKind(opt.key)}
+                      disabled={saving}
+                      style={{
+                        marginTop: 2,
+                        width: 18,
+                        height: 18,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: '#173857' }}>{opt.title}</div>
+                      <div
+                        className="text-small text-subtle"
+                        style={{ marginTop: 4, lineHeight: 1.45 }}
+                      >
+                        {opt.subtitle}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
-          </label>
-          <label className="checkbox-row" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <input
-              type="checkbox"
-              checked={Array.isArray(employeeForm?.telegramBotKinds) && employeeForm.telegramBotKinds.includes('supply')}
-              onChange={(e) => {
-                const current = Array.isArray(employeeForm?.telegramBotKinds) ? [...employeeForm.telegramBotKinds] : [];
-                let next = e.target.checked
-                  ? Array.from(new Set([...current, 'supply']))
-                  : current.filter((k) => k !== 'supply');
-                if (!next.length) next = ['primary'];
-                const singleKind = next.includes('supply') && !next.includes('primary') ? 'supply' : 'primary';
-                setEmployeeForm({ ...employeeForm, telegramBotKinds: next, telegramBotKind: singleKind });
-              }}
-              disabled={saving}
-            />
-            <div>
-              <div style={{ fontWeight: 600 }}>Бот отдела снабжения (заявки / закупки)</div>
-              <div className="text-small text-subtle" style={{ marginTop: 4 }}>
-                Заявки на расходники, запчасти, детали и другие закупки. Можно включить вместе с основным ботом.
-              </div>
-            </div>
-          </label>
+          ) : null}
         </div>
         <div className="text-small text-subtle" style={{ marginTop: 8 }}>
-          Отметьте оба бота — тогда сотрудник сможет авторизоваться в каждом из них под одной карточкой и будет получать уведомления от обоих сразу.
+          Отметьте оба бота — тогда сотрудник сможет авторизоваться в каждом из них под одной карточкой (один PIN подряд в каждом боте) и будет получать уведомления от обоих сразу.
         </div>
       </div>
 
