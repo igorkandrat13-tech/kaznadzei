@@ -2437,6 +2437,27 @@ function Admin() {
   }
 
   if (activeRole === 'employees') {
+    const getEmployeeBotKinds = (employee) => {
+      if (Array.isArray(employee?.telegramBotKinds) && employee.telegramBotKinds.length) {
+        return employee.telegramBotKinds.filter((k) => k === 'primary' || k === 'supply');
+      }
+      const single = String(employee?.telegramBotKind || 'primary').trim();
+      return single === 'supply' ? ['supply'] : ['primary'];
+    };
+    const getEmployeeBotKindsLabel = (kinds) => {
+      const hasPrimary = kinds.includes('primary');
+      const hasSupply = kinds.includes('supply');
+      if (hasPrimary && hasSupply) return 'Оба бота';
+      if (hasSupply) return 'Бот снабжения';
+      return 'Основной бот';
+    };
+    const getEmployeeBotKindsBadgeColor = (kinds) => {
+      const hasPrimary = kinds.includes('primary');
+      const hasSupply = kinds.includes('supply');
+      if (hasPrimary && hasSupply) return { background: '#e8f7ee', border: '1px solid #b8e6c9', color: '#2b7947' };
+      if (hasSupply) return { background: '#e9f1ff', border: '1px solid #c7d8f6', color: '#2c55a6' };
+      return { background: '#eaf3fb', border: '1px solid #c6e0f5', color: '#1f4f7a' };
+    };
     return (
       <div>
         <SettingsHeader title="⚙️ Настройки — Сотрудники" onBack={() => navigate('/orders')} activeRole={activeRole} onTabChange={handleSettingsTabChange} tabs={[]} />
@@ -2472,7 +2493,32 @@ function Admin() {
                       </td>
                       <td>{getRoleLabel(employee.role) || '—'}</td>
                       <td>{renderAllowedColumnsMarkers(employee, { compact: true, ownOnly: true, optionsByKey: employeeColumnOptionsByKey })}</td>
-                      <td>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span>{employee.telegramUserId ? 'Привязан' : 'Не привязан'}</span>
+                          {(() => {
+                            const kinds = getEmployeeBotKinds(employee);
+                            const badgeStyle = getEmployeeBotKindsBadgeColor(kinds);
+                            return (
+                              <span
+                                className="badge"
+                                style={{
+                                  ...badgeStyle,
+                                  display: 'inline-flex',
+                                  width: 'fit-content',
+                                  fontSize: 11,
+                                  padding: '2px 8px',
+                                  borderRadius: 999,
+                                  fontWeight: 600,
+                                  alignSelf: 'flex-start',
+                                }}
+                              >
+                                {getEmployeeBotKindsLabel(kinds)}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td>{getEmployeeTelegramSummary(employee)}</td>
                       <td>{employee.telegramAuthorizedAt ? formatDateTimeDisplay(employee.telegramAuthorizedAt) : '—'}</td>
                       <td>{employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</td>
@@ -2502,7 +2548,30 @@ function Admin() {
                     <div className="mobile-order-card-subtitle">{getRoleLabel(employee.role) || 'Должность не указана'}</div>
                   </div>
                   <div className="mobile-settings-card-meta">
-                    <div><strong>Статус TG:</strong> {employee.telegramUserId ? 'Привязан' : 'Не привязан'}</div>
+                    <div>
+                      <strong>Статус TG:</strong> {employee.telegramUserId ? 'Привязан' : 'Не привязан'}
+                      {(() => {
+                        const kinds = getEmployeeBotKinds(employee);
+                        const badgeStyle = getEmployeeBotKindsBadgeColor(kinds);
+                        return (
+                          <span
+                            className="badge"
+                            style={{
+                              ...badgeStyle,
+                              display: 'inline-flex',
+                              marginLeft: 8,
+                              fontSize: 11,
+                              padding: '2px 8px',
+                              borderRadius: 999,
+                              fontWeight: 600,
+                              verticalAlign: 'middle',
+                            }}
+                          >
+                            {getEmployeeBotKindsLabel(kinds)}
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <div><strong>Пользователь TG:</strong> {employee.telegramUserId ? employee.telegramUsername || 'без username' : '—'}</div>
                     <div><strong>Авторизован:</strong> {employee.telegramAuthorizedAt ? formatDateTimeDisplay(employee.telegramAuthorizedAt) : '—'}</div>
                     <div><strong>PIN:</strong> {employee.pinCode || (employee.telegramUserId ? 'Использован' : '—')}</div>

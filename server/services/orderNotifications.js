@@ -4,16 +4,19 @@ const SettingsStore = require('../stores/settingsStore');
 const { sendMessage } = require('./telegramService');
 const { normalizeEmployeeBotKinds } = require('../stores/employeeStore');
 
-function getEmployeeTelegramBotTokens(employee) {
+function getEmployeeTelegramBotTokens(employee, { notificationType = 'any' } = {}) {
   const settings = SettingsStore.get() || {};
   const kinds = normalizeEmployeeBotKinds(employee);
   const primaryToken = String(settings.telegramBotToken || '').trim();
   const supplyToken = String(settings.telegramSupplyBotToken || '').trim();
   const tokens = [];
-  if (kinds.includes('primary') && primaryToken) {
+  const type = String(notificationType || 'any');
+  const allowPrimary = true;
+  const allowSupply = type !== 'status-only';
+  if (allowPrimary && kinds.includes('primary') && primaryToken) {
     tokens.push({ botKind: 'primary', token: primaryToken });
   }
-  if (kinds.includes('supply') && supplyToken) {
+  if (allowSupply && kinds.includes('supply') && supplyToken) {
     tokens.push({ botKind: 'supply', token: supplyToken });
   }
   return tokens;
@@ -47,7 +50,7 @@ async function notifyEmployeesByRole(role, text) {
   const employees = getTelegramReadyEmployeesByRole(role);
   const sends = [];
   employees.forEach((employee) => {
-    const tokens = getEmployeeTelegramBotTokens(employee);
+    const tokens = getEmployeeTelegramBotTokens(employee, { notificationType: 'status-only' });
     tokens.forEach(({ token }) => {
       sends.push(sendMessage(token, employee.telegramChatId, text));
     });
@@ -56,16 +59,17 @@ async function notifyEmployeesByRole(role, text) {
   await Promise.allSettled(sends);
 }
 
-async function notifyEmployeesByIds(employeeIds = [], text = '') {
+async function notifyEmployeesByIds(employeeIds = [], text = '', options = {}) {
   const normalizedText = String(text || '').trim();
   if (!normalizedText) return;
+  const notificationType = String(options?.notificationType || 'any');
 
   const employees = getTelegramReadyEmployeesByIds(employeeIds);
   if (!employees.length) return;
 
   const sends = [];
   employees.forEach((employee) => {
-    const tokens = getEmployeeTelegramBotTokens(employee);
+    const tokens = getEmployeeTelegramBotTokens(employee, { notificationType });
     tokens.forEach(({ token }) => {
       sends.push(sendMessage(token, employee.telegramChatId, normalizedText));
     });
@@ -76,7 +80,7 @@ async function notifyEmployeesByIds(employeeIds = [], text = '') {
 
 async function notifyMaterialRequestWatchers(text = '') {
   const recipientIds = SettingsStore.get().telegramRequestNotificationEmployeeIds || [];
-  await notifyEmployeesByIds(recipientIds, text);
+  await notifyEmployeesByIds(recipientIds, text, { notificationType: 'request-only' });
 }
 
 async function notifyOrderCreated(order) {

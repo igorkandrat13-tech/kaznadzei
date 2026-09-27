@@ -251,7 +251,15 @@ function getTelegramPhotoMimeType(filePath = '') {
   return 'image/jpeg';
 }
 
-function getAuthorizedMessageReplyMarkup(employee = {}) {
+function getBotKindByToken(token) {
+  if (String(token || '').trim() === String(getConfiguredBotToken('supply') || '').trim()) return 'supply';
+  return 'primary';
+}
+
+function getAuthorizedMessageReplyMarkup(employee = {}, { botKind = 'primary' } = {}) {
+  if (botKind === 'supply') {
+    return { remove_keyboard: true };
+  }
   const isWaitingForWorkshopRequest = getEmployeePendingAction(employee) === EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST;
   const keyboardRow = [];
 
@@ -304,12 +312,13 @@ async function resetEmployeeKeyboardSilently(token, chatId, employee = {}) {
   let sent = false;
   let deleted = false;
   let error = '';
+  const botKind = getBotKindByToken(token);
   try {
     const resetText = '\u00a0';
     const sendResult = await sendMessage(token, {
       chat_id: chatId,
       text: resetText,
-      reply_markup: JSON.stringify(getAuthorizedMessageReplyMarkup(employee)),
+      reply_markup: JSON.stringify(getAuthorizedMessageReplyMarkup(employee, { botKind })),
       disable_notification: true,
       disable_web_page_preview: true,
     });
@@ -331,16 +340,17 @@ async function resetEmployeeKeyboardSilently(token, chatId, employee = {}) {
 
 async function syncTelegramMenuButton(token, chatId) {
   if (!chatId) return { updated: false, error: 'empty_chat_id', url: '' };
-  const employee = getEmployeeByTelegramChatId(chatId);
+  const botKind = getBotKindByToken(token);
+  const employee = getEmployeeByTelegramChatId(chatId, { botKind });
   if (!employee) {
     await clearTelegramMenuButton(token, chatId);
     return { updated: false, error: 'no_employee_by_chat_id', url: '' };
   }
-  let urlBotKind = 'primary';
-  if (String(token || '').trim() === String(getConfiguredBotToken('supply') || '').trim()) {
-    urlBotKind = 'supply';
+  if (botKind === 'supply') {
+    await clearTelegramMenuButton(token, chatId);
+    return { updated: true, error: '', url: '', botKind: 'supply' };
   }
-  const webAppUrlWithToken = buildEmployeeWebAppUrl(employee, { botKind: urlBotKind });
+  const webAppUrlWithToken = buildEmployeeWebAppUrl(employee, { botKind: 'primary' });
   if (!webAppUrlWithToken) {
     await clearTelegramMenuButton(token, chatId);
     return { updated: false, error: 'empty_url', url: '' };
@@ -370,8 +380,22 @@ async function syncTelegramMenuButton(token, chatId) {
 }
 
 async function sendAuthorizedMessage(token, chatId, text, employee) {
+  const botKind = getBotKindByToken(token);
   await syncTelegramMenuButton(token, chatId);
-  await sendMessage(token, chatId, text, { reply_markup: getAuthorizedMessageReplyMarkup(employee) });
+  const reply_markup = getAuthorizedMessageReplyMarkup(employee, { botKind });
+  let actualText = String(text || '');
+  if (botKind === 'supply' && employee) {
+    const supplyGreetingMarker = 'Используйте кнопки "Сканер QR" и "Заявки" ниже.';
+    if (actualText.includes(supplyGreetingMarker)) {
+      actualText = [
+        `✅ Вы авторизованы в боте отдела снабжения как ${employee.fullName || 'сотрудник'}.`,
+        '',
+        'Этот бот присылает только уведомления о новых заявках на закупки (расходники, запчасти, детали).',
+        'Для работы со сканером QR, этапами заказов и создания заявок в цех используйте основной бот Казнадзеи.',
+      ].join('\n');
+    }
+  }
+  await sendMessage(token, chatId, actualText, { reply_markup });
 }
 
 async function sendGuestMessage(token, chatId, text) {
@@ -786,6 +810,15 @@ async function processTelegramMessage(token, message, options = {}) {
   }
 
   if (existingEmployee) {
+    if (botKind === 'supply') {
+      await sendAuthorizedMessage(
+        token,
+        chatId,
+        `Вы уже авторизованы как ${existingEmployee.fullName}. Используйте кнопки "${EMPLOYEE_QR_SCANNER_BUTTON_TEXT}" и "${EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT}" ниже.`,
+        existingEmployee
+      );
+      return;
+    }
     if (await handleAuthorizedEmployeeMessage(token, chatId, message, existingEmployee)) {
       return;
     }
