@@ -2,14 +2,21 @@ const EmployeeStore = require('../stores/employeeStore');
 const OrderStore = require('../stores/orderStore');
 const SettingsStore = require('../stores/settingsStore');
 const { sendMessage } = require('./telegramService');
+const { normalizeEmployeeBotKinds } = require('../stores/employeeStore');
 
-function getEmployeeTelegramBotToken(employee) {
+function getEmployeeTelegramBotTokens(employee) {
   const settings = SettingsStore.get() || {};
-  const botKind = String(employee?.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
-  if (botKind === 'supply') {
-    return String(settings.telegramSupplyBotToken || '').trim();
+  const kinds = normalizeEmployeeBotKinds(employee);
+  const primaryToken = String(settings.telegramBotToken || '').trim();
+  const supplyToken = String(settings.telegramSupplyBotToken || '').trim();
+  const tokens = [];
+  if (kinds.includes('primary') && primaryToken) {
+    tokens.push({ botKind: 'primary', token: primaryToken });
   }
-  return String(settings.telegramBotToken || '').trim();
+  if (kinds.includes('supply') && supplyToken) {
+    tokens.push({ botKind: 'supply', token: supplyToken });
+  }
+  return tokens;
 }
 
 function getTelegramReadyEmployeesByRole(role) {
@@ -38,13 +45,15 @@ async function notifyEmployeesByRole(role, text) {
   if (!role || !text) return;
 
   const employees = getTelegramReadyEmployeesByRole(role);
-  await Promise.allSettled(
-    employees.map((employee) => {
-      const token = getEmployeeTelegramBotToken(employee);
-      if (!token) return null;
-      return sendMessage(token, employee.telegramChatId, text);
-    }).filter(Boolean),
-  );
+  const sends = [];
+  employees.forEach((employee) => {
+    const tokens = getEmployeeTelegramBotTokens(employee);
+    tokens.forEach(({ token }) => {
+      sends.push(sendMessage(token, employee.telegramChatId, text));
+    });
+  });
+  if (!sends.length) return;
+  await Promise.allSettled(sends);
 }
 
 async function notifyEmployeesByIds(employeeIds = [], text = '') {
@@ -54,13 +63,15 @@ async function notifyEmployeesByIds(employeeIds = [], text = '') {
   const employees = getTelegramReadyEmployeesByIds(employeeIds);
   if (!employees.length) return;
 
-  await Promise.allSettled(
-    employees.map((employee) => {
-      const token = getEmployeeTelegramBotToken(employee);
-      if (!token) return null;
-      return sendMessage(token, employee.telegramChatId, normalizedText);
-    }).filter(Boolean),
-  );
+  const sends = [];
+  employees.forEach((employee) => {
+    const tokens = getEmployeeTelegramBotTokens(employee);
+    tokens.forEach(({ token }) => {
+      sends.push(sendMessage(token, employee.telegramChatId, normalizedText));
+    });
+  });
+  if (!sends.length) return;
+  await Promise.allSettled(sends);
 }
 
 async function notifyMaterialRequestWatchers(text = '') {

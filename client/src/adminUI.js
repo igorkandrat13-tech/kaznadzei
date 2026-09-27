@@ -8,6 +8,7 @@ export const emptyEmployeeForm = {
   allowedColumns: [],
   telegramUsername: '',
   telegramBotKind: 'primary',
+  telegramBotKinds: ['primary'],
   pinCode: '',
 };
 

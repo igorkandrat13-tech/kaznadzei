@@ -55,6 +55,8 @@ const {
 } = require('../services/telegramSupergroupService');
 const { getRoleDefinitions, getRoleLabel } = require('../config/roles');
 
+const { normalizeEmployeeBotKinds, employeeHasBotKind } = require('../stores/employeeStore');
+
 const router = express.Router();
 const EMPLOYEE_QR_SCANNER_BUTTON_TEXT = 'Сканер QR';
 const EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT = 'Заявки';
@@ -93,14 +95,14 @@ function getTelegramWebAppUrl() {
   }
 }
 
-function buildEmployeeWebAppUrl(employee) {
+function buildEmployeeWebAppUrl(employee, { botKind = 'primary' } = {}) {
   const baseUrl = getTelegramWebAppUrl();
   if (!baseUrl) return '';
   try {
     const url = new URL(baseUrl);
     if (employee && employee._id) {
-      const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
-      const token = getConfiguredBotToken(botKind);
+      const kind = botKind === 'supply' ? 'supply' : 'primary';
+      const token = getConfiguredBotToken(kind);
       if (token) {
         try {
           const sessionToken = createTelegramEmployeeSessionToken(token, employee);
@@ -122,10 +124,9 @@ function getEmployeeByTelegramChatId(chatId, options = {}) {
   if (!chatId) return null;
   const normalized = String(chatId);
   const botKind = options?.botKind === 'supply' ? 'supply' : 'primary';
-  return EmployeeStore.findAll().find(emp => {
-    const empBotKind = String(emp.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
-    return String(emp.telegramChatId || '') === normalized && empBotKind === botKind;
-  }) || null;
+  return EmployeeStore.findAll().find(emp => (
+    String(emp.telegramChatId || '') === normalized && employeeHasBotKind(emp, botKind)
+  )) || null;
 }
 
 function getEmployeeRoleLabel(role) {
@@ -335,7 +336,11 @@ async function syncTelegramMenuButton(token, chatId) {
     await clearTelegramMenuButton(token, chatId);
     return { updated: false, error: 'no_employee_by_chat_id', url: '' };
   }
-  const webAppUrlWithToken = buildEmployeeWebAppUrl(employee);
+  let urlBotKind = 'primary';
+  if (String(token || '').trim() === String(getConfiguredBotToken('supply') || '').trim()) {
+    urlBotKind = 'supply';
+  }
+  const webAppUrlWithToken = buildEmployeeWebAppUrl(employee, { botKind: urlBotKind });
   if (!webAppUrlWithToken) {
     await clearTelegramMenuButton(token, chatId);
     return { updated: false, error: 'empty_url', url: '' };
@@ -378,8 +383,7 @@ async function refreshAuthorizedEmployeeAccess(token, options = {}) {
   const botKind = options?.botKind === 'supply' ? 'supply' : 'primary';
   const employees = EmployeeStore.findAll().filter(employee => {
     if (!String(employee.telegramChatId || '').trim()) return false;
-    const employeeBotKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
-    return employeeBotKind === botKind;
+    return employeeHasBotKind(employee, botKind);
   });
 
   let refreshedCount = 0;
@@ -1485,10 +1489,9 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
     if (!employee) {
       return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
     }
-    const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
-    const token = getConfiguredBotToken(botKind);
-    if (!token) {
-      return res.status(400).json({ ok: false, message: `Сначала сохраните токен ${botKind === 'supply' ? 'Telegram-бота снабжения' : 'Telegram-бота'} в Настройки.` });
+    const kinds = normalizeEmployeeBotKinds(employee);
+    if (!kinds.length) {
+      return res.status(400).json({ ok: false, message: 'У сотрудника не выбран ни один ТГ-бот.' });
     }
     const now = Date.now();
     const authorizedAt = new Date(now).toISOString();
@@ -1497,45 +1500,80 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
       telegramLastSeenAt: authorizedAt,
     });
     const freshEmployee = EmployeeStore.findById(employeeId) || employee;
-    const sessionToken = createTelegramEmployeeSessionToken(token, {
-      ...freshEmployee,
-      telegramAuthorizedAt: authorizedAt,
-    });
-    const info = getTelegramEmployeeSessionTokenInfo(sessionToken);
-    const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
-    let employeeWebAppUrl = '';
-    if (publicBase) {
-      try {
-        const base = new URL('/telegram-app', publicBase);
-        const tokenSegment = encodeURIComponent(String(sessionToken));
-        base.pathname = `/telegram-app/t/${tokenSegment}/`;
-        employeeWebAppUrl = base.toString();
-      } catch (_) { /* ignore */ }
-    }
 
-    let menuButtonUpdated = false;
-    let menuButtonError = '';
-    let keyboardResetSent = false;
-    let keyboardResetDeleted = false;
-    let keyboardResetError = '';
-    const chatId = String(freshEmployee.telegramChatId || '').trim();
-    if (chatId) {
-      try {
-        await syncTelegramMenuButton(token, chatId);
-        menuButtonUpdated = true;
-      } catch (mbErr) {
-        menuButtonError = String(mbErr?.message || mbErr || '');
+    const perKind = [];
+    let lastSessionToken = '';
+    let lastEmployeeWebAppUrl = '';
+    let overallMenuButtonUpdated = false;
+    let overallMenuButtonError = '';
+    let overallKeyboardResetSent = false;
+    let overallKeyboardResetDeleted = false;
+    let overallKeyboardResetError = '';
+
+    for (const kind of kinds) {
+      const token = getConfiguredBotToken(kind);
+      if (!token) continue;
+      const sessionToken = createTelegramEmployeeSessionToken(token, {
+        ...freshEmployee,
+        telegramAuthorizedAt: authorizedAt,
+      });
+      const info = getTelegramEmployeeSessionTokenInfo(sessionToken);
+      const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
+      let employeeWebAppUrl = '';
+      if (publicBase) {
+        try {
+          const base = new URL('/telegram-app', publicBase);
+          const tokenSegment = encodeURIComponent(String(sessionToken));
+          base.pathname = `/telegram-app/t/${tokenSegment}/`;
+          employeeWebAppUrl = base.toString();
+        } catch (_) { /* ignore */ }
       }
-      try {
-        const kbReset = await resetEmployeeKeyboardSilently(token, chatId, freshEmployee);
-        keyboardResetSent = Boolean(kbReset?.sent);
-        keyboardResetDeleted = Boolean(kbReset?.deleted);
-        if (kbReset?.error && !kbReset.sent) {
-          keyboardResetError = kbReset.error;
+      lastSessionToken = sessionToken;
+      lastEmployeeWebAppUrl = employeeWebAppUrl;
+
+      let menuButtonUpdated = false;
+      let menuButtonError = '';
+      let keyboardResetSent = false;
+      let keyboardResetDeleted = false;
+      let keyboardResetError = '';
+      const chatId = String(freshEmployee.telegramChatId || '').trim();
+      if (chatId) {
+        try {
+          await syncTelegramMenuButton(token, chatId);
+          menuButtonUpdated = true;
+          overallMenuButtonUpdated = true;
+        } catch (mbErr) {
+          menuButtonError = String(mbErr?.message || mbErr || '');
+          if (!overallMenuButtonError) overallMenuButtonError = menuButtonError;
         }
-      } catch (kbErr) {
-        keyboardResetError = String(kbErr?.message || kbErr || 'keyboard_reset_failed');
+        try {
+          const kbReset = await resetEmployeeKeyboardSilently(token, chatId, freshEmployee);
+          keyboardResetSent = Boolean(kbReset?.sent);
+          keyboardResetDeleted = Boolean(kbReset?.deleted);
+          if (keyboardResetSent) overallKeyboardResetSent = true;
+          if (keyboardResetDeleted) overallKeyboardResetDeleted = true;
+          if (kbReset?.error && !kbReset.sent) {
+            keyboardResetError = kbReset.error;
+            if (!overallKeyboardResetError) overallKeyboardResetError = keyboardResetError;
+          }
+        } catch (kbErr) {
+          keyboardResetError = String(kbErr?.message || kbErr || 'keyboard_reset_failed');
+          if (!overallKeyboardResetError) overallKeyboardResetError = keyboardResetError;
+        }
       }
+      perKind.push({
+        botKind: kind,
+        sessionToken,
+        expiresAt: info?.expiresAt || '',
+        expiresAtMs: info?.expiresAtMs || 0,
+        daysLeft: info?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+        employeeWebAppUrl,
+        menuButtonUpdated,
+        menuButtonError,
+        keyboardResetSent,
+        keyboardResetDeleted,
+        keyboardResetError,
+      });
     }
 
     res.json({
@@ -1549,17 +1587,19 @@ router.post('/telegram/employee/refresh-session-token', requireAdminAccess(), ex
         telegramUserId: freshEmployee.telegramUserId || '',
         telegramUsername: freshEmployee.telegramUsername || '',
       },
-      sessionToken,
-      expiresAt: info?.expiresAt || '',
-      expiresAtMs: info?.expiresAtMs || 0,
-      daysLeft: info?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+      botKinds: kinds,
+      sessionToken: lastSessionToken,
+      employeeWebAppUrl: lastEmployeeWebAppUrl,
+      expiresAt: perKind[0]?.expiresAt || '',
+      expiresAtMs: perKind[0]?.expiresAtMs || 0,
+      daysLeft: perKind[0]?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
       ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
-      employeeWebAppUrl,
-      menuButtonUpdated,
-      menuButtonError,
-      keyboardResetSent,
-      keyboardResetDeleted,
-      keyboardResetError,
+      menuButtonUpdated: overallMenuButtonUpdated,
+      menuButtonError: overallMenuButtonError,
+      keyboardResetSent: overallKeyboardResetSent,
+      keyboardResetDeleted: overallKeyboardResetDeleted,
+      keyboardResetError: overallKeyboardResetError,
+      perKind,
     });
   } catch (error) {
     res.status(400).json({ ok: false, message: String(error.message || 'Не удалось продлить токен сотрудника.') });
@@ -1576,11 +1616,12 @@ router.post('/telegram/employee/get-menu-button', requireAdminAccess(), express.
     if (!employee) {
       return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
     }
-    const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
-    const token = getConfiguredBotToken(botKind);
-    if (!token) {
-      return res.status(400).json({ ok: false, message: `Сначала сохраните токен ${botKind === 'supply' ? 'Telegram-бота снабжения' : 'Telegram-бота'} в Настройки.` });
+    const kinds = normalizeEmployeeBotKinds(employee);
+    if (!kinds.length) {
+      return res.status(400).json({ ok: false, message: 'У сотрудника не выбран ни один ТГ-бот.' });
     }
+    const primaryKind = kinds.includes('primary') ? 'primary' : kinds[0];
+    const primaryToken = getConfiguredBotToken(primaryKind);
     const chatId = String(employee.telegramChatId || employee.telegramUserId || '').trim();
     if (!chatId) {
       return res.json({
@@ -1592,32 +1633,61 @@ router.post('/telegram/employee/get-menu-button', requireAdminAccess(), express.
         hasChatId: false,
         hasEmployeeToken: false,
         urlPreview: '',
+        expectedUrl: '',
+        urlsMatch: false,
+        botKinds: kinds,
+        perKind: kinds.map((k) => ({ botKind: k, menuButton: null, expectedUrl: buildEmployeeWebAppUrl(employee, { botKind: k }) })),
       });
     }
-    const menuButton = await getChatMenuButton(token, { chatId });
-    const type = String(menuButton?.type || (menuButton ? 'default' : 'none'));
-    const actualUrl = String(menuButton?.web_app?.url || '');
-    const expectedUrl = buildEmployeeWebAppUrl(employee);
-    const hasPathToken = /\/telegram-app\/t\/[^/?#]{32,}/.test(actualUrl) || /[?&]employeeSessionToken=/.test(actualUrl);
-    const urlsMatch = Boolean(expectedUrl && actualUrl && actualUrl.replace(/\/$/, '') === expectedUrl.replace(/\/$/, ''));
+
+    const perKind = await Promise.all(
+      kinds.map(async (kind) => {
+        const token = getConfiguredBotToken(kind);
+        if (!token) {
+          return {
+            botKind: kind,
+            tokenSet: false,
+            menuButton: null,
+            type: 'none',
+            actualUrl: '',
+            expectedUrl: buildEmployeeWebAppUrl(employee, { botKind: kind }),
+            hasEmployeeToken: false,
+            urlsMatch: false,
+          };
+        }
+        const menuButton = await getChatMenuButton(token, { chatId }).catch(() => null);
+        const type = String(menuButton?.type || (menuButton ? 'default' : 'none'));
+        const actualUrl = String(menuButton?.web_app?.url || '');
+        const expectedUrl = buildEmployeeWebAppUrl(employee, { botKind: kind });
+        const hasPathToken = /\/telegram-app\/t\/[^/?#]{32,}/.test(actualUrl) || /[?&]employeeSessionToken=/.test(actualUrl);
+        const urlsMatch = Boolean(expectedUrl && actualUrl && actualUrl.replace(/\/$/, '') === expectedUrl.replace(/\/$/, ''));
+        return {
+          botKind: kind,
+          tokenSet: true,
+          menuButton,
+          type,
+          actualUrl,
+          expectedUrl,
+          hasEmployeeToken: hasPathToken,
+          urlsMatch,
+        };
+      }),
+    );
+
+    const primary = perKind.find((p) => p.botKind === primaryKind) || perKind[0] || {};
     res.json({
       ok: true,
       employeeId,
       chatId,
-      menuButton,
-      type,
+      menuButton: primary.menuButton || null,
+      type: primary.type || 'none',
       hasChatId: true,
-      hasEmployeeToken: hasPathToken,
-      urlPreview: actualUrl,
-      expectedUrl,
-      urlsMatch,
-      diff: {
-        hasExpected: Boolean(expectedUrl),
-        hasActual: Boolean(actualUrl),
-        expectedPath: (() => { try { return new URL(expectedUrl).pathname; } catch (_) { return ''; } })(),
-        actualPath: (() => { try { return new URL(actualUrl).pathname; } catch (_) { return ''; } })(),
-        cacheStillOld: Boolean(expectedUrl && actualUrl && !urlsMatch),
-      },
+      hasEmployeeToken: Boolean(primary.hasEmployeeToken),
+      urlPreview: primary.actualUrl || '',
+      expectedUrl: primary.expectedUrl || '',
+      urlsMatch: Boolean(primary.urlsMatch),
+      botKinds: kinds,
+      perKind,
     });
   } catch (error) {
     res.status(400).json({ ok: false, message: String(error.message || 'Не удалось проверить кнопку меню сотрудника.') });
@@ -1634,10 +1704,9 @@ router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express
     if (!employee) {
       return res.status(404).json({ ok: false, message: 'Сотрудник не найден.' });
     }
-    const botKind = String(employee.telegramBotKind || 'primary').trim() === 'supply' ? 'supply' : 'primary';
-    const token = getConfiguredBotToken(botKind);
-    if (!token) {
-      return res.status(400).json({ ok: false, message: `Сначала сохраните токен ${botKind === 'supply' ? 'Telegram-бота снабжения' : 'Telegram-бота'} в Настройки.` });
+    const kinds = normalizeEmployeeBotKinds(employee);
+    if (!kinds.length) {
+      return res.status(400).json({ ok: false, message: 'У сотрудника не выбран ни один ТГ-бот.' });
     }
     const now = Date.now();
     const authorizedAt = new Date(now).toISOString();
@@ -1646,55 +1715,91 @@ router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express
       telegramLastSeenAt: authorizedAt,
     });
     const freshEmployee = EmployeeStore.findById(employeeId) || employee;
-    const sessionToken = createTelegramEmployeeSessionToken(token, {
-      ...freshEmployee,
-      telegramAuthorizedAt: authorizedAt,
-    });
-    const info = getTelegramEmployeeSessionTokenInfo(sessionToken);
-    const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
-    let employeeWebAppUrl = '';
-    if (publicBase) {
-      try {
-        const base = new URL('/telegram-app', publicBase);
-        const tokenSegment = encodeURIComponent(String(sessionToken));
-        base.pathname = `/telegram-app/t/${tokenSegment}/`;
-        employeeWebAppUrl = base.toString();
-      } catch (_) { /* ignore */ }
-    }
+
     const chatId = String(freshEmployee.telegramChatId || '').trim()
       || String(freshEmployee.telegramUserId || '').trim();
-    let sent = false;
-    let sendStatus = 'no-chat-id';
-    let telegramError = '';
-    if (chatId && employeeWebAppUrl) {
-      const expDate = info?.expiresAtMs ? new Date(info.expiresAtMs) : new Date(now + 1825 * 24 * 60 * 60 * 1000);
-      const expDateRu = expDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const text = `🔐 ${freshEmployee.fullName || 'Сотрудник'}, ваша авторизация в «Казнадзеи» продлена на 5 лет!\n\nДействует до ${expDateRu}. Нажмите на кнопку ниже, чтобы открыть Сканер QR — всё заработает автоматически.`;
-      const reply_markup = {
-        inline_keyboard: [
-          [{
-            text: '📷 Открыть Сканер QR',
-            ...(publicBase ? { url: employeeWebAppUrl } : {}),
-          }],
-        ],
-      };
-      try {
-        await sendMessage(token, chatId, text, { reply_markup, parse_mode: undefined });
-        sent = true;
-        sendStatus = 'sent';
-      } catch (tgErr) {
-        sendStatus = 'telegram-error';
-        telegramError = String(tgErr.message || 'Telegram API error');
+
+    const perKind = [];
+    let anySent = false;
+    let overallStatus = chatId ? 'telegram-error' : 'no-chat-id';
+    let overallTelegramError = '';
+    let lastSessionToken = '';
+    let lastEmployeeWebAppUrl = '';
+
+    for (const kind of kinds) {
+      const token = getConfiguredBotToken(kind);
+      if (!token) {
+        perKind.push({ botKind: kind, tokenSet: false, sent: false, sendStatus: 'token-missing', telegramError: '' });
+        continue;
       }
+      const sessionToken = createTelegramEmployeeSessionToken(token, {
+        ...freshEmployee,
+        telegramAuthorizedAt: authorizedAt,
+      });
+      const info = getTelegramEmployeeSessionTokenInfo(sessionToken);
+      const publicBase = String(SettingsStore.get()?.publicBaseUrl || '').trim();
+      let employeeWebAppUrl = '';
+      if (publicBase) {
+        try {
+          const base = new URL('/telegram-app', publicBase);
+          const tokenSegment = encodeURIComponent(String(sessionToken));
+          base.pathname = `/telegram-app/t/${tokenSegment}/`;
+          employeeWebAppUrl = base.toString();
+        } catch (_) { /* ignore */ }
+      }
+      lastSessionToken = sessionToken;
+      lastEmployeeWebAppUrl = employeeWebAppUrl;
+
+      let sent = false;
+      let sendStatus = chatId ? 'telegram-error' : 'no-chat-id';
+      let telegramError = '';
+      if (chatId && employeeWebAppUrl) {
+        const expDate = info?.expiresAtMs ? new Date(info.expiresAtMs) : new Date(now + 1825 * 24 * 60 * 60 * 1000);
+        const expDateRu = expDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const botLabel = kind === 'supply' ? 'боте отдела снабжения' : 'основном боте';
+        const text = `🔐 ${freshEmployee.fullName || 'Сотрудник'}, ваша авторизация в «Казнадзеи» (${botLabel}) продлена на 5 лет!\n\nДействует до ${expDateRu}. Нажмите на кнопку ниже, чтобы открыть Сканер QR — всё заработает автоматически.`;
+        const reply_markup = {
+          inline_keyboard: [
+            [{
+              text: '📷 Открыть Сканер QR',
+              ...(publicBase ? { url: employeeWebAppUrl } : {}),
+            }],
+          ],
+        };
+        try {
+          await sendMessage(token, chatId, text, { reply_markup, parse_mode: undefined });
+          sent = true;
+          sendStatus = 'sent';
+          anySent = true;
+          overallStatus = 'sent';
+        } catch (tgErr) {
+          sendStatus = 'telegram-error';
+          telegramError = String(tgErr.message || 'Telegram API error');
+          if (!overallTelegramError) overallTelegramError = telegramError;
+        }
+      }
+      perKind.push({
+        botKind: kind,
+        tokenSet: true,
+        sent,
+        sendStatus,
+        telegramError,
+        sessionToken,
+        expiresAt: info?.expiresAt || '',
+        expiresAtMs: info?.expiresAtMs || 0,
+        daysLeft: info?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+        employeeWebAppUrl,
+      });
     }
+
     res.json({
       ok: true,
-      sendStatus,
-      sent,
+      sendStatus: overallStatus,
+      sent: anySent,
       hasChatId: Boolean(chatId),
       chatId: chatId || '',
       employeeId,
-      telegramError,
+      telegramError: overallTelegramError,
       employee: {
         _id: freshEmployee._id,
         fullName: freshEmployee.fullName,
@@ -1704,12 +1809,14 @@ router.post('/telegram/employee/send-direct-link', requireAdminAccess(), express
         telegramChatId: freshEmployee.telegramChatId || '',
         telegramUsername: freshEmployee.telegramUsername || '',
       },
-      sessionToken,
-      expiresAt: info?.expiresAt || '',
-      expiresAtMs: info?.expiresAtMs || 0,
-      daysLeft: info?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
+      botKinds: kinds,
+      sessionToken: lastSessionToken,
+      expiresAt: perKind[0]?.expiresAt || '',
+      expiresAtMs: perKind[0]?.expiresAtMs || 0,
+      daysLeft: perKind[0]?.daysLeft || TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
       ttlDays: TELEGRAM_EMPLOYEE_SESSION_TTL_DAYS,
-      employeeWebAppUrl,
+      employeeWebAppUrl: lastEmployeeWebAppUrl,
+      perKind,
     });
   } catch (error) {
     res.status(400).json({ ok: false, message: String(error.message || 'Не удалось отправить ссылку сотруднику.') });

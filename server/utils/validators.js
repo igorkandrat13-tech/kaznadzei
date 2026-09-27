@@ -552,9 +552,21 @@ function sanitizeEmployeeInput(payload, options = {}) {
     const username = normalizeString(payload.telegramUsername, 'telegramUsername', { maxLength: 80 });
     data.telegramUsername = username ? username.replace(/^@+/, '@') : '';
   }
-  if (!partial || payload.telegramBotKind !== undefined) {
-    const rawBotKind = String(payload.telegramBotKind || 'primary').trim();
-    data.telegramBotKind = rawBotKind === 'supply' ? 'supply' : 'primary';
+  if (!partial || payload.telegramBotKind !== undefined || payload.telegramBotKinds !== undefined) {
+    const VALID_KINDS = ['primary', 'supply'];
+    let selectedKinds;
+    if (payload.telegramBotKinds !== undefined && Array.isArray(payload.telegramBotKinds)) {
+      selectedKinds = payload.telegramBotKinds
+        .map((k) => String(k || '').trim())
+        .filter((k) => VALID_KINDS.includes(k));
+      if (!selectedKinds.length) selectedKinds = ['primary'];
+    } else {
+      const rawBotKind = String(payload.telegramBotKind || 'primary').trim();
+      selectedKinds = rawBotKind === 'supply' ? ['supply'] : ['primary'];
+    }
+    selectedKinds = Array.from(new Set(selectedKinds));
+    data.telegramBotKinds = selectedKinds;
+    data.telegramBotKind = selectedKinds.includes('supply') ? 'supply' : 'primary';
   }
   if (!partial || payload.pinCode !== undefined) {
     const pinCode = normalizeString(payload.pinCode, 'pinCode', { required: !partial, maxLength: 20 });

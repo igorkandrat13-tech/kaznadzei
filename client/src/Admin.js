@@ -1331,9 +1331,17 @@ function Admin() {
   };
 
   const openEditEmployeeModal = (employee) => {
+    let normalizedKinds = Array.isArray(employee?.telegramBotKinds) ? [...employee.telegramBotKinds] : [];
+    if (!normalizedKinds.length) {
+      normalizedKinds = String(employee?.telegramBotKind || 'primary').trim() === 'supply' ? ['supply'] : ['primary'];
+    }
+    normalizedKinds = Array.from(new Set(normalizedKinds.filter((k) => k === 'primary' || k === 'supply')));
+    if (!normalizedKinds.length) normalizedKinds = ['primary'];
     setEditEmployee({
       ...getDefaultEmployeeForm(employee.role),
       ...employee,
+      telegramBotKinds: normalizedKinds,
+      telegramBotKind: normalizedKinds.includes('supply') && !normalizedKinds.includes('primary') ? 'supply' : 'primary',
       allowedColumns: [...getOwnAllowedColumns(employee, employeeColumnOptionsByKey)],
     });
     setEmployeeModalMode('edit');
