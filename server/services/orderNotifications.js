@@ -134,27 +134,20 @@ async function notifyOrderCreated(order) {
 function buildStageWatcherText(order, itemsUpdate = [], options = {}) {
   if (!order) return '';
   const list = Array.isArray(itemsUpdate) ? itemsUpdate : [];
-  const source = String(options?.source || 'manager').trim().toLowerCase();
-  const clear = Boolean(options?.clear);
-  const header = [
-    clear ? 'Этап отменен ↩️' : 'Этап выполнен ✔️',
-    source === 'telegram' ? 'Источник: Telegram-бот сотрудников' : 'Источник: Админка',
-    `Заказ: ${order.orderNumber || 'не указан'}`,
-    `Заказчик: ${order.customer || 'не указан'}`,
-  ];
-  if (!list.length) return header.join('\n');
-  const rows = list
-    .map((update) => {
-      const parts = [
-        update?.room,
-        update?.itemNumber ? `изд. ${update.itemNumber}` : '',
-        update?.itemName,
-      ].filter(Boolean).join(' • ');
-      const stage = String(update?.stageLabel || '').trim() || 'Этап';
-      return parts ? `— ${stage} (${parts})` : `— ${stage}`;
-    })
-    .filter(Boolean);
-  return [...header, ...rows].join('\n');
+  if (!list.length) return '';
+  const orderNum = String(order?.orderNumber || 'не указан').trim();
+  const rows = list.map((update) => {
+    const itemParts = [
+      String(update?.room || '').trim(),
+      String(update?.itemNumber || '').trim() ? `изд. ${String(update?.itemNumber || '').trim()}` : '',
+      String(update?.itemName || '').trim(),
+    ].filter(Boolean);
+    const itemLabel = itemParts.length > 0 ? itemParts.join(' • ') : 'не указано';
+    const stage = String(update?.stageLabel || '').trim() || 'Этап производства';
+    const actor = String(update?.actorName || '').trim() || 'не указан';
+    return `Заказ №${orderNum}. Изделие: ${itemLabel}. Этап производства: ${stage}. Сотрудник: ${actor}.`;
+  }).filter(Boolean);
+  return rows.join('\n');
 }
 
 async function notifyStageWatchers(order, itemsUpdate, options = {}) {

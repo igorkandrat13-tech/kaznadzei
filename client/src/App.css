@@ -111,7 +111,7 @@
   font-weight: 700;
   text-decoration: none;
   border-bottom: 1px solid rgba(121, 222, 255, 0.22);
-  transition: color 0.18s ease, border-color 0.18s ease;
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -120,12 +120,51 @@
   overflow-wrap: anywhere;
 }
 
+.workshop-request-link--with-photo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: rgba(255, 196, 87, 0.14);
+  border: 1px solid rgba(255, 157, 46, 0.55);
+  border-bottom-width: 2px;
+  border-bottom-color: rgba(255, 129, 26, 0.75);
+  color: #5a3100;
+  font-weight: 800;
+  box-shadow: 0 1px 0 rgba(181, 86, 0, 0.12), 0 0 0 1px rgba(255, 145, 46, 0.12) inset;
+  cursor: zoom-in;
+}
+
+.workshop-request-link-photo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.workshop-request-link-text {
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(255, 129, 26, 0.7);
+}
+
 .workshop-request-link-wrap {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   max-width: 100%;
+}
+
+.workshop-request-link-wrap--with-photo {
+  gap: 10px;
 }
 
 .workshop-request-link-indicator {
@@ -141,6 +180,16 @@
   white-space: nowrap;
 }
 
+.workshop-request-link-indicator--strong {
+  padding: 3px 11px;
+  border-radius: 10px;
+  background: rgba(255, 145, 46, 0.22);
+  color: #7a3d00;
+  border: 1px solid rgba(255, 129, 26, 0.45);
+  font-weight: 800;
+  font-size: 11.5px;
+}
+
 .workshop-request-link-indicator::before {
   content: '🖼';
   font-size: 11px;
@@ -150,6 +199,19 @@
 .workshop-request-link:hover {
   color: var(--hover-link-text);
   border-color: var(--hover-link-border);
+}
+
+.workshop-request-link--with-photo:hover {
+  background: rgba(255, 166, 77, 0.28);
+  border-color: rgba(255, 120, 10, 0.85);
+  border-bottom-color: rgba(200, 86, 0, 0.95);
+  color: #3a1e00;
+  box-shadow: 0 2px 6px rgba(255, 145, 46, 0.28), 0 0 0 1px rgba(255, 145, 46, 0.25) inset;
+}
+
+.workshop-request-link--with-photo:hover .workshop-request-link-text {
+  text-decoration-color: rgba(200, 86, 0, 0.95);
+  text-decoration-thickness: 2px;
 }
 
 .workshop-cell-stack {

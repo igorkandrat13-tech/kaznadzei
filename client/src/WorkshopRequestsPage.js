@@ -642,16 +642,18 @@ function WorkshopRequestsPage() {
                     <td>
                       <div className="workshop-request-main">
                         {row.openUrl ? (
-                          <span className="workshop-request-link-wrap">
+                          <span className="workshop-request-link-wrap workshop-request-link-wrap--with-photo">
                             <button
                               type="button"
-                              className="workshop-request-link"
+                              className="workshop-request-link workshop-request-link--with-photo"
                               onClick={() => handleOpenRequestAttachmentPreview(row)}
                               disabled={isUpdating}
+                              title="Нажмите, чтобы посмотреть фото заявки"
                             >
-                              {row.text}
+                              <span className="workshop-request-link-photo-icon" aria-hidden="true">📷</span>
+                              <span className="workshop-request-link-text">{row.text}</span>
                             </button>
-                            <span className="workshop-request-link-indicator" aria-hidden="true">
+                            <span className="workshop-request-link-indicator workshop-request-link-indicator--strong" aria-hidden="true">
                               Фото
                             </span>
                           </span>

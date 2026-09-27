@@ -673,8 +673,7 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
 
   notifyMaterialRequestWatchers(
     [
-      'Новая заявка: ТГ бот сотрудников',
-      `Сотрудник: ${employee.fullName || 'Сотрудник'}`,
+      `Новая заявка. Сотрудник: ${employee.fullName || 'Сотрудник'}.`,
       attachments.length > 0 ? 'Тип: С фото' : 'Тип: Текст',
       `Текст: ${createdRequest.text || 'без текста'}`,
     ].join('\n'),
@@ -691,9 +690,7 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
   await sendAuthorizedMessage(
     token,
     chatId,
-    attachments.length > 0
-      ? `Заявка с фото принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Заявки на материалы".`
-      : `Заявка принята.\n\n${createdRequest.text}\n\nМенеджер увидит ее в разделе "Заявки на материалы".`,
+    'Заявка принята.',
     updatedEmployee,
   );
   return true;

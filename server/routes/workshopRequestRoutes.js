@@ -18,19 +18,19 @@ function getWorkshopRequestStatusLabel(status = '') {
 }
 
 function buildWorkshopRequestStatusText(request, nextStatusValue = false) {
-  const stateLabel = nextStatusValue ? 'Отработана ✔️' : 'Возврат в работу ↩️';
+  const stateLabel = nextStatusValue ? 'Взята в работу ✔️' : 'Отмена взятия ↩️';
   return [
-    `Изменение статуса цеховой заявки: ${stateLabel}`,
+    `Изменение статуса заявки: ${stateLabel}`,
     `Автор: ${request?.employeeName || 'неизвестно'}`,
-    `Текст: ${request?.text || '—'}`,
+    `Название: ${request?.text || '—'}`,
   ].filter(Boolean).join('\n');
 }
 
 function buildWorkshopRequestDeleteText(request) {
   return [
-    'Цеховая заявка удалена 🗑️',
+    'Заявка удалена 🗑️',
     `Автор: ${request?.employeeName || 'неизвестно'}`,
-    `Текст: ${request?.text || '—'}`,
+    `Название: ${request?.text || '—'}`,
   ].filter(Boolean).join('\n');
 }
 

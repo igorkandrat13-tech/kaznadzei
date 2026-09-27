@@ -805,7 +805,7 @@ function buildMaterialRequestWatchersManagerUpdateText(order, diffs) {
 
 function buildMaterialRequestToggleText(order, item, target, source, nextStatusValue = false) {
   const label = source === 'package' ? 'Позиция комплектации' : 'Заявка на расходники';
-  const stateLabel = nextStatusValue ? 'Отработана ✔️' : 'Возврат в работу ↩️';
+  const stateLabel = nextStatusValue ? 'Взята в работу ✔️' : 'Отмена взятия ↩️';
   const itemHeader = [
     item?.room,
     item?.itemNumber ? `изд. ${item.itemNumber}` : '',
@@ -817,7 +817,7 @@ function buildMaterialRequestToggleText(order, item, target, source, nextStatusV
     `Заказ: ${order?.orderNumber || 'не указан'}`,
     `Заказчик: ${order?.customer || 'не указан'}`,
     itemHeader ? `Изделие: ${itemHeader}` : null,
-    `Наименование: ${target?.name || '—'}`,
+    `Наименование: ${target?.name || target?.text || '—'}`,
   ].filter(Boolean).join('\n');
 }
 
@@ -834,24 +834,24 @@ function buildMaterialRequestDeleteText(order, item, target, source) {
     `Заказ: ${order?.orderNumber || 'не указан'}`,
     `Заказчик: ${order?.customer || 'не указан'}`,
     itemHeader ? `Изделие: ${itemHeader}` : null,
-    `Наименование: ${target?.name || '—'}`,
+    `Наименование: ${target?.name || target?.text || '—'}`,
   ].filter(Boolean).join('\n');
 }
 
 function buildWorkshopRequestStatusText(request, nextStatusValue = false) {
-  const stateLabel = nextStatusValue ? 'Отработана ✔️' : 'Возврат в работу ↩️';
+  const stateLabel = nextStatusValue ? 'Взята в работу ✔️' : 'Отмена взятия ↩️';
   return [
-    `Изменение статуса цеховой заявки: ${stateLabel}`,
+    `Изменение статуса заявки: ${stateLabel}`,
     `Автор: ${request?.employeeName || 'неизвестно'}`,
-    `Текст: ${request?.text || '—'}`,
+    `Название: ${request?.text || '—'}`,
   ].filter(Boolean).join('\n');
 }
 
 function buildWorkshopRequestDeleteText(request) {
   return [
-    'Цеховая заявка удалена 🗑️',
+    'Заявка удалена 🗑️',
     `Автор: ${request?.employeeName || 'неизвестно'}`,
-    `Текст: ${request?.text || '—'}`,
+    `Название: ${request?.text || '—'}`,
   ].filter(Boolean).join('\n');
 }
 
@@ -1067,6 +1067,7 @@ function handleManualStageMarks(req, res) {
               itemNumber: targetItem?.itemNumber || '',
               itemName: targetItem?.name || '',
               stageLabel: getManualStageCellLabel(selection.columnKey, settings) || selection.columnKey,
+              actorName: requestActor?.label || requestActor?.name || '',
             };
           });
         return notifyStageWatchers(order, orderItemsUpdate, {
@@ -1461,6 +1462,7 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
         itemNumber: updatedItem?.itemNumber || '',
         itemName: updatedItem?.name || '',
         stageLabel: getManualStageCellLabel(selection.columnKey, settings) || selection.columnKey,
+        actorName: employee?.fullName || stageActorName || '',
       })),
       {
         source: 'telegram',
