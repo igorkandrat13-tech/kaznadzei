@@ -712,6 +712,85 @@ function sanitizeOrderItemsPayload(payload) {
   }));
 }
 
+function diffAddedItemsByName(prevItems = [], nextItems = []) {
+  const prevList = Array.isArray(prevItems) ? prevItems : [];
+  const nextList = Array.isArray(nextItems) ? nextItems : [];
+  const prevKeySet = new Set(
+    prevList.map((it) => String((it?.name || '') + '|' + (it?.kind || '')).trim().toLowerCase())
+  );
+  const added = [];
+  const seen = new Set();
+  for (const item of nextList) {
+    const key = String((item?.name || '') + '|' + (item?.kind || '')).trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    if (!prevKeySet.has(key)) added.push(item);
+  }
+  return added;
+}
+
+function diffOrderItemsAddedMaterialData(prevOrder, nextOrder) {
+  const prevItems = Array.isArray(prevOrder?.items) ? prevOrder.items : [];
+  const nextItems = Array.isArray(nextOrder?.items) ? nextOrder.items : [];
+  const byItemId = new Map();
+  for (const item of prevItems) byItemId.set(String(item?.itemId || '').trim(), { package: [], material: [] });
+  const result = [];
+  for (const nextItem of nextItems) {
+    const id = String(nextItem?.itemId || '').trim();
+    if (!id) continue;
+    const prevData = byItemId.get(id);
+    const prevPackage = prevData
+      ? (prevItems.find((it) => String(it?.itemId || '').trim() === id)?.packageItems || [])
+      : [];
+    const prevMaterial = prevData
+      ? (prevItems.find((it) => String(it?.itemId || '').trim() === id)?.materialRequestItems || [])
+      : [];
+    const addedPackage = diffAddedItemsByName(prevPackage, nextItem?.packageItems || []);
+    const addedMaterial = diffAddedItemsByName(prevMaterial, nextItem?.materialRequestItems || []);
+    if (addedPackage.length || addedMaterial.length) {
+      result.push({
+        itemId: id,
+        itemName: nextItem?.name || '',
+        itemNumber: nextItem?.itemNumber || '',
+        room: nextItem?.room || '',
+        addedPackage,
+        addedMaterial,
+      });
+    }
+  }
+  return result;
+}
+
+function buildMaterialRequestWatchersManagerUpdateText(order, diffs) {
+  if (!order || !Array.isArray(diffs) || !diffs.length) return '';
+  const chunks = [];
+  for (const diff of diffs) {
+    if (!diff) continue;
+    const itemHeader = [
+      diff.room,
+      diff.itemNumber ? `изд. ${diff.itemNumber}` : '',
+      diff.itemName,
+    ].filter(Boolean).join(' • ');
+    if (diff.addedPackage && diff.addedPackage.length) {
+      chunks.push(`— Позиции комплектации ${itemHeader ? `(${itemHeader})` : ''}:`);
+      chunks.push(diff.addedPackage.map((p) => `  • ${p?.name || '—'}`).join('\n'));
+    }
+    if (diff.addedMaterial && diff.addedMaterial.length) {
+      chunks.push(`— Заявки на расходники ${itemHeader ? `(${itemHeader})` : ''}:`);
+      chunks.push(diff.addedMaterial.map((p) => `  • ${p?.name || '—'}${p?.kind === 'photo' ? ' (Фото)' : ''}`).join('\n'));
+    }
+  }
+  if (!chunks.length) return '';
+  return [
+    'Новые позиции заявки (админка):',
+    `Заказ: ${order.orderNumber || 'не указан'}`,
+    `Заказчик: ${order.customer || 'не указан'}`,
+    '',
+    ...chunks,
+  ].join('\n');
+}
+
+
 function getOrderItemOrFail(order, itemId) {
   const item = OrderStore.getOrderItem(order, itemId);
   if (!item) {
@@ -2507,6 +2586,13 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
         notesChanged: OrderStore.getOrderPrimaryNotes(previousOrder) !== OrderStore.getOrderPrimaryNotes(nextOrder),
       },
     });
+    if (items) {
+      const addedDiff = diffOrderItemsAddedMaterialData(previousOrder, nextOrder);
+      const notifyText = buildMaterialRequestWatchersManagerUpdateText(nextOrder, addedDiff);
+      if (notifyText) {
+        notifyMaterialRequestWatchers(notifyText).catch(() => {});
+      }
+    }
     res.json(nextOrder);
   } catch (error) {
     res.status(error.status || 400).json({ message: error.message });
