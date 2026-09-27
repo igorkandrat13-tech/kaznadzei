@@ -18,7 +18,21 @@ const {
 } = require('../utils/validators');
 const { addTelegramDiagnosticLog } = require('../services/telegramDiagnostics');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
-const { notifyMaterialRequestWatchers, notifyOrderCreated, notifyStageWatchers } = require('../services/orderNotifications');
+const {
+  notifyMaterialRequestWatchers,
+  notifyOrderCreated,
+  notifyStageWatchers,
+} = require('../services/orderNotifications');
+
+function shortFullName(fullName = '') {
+  const raw = String(fullName || '').trim();
+  if (!raw) return 'Сотрудник';
+  const parts = raw.split(/\s+/).filter(Boolean).slice(0, 3);
+  if (parts.length === 0) return raw;
+  const surname = parts[0];
+  const initials = parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join('');
+  return initials ? `${surname} ${initials}` : surname;
+}
 const {
   getCustomerOrderChangedItemsText,
   getCustomerOrderUpdateItemText,
@@ -882,38 +896,29 @@ function buildSupplyNotifyFromIncomingPayload(orderNumber, customer, incomingIte
   const targetItem = incomingItems.find((it) => String(it?.itemId || '').trim() === itemId) || null;
   if (!targetItem) return '';
 
-  const header = [
-    targetItem.room,
-    targetItem.itemNumber ? `изд. ${targetItem.itemNumber}` : '',
-    targetItem.name,
-  ].filter(Boolean).join(' • ');
-
-  const rows = [];
+  let addedNames = [];
   if (source === 'package') {
     const list = Array.isArray(targetItem.packageItems) ? targetItem.packageItems : [];
     if (!list.length) return '';
-    rows.push(`— Позиции комплектации${header ? ` (${header})` : ''}:`);
-    list.forEach((p, i) => {
-      rows.push(`  ${i + 1}. ${String(p?.name || '—').trim()}${p?.isCompleted ? ' ✔️' : ''}`);
-    });
+    addedNames = list
+      .filter((p) => !p?.isCompleted)
+      .map((p) => String(p?.name || '').trim())
+      .filter(Boolean);
   } else if (source === 'material') {
     const list = Array.isArray(targetItem.materialRequestItems) ? targetItem.materialRequestItems : [];
     if (!list.length) return '';
-    rows.push(`— Заявки на расходники${header ? ` (${header})` : ''}:`);
-    list.forEach((p, i) => {
-      const displayName = String(p?.name || '—').trim();
-      rows.push(`  ${i + 1}. ${displayName}${String(p?.kind || '').trim().toLowerCase() === 'photo' ? ' (Фото)' : ''}${p?.isCompleted ? ' ✔️' : ''}`);
-    });
+    addedNames = list
+      .filter((p) => !p?.isCompleted)
+      .map((p) => String(p?.name || '').trim())
+      .filter(Boolean);
   }
 
-  if (!rows.length) return '';
-  return [
-    'Обновление заявок на закупку (админка):',
-    `Заказ: ${String(orderNumber || 'не указан').trim()}`,
-    `Заказчик: ${String(customer || 'не указан').trim()}`,
-    '',
-    ...rows,
-  ].join('\n');
+  if (!addedNames.length) return '';
+  return addedNames.map((name) => [
+    'Новая заявка:',
+    name,
+    'Сотрудник: Админка',
+  ].join('\n')).join('\n\n');
 }
 
 
@@ -1568,12 +1573,9 @@ router.post('/orders/:id/telegram-package-items', (req, res) => {
     });
 
     notifyMaterialRequestWatchers([
-      'Новая заявка: Комплектация заказа',
-      `Заказ: ${updatedOrder.orderNumber || 'не указан'}`,
-      `Заказчик: ${updatedOrder.customer || 'не указан'}`,
-      `Помещение / изделие: ${[updatedItem.room, updatedItem.itemNumber ? `изд. ${updatedItem.itemNumber}` : '', updatedItem.name].filter(Boolean).join(' • ') || 'не указано'}`,
-      `Позиция: ${itemName}`,
-      `Добавил: ${employee.fullName || 'Сотрудник'}`,
+      'Новая заявка:',
+      `${itemName}`,
+      `Сотрудник: ${shortFullName(employee.fullName)}`,
     ].join('\n')).catch(() => {});
 
     res.status(201).json({
@@ -1767,12 +1769,9 @@ router.post('/orders/:id/telegram-material-request-items', (req, res) => {
     }
 
     notifyMaterialRequestWatchers([
-      'Новая заявка: Заявки на расходники',
-      `Заказ: ${updatedOrder.orderNumber || 'не указан'}`,
-      `Заказчик: ${updatedOrder.customer || 'не указан'}`,
-      `Помещение / изделие: ${[updatedItem.room, updatedItem.itemNumber ? `изд. ${updatedItem.itemNumber}` : '', updatedItem.name].filter(Boolean).join(' • ') || 'не указано'}`,
-      `Заявка: ${itemName}`,
-      `Добавил: ${employee.fullName || 'Сотрудник'}`,
+      'Новая заявка:',
+      `${itemName}`,
+      `Сотрудник: ${shortFullName(employee.fullName)}`,
     ].join('\n')).catch(() => {});
 
     res.status(201).json({
@@ -1911,13 +1910,9 @@ router.post('/orders/:id/telegram-material-request-photo-items', (req, res) => {
 
       notifyMaterialRequestWatchers(
         [
-          'Новая заявка: Заявки на расходники',
-          `Заказ: ${updatedOrder.orderNumber || 'не указан'}`,
-          `Заказчик: ${updatedOrder.customer || 'не указан'}`,
-          `Помещение / изделие: ${[updatedItem.room, updatedItem.itemNumber ? `изд. ${updatedItem.itemNumber}` : '', updatedItem.name].filter(Boolean).join(' • ') || 'не указано'}`,
-          `Заявка: ${createdPhotoItem?.name || attachment.name || normalizedFileName || 'Фото'}`,
-          'Тип: Фото',
-          `Добавил: ${employee.fullName || 'Сотрудник'}`,
+          'Новая заявка:',
+          `${createdPhotoItem?.name || attachment.name || normalizedFileName || 'Фото'}`,
+          `Сотрудник: ${shortFullName(employee.fullName)}`,
         ].join('\n'),
         {
           attachments: (Array.isArray(createdPhotoItem?.attachments) ? createdPhotoItem.attachments : []).map((itemAttachment) => ({

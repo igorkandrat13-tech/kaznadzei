@@ -154,27 +154,18 @@ function buildStageWatcherText(order, itemsUpdate = [], options = {}) {
   if (!order) return '';
   const list = Array.isArray(itemsUpdate) ? itemsUpdate : [];
   if (!list.length) return '';
-  const count = getOrderItemsCount(order);
-  const pluralSuffix = count === 1 ? 'е' : (count >= 2 && count <= 4 ? 'ия' : 'ий');
-  const orderNumberLine = [
-    `Заказ: ${String(order?.orderNumber || 'не указан').trim()}`,
-    `(${count} издели${pluralSuffix})`,
-  ].join(' ');
+  const orderLine = `Заказ: ${String(order?.orderNumber || 'не указан').trim()}`;
   const blocks = list.map((update) => {
-    const roomParts = [];
-    const roomNumber = String(update?.roomNumber || update?.roomNo || '').trim();
-    const roomName = String(update?.room || '').trim();
-    if (roomNumber) roomParts.push(`№${roomNumber}`);
-    if (roomName) roomParts.push(roomName);
-    const roomLine = roomParts.length > 0 ? `Помещение: ${roomParts.join(' ')}` : 'Помещение: не указано';
-    const stageLine = String(update?.stageLabel || '').trim() || 'Этап производства';
-    const effectiveLegendKey = String(update?.legendKey || '').trim();
-    const clear = Boolean(options?.clear) || Boolean(update?.clear);
-    const statusLabel = clear
-      ? STAGE_STATUS_LABELS.pending
-      : getStageStatusByLegendKey(effectiveLegendKey);
-    const statusLine = `Статус изделия: ${statusLabel}`;
-    return [orderNumberLine, roomLine, stageLine, statusLine].join('\n');
+    const itemNumber = String(update?.itemNumber || '').trim();
+    const itemName = String(update?.itemName || '').trim();
+    const itemLine = itemNumber
+      ? `Номер изделия ${itemNumber}: ${itemName || 'Без названия'}`
+      : `Номер изделия: ${itemName || 'Без названия'}`;
+    const stageLabel = String(update?.stageLabel || '').trim() || 'Этап производства';
+    const statusLine = `Статус изделия: ${stageLabel}`;
+    const actor = String(update?.actorName || '').trim() || 'Админка';
+    const actorLine = `Столяр: ${actor}`;
+    return [orderLine, itemLine, statusLine, actorLine].join('\n');
   }).filter(Boolean);
   return blocks.join('\n\n');
 }

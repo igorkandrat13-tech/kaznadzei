@@ -59,9 +59,19 @@ const { normalizeEmployeeBotKinds, employeeHasBotKind } = require('../stores/emp
 
 const router = express.Router();
 const EMPLOYEE_QR_SCANNER_BUTTON_TEXT = 'Сканер QR';
-const EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT = 'Заявки';
+const EMPLOYEE_WORKSHOP_REQUEST_BUTTON_TEXT = 'Заявка';
 const EMPLOYEE_WORKSHOP_REQUEST_CANCEL_BUTTON_TEXT = 'Отмена заявки';
 const EMPLOYEE_PENDING_ACTION_CREATE_WORKSHOP_REQUEST = 'create_workshop_request';
+
+function shortFullName(fullName = '') {
+  const raw = String(fullName || '').trim();
+  if (!raw) return 'Сотрудник';
+  const parts = raw.split(/\s+/).filter(Boolean).slice(0, 3);
+  if (parts.length === 0) return raw;
+  const surname = parts[0];
+  const initials = parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join('');
+  return initials ? `${surname} ${initials}` : surname;
+}
 
 function getConfiguredBotToken(botKind = 'primary') {
   const normalized = botKind === 'supply' ? 'supply' : 'primary';
@@ -673,9 +683,9 @@ async function handleAuthorizedEmployeeMessage(token, chatId, message, employee)
 
   notifyMaterialRequestWatchers(
     [
-      `Новая заявка. Сотрудник: ${employee.fullName || 'Сотрудник'}.`,
-      attachments.length > 0 ? 'Тип: С фото' : 'Тип: Текст',
-      `Текст: ${createdRequest.text || 'без текста'}`,
+      'Новая заявка:',
+      `${createdRequest.text || 'Без названия'}`,
+      `Сотрудник: ${shortFullName(employee.fullName)}`,
     ].join('\n'),
     {
       attachments: (Array.isArray(createdRequest.attachments) ? createdRequest.attachments : []).map((attachment) => ({
