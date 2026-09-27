@@ -851,7 +851,7 @@ function getCustomerOrderUpdateItemText(order = {}, item = {}, stageLabel = '', 
   const itemNumber = String(item?.itemNumber || '').trim();
   const itemName = String(item?.name || '').trim() || 'Без названия';
   const itemLine = itemNumber
-    ? `Номер изделия ${itemNumber}: ${itemName}`
+    ? `Номер изделия: ${itemNumber} - ${itemName}`
     : `Номер изделия: ${itemName}`;
   const statusLine = `Статус изделия: ${String(stageLabel || '').trim() || 'Этап производства'}`;
   const actorLine = `Сотрудник: ${shortFullName(actorName)}`;
@@ -880,7 +880,7 @@ function getCustomerOrderChangedItemsText(order = {}, changedItems = [], { clear
       const itemNumber = String(item?.itemNumber || '').trim();
       const itemName = String(item?.name || '').trim() || 'Без названия';
       const itemLine = itemNumber
-        ? `Номер изделия ${itemNumber}: ${itemName}`
+        ? `Номер изделия: ${itemNumber} - ${itemName}`
         : `Номер изделия: ${itemName}`;
       const statusLine = `Статус изделия: ${String(stageLabel || '').trim() || 'Этап производства'}`;
       const block = [itemLine, statusLine];

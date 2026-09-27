@@ -169,7 +169,7 @@ function buildStageWatcherText(order, itemsUpdate = [], options = {}) {
     const itemNumber = String(update?.itemNumber || '').trim();
     const itemName = String(update?.itemName || '').trim();
     const itemLine = itemNumber
-      ? `Номер изделия ${itemNumber}: ${itemName || 'Без названия'}`
+      ? `Номер изделия: ${itemNumber} - ${itemName || 'Без названия'}`
       : `Номер изделия: ${itemName || 'Без названия'}`;
     const stageLabel = String(update?.stageLabel || '').trim() || 'Этап производства';
     const statusLine = `Статус изделия: ${stageLabel}`;
