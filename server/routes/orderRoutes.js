@@ -803,6 +803,77 @@ function buildMaterialRequestWatchersManagerUpdateText(order, diffs) {
   ].join('\n');
 }
 
+function buildMaterialRequestToggleText(order, item, target, source, nextStatusValue = false) {
+  const label = source === 'package' ? 'Позиция комплектации' : 'Заявка на расходники';
+  const stateLabel = nextStatusValue ? 'Отработана ✔️' : 'Возврат в работу ↩️';
+  const itemHeader = [
+    item?.room,
+    item?.itemNumber ? `изд. ${item.itemNumber}` : '',
+    item?.name,
+  ].filter(Boolean).join(' • ');
+  return [
+    `Изменение статуса заявки: ${stateLabel}`,
+    `Тип: ${label}`,
+    `Заказ: ${order?.orderNumber || 'не указан'}`,
+    `Заказчик: ${order?.customer || 'не указан'}`,
+    itemHeader ? `Изделие: ${itemHeader}` : null,
+    `Наименование: ${target?.name || '—'}`,
+  ].filter(Boolean).join('\n');
+}
+
+function buildMaterialRequestDeleteText(order, item, target, source) {
+  const label = source === 'package' ? 'Позиция комплектации' : 'Заявка на расходники';
+  const itemHeader = [
+    item?.room,
+    item?.itemNumber ? `изд. ${item.itemNumber}` : '',
+    item?.name,
+  ].filter(Boolean).join(' • ');
+  return [
+    'Заявка удалена 🗑️',
+    `Тип: ${label}`,
+    `Заказ: ${order?.orderNumber || 'не указан'}`,
+    `Заказчик: ${order?.customer || 'не указан'}`,
+    itemHeader ? `Изделие: ${itemHeader}` : null,
+    `Наименование: ${target?.name || '—'}`,
+  ].filter(Boolean).join('\n');
+}
+
+function buildWorkshopRequestStatusText(request, nextStatusValue = false) {
+  const stateLabel = nextStatusValue ? 'Отработана ✔️' : 'Возврат в работу ↩️';
+  return [
+    `Изменение статуса цеховой заявки: ${stateLabel}`,
+    `Автор: ${request?.employeeName || 'неизвестно'}`,
+    `Текст: ${request?.text || '—'}`,
+  ].filter(Boolean).join('\n');
+}
+
+function buildWorkshopRequestDeleteText(request) {
+  return [
+    'Цеховая заявка удалена 🗑️',
+    `Автор: ${request?.employeeName || 'неизвестно'}`,
+    `Текст: ${request?.text || '—'}`,
+  ].filter(Boolean).join('\n');
+}
+
+function hasMaterialRequestChangesBetweenOrders(prevOrder, nextOrder) {
+  const prevItems = Array.isArray(prevOrder?.items) ? prevOrder.items : [];
+  const nextItems = Array.isArray(nextOrder?.items) ? nextOrder.items : [];
+  const serialize = (items) => JSON.stringify(
+    items.map((it) => ({
+      itemId: String(it?.itemId || '').trim(),
+      packageItems: (Array.isArray(it?.packageItems) ? it.packageItems : [])
+        .map((p) => ({ id: String(p?.id || '').trim(), name: String(p?.name || '').trim() })),
+      materialRequestItems: (Array.isArray(it?.materialRequestItems) ? it.materialRequestItems : [])
+        .map((m) => ({
+          id: String(m?.id || '').trim(),
+          name: String(m?.name || '').trim(),
+          kind: String(m?.kind || '').trim(),
+        })),
+    })),
+  );
+  return serialize(prevItems) !== serialize(nextItems);
+}
+
 
 function getOrderItemOrFail(order, itemId) {
   const item = OrderStore.getOrderItem(order, itemId);
@@ -1906,6 +1977,12 @@ router.patch('/orders/:id/material-request-items/:materialRequestItemId/toggle',
       return res.status(400).json({ message: 'Не указана заявка на расходники.' });
     }
 
+    const orderBefore = OrderStore.findById(orderId);
+    const itemBefore = orderBefore ? getOrderItemOrFail(orderBefore, itemId) : null;
+    const targetBefore = itemBefore
+      ? (Array.isArray(itemBefore.materialRequestItems) ? itemBefore.materialRequestItems.find((m) => String(m?.id || '').trim() === materialRequestItemId) || null : null)
+      : null;
+
     const updatedOrder = OrderStore.toggleMaterialRequestItem(orderId, itemId, materialRequestItemId);
     if (updatedOrder === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
@@ -1921,6 +1998,10 @@ router.patch('/orders/:id/material-request-items/:materialRequestItemId/toggle',
     }
 
     const updatedItem = getOrderItemOrFail(updatedOrder, itemId);
+    const updatedTarget = Array.isArray(updatedItem.materialRequestItems)
+      ? updatedItem.materialRequestItems.find((m) => String(m?.id || '').trim() === materialRequestItemId) || targetBefore
+      : targetBefore;
+
     addActivityLog({
       action: 'order.material-request.manager.toggle',
       entityType: 'orderItem',
@@ -1934,6 +2015,13 @@ router.patch('/orders/:id/material-request-items/:materialRequestItemId/toggle',
         materialRequestItemId,
       },
     });
+
+    if (updatedTarget) {
+      const nextCompleted = Boolean(updatedTarget.isCompleted);
+      notifyMaterialRequestWatchers(
+        buildMaterialRequestToggleText(updatedOrder, updatedItem, updatedTarget, 'material', nextCompleted)
+      ).catch(() => {});
+    }
 
     return res.json({
       ok: true,
@@ -1963,6 +2051,12 @@ router.patch('/orders/:id/package-items/:packageItemId/toggle', requireManagerAc
       return res.status(400).json({ message: 'Не указана позиция комплектации.' });
     }
 
+    const orderBefore = OrderStore.findById(orderId);
+    const itemBefore = orderBefore ? getOrderItemOrFail(orderBefore, itemId) : null;
+    const targetBefore = itemBefore
+      ? (Array.isArray(itemBefore.packageItems) ? itemBefore.packageItems.find((p) => String(p?.id || '').trim() === packageItemId) || null : null)
+      : null;
+
     const updatedOrder = OrderStore.togglePackageItem(orderId, itemId, packageItemId);
     if (updatedOrder === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
@@ -1978,6 +2072,10 @@ router.patch('/orders/:id/package-items/:packageItemId/toggle', requireManagerAc
     }
 
     const updatedItem = getOrderItemOrFail(updatedOrder, itemId);
+    const updatedTarget = Array.isArray(updatedItem.packageItems)
+      ? updatedItem.packageItems.find((p) => String(p?.id || '').trim() === packageItemId) || targetBefore
+      : targetBefore;
+
     addActivityLog({
       action: 'order.package-item.manager.toggle',
       entityType: 'orderItem',
@@ -1991,6 +2089,13 @@ router.patch('/orders/:id/package-items/:packageItemId/toggle', requireManagerAc
         packageItemId,
       },
     });
+
+    if (updatedTarget) {
+      const nextCompleted = Boolean(updatedTarget.isCompleted);
+      notifyMaterialRequestWatchers(
+        buildMaterialRequestToggleText(updatedOrder, updatedItem, updatedTarget, 'package', nextCompleted)
+      ).catch(() => {});
+    }
 
     return res.json({
       ok: true,
@@ -2020,6 +2125,12 @@ router.delete('/orders/:id/package-items/:packageItemId', requireManagerAccess()
       return res.status(400).json({ message: 'Не указана позиция комплектации.' });
     }
 
+    const orderBefore = OrderStore.findById(orderId);
+    const itemBefore = orderBefore ? getOrderItemOrFail(orderBefore, itemId) : null;
+    const deletedTargetBefore = itemBefore
+      ? (Array.isArray(itemBefore.packageItems) ? itemBefore.packageItems.find((p) => String(p?.id || '').trim() === packageItemId) || null : null)
+      : null;
+
     const result = OrderStore.deletePackageItem(orderId, itemId, packageItemId);
     if (result === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
@@ -2034,11 +2145,12 @@ router.delete('/orders/:id/package-items/:packageItemId', requireManagerAccess()
       return res.status(404).json({ message: 'Позиция комплектации не найдена.' });
     }
 
+    const deletedTarget = result.deletedPackageItem || deletedTargetBefore;
     addActivityLog({
       action: 'order.package-item.manager.delete',
       entityType: 'orderItem',
       entityId: result.item.itemId,
-      entityName: result.deletedPackageItem?.name || result.item.name || '',
+      entityName: deletedTarget?.name || result.item.name || '',
       actor: getRequestActor(req),
       message: 'Позиция комплектации удалена из сводной таблицы.',
       details: {
@@ -2047,6 +2159,12 @@ router.delete('/orders/:id/package-items/:packageItemId', requireManagerAccess()
         packageItemId,
       },
     });
+
+    if (deletedTarget) {
+      notifyMaterialRequestWatchers(
+        buildMaterialRequestDeleteText(result.order, result.item, deletedTarget, 'package')
+      ).catch(() => {});
+    }
 
     return res.json({
       ok: true,
@@ -2077,6 +2195,12 @@ router.delete('/orders/:id/material-request-items/:materialRequestItemId', requi
       return res.status(400).json({ message: 'Не указана заявка на расходники.' });
     }
 
+    const orderBefore = OrderStore.findById(orderId);
+    const itemBefore = orderBefore ? getOrderItemOrFail(orderBefore, itemId) : null;
+    const deletedTargetBefore = itemBefore
+      ? (Array.isArray(itemBefore.materialRequestItems) ? itemBefore.materialRequestItems.find((m) => String(m?.id || '').trim() === materialRequestItemId) || null : null)
+      : null;
+
     const result = OrderStore.deleteMaterialRequestItem(orderId, itemId, materialRequestItemId);
     if (result === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
@@ -2091,11 +2215,12 @@ router.delete('/orders/:id/material-request-items/:materialRequestItemId', requi
       return res.status(404).json({ message: 'Заявка на расходники не найдена.' });
     }
 
+    const deletedTarget = result.deletedMaterialRequestItem || deletedTargetBefore;
     addActivityLog({
       action: 'order.material-request.manager.delete',
       entityType: 'orderItem',
       entityId: result.item.itemId,
-      entityName: result.deletedMaterialRequestItem?.name || result.item.name || '',
+      entityName: deletedTarget?.name || result.item.name || '',
       actor: getRequestActor(req),
       message: 'Заявка на расходники удалена из сводной таблицы.',
       details: {
@@ -2104,6 +2229,12 @@ router.delete('/orders/:id/material-request-items/:materialRequestItemId', requi
         materialRequestItemId,
       },
     });
+
+    if (deletedTarget) {
+      notifyMaterialRequestWatchers(
+        buildMaterialRequestDeleteText(result.order, result.item, deletedTarget, 'material')
+      ).catch(() => {});
+    }
 
     return res.json({
       ok: true,
@@ -2658,7 +2789,15 @@ router.put('/orders/:id', requireManagerAccess(), (req, res) => {
     });
     if (items) {
       const addedDiff = diffOrderItemsAddedMaterialData(previousOrder, nextOrder);
-      const notifyText = buildMaterialRequestWatchersManagerUpdateText(nextOrder, addedDiff);
+      let notifyText = buildMaterialRequestWatchersManagerUpdateText(nextOrder, addedDiff);
+      if (!notifyText && hasMaterialRequestChangesBetweenOrders(previousOrder, nextOrder)) {
+        notifyText = [
+          'Обновление заявок на закупку (админка):',
+          `Заказ: ${nextOrder.orderNumber || 'не указан'}`,
+          `Заказчик: ${nextOrder.customer || 'не указан'}`,
+          'Состав комплектации или заявок на расходники был изменен.',
+        ].join('\n');
+      }
       if (notifyText) {
         notifyMaterialRequestWatchers(notifyText).catch(() => {});
       }

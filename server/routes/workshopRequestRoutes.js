@@ -7,6 +7,7 @@ const {
   resolveWorkshopRequestAttachmentAbsolutePath,
 } = require('../services/workshopRequestAttachments');
 const { WORKSHOP_REQUEST_STATUS, WorkshopRequestStore } = require('../stores/workshopRequestStore');
+const { notifyMaterialRequestWatchers } = require('../services/orderNotifications');
 
 const router = express.Router();
 
@@ -14,6 +15,23 @@ function getWorkshopRequestStatusLabel(status = '') {
   return String(status || '').trim() === WORKSHOP_REQUEST_STATUS.COMPLETED
     ? 'Закрыта'
     : 'Открыта';
+}
+
+function buildWorkshopRequestStatusText(request, nextStatusValue = false) {
+  const stateLabel = nextStatusValue ? 'Отработана ✔️' : 'Возврат в работу ↩️';
+  return [
+    `Изменение статуса цеховой заявки: ${stateLabel}`,
+    `Автор: ${request?.employeeName || 'неизвестно'}`,
+    `Текст: ${request?.text || '—'}`,
+  ].filter(Boolean).join('\n');
+}
+
+function buildWorkshopRequestDeleteText(request) {
+  return [
+    'Цеховая заявка удалена 🗑️',
+    `Автор: ${request?.employeeName || 'неизвестно'}`,
+    `Текст: ${request?.text || '—'}`,
+  ].filter(Boolean).join('\n');
 }
 
 router.get('/workshop-requests', requireManagerAccess(), (req, res) => {
@@ -87,6 +105,9 @@ router.patch('/workshop-requests/:id/status', requireManagerAccess(), (req, res)
     },
   });
 
+  const nextCompleted = String(updatedItem.status || '').trim() === WORKSHOP_REQUEST_STATUS.COMPLETED;
+  notifyMaterialRequestWatchers(buildWorkshopRequestStatusText(updatedItem, nextCompleted)).catch(() => {});
+
   return res.json({
     ok: true,
     item: updatedItem,
@@ -122,6 +143,8 @@ router.delete('/workshop-requests/:id', requireManagerAccess(), (req, res) => {
       employeeName: deletedItem.employeeName || '',
     },
   });
+
+  notifyMaterialRequestWatchers(buildWorkshopRequestDeleteText(deletedItem)).catch(() => {});
 
   return res.json({
     ok: true,
