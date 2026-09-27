@@ -285,7 +285,7 @@ function getOrderStatusSummary(order = {}) {
   return 'ожидает запуска';
 }
 
-function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], settings = {}, { clear = false, source = 'manager' } = {}) {
+function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], settings = {}, { clear = false, source = 'manager', actorName = '' } = {}) {
   const groupedSelections = new Map();
   for (const selection of Array.isArray(selections) ? selections : []) {
     const orderId = String(selection?.orderId || '').trim();
@@ -307,6 +307,8 @@ function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], s
           return {
             item,
             stageLabel: getManualStageCellLabel(selection.columnKey, settings),
+            legendKey: selection.legendKey || '',
+            actorName: selection.actorName || actorName || '',
           };
         })
         .filter(Boolean);
@@ -315,8 +317,16 @@ function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], s
       return {
         order,
         text: changedItems.length === 1
-          ? getCustomerOrderUpdateItemText(order, changedItems[0].item, changedItems[0].stageLabel, { clear })
-          : getCustomerOrderChangedItemsText(order, changedItems, { clear }),
+          ? getCustomerOrderUpdateItemText(order, changedItems[0].item, changedItems[0].stageLabel, {
+              clear,
+              actorName: changedItems[0].actorName || actorName || '',
+              legendKey: changedItems[0].legendKey || '',
+            })
+          : getCustomerOrderChangedItemsText(order, changedItems, {
+              clear,
+              actorName: actorName || changedItems[0]?.actorName || '',
+              legendKey: changedItems[0]?.legendKey || '',
+            }),
       };
     })
     .filter(Boolean);
@@ -1053,6 +1063,7 @@ function handleManualStageMarks(req, res) {
     const customerMessages = buildCustomerStageUpdateMessages(updatedOrders, normalizedSelections, settings, {
       clear: !isApplyAction,
       source: 'manager',
+      actorName: requestActor?.label || requestActor?.name || '',
     });
     Promise.allSettled(
       customerMessages.map(({ order, text }) => notifyCustomerOrderStatusText(order, text, {
@@ -1454,6 +1465,7 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
     const customerMessages = buildCustomerStageUpdateMessages([updatedOrder], selections, settings, {
       clear: context.clear,
       source: 'telegram',
+      actorName: employee?.fullName || stageActorName || '',
     });
     Promise.allSettled(
       customerMessages.map(({ order, text }) => notifyCustomerOrderStatusText(order, text, {

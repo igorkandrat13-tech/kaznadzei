@@ -10,6 +10,16 @@ const STAGE_STATUS_LABELS = {
   completed: 'Готово',
 };
 
+function shortFullNameEmployee(fullName = '') {
+  const raw = String(fullName || '').trim();
+  if (!raw) return 'Администратор';
+  const parts = raw.split(/\s+/).filter(Boolean).slice(0, 3);
+  if (parts.length === 0) return raw;
+  const surname = parts[0];
+  const initials = parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join('');
+  return initials ? `${surname} ${initials}` : surname;
+}
+
 function getOrderItemsCount(order) {
   const items = Array.isArray(order?.items) ? order.items : [];
   return items.length;
@@ -163,8 +173,8 @@ function buildStageWatcherText(order, itemsUpdate = [], options = {}) {
       : `Номер изделия: ${itemName || 'Без названия'}`;
     const stageLabel = String(update?.stageLabel || '').trim() || 'Этап производства';
     const statusLine = `Статус изделия: ${stageLabel}`;
-    const actor = String(update?.actorName || '').trim() || 'Админка';
-    const actorLine = `Столяр: ${actor}`;
+    const actor = String(update?.actorName || '').trim() || 'Администратор';
+    const actorLine = `Сотрудник: ${shortFullNameEmployee(actor)}`;
     return [orderLine, itemLine, statusLine, actorLine].join('\n');
   }).filter(Boolean);
   return blocks.join('\n\n');

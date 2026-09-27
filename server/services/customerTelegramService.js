@@ -837,33 +837,58 @@ function getCustomerAccessClosedText(order = {}, { hasOtherAccesses = false } = 
   ].filter(Boolean).join('\n');
 }
 
-function getCustomerOrderUpdateItemText(order = {}, item = {}, stageLabel = '', { clear = false } = {}) {
-  const itemStatus = getReadableItemStatus(item);
+function shortFullName(fullName = '') {
+  const raw = String(fullName || '').trim();
+  if (!raw) return 'Администратор';
+  const parts = raw.split(/\s+/).filter(Boolean).slice(0, 3);
+  if (parts.length === 0) return raw;
+  const surname = parts[0];
+  const initials = parts.slice(1).map((part) => `${part.charAt(0).toUpperCase()}.`).join('');
+  return initials ? `${surname} ${initials}` : surname;
+}
+
+function getCustomerOrderUpdateItemText(order = {}, item = {}, stageLabel = '', { clear = false, actorName = '', legendKey = '' } = {}) {
+  const itemNumber = String(item?.itemNumber || '').trim();
+  const itemName = String(item?.name || '').trim() || 'Без названия';
+  const itemLine = itemNumber
+    ? `Номер изделия ${itemNumber}: ${itemName}`
+    : `Номер изделия: ${itemName}`;
+  const statusLine = `Статус изделия: ${String(stageLabel || '').trim() || 'Этап производства'}`;
+  const actorLine = `Сотрудник: ${shortFullName(actorName)}`;
   return [
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    `${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}`,
-    `Статус изделия: ${itemStatus}`,
-    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
+    itemLine,
+    statusLine,
+    actorLine,
   ].filter(Boolean).join('\n');
 }
 
-function getCustomerOrderChangedItemsText(order = {}, changedItems = [], { clear = false } = {}) {
+function getCustomerOrderChangedItemsText(order = {}, changedItems = [], { clear = false, actorName = '', legendKey = '' } = {}) {
   const normalizedItems = (Array.isArray(changedItems) ? changedItems : [])
     .filter((entry) => entry?.item);
   if (normalizedItems.length === 0) {
     return [
       `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-      `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
     ].filter(Boolean).join('\n');
   }
 
+  const perActor = actorName ? actorName : (normalizedItems[0]?.actorName || '');
+  const actorLine = `Сотрудник: ${shortFullName(perActor)}`;
   return [
     `Заказ: ${getOrderDisplayName(order) || 'не указан'}`,
-    ...normalizedItems.map(({ item, stageLabel }) => {
-      const itemStatus = getReadableItemStatus(item);
-      return `${getOrderItemDisplayName(item)}${stageLabel ? ` · ${stageLabel}` : ''}\nСтатус изделия: ${itemStatus}`;
+    ...normalizedItems.flatMap(({ item, stageLabel }, i) => {
+      const itemNumber = String(item?.itemNumber || '').trim();
+      const itemName = String(item?.name || '').trim() || 'Без названия';
+      const itemLine = itemNumber
+        ? `Номер изделия ${itemNumber}: ${itemName}`
+        : `Номер изделия: ${itemName}`;
+      const statusLine = `Статус изделия: ${String(stageLabel || '').trim() || 'Этап производства'}`;
+      const block = [itemLine, statusLine];
+      if (i === normalizedItems.length - 1) {
+        block.push(actorLine);
+      }
+      return block;
     }),
-    `Для полного списка изделий нажмите "${CUSTOMER_FULL_ORDER_BUTTON_TEXT}".`,
   ].filter(Boolean).join('\n');
 }
 
