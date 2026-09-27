@@ -270,6 +270,37 @@
   accent-color: #64e6c2;
 }
 
+.workshop-requests-row--completed {
+  background-color: rgba(55, 170, 90, 0.18);
+  color: #1c3020;
+}
+
+.workshop-requests-row--completed td {
+  border-top-color: rgba(55, 170, 90, 0.32);
+  border-bottom-color: rgba(55, 170, 90, 0.32);
+}
+
+.workshop-requests-row--completed .workshop-source-text,
+.workshop-requests-row--completed .workshop-cell-stack,
+.workshop-requests-row--completed .workshop-cell-stack strong,
+.workshop-requests-row--completed .workshop-cell-stack span,
+.workshop-requests-row--completed td {
+  color: #1c3020;
+}
+
+.workshop-requests-row--completed td strong {
+  color: #12301c;
+  font-weight: 700;
+}
+
+.workshop-requests-row--completed .workshop-request-main {
+  color: #12301c;
+}
+
+.workshop-requests-row--completed:hover {
+  background-color: rgba(55, 170, 90, 0.24);
+}
+
 .workshop-delete-btn {
   display: inline-flex;
   align-items: center;

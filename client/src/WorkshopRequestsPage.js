@@ -290,6 +290,7 @@ function WorkshopRequestsPage() {
   const [updatingKey, setUpdatingKey] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [attachmentPreview, setAttachmentPreview] = useState(null);
+  const [completedKeyOrder, setCompletedKeyOrder] = useState([]);
 
   useGlobalErrorEffect(error, 'Ошибка раздела заявок.');
 
@@ -363,7 +364,7 @@ function WorkshopRequestsPage() {
 
   const filteredRows = useMemo(() => {
     const query = String(search || '').trim().toLowerCase();
-    return rows.filter((row) => {
+    const sourceRows = rows.filter((row) => {
       if (sourceFilter !== 'all' && row.source !== sourceFilter) return false;
       if (authorFilter !== 'all' && row.author !== authorFilter) return false;
       if (orderFilter !== 'all' && row.orderNumber !== orderFilter) return false;
@@ -380,7 +381,34 @@ function WorkshopRequestsPage() {
       ].join(' ').toLowerCase();
       return haystack.includes(query);
     });
-  }, [authorFilter, orderFilter, rows, search, sourceFilter]);
+
+    const completedSet = new Set((Array.isArray(completedKeyOrder) ? completedKeyOrder : []).filter(Boolean));
+    const completedKeyIndex = new Map();
+    completedSet.forEach((k, i) => completedKeyIndex.set(k, i));
+
+    const openRows = [];
+    const completedRowsInToggleOrder = [];
+    const completedRowsByCreation = [];
+    for (const row of sourceRows) {
+      const isCompleted = row.status === 'completed';
+      if (!isCompleted) {
+        openRows.push(row);
+      } else if (completedKeyIndex.has(row.key)) {
+        completedRowsInToggleOrder.push({
+          row,
+          order: completedKeyIndex.get(row.key),
+        });
+      } else {
+        completedRowsByCreation.push(row);
+      }
+    }
+    completedRowsInToggleOrder.sort((left, right) => left.order - right.order);
+    return [
+      ...openRows,
+      ...completedRowsInToggleOrder.map((entry) => entry.row),
+      ...completedRowsByCreation,
+    ];
+  }, [authorFilter, completedKeyOrder, orderFilter, rows, search, sourceFilter]);
 
   const handleDownloadExcel = useCallback(() => {
     setError('');
@@ -428,6 +456,18 @@ function WorkshopRequestsPage() {
       const data = await parseJsonSafely(res);
       if (!res.ok) {
         throw new Error(data?.message || 'Не удалось изменить статус заявки.');
+      }
+      if (nextStatus === 'completed') {
+        setCompletedKeyOrder((current) => {
+          const prev = Array.isArray(current) ? current.slice() : [];
+          const set = new Set(prev.filter((x) => x && x !== row.key));
+          return [...set, row.key];
+        });
+      } else if (nextStatus === 'open') {
+        setCompletedKeyOrder((current) => {
+          const prev = Array.isArray(current) ? current : [];
+          return prev.filter((x) => x && x !== row.key);
+        });
       }
       await fetchData({ showLoader: false });
     } catch (toggleError) {
@@ -617,8 +657,15 @@ function WorkshopRequestsPage() {
               ) : null}
               {filteredRows.map((row) => {
                 const isUpdating = updatingKey === row.key;
+                const isCompleted = row.status === 'completed';
+                const rowClass = [
+                  isCompleted ? 'workshop-requests-row--completed' : '',
+                ].filter(Boolean).join(' ').trim();
                 return (
-                  <tr key={row.key}>
+                  <tr
+                    key={row.key}
+                    className={rowClass || undefined}
+                  >
                     <td>
                       <span className="workshop-source-text">
                         {row.sourceLabel}
