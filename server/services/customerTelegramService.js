@@ -378,6 +378,9 @@ function isPrimaryCellHighlighted(item = {}, columnPrimaryIndex) {
     if (isClearedMarkKey(rawKey)) continue;
     const mark = manualStageMarks[rawKey];
     if (!hasValidMark(mark)) continue;
+    const markLegendKey = String(mark.legendKey || '').trim();
+    const colSpan = Number(cellHeader?.colSpan) || 1;
+    if (colSpan === 1 && cellLegendKey && markLegendKey === cellLegendKey) return true;
     const normKey = normalizeOrderColumnKey(rawKey);
     const normCellKey = normalizeOrderColumnKey(columnKey);
     if (normCellKey && normKey === normCellKey) return true;
