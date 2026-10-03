@@ -329,9 +329,25 @@ function getTrackedStageWeight(stageIndex = -1) {
   return ORDER_PROGRESS_STAGE_WEIGHTS[stageIndex] || 0;
 }
 
+function getSecondaryHeaderForPrimaryColumn(columnIndex = -1, secondaryHeaders = []) {
+  if (columnIndex < 0) return null;
+  let currentIndex = 0;
+  for (const cell of Array.isArray(secondaryHeaders) ? secondaryHeaders : []) {
+    const span = Number(cell?.colSpan) || 1;
+    if (columnIndex >= currentIndex && columnIndex < currentIndex + span) {
+      return cell || null;
+    }
+    currentIndex += span;
+  }
+  return null;
+}
+
 function isPrimaryCellHighlighted(item = {}, columnPrimaryIndex) {
+  const settings = SettingsStore.get();
+  const secondaryHeaders = Array.isArray(settings?.orderStageLegendConfig?.secondaryHeaders)
+    ? settings.orderStageLegendConfig.secondaryHeaders
+    : [];
   const columnKey = normalizeOrderColumnKey(PRIMARY_INDEX_TO_ORDER_COLUMN_KEY[columnPrimaryIndex] || '');
-  if (!columnKey) return false;
 
   const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
     ? item.manualStageMarks
@@ -340,13 +356,29 @@ function isPrimaryCellHighlighted(item = {}, columnPrimaryIndex) {
     ? item.manualStageClears
     : {};
 
-  const normalizedKey = normalizeOrderColumnKey(columnKey);
-  if (manualStageClears[normalizedKey]) return false;
-  const visualMarkKey = normalizedKey;
-  const visualMark = manualStageMarks[visualMarkKey] || null;
-  const hasManualMark = Boolean(visualMark?.legendKey && String(visualMark?.updatedAt || '').trim());
+  const cellHeader = getSecondaryHeaderForPrimaryColumn(columnPrimaryIndex, secondaryHeaders);
+  const cellLegendKey = String(cellHeader?.legendKey || '').trim();
 
-  if (hasManualMark) return true;
+  const isClearedMarkKey = (key) => Boolean(manualStageClears[key]);
+  const hasValidMark = (mark) => Boolean(
+    mark
+    && typeof mark === 'object'
+    && String(mark.legendKey || '').trim()
+    && String(mark.updatedAt || '').trim()
+  );
+
+  for (const rawKey of Object.keys(manualStageMarks)) {
+    if (isClearedMarkKey(rawKey)) continue;
+    const mark = manualStageMarks[rawKey];
+    if (!hasValidMark(mark)) continue;
+    const markLegendKey = String(mark.legendKey || '').trim();
+    if (cellLegendKey && markLegendKey === cellLegendKey) return true;
+    const normKey = normalizeOrderColumnKey(rawKey);
+    const normCellKey = normalizeOrderColumnKey(columnKey);
+    if (normCellKey && normKey === normCellKey) return true;
+    const markPrimaryIndex = ORDER_COLUMN_KEY_TO_PRIMARY_INDEX[normKey];
+    if (Number.isInteger(markPrimaryIndex) && Number.isInteger(columnPrimaryIndex) && markPrimaryIndex === columnPrimaryIndex) return true;
+  }
 
   if (columnKey === 'orderCard') {
     const attachments = Array.isArray(item?.attachments) ? item.attachments : [];
