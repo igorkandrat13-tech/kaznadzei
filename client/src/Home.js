@@ -303,43 +303,13 @@ function Home() {
                 <div className="home-landing-line home-landing-line-c" />
             </div>
 
-            <div className="home-landing-content">
-                <section className="home-hero-panel">
-                    <div className="home-hero-topline">TECH WORKSHOP INTERFACE</div>
-                    <h2>Цифровая панель управления мебельным производством</h2>
-                    <p>
-                        Вход в систему по имени пользователя и паролю. Администраторские и рабочие права
-                        управляются в разделе «Пользователи».
-                    </p>
-
-                    <div className="home-hero-tags">
-                        <span>Живые статусы</span>
-                        <span>QR и Telegram</span>
-                        <span>Мобильный доступ</span>
-                    </div>
-
-                    <div className="home-stats-grid">
-                        <div className="home-stat-card">
-                            <div className="home-stat-value">1</div>
-                            <div className="home-stat-label">точка входа</div>
-                        </div>
-                        <div className="home-stat-card">
-                            <div className="home-stat-value">{authMe?.username || 'Login'}</div>
-                            <div className="home-stat-label">текущий пользователь</div>
-                        </div>
-                        <div className="home-stat-card">
-                            <div className="home-stat-value">ACL</div>
-                            <div className="home-stat-label">страницы, роли, права</div>
-                        </div>
-                    </div>
-                </section>
-
+            <div className="home-landing-content home-landing-content-centered">
                 <section className="home-role-panel">
                     <div className="home-role-panel-header">
                         <div>
                             <div className="home-role-panel-title">Доступ к системе</div>
                             <div className="home-role-panel-subtitle">
-                                Войдите по имени пользователя и паролю. Логин по умолчанию: <strong>Administrator</strong>.
+                                Войдите по имени пользователя и паролю.
                             </div>
                         </div>
                     </div>
@@ -427,9 +397,7 @@ function Home() {
                                 <div className="home-auth-hint" style={{ color: '#d97706', fontWeight: 600 }}>
                                     Слишком много неудачных попыток. Повторите через: {lockRemaining} сек.
                                 </div>
-                            ) : (
-                                <div className="home-auth-hint">Имя по умолчанию — Administrator.</div>
-                            )}
+                            ) : null}
                             <form onSubmit={handleLoginSubmit}>
                                 <div className="form-group" style={{ marginBottom: 12 }}>
                                     <label>Имя пользователя</label>
@@ -461,9 +429,6 @@ function Home() {
                                 </div>
                             </form>
                         </div>
-                    </div>
-                    <div className="home-auth-note">
-                        Роли цеха, QR и Telegram-сценарии продолжают работать по своим маршрутам и не требуют отдельного логина на этой странице.
                     </div>
                 </section>
             </div>

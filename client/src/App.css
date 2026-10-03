@@ -2056,6 +2056,22 @@ body .order-primary-title-button-badge {
   align-items: stretch;
 }
 
+.home-landing-content-centered {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 720px;
+  margin: 0 auto;
+  min-height: 70vh;
+  align-content: center;
+  justify-content: center;
+  justify-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .home-landing-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .home-hero-panel,
 .home-role-panel {
   position: relative;

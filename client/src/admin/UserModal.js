@@ -32,6 +32,80 @@ function UserModal({
   const [genTarget, setGenTarget] = useState('both');
   const roleAnchorRef = useRef(null);
   const empAnchorRef = useRef(null);
+  const [empDropdownStyle, setEmpDropdownStyle] = useState(null);
+  const [roleDropdownStyle, setRoleDropdownStyle] = useState(null);
+
+  const computeDropdownPlacement = (anchorEl) => {
+    if (!anchorEl) return null;
+    const rect = anchorEl.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const margin = 20;
+    const minHeight = 140;
+    const maxHardCap = 360;
+    const below = Math.max(0, Math.floor(vh - rect.bottom - margin));
+    const above = Math.max(0, Math.floor(rect.top - margin));
+    const allowAbove = above >= minHeight;
+    const allowBelow = below >= minHeight;
+    let direction = 'below';
+    if (allowBelow && allowAbove) {
+      direction = below >= above ? 'below' : 'above';
+    } else if (allowAbove) {
+      direction = 'above';
+    } else if (allowBelow) {
+      direction = 'below';
+    } else {
+      direction = below >= above ? 'below' : 'above';
+    }
+    const available = direction === 'below' ? below : above;
+    const maxHeight = Math.max(minHeight, Math.min(maxHardCap, available));
+    return { direction, maxHeight };
+  };
+
+  const refreshRoleDropdownPlacement = () => {
+    const placement = computeDropdownPlacement(roleAnchorRef.current);
+    if (!placement) return;
+    const base = {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      zIndex: 60,
+      maxHeight: placement.maxHeight,
+      overflowY: 'auto',
+      overflowX: 'hidden',
+      borderRadius: 10,
+      boxShadow: '0 10px 24px rgba(2,6,23,0.18)',
+      background: '#ffffff',
+      border: '1px solid #e5e7eb',
+    };
+    if (placement.direction === 'below') {
+      setRoleDropdownStyle({ ...base, top: 'calc(100% + 6px)' });
+    } else {
+      setRoleDropdownStyle({ ...base, bottom: 'calc(100% + 6px)' });
+    }
+  };
+
+  const refreshEmpDropdownPlacement = () => {
+    const placement = computeDropdownPlacement(empAnchorRef.current);
+    if (!placement) return;
+    const base = {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      zIndex: 60,
+      maxHeight: placement.maxHeight,
+      overflowY: 'auto',
+      overflowX: 'hidden',
+      borderRadius: 10,
+      boxShadow: '0 10px 24px rgba(2,6,23,0.18)',
+      background: '#ffffff',
+      border: '1px solid #e5e7eb',
+    };
+    if (placement.direction === 'below') {
+      setEmpDropdownStyle({ ...base, top: 'calc(100% + 6px)' });
+    } else {
+      setEmpDropdownStyle({ ...base, bottom: 'calc(100% + 6px)' });
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -45,6 +119,8 @@ function UserModal({
       setEmployeeSearch('');
       setEmployeeDropdownOpen(false);
       setLocalError('');
+      setRoleDropdownStyle(null);
+      setEmpDropdownStyle(null);
     }
   }, [open, initialUser]);
 
@@ -66,6 +142,56 @@ function UserModal({
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, [open, employeeDropdownOpen]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    if (!roleDropdownOpen) {
+      setRoleDropdownStyle(null);
+      return undefined;
+    }
+    let rafId = 0;
+    const run = () => {
+      rafId = 0;
+      refreshRoleDropdownPlacement();
+    };
+    const schedule = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(run);
+    };
+    schedule();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+    };
+  }, [open, roleDropdownOpen]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    if (!employeeDropdownOpen) {
+      setEmpDropdownStyle(null);
+      return undefined;
+    }
+    let rafId = 0;
+    const run = () => {
+      rafId = 0;
+      refreshEmpDropdownPlacement();
+    };
+    const schedule = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(run);
+    };
+    schedule();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+    };
   }, [open, employeeDropdownOpen]);
 
   const filteredRoles = useMemo(() => {
@@ -260,23 +386,10 @@ function UserModal({
                 {roleDropdownOpen ? '▴' : '▾'}
               </span>
             </button>
-            {roleDropdownOpen ? (
+            {roleDropdownOpen && roleDropdownStyle ? (
               <div
                 className="settings-dropdown-panel user-role-dropdown"
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  top: 'calc(100% + 6px)',
-                  zIndex: 60,
-                  maxHeight: 340,
-                  overflowY: 'auto',
-                  overflowX: 'hidden',
-                  borderRadius: 10,
-                  boxShadow: '0 10px 24px rgba(2,6,23,0.18)',
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                }}
+                style={roleDropdownStyle}
               >
                 <div style={{
                   padding: 10,
@@ -467,18 +580,10 @@ function UserModal({
                 </span>
               </button>
             </div>
-            {employeeDropdownOpen ? (
+            {employeeDropdownOpen && empDropdownStyle ? (
               <div
                 className="settings-dropdown-panel user-employee-dropdown"
-                style={{
-                  position: 'absolute', left: 0, right: 0,
-                  top: 'calc(100% + 6px)', zIndex: 60,
-                  maxHeight: 340, overflowY: 'auto', overflowX: 'hidden',
-                  borderRadius: 10,
-                  boxShadow: '0 10px 24px rgba(2,6,23,0.18)',
-                  background: '#ffffff',
-                  border: '1px solid #e5e7eb',
-                }}
+                style={empDropdownStyle}
               >
                 <div style={{ padding: 8, borderBottom: '1px solid #e5e7eb' }}>
                   <input
