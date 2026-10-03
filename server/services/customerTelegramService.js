@@ -26,15 +26,15 @@ const ORDER_PRIMARY_HEADERS = [
   'Карточка заказа',
   'Комплектация заказа',
   'Примечания',
-  '',
+  'Предварительная сборка',
   'Отгрузка до',
   'СТОЛЯР',
   'Заявки на расходники',
   'Покраска',
-  'Начало изготовления изделия',
-  'Окончание изготовления изделия',
-  'Время изготовления изделий',
-  'Время изготовления заказа',
+  'Сборка после покраски',
+  'Контроль качества',
+  'Доставка/Монтаж',
+  'Заказ готов',
 ];
 const ORDER_COLUMN_KEY_TO_PRIMARY_INDEX = {
   orderNumber: ORDER_PRIMARY_HEADERS.indexOf('Номер заказа'),
@@ -47,15 +47,22 @@ const ORDER_COLUMN_KEY_TO_PRIMARY_INDEX = {
   orderCard: ORDER_PRIMARY_HEADERS.indexOf('Карточка заказа'),
   packageName: ORDER_PRIMARY_HEADERS.indexOf('Комплектация заказа'),
   notes: ORDER_PRIMARY_HEADERS.indexOf('Примечания'),
-  preAssembly: ORDER_PRIMARY_HEADERS.indexOf('') >= 0 ? ORDER_PRIMARY_HEADERS.indexOf('') : 10,
+  preAssembly: ORDER_PRIMARY_HEADERS.indexOf('Предварительная сборка'),
   deliveryDate: ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до'),
   carpenter: ORDER_PRIMARY_HEADERS.indexOf('СТОЛЯР'),
   materialRequests: ORDER_PRIMARY_HEADERS.indexOf('Заявки на расходники'),
   paint: ORDER_PRIMARY_HEADERS.indexOf('Покраска'),
-  itemStartDate: ORDER_PRIMARY_HEADERS.indexOf('Начало изготовления изделия'),
-  itemEndDate: ORDER_PRIMARY_HEADERS.indexOf('Окончание изготовления изделия'),
-  itemDuration: ORDER_PRIMARY_HEADERS.indexOf('Время изготовления изделий'),
-  duration: ORDER_PRIMARY_HEADERS.indexOf('Время изготовления заказа'),
+  postPaint: ORDER_PRIMARY_HEADERS.indexOf('Сборка после покраски'),
+  qualityControl: ORDER_PRIMARY_HEADERS.indexOf('Контроль качества'),
+  logistics: ORDER_PRIMARY_HEADERS.indexOf('Доставка/Монтаж'),
+  orderReady: ORDER_PRIMARY_HEADERS.indexOf('Заказ готов'),
+  postpaint: ORDER_PRIMARY_HEADERS.indexOf('Сборка после покраски'),
+  qc: ORDER_PRIMARY_HEADERS.indexOf('Контроль качества'),
+  ready: ORDER_PRIMARY_HEADERS.indexOf('Заказ готов'),
+  duration: ORDER_PRIMARY_HEADERS.indexOf('Заказ готов'),
+  itemStartDate: ORDER_PRIMARY_HEADERS.indexOf('Предварительная сборка'),
+  itemEndDate: ORDER_PRIMARY_HEADERS.indexOf('Заказ готов'),
+  itemDuration: ORDER_PRIMARY_HEADERS.indexOf('Доставка/Монтаж'),
 };
 const PRIMARY_INDEX_TO_ORDER_COLUMN_KEY = Object.entries(ORDER_COLUMN_KEY_TO_PRIMARY_INDEX).reduce((acc, [columnKey, index]) => {
   if (Number.isInteger(index)) {
@@ -371,8 +378,6 @@ function isPrimaryCellHighlighted(item = {}, columnPrimaryIndex) {
     if (isClearedMarkKey(rawKey)) continue;
     const mark = manualStageMarks[rawKey];
     if (!hasValidMark(mark)) continue;
-    const markLegendKey = String(mark.legendKey || '').trim();
-    if (cellLegendKey && markLegendKey === cellLegendKey) return true;
     const normKey = normalizeOrderColumnKey(rawKey);
     const normCellKey = normalizeOrderColumnKey(columnKey);
     if (normCellKey && normKey === normCellKey) return true;
