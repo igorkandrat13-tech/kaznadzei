@@ -385,18 +385,24 @@ function isPrimaryCellHighlighted(item = {}, columnPrimaryIndex) {
   }
 
   if (columnKey === 'orderCard') {
+    if (isClearedMarkKey('orderCard')) return false;
     const attachments = Array.isArray(item?.attachments) ? item.attachments : [];
     return attachments.length > 0;
   }
   if (columnKey === 'paint') {
+    if (isClearedMarkKey('paint') || isClearedMarkKey('paintAttachments')) return false;
     const paintAttachments = Array.isArray(item?.paintAttachments) ? item.paintAttachments : [];
     return paintAttachments.length > 0;
   }
   if (columnKey === 'packageName') {
+    if (isClearedMarkKey('packageName')) return false;
     const packageItems = Array.isArray(item?.packageItems) ? item.packageItems : [];
     return packageItems.length > 0 && packageItems.every((packageItem) => Boolean(packageItem?.isCompleted));
   }
   if (columnKey === 'carpenter') {
+    const carpenterMark = manualStageMarks && (manualStageMarks.carpenter || manualStageMarks.carpenterAssignment || manualStageMarks.assignedCarpenter || manualStageMarks.assignedStage || manualStageMarks.carpenterActiveStage);
+    if (hasValidMark(carpenterMark)) return true;
+    if (isClearedMarkKey('carpenter') || isClearedMarkKey('carpenterAssignment') || isClearedMarkKey('assignedCarpenter') || isClearedMarkKey('assignedStage') || isClearedMarkKey('activeStage')) return false;
     const carpenterAssignment = item?.workerAssignments?.carpenter || null;
     const carpenterActiveStage = getItemActiveRoleStage(item, 'carpenter');
     const activeStage = getItemActiveStage(item);
