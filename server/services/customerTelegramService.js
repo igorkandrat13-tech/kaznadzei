@@ -182,14 +182,11 @@ function getStageStatusMarker(status = '', legendKey = '') {
   const normalizedStatus = String(status || '').trim();
   const normalizedLegendKey = String(legendKey || '').trim();
   if (normalizedStatus !== 'completed') return '⬜';
-  if (normalizedStatus === 'in_progress') return '🟨';
-  if (normalizedLegendKey === 'stock') return '🟦';
+  if (normalizedLegendKey === 'stock') return '🟧';
   if (normalizedLegendKey === 'assembly') return '🟧';
+  if (normalizedLegendKey === 'kitting') return '🟧';
   if (normalizedLegendKey === 'paint') return '🟪';
   if (normalizedLegendKey === 'postpaint') return '🟥';
-  if (normalizedLegendKey === 'qc') return '🟫';
-  if (normalizedLegendKey === 'logistics') return '🟫';
-  if (normalizedLegendKey === 'kitting') return '🟫';
   return '🟩';
 }
 
