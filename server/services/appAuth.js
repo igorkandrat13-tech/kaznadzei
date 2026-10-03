@@ -2,7 +2,6 @@ const crypto = require('crypto');
 const SettingsStore = require('../stores/settingsStore');
 
 const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
-const SETTINGS_PIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const UNSAFE_ADMIN_TOKENS = new Set(['change-me']);
 
 function encodeBase64Url(value) {
@@ -160,45 +159,6 @@ function verifyAppSessionToken(sessionToken) {
   return payload;
 }
 
-function createSettingsPinSessionToken(role = 'admin') {
-  return signPayload({
-    role: String(role || 'admin').trim() || 'admin',
-    exp: Date.now() + SETTINGS_PIN_SESSION_TTL_MS,
-    tokenType: 'settings-pin',
-  });
-}
-
-function verifySettingsPinSessionToken(sessionToken) {
-  const payload = verifySignedPayload(sessionToken);
-
-  if (payload?.tokenType !== 'settings-pin') {
-    throw new Error('Некорректная сессия доступа к настройкам.');
-  }
-  if (!payload?.role || payload.role !== 'admin') {
-    throw new Error('Недостаточно прав для доступа к настройкам.');
-  }
-  if (Number(payload.exp || 0) < Date.now()) {
-    throw new Error('Сессия доступа к настройкам истекла. Введите PIN-код снова.');
-  }
-
-  return payload;
-}
-
-function verifySettingsPin(pinCode) {
-  const config = SettingsStore.getAuthConfig();
-  const normalizedPin = normalizePassword(pinCode);
-  if (!normalizedPin) {
-    throw new Error('Введите PIN-код для доступа к настройкам.');
-  }
-  if (!config.settingsPinHash) {
-    return { configured: false, verified: true };
-  }
-  if (!verifyPassword(normalizedPin, config.settingsPinHash)) {
-    throw new Error('Неверный PIN-код настроек.');
-  }
-  return { configured: true, verified: true };
-}
-
 function canAccessRole(actualRole, requiredRole) {
   if (requiredRole === 'manager') {
     return actualRole === 'manager' || actualRole === 'admin';
@@ -244,7 +204,6 @@ function getPublicAuthConfig() {
   return {
     adminPasswordConfigured: Boolean(config.adminPasswordHash),
     adminBootstrapAvailable: Boolean(!config.adminPasswordHash && getBootstrapAdminPassword()),
-    settingsPinConfigured: Boolean(config.settingsPinHash),
   };
 }
 
@@ -293,12 +252,9 @@ module.exports = {
   canAccessRole,
   createAppSessionToken,
   createAppSessionTokenForUser,
-  createSettingsPinSessionToken,
   getPublicAuthConfig,
   getBootstrapAdminPassword,
   hashPassword,
   verifyAppSessionToken,
   verifyPassword,
-  verifySettingsPin,
-  verifySettingsPinSessionToken,
 };

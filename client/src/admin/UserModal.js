@@ -469,11 +469,15 @@ function UserModal({
             </div>
             {employeeDropdownOpen ? (
               <div
-                className="settings-dropdown-panel"
+                className="settings-dropdown-panel user-employee-dropdown"
                 style={{
                   position: 'absolute', left: 0, right: 0,
-                  top: 'calc(100% + 6px)', zIndex: 40,
-                  maxHeight: 260, overflow: 'auto',
+                  top: 'calc(100% + 6px)', zIndex: 60,
+                  maxHeight: 340, overflowY: 'auto', overflowX: 'hidden',
+                  borderRadius: 10,
+                  boxShadow: '0 10px 24px rgba(2,6,23,0.18)',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
                 }}
               >
                 <div style={{ padding: 8, borderBottom: '1px solid #e5e7eb' }}>

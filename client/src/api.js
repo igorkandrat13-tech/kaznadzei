@@ -1,4 +1,4 @@
-import { getAppAuthToken, getSettingsPinSessionToken } from './appAuth';
+import { getAppAuthToken } from './appAuth';
 import { normalizeErrorMessage } from './globalErrors';
 
 const ADMIN_TOKEN_KEY = 'kaznadzei_admin_token';
@@ -25,10 +25,6 @@ function withAdminHeaders(headers = {}) {
   const authToken = getAppAuthToken();
   if (authToken) {
     nextHeaders.set('Authorization', `Bearer ${authToken}`);
-  }
-  const settingsPinToken = getSettingsPinSessionToken();
-  if (settingsPinToken) {
-    nextHeaders.set('X-Settings-Pin-Token', settingsPinToken);
   }
   const token = getAdminToken();
   if (token) {

@@ -4,9 +4,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import {
   canAccessRole,
-  clearSettingsPinSessionToken,
   getAppAuthRole,
-  setSettingsPinSessionToken,
 } from './appAuth';
 import { SettingsFeedback } from './adminUI';
 import { formatDateTimeDisplay } from './dateTime';
@@ -215,16 +213,8 @@ function CustomersPage() {
     error: '',
   });
   const [telegramActionLoadingKey, setTelegramActionLoadingKey] = useState('');
-  const [settingsPinStatus, setSettingsPinStatus] = useState({
-    loading: true,
-    configured: false,
-    accessGranted: false,
-  });
-  const [settingsPinValue, setSettingsPinValue] = useState('');
-  const [verifyingSettingsPin, setVerifyingSettingsPin] = useState(false);
   const authRole = getAppAuthRole();
   const canDeleteCustomers = canAccessRole('admin', authRole);
-  const hasSettingsAccess = !settingsPinStatus.loading && (!settingsPinStatus.configured || settingsPinStatus.accessGranted);
   useGlobalErrorEffect(error, 'Ошибка при работе с заказчиками.');
 
   const fetchPageData = useCallback(async () => {
@@ -264,75 +254,8 @@ function CustomersPage() {
   }, []);
 
   useEffect(() => {
-    const fetchSettingsPinStatus = async () => {
-      try {
-        const res = await apiFetch('/api/auth/settings-pin/status');
-        const data = await parseJsonSafely(res);
-        if (!res.ok) {
-          throw new Error(data?.message || 'Не удалось проверить доступ к настройкам.');
-        }
-        setSettingsPinStatus({
-          loading: false,
-          configured: Boolean(data?.settingsPinConfigured),
-          accessGranted: Boolean(data?.accessGranted),
-        });
-      } catch (statusError) {
-        clearSettingsPinSessionToken();
-        setSettingsPinStatus({
-          loading: false,
-          configured: true,
-          accessGranted: false,
-        });
-        setError(toUserErrorMessage(statusError, 'Не удалось проверить доступ по PIN-коду.'));
-      }
-    };
-
-    fetchSettingsPinStatus();
-  }, []);
-
-  useEffect(() => {
-    if (!hasSettingsAccess) return;
     fetchPageData();
-  }, [fetchPageData, hasSettingsAccess]);
-
-  const verifySettingsPinAccess = async () => {
-    const pinCode = String(settingsPinValue || '').trim();
-    if (!pinCode) {
-      setError('Введите PIN-код для доступа к разделу заказчиков.');
-      return;
-    }
-
-    setVerifyingSettingsPin(true);
-    setError('');
-    setSuccessMessage('');
-    try {
-      const res = await apiFetch('/api/auth/settings-pin/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinCode }),
-      });
-      const data = await parseJsonSafely(res);
-      if (!res.ok) {
-        setError(toUserErrorMessage(data?.message, 'Не удалось подтвердить PIN-код доступа.'));
-        return;
-      }
-
-      if (data?.settingsPinToken) {
-        setSettingsPinSessionToken(data.settingsPinToken);
-      }
-      setSettingsPinStatus({
-        loading: false,
-        configured: Boolean(data?.settingsPinConfigured),
-        accessGranted: true,
-      });
-      setSettingsPinValue('');
-      setSuccessMessage(data?.message || 'Доступ подтвержден.');
-    } catch (verifyError) {
-      setError(toUserErrorMessage(verifyError, 'Не удалось подтвердить PIN-код доступа.'));
-    } finally {
-      setVerifyingSettingsPin(false);
-    }
-  };
+  }, [fetchPageData]);
 
   const ordersByCustomerId = useMemo(() => {
     const nextMap = {};
@@ -721,56 +644,6 @@ function CustomersPage() {
       action: 'revoke',
     });
   };
-
-  if (settingsPinStatus.loading) {
-    return (
-      <div>
-        <div className="card section-spaced">
-          <h2>Заказчики</h2>
-          <p>Проверяю доступ к разделу...</p>
-          <SettingsFeedback error={error} success={successMessage} />
-        </div>
-      </div>
-    );
-  }
-
-  if (settingsPinStatus.configured && !settingsPinStatus.accessGranted) {
-    return (
-      <div>
-        <div className="card section-spaced" style={{ maxWidth: 560 }}>
-          <h2>Заказчики</h2>
-          <p>Для входа в раздел заказчиков введите PIN-код доступа.</p>
-          <SettingsFeedback error={error} success={successMessage} />
-          <div className="form-group">
-            <label>PIN-код настроек</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={settingsPinValue}
-              onChange={(event) => {
-                setSettingsPinValue(event.target.value.replace(/[^\d]/g, ''));
-                setError('');
-              }}
-              placeholder="Введите PIN-код"
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  verifySettingsPinAccess();
-                }
-              }}
-            />
-          </div>
-          <div className="modal-actions">
-            <Button onClick={() => navigate('/orders')}>Назад</Button>
-            <Button variant="success" onClick={verifySettingsPinAccess} disabled={verifyingSettingsPin}>
-              {verifyingSettingsPin ? 'Проверка...' : 'Войти'}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>

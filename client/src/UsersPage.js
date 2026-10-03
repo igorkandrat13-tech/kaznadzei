@@ -87,7 +87,9 @@ function UsersPage() {
         apiFetch('/api/employees').then(async (res) => {
           if (!res.ok) return [];
           const data = await parseJsonSafely(res);
-          return Array.isArray(data?.employees) ? data.employees : [];
+          if (Array.isArray(data)) return data;
+          if (Array.isArray(data?.employees)) return data.employees;
+          return [];
         }).catch(() => []),
       ]);
       setUsers(u);

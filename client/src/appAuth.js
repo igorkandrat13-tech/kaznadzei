@@ -1,5 +1,4 @@
 const APP_AUTH_STORAGE_KEY = 'kaznadzei.app_auth';
-const SETTINGS_PIN_STORAGE_KEY = 'kaznadzei.settings_pin_auth';
 const APP_AUTH_EVENT = 'kaznadzei-auth-changed';
 
 const PAGE_KEYS = ['orders', 'requests', 'archive', 'customers', 'employees', 'stages', 'users', 'settings'];
@@ -116,26 +115,6 @@ export function setAppAuthSession(session) {
 
 export function clearAppAuthSession() {
   window.localStorage.removeItem(APP_AUTH_STORAGE_KEY);
-  window.localStorage.removeItem(SETTINGS_PIN_STORAGE_KEY);
-  notifyAuthChanged();
-}
-
-export function getSettingsPinSessionToken() {
-  return window.localStorage.getItem(SETTINGS_PIN_STORAGE_KEY) || '';
-}
-
-export function setSettingsPinSessionToken(token) {
-  const normalized = String(token || '').trim();
-  if (!normalized) {
-    clearSettingsPinSessionToken();
-    return;
-  }
-  window.localStorage.setItem(SETTINGS_PIN_STORAGE_KEY, normalized);
-  notifyAuthChanged();
-}
-
-export function clearSettingsPinSessionToken() {
-  window.localStorage.removeItem(SETTINGS_PIN_STORAGE_KEY);
   notifyAuthChanged();
 }
 
