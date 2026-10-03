@@ -60,9 +60,10 @@ const ORDER_COLUMN_KEY_TO_PRIMARY_INDEX = {
   qc: ORDER_PRIMARY_HEADERS.indexOf('Контроль качества'),
   ready: ORDER_PRIMARY_HEADERS.indexOf('Заказ готов'),
   duration: ORDER_PRIMARY_HEADERS.indexOf('Заказ готов'),
-  itemStartDate: ORDER_PRIMARY_HEADERS.indexOf('Предварительная сборка'),
-  itemEndDate: ORDER_PRIMARY_HEADERS.indexOf('Заказ готов'),
+  itemStartDate: ORDER_PRIMARY_HEADERS.indexOf('Сборка после покраски'),
+  itemEndDate: ORDER_PRIMARY_HEADERS.indexOf('Контроль качества'),
   itemDuration: ORDER_PRIMARY_HEADERS.indexOf('Доставка/Монтаж'),
+  startDate: ORDER_PRIMARY_HEADERS.indexOf('Отгрузка до'),
 };
 const PRIMARY_INDEX_TO_ORDER_COLUMN_KEY = Object.entries(ORDER_COLUMN_KEY_TO_PRIMARY_INDEX).reduce((acc, [columnKey, index]) => {
   if (Number.isInteger(index)) {
