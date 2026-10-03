@@ -387,18 +387,23 @@ function isPrimaryCellHighlighted(item = {}, columnPrimaryIndex) {
 
   if (columnKey === 'orderCard') {
     if (isClearedMarkKey('orderCard')) return false;
-    const attachments = Array.isArray(item?.attachments) ? item.attachments : [];
-    return attachments.length > 0;
+    const hasManual = hasValidMark(manualStageMarks?.orderCard) || hasValidMark(manualStageMarks?.card) || hasValidMark(manualStageMarks?.attachments) || hasValidMark(manualStageMarks?.orderFiles);
+    return Boolean(hasManual);
   }
   if (columnKey === 'paint') {
     if (isClearedMarkKey('paint') || isClearedMarkKey('paintAttachments')) return false;
-    const paintAttachments = Array.isArray(item?.paintAttachments) ? item.paintAttachments : [];
-    return paintAttachments.length > 0;
+    const hasManual = hasValidMark(manualStageMarks?.paint) || hasValidMark(manualStageMarks?.painting) || hasValidMark(manualStageMarks?.color);
+    return Boolean(hasManual);
   }
   if (columnKey === 'packageName') {
     if (isClearedMarkKey('packageName')) return false;
-    const packageItems = Array.isArray(item?.packageItems) ? item.packageItems : [];
-    return packageItems.length > 0 && packageItems.every((packageItem) => Boolean(packageItem?.isCompleted));
+    const hasManual = hasValidMark(manualStageMarks?.packageName) || hasValidMark(manualStageMarks?.package) || hasValidMark(manualStageMarks?.kitting) || hasValidMark(manualStageMarks?.packageItems);
+    return Boolean(hasManual);
+  }
+  if (columnKey === 'materialRequests') {
+    if (isClearedMarkKey('materialRequests')) return false;
+    const hasManual = hasValidMark(manualStageMarks?.materialRequests) || hasValidMark(manualStageMarks?.materials) || hasValidMark(manualStageMarks?.supply) || hasValidMark(manualStageMarks?.photoLink);
+    return Boolean(hasManual);
   }
   if (columnKey === 'carpenter') {
     const carpenterMark = manualStageMarks && (manualStageMarks.carpenter || manualStageMarks.carpenterAssignment || manualStageMarks.assignedCarpenter || manualStageMarks.assignedStage || manualStageMarks.carpenterActiveStage);
