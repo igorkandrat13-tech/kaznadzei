@@ -182,13 +182,15 @@ function getStageStatusMarker(status = '', legendKey = '') {
   const normalizedStatus = String(status || '').trim();
   const normalizedLegendKey = String(legendKey || '').trim();
   if (normalizedStatus !== 'completed') return '⬜';
+  if (normalizedStatus === 'in_progress') return '🟨';
   if (normalizedLegendKey === 'stock') return '🟦';
   if (normalizedLegendKey === 'assembly') return '🟧';
   if (normalizedLegendKey === 'paint') return '🟪';
   if (normalizedLegendKey === 'postpaint') return '🟥';
-  if (normalizedLegendKey === 'ready') return '🟩';
-  if (normalizedLegendKey === 'brief' || normalizedLegendKey === 'drafting') return '🟩';
-  return '⬜';
+  if (normalizedLegendKey === 'qc') return '🟫';
+  if (normalizedLegendKey === 'logistics') return '🟫';
+  if (normalizedLegendKey === 'kitting') return '🟫';
+  return '🟩';
 }
 
 function getItemActiveRoleStage(item = {}, role = '') {
