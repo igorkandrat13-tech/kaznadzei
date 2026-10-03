@@ -3,6 +3,8 @@ const UNSAFE_ADMIN_TOKENS = new Set(['change-me']);
 const SettingsStore = require('../stores/settingsStore');
 const { canAccessRole, verifyAppSessionToken, verifySettingsPinSessionToken } = require('../services/appAuth');
 
+const PAGE_KEYS = ['orders', 'requests', 'archive', 'customers', 'employees', 'stages', 'users', 'settings'];
+
 function getConfiguredAdminToken() {
   const token = (process.env.ADMIN_TOKEN || '').trim();
   if (!token || UNSAFE_ADMIN_TOKENS.has(token)) {
@@ -131,6 +133,46 @@ function requireManagerAccess(options = {}) {
   };
 }
 
+function requirePageAccess(page, options = {}) {
+  return (req, res, next) => {
+    if (!PAGE_KEYS.includes(page)) {
+      return res.status(500).json({ message: `Неизвестная страница ACL: ${page}` });
+    }
+    try {
+      const sessionToken = getRequestSessionToken(req);
+      if (sessionToken) {
+        const session = verifyAppSessionToken(sessionToken);
+        const hasPermission = Boolean(session.fullAccess || (session.permissions && session.permissions[page]));
+        if (hasPermission) {
+          req.auth = session;
+          return next();
+        }
+        return res.status(403).json({
+          message: options.invalidTokenMessage || `Недостаточно прав для доступа к разделу "${page}".`,
+        });
+      }
+    } catch (error) {
+      return res.status(401).json({
+        message: options.invalidTokenMessage || error.message || 'Требуется вход по паролю.',
+      });
+    }
+
+    const fallback = checkAdminAccess(req, options);
+    if (fallback) {
+      return res.status(fallback.status).json(fallback.body);
+    }
+    next();
+  };
+}
+
+function requireAdminAccess(options = {}) {
+  return requirePageAccess('settings', options);
+}
+
+function requireManagerAccess(options = {}) {
+  return requirePageAccess('orders', options);
+}
+
 function requireWriteAccess(req, res, next) {
   next();
 }
@@ -147,11 +189,13 @@ function buildSecurityHeaders(req, res, next) {
 }
 
 module.exports = {
+  PAGE_KEYS,
   buildSecurityHeaders,
   checkAdminAccess,
   getConfiguredAdminToken,
   getRequestSettingsPinToken,
   isSelfUpdateEnabled,
+  requirePageAccess,
   requireAdminAccess,
   requireManagerAccess,
   requireWriteAccess,

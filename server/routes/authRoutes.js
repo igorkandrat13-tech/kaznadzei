@@ -1,41 +1,55 @@
 const express = require('express');
 const SettingsStore = require('../stores/settingsStore');
-const { requireAdminAccess, requireManagerAccess, getRequestSettingsPinToken } = require('../middleware/security');
+const UserStore = require('../stores/userStore');
+const PermissionRoleStore = require('../stores/permissionRoleStore');
+const {
+  requireAdminAccess,
+  requireManagerAccess,
+  requirePageAccess,
+  getRequestSettingsPinToken,
+  getRequestSessionToken,
+} = require('../middleware/security');
 const {
   authenticateRolePassword,
+  authenticateUsernamePassword,
   createAppSessionToken,
+  createAppSessionTokenForUser,
   createSettingsPinSessionToken,
   getPublicAuthConfig,
   hashPassword,
+  verifyAppSessionToken,
   verifySettingsPin,
   verifySettingsPinSessionToken,
 } = require('../services/appAuth');
+const LoginLockout = require('../services/loginLockout');
+const {
+  ensureSystemFullAccessRole,
+  ensureAdministratorUserFromAdminPasswordHash,
+  syncAdministratorPasswordHashBiDirection,
+  SYSTEM_USERNAME,
+  syncAdminUserPasswordOnChange,
+} = require('../services/bootAuthSync');
 
 const router = express.Router();
 
-function normalizePasswordInput(value, fieldLabel) {
-  if (value === undefined) {
-    return undefined;
-  }
-
+function normalizePasswordInput(value, fieldLabel, { allowEmpty = false, min = 4, max = 120 } = {}) {
+  if (value === undefined) return undefined;
   const normalized = String(value || '').trim();
   if (!normalized) {
+    if (allowEmpty) return '';
     throw new Error(`Поле "${fieldLabel}" не может быть пустым.`);
   }
-  if (normalized.length < 4) {
-    throw new Error(`Поле "${fieldLabel}" должно содержать минимум 4 символа.`);
+  if (normalized.length < min) {
+    throw new Error(`Поле "${fieldLabel}" должно содержать минимум ${min} символа.`);
   }
-  if (normalized.length > 120) {
+  if (normalized.length > max) {
     throw new Error(`Поле "${fieldLabel}" слишком длинное.`);
   }
   return normalized;
 }
 
 function normalizePinInput(value, fieldLabel, { allowEmpty = false } = {}) {
-  if (value === undefined) {
-    return undefined;
-  }
-
+  if (value === undefined) return undefined;
   const normalized = String(value || '').trim();
   if (!normalized) {
     if (allowEmpty) return '';
@@ -47,6 +61,38 @@ function normalizePinInput(value, fieldLabel, { allowEmpty = false } = {}) {
   return normalized;
 }
 
+function getMeFromSession(req) {
+  try {
+    const token = getRequestSessionToken(req);
+    if (!token) return null;
+    const payload = verifyAppSessionToken(token);
+    if (!payload || !payload.userId) return null;
+    const user = UserStore.findById(payload.userId);
+    if (!user) return null;
+    const EmployeeStore = require('../stores/employeeStore');
+    const employee = user.employeeId ? EmployeeStore.findById(user.employeeId) : null;
+    const role = user.roleId ? PermissionRoleStore.findById(user.roleId) : null;
+    return {
+      userId: user._id,
+      username: user.username,
+      employeeId: user.employeeId || null,
+      employeeName: employee ? (employee.fullName || employee.name || '') : '',
+      role: role
+        ? {
+            _id: role._id,
+            name: role.name,
+            pages: role.pages || PermissionRoleStore.normalizePages({}),
+            isSystem: Boolean(role.isSystem),
+          }
+        : null,
+      fullAccess: Boolean(payload.fullAccess),
+      permissions: payload.permissions || PermissionRoleStore.normalizePages({}),
+    };
+  } catch {
+    return null;
+  }
+}
+
 router.get('/auth/config', (req, res) => {
   res.json(getPublicAuthConfig());
 });
@@ -54,53 +100,127 @@ router.get('/auth/config', (req, res) => {
 router.post('/auth/setup', (req, res) => {
   try {
     const authConfig = SettingsStore.getAuthConfig();
-    if (authConfig.adminPasswordHash) {
+    const existingAdmin = UserStore.findByUsername(SYSTEM_USERNAME);
+    if (authConfig.adminPasswordHash || existingAdmin) {
       return res.status(409).json({
-        message: 'Первичная настройка уже выполнена. Для изменения пароля используйте админ-панель.',
+        ok: false,
+        message: 'Первичная настройка уже выполнена. Для изменения пароля используйте раздел "Пользователи".',
       });
     }
-
-    const adminPassword = normalizePasswordInput(req.body?.adminPassword, 'Пароль администратора');
-
-    SettingsStore.updateAuthConfig({
-      adminPasswordHash: hashPassword(adminPassword),
+    const adminPassword = normalizePasswordInput(req.body?.adminPassword, 'Пароль администратора', { min: 4 });
+    const confirmPassword = normalizePasswordInput(req.body?.passwordConfirm || req.body?.adminPassword, 'Подтвердите пароль', { min: 4 });
+    if (adminPassword !== confirmPassword) {
+      return res.status(400).json({ ok: false, message: 'Пароли не совпадают.' });
+    }
+    const hashed = hashPassword(adminPassword);
+    SettingsStore.updateAuthConfig({ adminPasswordHash: hashed });
+    const { role } = ensureSystemFullAccessRole();
+    const adminUser = UserStore.create({
+      username: SYSTEM_USERNAME,
+      passwordHash: hashed,
+      employeeId: null,
+      roleId: role._id,
+      isSystem: true,
     });
-
-    const sessionToken = createAppSessionToken('admin');
+    syncAdministratorPasswordHashBiDirection(adminUser._id);
+    const sessionToken = createAppSessionTokenForUser(adminUser, role);
     res.json({
       ok: true,
       role: 'admin',
       sessionToken,
+      me: {
+        userId: adminUser._id,
+        username: adminUser.username,
+        fullAccess: true,
+        role: { name: role.name, isSystem: true, pages: role.pages },
+      },
       message: 'Пароль администратора сохранен.',
       ...getPublicAuthConfig(),
     });
   } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось выполнить первичную настройку пароля.' });
+    res.status(error.status || 400).json({ ok: false, message: error.message || 'Не удалось выполнить первичную настройку пароля.' });
   }
 });
 
 router.post('/auth/login', (req, res) => {
   try {
-    const role = String(req.body?.role || '').trim();
-    const password = String(req.body?.password || '');
-    const authResult = authenticateRolePassword(role, password);
-    const sessionToken = createAppSessionToken(authResult.role);
+    const lockState = LoginLockout.isLockedOutRequest(req);
+    if (lockState.locked) {
+      return res.status(423).json({
+        ok: false,
+        message: `Слишком много неудачных попыток. Повторите через ${Math.ceil(lockState.lockRemainingMs / 1000)} секунд.`,
+        lockSecondsRemaining: Math.ceil(lockState.lockRemainingMs / 1000),
+        lockUntilMs: Date.now() + lockState.lockRemainingMs,
+      });
+    }
 
+    const hasRoleField = req.body && ('role' in req.body);
+    if (hasRoleField) {
+      LoginLockout.recordFailedAttemptRequest(req);
+      return res.status(400).json({
+        ok: false,
+        message: 'Схема входа обновлена — используйте Имя пользователя и Пароль.',
+      });
+    }
+
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '');
+    let authResult = null;
+    try {
+      authResult = authenticateUsernamePassword(username, password);
+    } catch (authError) {
+      LoginLockout.recordFailedAttemptRequest(req);
+      const nextLock = LoginLockout.isLockedOutRequest(req);
+      if (nextLock.locked) {
+        return res.status(423).json({
+          ok: false,
+          message: authError.message || 'Неверное имя пользователя или пароль.',
+          lockSecondsRemaining: Math.ceil(nextLock.lockRemainingMs / 1000),
+          lockUntilMs: Date.now() + nextLock.lockRemainingMs,
+        });
+      }
+      return res.status(401).json({ ok: false, message: authError.message || 'Неверное имя пользователя или пароль.' });
+    }
+
+    if (!authResult.role) {
+      LoginLockout.recordFailedAttemptRequest(req);
+      return res.status(401).json({ ok: false, message: 'Для пользователя не настроены права доступа.' });
+    }
+
+    LoginLockout.recordSuccessfulLoginRequest(req);
+    const sessionToken = createAppSessionTokenForUser(authResult.user, authResult.role);
+    const EmployeeStore = require('../stores/employeeStore');
+    const employee = authResult.user.employeeId ? EmployeeStore.findById(authResult.user.employeeId) : null;
     res.json({
       ok: true,
       sessionToken,
-      role: authResult.role,
-      bootstrapUsed: Boolean(authResult.bootstrapUsed),
+      role: authResult.role.isSystem ? 'admin' : 'manager',
+      bootstrapUsed: false,
+      me: {
+        userId: authResult.user._id,
+        username: authResult.user.username,
+        employeeId: authResult.user.employeeId || null,
+        employeeName: employee ? (employee.fullName || employee.name || '') : '',
+        fullAccess: Boolean(authResult.role.isSystem),
+        role: {
+          _id: authResult.role._id,
+          name: authResult.role.name,
+          isSystem: Boolean(authResult.role.isSystem),
+          pages: authResult.role.pages,
+        },
+      },
     });
   } catch (error) {
-    res.status(401).json({ message: error.message || 'Не удалось выполнить вход.' });
+    res.status(500).json({ ok: false, message: error.message || 'Не удалось выполнить вход.' });
   }
 });
 
 router.get('/auth/session', requireManagerAccess(), (req, res) => {
+  const me = getMeFromSession(req);
   res.json({
     ok: true,
-    role: req.auth?.role || '',
+    role: req.auth?.role || (me?.fullAccess ? 'admin' : 'manager'),
+    me,
   });
 });
 
@@ -150,7 +270,7 @@ router.post('/auth/settings-pin/verify', requireAdminAccess(), (req, res) => {
       message: 'Доступ к настройкам подтвержден.',
     });
   } catch (error) {
-    res.status(401).json({ message: error.message || 'Не удалось подтвердить PIN-код настроек.' });
+    res.status(401).json({ ok: false, message: error.message || 'Не удалось подтвердить PIN-код настроек.' });
   }
 });
 
@@ -164,7 +284,7 @@ router.put('/auth/settings-pin', requireAdminAccess(), (req, res) => {
     };
 
     if (!shouldClear && !nextPinCode) {
-      return res.status(400).json({ message: 'Укажите новый PIN-код для настроек.' });
+      return res.status(400).json({ ok: false, message: 'Укажите новый PIN-код для настроек.' });
     }
 
     SettingsStore.updateAuthConfig(updates);
@@ -175,32 +295,17 @@ router.put('/auth/settings-pin', requireAdminAccess(), (req, res) => {
       ...getPublicAuthConfig(),
     });
   } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось сохранить PIN-код доступа к настройкам.' });
+    res.status(error.status || 400).json({ ok: false, message: error.message || 'Не удалось сохранить PIN-код доступа к настройкам.' });
   }
 });
 
 router.put('/auth/passwords', requireAdminAccess(), (req, res) => {
-  try {
-    const adminPassword = normalizePasswordInput(req.body?.adminPassword, 'Пароль администратора');
-
-    if (adminPassword === undefined) {
-      return res.status(400).json({ message: 'Укажите пароль администратора для обновления.' });
-    }
-
-    const updates = {};
-    if (adminPassword !== undefined) {
-      updates.adminPasswordHash = hashPassword(adminPassword);
-    }
-
-    SettingsStore.updateAuthConfig(updates);
-    res.json({
-      ok: true,
-      message: 'Пароль администратора обновлен.',
-      ...getPublicAuthConfig(),
-    });
-  } catch (error) {
-    res.status(error.status || 400).json({ message: error.message || 'Не удалось обновить пароль администратора.' });
-  }
+  res.status(501).json({
+    ok: false,
+    message: 'Используйте раздел "Пользователи" для смены паролей.',
+    help: 'PATCH /api/users/:id с полями password и passwordConfirm.',
+  });
 });
 
 module.exports = router;
+module.exports._helpers = { normalizePasswordInput, normalizePinInput, getMeFromSession };

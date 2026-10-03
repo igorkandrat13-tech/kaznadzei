@@ -2577,6 +2577,42 @@ body .order-primary-title-button-badge {
   width: auto;
 }
 
+.btn-ghost {
+  background: transparent !important;
+  border: 1px solid transparent;
+  box-shadow: none;
+  color: #1f3b5a;
+  min-height: 32px;
+  padding: 4px 10px;
+}
+
+.btn-ghost:hover {
+  background: rgba(15, 118, 224, 0.08) !important;
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.btn-ghost:active {
+  transform: translateY(0);
+  box-shadow: none;
+  background: rgba(15, 118, 224, 0.12) !important;
+}
+
+.btn-ghost[disabled] {
+  pointer-events: none;
+}
+
+.row-action-icon {
+  min-width: 30px !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+}
+
 .orders-table {
   font-size: 12px;
   table-layout: fixed;
@@ -6689,6 +6725,44 @@ body .attachment-preview-table td {
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(147, 205, 255, 0.24);
   animation: modalSlideIn 0.22s ease;
+}
+
+.modal-window.role-modal {
+  overflow: visible !important;
+  overflow-y: visible !important;
+  overflow-x: visible !important;
+  padding-bottom: 24px;
+}
+
+body .modal-window.role-modal {
+  overflow: visible !important;
+  overflow-y: visible !important;
+  overflow-x: visible !important;
+}
+
+.role-modal .role-pages-dropdown {
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.modal-window.user-modal {
+  overflow: visible !important;
+  overflow-y: visible !important;
+  overflow-x: visible !important;
+  padding-bottom: 24px;
+}
+
+body .modal-window.user-modal {
+  overflow: visible !important;
+  overflow-y: visible !important;
+  overflow-x: visible !important;
+}
+
+.user-modal .user-role-dropdown {
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .modal-window-sm {

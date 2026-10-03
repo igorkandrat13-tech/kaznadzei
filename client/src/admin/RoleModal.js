@@ -1,155 +1,253 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Modal, ModalHeader } from '../ui';
+import { normalizePagePermissions, PAGE_KEYS } from '../appAuth';
 
-function hexToRgb(hex) {
-  const normalized = String(hex || '').trim().replace('#', '');
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null;
-  return {
-    r: parseInt(normalized.slice(0, 2), 16),
-    g: parseInt(normalized.slice(2, 4), 16),
-    b: parseInt(normalized.slice(4, 6), 16),
-  };
-}
+const PAGE_OPTIONS = [
+  { key: 'orders', label: 'Заказы' },
+  { key: 'requests', label: 'Заявки' },
+  { key: 'archive', label: 'Архив' },
+  { key: 'customers', label: 'Заказчики' },
+  { key: 'employees', label: 'Сотрудники' },
+  { key: 'stages', label: 'Этапы производства' },
+  { key: 'users', label: 'Пользователи' },
+  { key: 'settings', label: 'Настройки' },
+];
 
-function getReadableTextColor(backgroundHex) {
-  const rgb = hexToRgb(backgroundHex);
-  if (!rgb) return '#173857';
-  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-  return luminance > 0.62 ? '#173857' : '#F7FBFF';
-}
-
-function toRgba(hex, alpha) {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return `rgba(23, 56, 87, ${alpha})`;
-  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+function safeGetObj(obj, key, fallback) {
+  return obj && typeof obj === 'object' && key in obj ? obj[key] : fallback;
 }
 
 function RoleModal({
-  mode,
-  roleForm,
-  setRoleForm,
-  columnOptions = [],
-  onAdd,
-  onUpdate,
+  open,
+  mode = 'create',
+  initialRole,
   onClose,
-  saving = false,
+  onSubmit,
+  submitting = false,
 }) {
-  if (!mode) return null;
-
   const isEdit = mode === 'edit';
-  const decoratedColumnOptions = useMemo(() => {
-    return columnOptions.map((column) => {
-      const previewColor = column.previewColor || '#DCEBFA';
-      const textColor = getReadableTextColor(previewColor);
-      return {
-        ...column,
-        previewColor,
-        textColor,
-        descriptionColor: toRgba(textColor, 0.78),
-        borderColor: toRgba(textColor, 0.18),
-        shadowColor: toRgba(textColor, 0.12),
-      };
+  const isSystemView = Boolean(initialRole?.isSystem);
+
+  const [name, setName] = useState('');
+  const [pages, setPages] = useState(() => normalizePagePermissions({}));
+  const [search, setSearch] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [localError, setLocalError] = useState('');
+  const dropdownAnchorRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      setName(initialRole?.name || '');
+      setPages(normalizePagePermissions(initialRole?.pages || {}));
+      setSearch('');
+      setDropdownOpen(false);
+      setLocalError('');
+    }
+  }, [open, initialRole]);
+
+  useEffect(() => {
+    if (!open || !dropdownOpen) return undefined;
+    const handleClick = (e) => {
+      if (!dropdownAnchorRef.current) return;
+      if (!dropdownAnchorRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open, dropdownOpen]);
+
+  const togglePage = (key) => {
+    if (isSystemView) return;
+    setPages((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const filteredPages = useMemo(() => {
+    const q = String(search || '').trim().toLowerCase();
+    if (!q) return PAGE_OPTIONS;
+    return PAGE_OPTIONS.filter(opt => opt.label.toLowerCase().includes(q));
+  }, [search]);
+
+  const checkedCount = useMemo(() => Object.values(pages).filter(Boolean).length, [pages]);
+
+  const handleSubmit = () => {
+    setLocalError('');
+    if (!name.trim() || name.trim().length < 3) {
+      setLocalError('Имя права должно содержать минимум 3 символа.');
+      return;
+    }
+    if (name.trim().length > 50) {
+      setLocalError('Имя права слишком длинное (50 символов макс.).');
+      return;
+    }
+    onSubmit && onSubmit({
+      name: name.trim(),
+      pages: normalizePagePermissions(pages),
     });
-  }, [columnOptions]);
+  };
 
   return (
-    <Modal open={Boolean(mode)} onClose={onClose} closeDisabled={saving} size="lg">
+    <Modal open={open} onClose={onClose} size="md" className="role-modal">
       <ModalHeader
-        title={isEdit ? 'Редактировать роль' : 'Добавить роль'}
-        subtitle="Настройка роли для сотрудников, рабочих разделов и доступа к цветовым отметкам."
+        title={isEdit ? (isSystemView ? 'Системное право' : 'Редактировать право') : 'Добавить право'}
+        subtitle={isSystemView
+          ? 'Это системное право с полным доступом — его нельзя изменить.'
+          : 'Задайте имя и выберите страницы, доступные пользователям с этим правом.'}
         onClose={onClose}
-        closeDisabled={saving}
+        closeDisabled={submitting}
       />
-
-      <div className="modal-form-grid modal-form-grid-two">
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Название роли</label>
+      <div style={{ padding: '0 20px 8px' }}>
+        {localError ? (
+          <div className="settings-alert settings-alert-error mb-16">{localError}</div>
+        ) : null}
+        <div className="form-group" style={{ marginBottom: 14 }}>
+          <label>Имя права</label>
           <input
-            value={roleForm?.label || ''}
-            onChange={event => setRoleForm({ ...roleForm, label: event.target.value })}
-            placeholder="Например: Фрезеровщик"
-            disabled={saving}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Например: Закупки, Бухгалтер, Мастер"
+            disabled={submitting || isSystemView}
+            maxLength={50}
           />
         </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Иконка</label>
-          <input
-            value={roleForm?.icon || ''}
-            onChange={event => setRoleForm({ ...roleForm, icon: event.target.value })}
-            placeholder="Например: 🪚"
-            disabled={saving}
-          />
-        </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label>Заголовок страницы</label>
-          <input
-            value={roleForm?.shortTitle || ''}
-            onChange={event => setRoleForm({ ...roleForm, shortTitle: event.target.value })}
-            placeholder="Например: Цех фрезеровки"
-            disabled={saving}
-          />
-        </div>
-      </div>
 
-      <div className="form-group">
-        <label>Описание</label>
-        <textarea
-          value={roleForm?.description || ''}
-          onChange={event => setRoleForm({ ...roleForm, description: event.target.value })}
-          placeholder="Краткое описание работы роли"
-          disabled={saving}
-          rows={3}
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Доступ к колонкам для цветовых отметок</label>
-        <div className="role-columns-picker">
-          {decoratedColumnOptions.map((column) => {
-            const checked = Array.isArray(roleForm?.allowedColumns) && roleForm.allowedColumns.includes(column.key);
-            return (
-              <label
-                key={column.key}
-                className={`role-columns-picker-item ${checked ? 'role-columns-picker-item-selected' : ''}`}
+        <div ref={dropdownAnchorRef} className="form-group" style={{ marginBottom: 12 }}>
+          <label>Доступные страницы</label>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="btn"
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+              onClick={() => setDropdownOpen(v => !v)}
+              disabled={submitting || isSystemView}
+            >
+              <span>Отмечено: <strong>{checkedCount}</strong> / {PAGE_KEYS.length}</span>
+              <span aria-hidden="true">{dropdownOpen ? '▴' : '▾'}</span>
+            </button>
+            {dropdownOpen ? (
+              <div
+                className="settings-dropdown-panel role-pages-dropdown"
                 style={{
-                  background: column.previewColor,
-                  color: column.textColor,
-                  borderColor: column.borderColor,
-                  boxShadow: checked ? `0 12px 24px ${column.shadowColor}` : `0 6px 16px ${column.shadowColor}`,
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 'calc(100% + 6px)',
+                  zIndex: 60,
+                  maxHeight: 320,
+                  overflowY: 'auto',
+                  borderRadius: 10,
+                  boxShadow: '0 10px 24px rgba(2,6,23,0.18)',
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={saving}
-                  onChange={(event) => {
-                    const currentColumns = Array.isArray(roleForm?.allowedColumns) ? roleForm.allowedColumns : [];
-                    setRoleForm({
-                      ...roleForm,
-                      allowedColumns: event.target.checked
-                        ? [...currentColumns, column.key]
-                        : currentColumns.filter((value) => value !== column.key),
-                    });
-                  }}
-                />
-                <span className="role-columns-picker-body">
-                  <span className="role-columns-picker-title" style={{ color: column.textColor }}>{column.label}</span>
-                  <span className="role-columns-picker-description" style={{ color: column.descriptionColor }}>{column.description}</span>
-                </span>
-              </label>
-            );
-          })}
+                <div style={{ padding: 10, borderBottom: '1px solid #eef2f7', position: 'sticky', top: 0, background: '#ffffff', zIndex: 1 }}>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Поиск страницы..."
+                    style={{ marginBottom: 0 }}
+                  />
+                </div>
+                <div style={{ padding: 6 }}>
+                  {filteredPages.length === 0 ? (
+                    <div style={{ padding: 10, opacity: 0.6, fontSize: 13 }}>Ничего не найдено</div>
+                  ) : (
+                    filteredPages.map(opt => (
+                      <label
+                        key={opt.key}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'flex-start',
+                          gap: 10,
+                          padding: '9px 10px',
+                          cursor: isSystemView ? 'default' : 'pointer',
+                          borderRadius: 8,
+                          userSelect: 'none',
+                        }}
+                        onMouseEnter={(e) => { if (!isSystemView) e.currentTarget.style.background = '#f3f7ff'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(safeGetObj(pages, opt.key, false))}
+                          onChange={() => togglePage(opt.key)}
+                          disabled={isSystemView}
+                          style={{ flexShrink: 0, width: 18, height: 18 }}
+                        />
+                        <span style={{
+                          fontSize: 14,
+                          color: '#0f172a',
+                          fontWeight: 500,
+                          lineHeight: 1.2,
+                          flex: 1,
+                          minWidth: 0,
+                        }}>
+                          {opt.label}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          marginBottom: 8,
+          padding: 10,
+          background: '#f7f9fc',
+          borderRadius: 10,
+          border: '1px solid #eef2f7',
+          minHeight: 22,
+        }}>
+          {PAGE_OPTIONS.filter(opt => Boolean(safeGetObj(pages, opt.key, false))).map(opt => (
+            <span key={opt.key} style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '5px 12px',
+              borderRadius: 999,
+              fontSize: 13,
+              fontWeight: 600,
+              background: 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)',
+              color: '#ffffff',
+              boxShadow: '0 2px 6px rgba(249,115,22,0.22)',
+              letterSpacing: 0.1,
+            }}>
+              {opt.label}
+            </span>
+          ))}
+          {checkedCount === 0 ? (
+            <span style={{ fontSize: 13, opacity: 0.6, padding: '4px 2px' }}>Нет отмеченных страниц</span>
+          ) : null}
         </div>
       </div>
-
       <div className="modal-actions">
-        <Button variant="success" onClick={isEdit ? onUpdate : onAdd} disabled={saving}>
-          {saving ? (isEdit ? 'Сохранение...' : 'Добавление...') : (isEdit ? 'Сохранить роль' : 'Добавить роль')}
+        <Button onClick={onClose} disabled={submitting}>Отмена</Button>
+        <Button
+          variant={isSystemView ? 'primary' : 'success'}
+          onClick={isSystemView ? onClose : handleSubmit}
+          disabled={submitting || isSystemView ? false : submitting}
+        >
+          {submitting ? 'Сохранение...' : (isSystemView ? 'Понятно' : (isEdit ? 'Сохранить' : 'Добавить'))}
         </Button>
-        <Button onClick={onClose} disabled={saving}>Отмена</Button>
       </div>
     </Modal>
   );
 }
 
 export default RoleModal;
+export { PAGE_OPTIONS };

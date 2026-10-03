@@ -9,6 +9,7 @@ const EmployeeStore = require('./server/stores/employeeStore');
 const SettingsStore = require('./server/stores/settingsStore');
 const RoleStore = require('./server/stores/roleStore');
 const { buildSecurityHeaders } = require('./server/middleware/security');
+const { runAllBootSync } = require('./server/services/bootAuthSync');
 const { getDefaultRoleLabels, getDefaultRoles } = require('./server/config/roles');
 
 dotenv.config();
@@ -231,6 +232,8 @@ seedDemoMultiItemOrders();
   }
 })();
 
+runAllBootSync();
+
 const processStepRoutes = require('./server/routes/processStepRoutes');
 const orderRoutes = require('./server/routes/orderRoutes');
 const colorRoutes = require('./server/routes/colorRoutes');
@@ -244,7 +247,11 @@ const authRoutes = require('./server/routes/authRoutes');
 const adminToolsRoutes = require('./server/routes/adminToolsRoutes');
 const roleRoutes = require('./server/routes/roleRoutes');
 const workshopRequestRoutes = require('./server/routes/workshopRequestRoutes');
+const userRoutes = require('./server/routes/userRoutes');
+const permissionRoleRoutes = require('./server/routes/permissionRoleRoutes');
 app.use('/api', authRoutes);
+app.use('/api', userRoutes);
+app.use('/api', permissionRoleRoutes);
 app.use('/api', roleRoutes);
 app.use('/api', processStepRoutes);
 app.use('/api', orderRoutes);

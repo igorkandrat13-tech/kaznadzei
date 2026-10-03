@@ -126,12 +126,35 @@ function createAppSessionToken(role) {
 function verifyAppSessionToken(sessionToken) {
   const payload = verifySignedPayload(sessionToken);
 
-  if (!payload?.role) {
+  const hasNewFormat = payload && (payload.userId || payload.tokenType === 'app-session' && payload.permissions);
+  const hasLegacyFormat = payload && payload.role;
+
+  if (!hasNewFormat && !hasLegacyFormat) {
     throw new Error('Сессия авторизации неполная.');
   }
 
   if (Number(payload.exp || 0) < Date.now()) {
     throw new Error('Сессия авторизации истекла. Выполните вход снова.');
+  }
+
+  if (hasLegacyFormat && !hasNewFormat) {
+    const fullAccess = payload.role === 'admin';
+    const managerAccess = payload.role === 'admin' || payload.role === 'manager';
+    payload.userId = payload.userId || 'legacy';
+    payload.username = payload.username || (fullAccess ? 'Administrator' : 'manager');
+    payload.roleId = payload.roleId || '';
+    payload.roleKey = fullAccess ? 'full-access' : (managerAccess ? 'legacy-manager' : 'legacy-worker');
+    payload.fullAccess = fullAccess;
+    payload.permissions = {
+      orders: managerAccess,
+      requests: managerAccess,
+      archive: fullAccess,
+      customers: fullAccess,
+      employees: fullAccess,
+      stages: fullAccess,
+      users: fullAccess,
+      settings: fullAccess,
+    };
   }
 
   return payload;
@@ -225,15 +248,57 @@ function getPublicAuthConfig() {
   };
 }
 
+function createAppSessionTokenForUser(user, role) {
+  const userId = String(user?._id || '');
+  const username = String(user?.username || '');
+  const roleId = String(role?._id || '');
+  const isSystemRole = Boolean(role?.isSystem);
+  const pages = role?.pages && typeof role.pages === 'object' ? role.pages : {};
+  const permissions = {};
+  for (const key of ['orders', 'requests', 'archive', 'customers', 'employees', 'stages', 'users', 'settings']) {
+    permissions[key] = isSystemRole ? true : Boolean(pages[key]);
+  }
+  const fullAccess = isSystemRole;
+  return signPayload({
+    tokenType: 'app-session',
+    userId,
+    username,
+    roleId,
+    roleKey: isSystemRole ? 'full-access' : 'custom',
+    fullAccess,
+    permissions,
+    exp: Date.now() + SESSION_TTL_MS,
+  });
+}
+
+function authenticateUsernamePassword(username, password) {
+  const UserStore = require('../stores/userStore');
+  const PermissionRoleStore = require('../stores/permissionRoleStore');
+  const normalizedUsername = String(username || '').trim();
+  const normalizedPassword = normalizePassword(password);
+  if (!normalizedUsername) throw new Error('Введите имя пользователя.');
+  if (!normalizedPassword) throw new Error('Введите пароль.');
+  const user = UserStore.findByUsername(normalizedUsername);
+  if (!user) throw new Error('Неверное имя пользователя или пароль.');
+  if (!verifyPassword(normalizedPassword, user.passwordHash || '')) {
+    throw new Error('Неверное имя пользователя или пароль.');
+  }
+  const role = user.roleId ? PermissionRoleStore.findById(user.roleId) : null;
+  return { user, role: role || null };
+}
+
 module.exports = {
   authenticateRolePassword,
+  authenticateUsernamePassword,
   canAccessRole,
   createAppSessionToken,
+  createAppSessionTokenForUser,
   createSettingsPinSessionToken,
   getPublicAuthConfig,
   getBootstrapAdminPassword,
   hashPassword,
   verifyAppSessionToken,
+  verifyPassword,
   verifySettingsPin,
   verifySettingsPinSessionToken,
 };

@@ -9,6 +9,7 @@ import RoleWorkspacePage from './RoleWorkspacePage';
 import OrdersWorkspace from './OrdersWorkspace';
 import WorkshopRequestsPage from './WorkshopRequestsPage';
 import Home from './Home';
+import UsersPage from './UsersPage';
 import TelegramScannerPage from './TelegramScannerPage';
 import {
   hasTelegramWebAppSession,
@@ -18,7 +19,7 @@ import {
   setTelegramEmployeeSessionToken,
 } from './telegramWebApp';
 import { apiFetch } from './api';
-import { canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
+import { canAccessPage, canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
 import { showGlobalError } from './globalErrors';
 import { RoleConfigProvider } from './RoleConfigContext';
 import './App.css';
@@ -107,7 +108,13 @@ class AppErrorBoundary extends React.Component {
     }
 }
 
-function ProtectedRoute({ requiredRole, children }) {
+function ProtectedRoute({ requiredRole, requiredPage, children }) {
+    if (requiredPage) {
+        if (!canAccessPage(requiredPage)) {
+            return <Navigate to="/" replace />;
+        }
+        return children;
+    }
     const authRole = getAppAuthRole();
     if (!canAccessRole(requiredRole, authRole)) {
         return <Navigate to="/" replace />;
@@ -278,10 +285,11 @@ function AppLayout() {
                                     {canAccessOrders && <Link to="/orders" onClick={() => setMobileMenuOpen(false)}>Заказы</Link>}
                                     {canAccessOrders && <Link to="/requests" onClick={() => setMobileMenuOpen(false)}>Заявки</Link>}
                                     {canAccessOrders && <Link to="/archive" onClick={() => setMobileMenuOpen(false)}>Архив</Link>}
-                                    {canAccessOrders && <Link to="/customers" onClick={() => setMobileMenuOpen(false)}>Заказчики 🔒</Link>}
-                                    {canAccessRole('admin', authRole) && <Link to="/settings?tab=employees" onClick={() => setMobileMenuOpen(false)}>Сотрудники 🔒</Link>}
-                                    {canAccessRole('admin', authRole) && <Link to="/settings?tab=colors" onClick={() => setMobileMenuOpen(false)}>Этапы производства 🔒</Link>}
-                                    {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки 🔒</Link>}
+                                    {canAccessOrders && <Link to="/customers" onClick={() => setMobileMenuOpen(false)}>Заказчики</Link>}
+                                    {canAccessRole('admin', authRole) && <Link to="/settings?tab=employees" onClick={() => setMobileMenuOpen(false)}>Сотрудники</Link>}
+                                    {canAccessRole('admin', authRole) && <Link to="/settings?tab=colors" onClick={() => setMobileMenuOpen(false)}>Этапы производства</Link>}
+                                    {canAccessPage('users') && <Link to="/users" onClick={() => setMobileMenuOpen(false)}>Пользователи</Link>}
+                                    {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
                                 </nav>
                                 <div className="App-header-menu-footer">
                                     {authRole ? (
@@ -298,6 +306,7 @@ function AppLayout() {
             <div className={telegramMode ? 'container container-telegram' : 'container'}>
                 <Routes>
                     <Route path='/settings' element={<ProtectedRoute requiredRole='admin'><Admin /></ProtectedRoute>} />
+                    <Route path='/users' element={<ProtectedRoute requiredPage='users'><UsersPage /></ProtectedRoute>} />
                     <Route path='/admin' element={<Navigate to='/settings' replace />} />
                     <Route path='/orders' element={<ProtectedRoute requiredRole='manager'><OrdersWorkspace /></ProtectedRoute>} />
                     <Route path='/requests' element={<ProtectedRoute requiredRole='manager'><WorkshopRequestsPage /></ProtectedRoute>} />
