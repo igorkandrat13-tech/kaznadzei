@@ -7,9 +7,13 @@
     "dev": "concurrently -n server,client -c blue,green \"npm run server:dev\" \"npm run client\"",
     "server": "node server.js",
     "server:dev": "nodemon server.js",
+    "server:check": "powershell -NoProfile -Command \"$ErrorActionPreference='Stop'; Get-ChildItem -Path server -Recurse -Include *.js -Exclude package.json | ForEach-Object { & node --check $_.FullName; if ($LASTEXITCODE -ne 0) { Write-Host 'FAIL:' $_.FullName; exit 1 } }; Write-Host 'All server files passed syntax check'\"",
     "client": "cd client && npm start",
     "build": "cd client && npm install && npm run build",
-    "deploy": "npm install && npm run build"
+    "deploy": "npm install && npm run build",
+    "health": "node -e \"const http = require('http'); const port = process.env.PORT || 5000; http.get('http://localhost:' + port + '/healthz', r => { console.log('HTTP', r.statusCode); process.exit(r.statusCode === 200 ? 0 : 1) }).on('error', e => { console.error('FAIL:', e.message); process.exit(2) })\"",
+    "lint": "echo 'No ESLint configured yet - skipping lint'",
+    "format": "echo 'No Prettier configured yet - skipping format'"
   },
   "dependencies": {
     "concurrently": "^8.2.2",

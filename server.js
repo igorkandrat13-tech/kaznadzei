@@ -19,6 +19,23 @@ app.disable('x-powered-by');
 app.use(buildSecurityHeaders);
 app.use(express.json({ limit: '5mb' }));
 
+app.get('/healthz', (req, res) => {
+  try {
+    const store = require('./server/stores/store');
+    const loaded = store.load && typeof store.load === 'function' ? store.load() : null;
+    const hasDb = Boolean(loaded && typeof loaded === 'object');
+    res.status(hasDb ? 200 : 503).json({
+      ok: hasDb,
+      service: 'Kaznadzei API',
+      version: '1.0.0',
+      ts: Date.now(),
+      memoryRssMb: Math.round((process.memoryUsage().rss / 1024 / 1024) * 10) / 10,
+    });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: String(err && err.message || err), ts: Date.now() });
+  }
+});
+
 const filesPath = path.join(__dirname, 'files');
 if (fs.existsSync(filesPath)) {
   app.use('/files', express.static(filesPath));
