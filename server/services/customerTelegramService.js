@@ -272,6 +272,11 @@ function getTrackedSecondaryHeaderCells() {
   const secondaryHeaders = Array.isArray(settings?.orderStageLegendConfig?.secondaryHeaders)
     ? settings.orderStageLegendConfig.secondaryHeaders
     : [];
+  const validStages = new Set(
+    Array.isArray(settings?.orderStageLegendConfig?.stages)
+      ? settings.orderStageLegendConfig.stages
+      : []
+  );
   let startIndex = 0;
   return secondaryHeaders
     .map((header) => {
@@ -284,11 +289,13 @@ function getTrackedSecondaryHeaderCells() {
       startIndex += span;
       return cell;
     })
-    .filter((header) => (
-      String(header?.legendKey || '').trim()
-      && header.endIndex >= ORDER_TRACKED_PRIMARY_START_INDEX
-      && header.startIndex <= ORDER_TRACKED_PRIMARY_END_INDEX
-    ));
+    .filter((header) => {
+      const legendKey = String(header?.legendKey || '').trim();
+      if (!legendKey) return false;
+      const isValidStage = validStages.size === 0 || Boolean(legendKey);
+      const isExplicitExcluded = legendKey === 'unprocessed';
+      return isValidStage && !isExplicitExcluded;
+    });
 }
 
 function getTrackedStageLabel(header = {}) {
@@ -301,51 +308,113 @@ function getTrackedStageWeight(stageIndex = -1) {
   return ORDER_PROGRESS_STAGE_WEIGHTS[stageIndex] || 0;
 }
 
+function getItemEffectiveTimestampForCell(item, columnPrimaryIndex) {
+  const columnKey = PRIMARY_INDEX_TO_ORDER_COLUMN_KEY[columnPrimaryIndex] || '';
+  if (!columnKey) return '';
+  if (
+    columnKey === 'itemStartDate'
+    || columnKey === 'itemEndDate'
+    || columnKey === 'itemDuration'
+    || columnKey === 'duration'
+  ) return '';
+  return getItemEffectiveColumnTimestamp(item, columnKey);
+}
+
+function getItemCompletedCellsByLegendKey(item = {}) {
+  const manualStageMarks = item?.manualStageMarks && typeof item.manualStageMarks === 'object'
+    ? item.manualStageMarks
+    : {};
+  const manualStageClears = item?.manualStageClears && typeof item.manualStageClears === 'object'
+    ? item.manualStageClears
+    : {};
+  const completedByLegendKey = new Map();
+  Object.entries(manualStageMarks).forEach(([columnKey, mark]) => {
+    if (!mark || typeof mark !== 'object') return;
+    if (manualStageClears[columnKey]) return;
+    const updatedAt = String(mark.updatedAt || '').trim();
+    if (!updatedAt) return;
+    const legendKey = String(mark.legendKey || '').trim();
+    if (!legendKey) return;
+    if (!completedByLegendKey.has(legendKey)) {
+      completedByLegendKey.set(legendKey, []);
+    }
+    completedByLegendKey.get(legendKey).push({ columnKey, updatedAt });
+  });
+  return completedByLegendKey;
+}
+
 function getItemTrackedStageProgress(order = {}, item = {}) {
   const headers = getTrackedSecondaryHeaderCells();
-  return headers.map((header, stageIndex) => {
+  const autoCompletedByLegendKey = new Map();
+  headers.forEach((header) => {
+    const legendKey = String(header?.legendKey || '').trim();
+    if (!legendKey) return;
     const columnIndexes = [];
-    for (let columnIndex = Math.max(header.startIndex, ORDER_TRACKED_PRIMARY_START_INDEX); columnIndex <= Math.min(header.endIndex, ORDER_TRACKED_PRIMARY_END_INDEX); columnIndex += 1) {
+    for (
+      let columnIndex = Math.max(header.startIndex, ORDER_TRACKED_PRIMARY_START_INDEX);
+      columnIndex <= Math.min(header.endIndex, ORDER_TRACKED_PRIMARY_END_INDEX);
+      columnIndex += 1
+    ) {
+      const columnKey = PRIMARY_INDEX_TO_ORDER_COLUMN_KEY[columnIndex] || '';
+      if (!columnKey) continue;
+      if (
+        columnKey === 'itemStartDate'
+        || columnKey === 'itemEndDate'
+        || columnKey === 'itemDuration'
+        || columnKey === 'duration'
+      ) {
+        continue;
+      }
       columnIndexes.push(columnIndex);
     }
-
+    if (columnIndexes.length === 0) return;
     const cells = columnIndexes
       .map((columnIndex) => {
-        const columnKey = PRIMARY_INDEX_TO_ORDER_COLUMN_KEY[columnIndex] || '';
-        if (!columnKey) return null;
-        let value = getItemEffectiveColumnTimestamp(item, columnKey);
-        if (!value && (columnKey === 'itemStartDate' || columnKey === 'itemEndDate' || columnKey === 'itemDuration')) {
-          const itemMeta = getItemManufacturingMeta(item);
-          if (columnKey === 'itemStartDate') value = itemMeta.startAt;
-          if (columnKey === 'itemEndDate') value = itemMeta.endAt;
-          if (columnKey === 'itemDuration' && itemMeta.isCompleted) value = itemMeta.endAt || itemMeta.startAt;
-        }
-        if (!value && columnKey === 'duration') {
-          const orderMeta = OrderStore.deriveOrderManufacturingMeta(order);
-          if (orderMeta.isCompleted) {
-            value = orderMeta.endAt || orderMeta.startAt;
-          }
-        }
+        const value = getItemEffectiveTimestampForCell(item, columnIndex);
         return {
-          columnKey,
+          columnIndex,
           value,
           isCompleted: Boolean(value),
         };
       })
       .filter(Boolean);
-
     const completedCount = cells.filter((cell) => cell.isCompleted).length;
     const totalCount = cells.length;
+    if (totalCount <= 0) return;
+    if (!autoCompletedByLegendKey.has(legendKey)) {
+      autoCompletedByLegendKey.set(legendKey, { completedCount: 0, totalCount: 0 });
+    }
+    const bucket = autoCompletedByLegendKey.get(legendKey);
+    bucket.completedCount += completedCount;
+    bucket.totalCount += totalCount;
+  });
+
+  const manualCompleted = getItemCompletedCellsByLegendKey(item);
+
+  return headers.map((header, stageIndex) => {
+    const legendKey = String(header?.legendKey || '').trim();
+    const manualCells = manualCompleted.get(legendKey) || [];
+    const autoBucket = autoCompletedByLegendKey.get(legendKey) || { completedCount: 0, totalCount: 0 };
+    const autoTotal = autoBucket.totalCount || 0;
+    const autoCompleted = autoBucket.completedCount || 0;
+    const manualCompletedCount = manualCells.length;
+    const totalCount = Math.max(autoTotal, 1, manualCompletedCount);
+    const completedCount = autoTotal > 0
+      ? Math.min(autoTotal, autoCompleted + manualCompletedCount)
+      : manualCompletedCount;
+
     let status = 'pending';
     if (completedCount > 0 && completedCount < totalCount) {
       status = 'in_progress';
     } else if (totalCount > 0 && completedCount === totalCount) {
       status = 'completed';
+    } else if (manualCompletedCount > 0) {
+      status = 'completed';
     }
 
     return {
-      key: `${String(header?.legendKey || '').trim()}-${header.startIndex}-${header.endIndex}`,
-      legendKey: String(header?.legendKey || '').trim(),
+      key: `${legendKey}-${header.startIndex}-${header.endIndex}`,
+      legendKey,
       label: getTrackedStageLabel(header),
       weight: getTrackedStageWeight(stageIndex),
       status,
