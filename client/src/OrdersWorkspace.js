@@ -1804,7 +1804,6 @@ function OrdersWorkspace() {
           ...currentMark,
           legendKey: nextLegendKey,
           updatedAt: new Date(`${payload.date}T00:00:00.000Z`).toISOString(),
-          updatedBy: 'admin',
         },
       };
       if (item.manualStageClears?.[columnKey]) {

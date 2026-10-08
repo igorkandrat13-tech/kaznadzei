@@ -262,10 +262,28 @@ function createAppSessionTokenForUser(user, role) {
     permissions[key] = isSystemRole ? true : Boolean(pages[key]);
   }
   const fullAccess = isSystemRole;
+  const employeeId = String(user?.employeeId || '').trim();
+  let employeeName = '';
+  let employeeRole = '';
+  if (employeeId) {
+    try {
+      const EmployeeStore = require('../stores/employeeStore');
+      const employee = EmployeeStore.findById(employeeId);
+      if (employee) {
+        employeeName = String(employee.fullName || employee.name || '').trim();
+        employeeRole = String(employee.role || '').trim();
+      }
+    } catch (_) {
+      employeeId = '';
+    }
+  }
   return signPayload({
     tokenType: 'app-session',
     userId,
     username,
+    employeeId,
+    employeeName,
+    employeeRole,
     roleId,
     roleKey: isSystemRole ? 'full-access' : 'custom',
     fullAccess,

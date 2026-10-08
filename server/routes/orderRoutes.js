@@ -333,6 +333,16 @@ function buildCustomerStageUpdateMessages(updatedOrders = [], selections = [], s
 }
 
 function getActorAllowedManualColumns(actor = {}) {
+  const permissions = actor?.permissions && typeof actor.permissions === 'object' ? actor.permissions : null;
+  const canManageOrders = Boolean(
+    actor?.fullAccess
+    || (permissions && permissions.orders)
+    || (permissions && permissions.requests)
+    || (permissions && permissions.archive)
+    || (permissions && permissions.customers)
+  );
+  if (canManageOrders) return null;
+
   const normalizedEmployeeId = String(actor?.employeeId || '').trim();
   if (normalizedEmployeeId) {
     const employee = EmployeeStore.findById(normalizedEmployeeId);
@@ -344,6 +354,7 @@ function getActorAllowedManualColumns(actor = {}) {
     if (Array.isArray(employee.allowedColumns)) {
       return new Set(employee.allowedColumns);
     }
+    return null;
   }
 
   const normalizedRole = String(actor?.role || '').trim();
@@ -353,9 +364,7 @@ function getActorAllowedManualColumns(actor = {}) {
 
   const role = RoleStore.findByKey(normalizedRole, { includeDeleted: true });
   if (!role || role.isDeleted) {
-    const error = new Error('Роль пользователя не найдена или отключена.');
-    error.status = 403;
-    throw error;
+    return null;
   }
 
   return new Set(Array.isArray(role.allowedColumns) ? role.allowedColumns : []);

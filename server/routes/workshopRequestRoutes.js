@@ -7,7 +7,7 @@ const {
   resolveWorkshopRequestAttachmentAbsolutePath,
 } = require('../services/workshopRequestAttachments');
 const { WORKSHOP_REQUEST_STATUS, WorkshopRequestStore } = require('../stores/workshopRequestStore');
-const { notifyMaterialRequestWatchers } = require('../services/orderNotifications');
+const { notifyMaterialRequestWatchers, notifySupplyWorkshopRequestCompleted } = require('../services/orderNotifications');
 
 const router = express.Router();
 
@@ -106,7 +106,11 @@ router.patch('/workshop-requests/:id/status', requireAnyPageAccess(['orders', 'r
   });
 
   const nextCompleted = String(updatedItem.status || '').trim() === WORKSHOP_REQUEST_STATUS.COMPLETED;
-  notifyMaterialRequestWatchers(buildWorkshopRequestStatusText(updatedItem, nextCompleted)).catch(() => {});
+  if (nextCompleted) {
+    notifySupplyWorkshopRequestCompleted(updatedItem).catch(() => {});
+  } else {
+    notifyMaterialRequestWatchers(buildWorkshopRequestStatusText(updatedItem, nextCompleted)).catch(() => {});
+  }
 
   return res.json({
     ok: true,

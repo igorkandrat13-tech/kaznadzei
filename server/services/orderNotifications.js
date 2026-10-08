@@ -4,6 +4,58 @@ const SettingsStore = require('../stores/settingsStore');
 const { sendMessage, sendPhotoWithAttachment, sendMediaGroupWithAttachments } = require('./telegramService');
 const { normalizeEmployeeBotKinds } = require('../stores/employeeStore');
 
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
+const SECONDS_PER_DAY = 86400;
+
+function formatDurationRussian(msValue) {
+  const numericMs = Number(msValue);
+  if (!Number.isFinite(numericMs) || numericMs < 0) return '';
+  let totalSeconds = Math.floor(numericMs / 1000);
+  const days = Math.floor(totalSeconds / SECONDS_PER_DAY);
+  totalSeconds -= days * SECONDS_PER_DAY;
+  const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR);
+  totalSeconds -= hours * SECONDS_PER_HOUR;
+  const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
+  totalSeconds -= minutes * SECONDS_PER_MINUTE;
+  const seconds = totalSeconds;
+  const parts = [];
+  if (days > 0) parts.push(`${days}д`);
+  if (hours > 0) parts.push(`${hours}ч`);
+  if (minutes > 0) parts.push(`${minutes}мин`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}сек`);
+  return parts.join(' ');
+}
+
+function buildWorkshopRequestCompletedSupplyText(request = {}, options = {}) {
+  const requestNumber = Number(request?.requestNumber) || 0;
+  const text = String(request?.text || '').trim() || 'Заявка';
+  const titleLine = requestNumber > 0 ? `Заявка №${requestNumber}` : 'Заявка';
+  const authorName = String(request?.employeeName || options?.authorName || '').trim() || 'Не указан';
+  const executorName = String(request?.resolvedBy?.employeeName || options?.executorName || '').trim() || 'Не указан';
+  const createdAtStr = String(request?.createdAt || '').trim();
+  const resolvedAtStr = String(request?.resolvedAt || options?.resolvedAt || '').trim();
+  let durationLine = '';
+  if (createdAtStr && resolvedAtStr) {
+    const createdMs = new Date(createdAtStr).getTime();
+    const resolvedMs = new Date(resolvedAtStr).getTime();
+    if (Number.isFinite(createdMs) && Number.isFinite(resolvedMs) && resolvedMs >= createdMs) {
+      const durationText = formatDurationRussian(resolvedMs - createdMs);
+      if (durationText) {
+        durationLine = `Время выполнения - ${durationText}`;
+      }
+    }
+  }
+  const lines = [
+    titleLine,
+    `${text} - Выполнено`,
+    `Автор - ${shortFullNameEmployee(authorName)}`,
+    `Исполнитель - ${shortFullNameEmployee(executorName)}`,
+  ];
+  if (durationLine) lines.push(durationLine);
+  return lines.filter(Boolean).join('\n');
+}
+
 const STAGE_STATUS_LABELS = {
   pending: 'Ожидает',
   in_progress: 'В работе',
@@ -134,7 +186,18 @@ async function notifyEmployeesByIds(employeeIds = [], text = '', options = {}) {
 
 async function notifyMaterialRequestWatchers(text = '', options = {}) {
   const recipientIds = SettingsStore.get().telegramRequestNotificationEmployeeIds || [];
+  const notificationType = String(options?.notificationType || 'request-only');
+  const attachments = Array.isArray(options?.attachments) ? options.attachments : [];
   await notifyEmployeesByIds(recipientIds, text, {
+    notificationType,
+    attachments,
+  });
+}
+
+async function notifySupplyWorkshopRequestCompleted(request = {}, options = {}) {
+  const text = buildWorkshopRequestCompletedSupplyText(request, options);
+  if (!text) return;
+  await notifyMaterialRequestWatchers(text, {
     notificationType: 'request-only',
     attachments: Array.isArray(options?.attachments) ? options.attachments : [],
   });
@@ -189,11 +252,14 @@ async function notifyStageWatchers(order, itemsUpdate, options = {}) {
 }
 
 module.exports = {
+  buildWorkshopRequestCompletedSupplyText,
+  formatDurationRussian,
   notifyEmployeesByRole,
   notifyEmployeesByIds,
   notifyMaterialRequestWatchers,
   notifyOrderCreated,
   notifyStageWatchers,
+  notifySupplyWorkshopRequestCompleted,
   buildStageWatcherText,
   getEmployeeTelegramBotTokens,
 };

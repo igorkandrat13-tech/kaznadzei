@@ -45,9 +45,79 @@ function normalizeAttachments(attachments = []) {
   }, []);
 }
 
+function normalizeRequestNumber(value) {
+  if (value === null || value === undefined) return 0;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0 && Number.isInteger(numeric)) return numeric;
+  const parsed = parseInt(String(value || '').replace(/\D/g, ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function sortByCreatedAtAsc(left = {}, right = {}) {
+  const leftTime = new Date(left.createdAt || 0).getTime();
+  const rightTime = new Date(right.createdAt || 0).getTime();
+  return leftTime - rightTime;
+}
+
+function sortByCreatedAtDesc(left = {}, right = {}) {
+  const leftTime = new Date(left.createdAt || 0).getTime();
+  const rightTime = new Date(right.createdAt || 0).getTime();
+  return rightTime - leftTime;
+}
+
+function ensureWorkshopRequestNumbers() {
+  const db = load();
+  if (!db.workshopRequests || !Array.isArray(db.workshopRequests)) {
+    db.workshopRequests = [];
+  }
+  const existingNumbers = new Set();
+  let maxNumber = 0;
+  for (const entry of db.workshopRequests) {
+    const number = normalizeRequestNumber(entry.requestNumber);
+    if (number > 0) {
+      entry.requestNumber = number;
+      existingNumbers.add(number);
+      if (number > maxNumber) maxNumber = number;
+    } else {
+      delete entry.requestNumber;
+    }
+  }
+  const missingNumbers = db.workshopRequests.filter((entry) => !Number.isFinite(entry.requestNumber) || entry.requestNumber <= 0);
+  if (missingNumbers.length > 0) {
+    missingNumbers.sort(sortByCreatedAtAsc);
+    let nextNumber = maxNumber + 1;
+    for (const entry of missingNumbers) {
+      while (existingNumbers.has(nextNumber)) nextNumber += 1;
+      entry.requestNumber = nextNumber;
+      existingNumbers.add(nextNumber);
+      if (nextNumber > maxNumber) maxNumber = nextNumber;
+      nextNumber += 1;
+    }
+  }
+  const currentCounter = normalizeRequestNumber(db?.settings?.workshopRequestCounter);
+  if (currentCounter < maxNumber) {
+    db.settings = db.settings || {};
+    db.settings.workshopRequestCounter = maxNumber;
+  }
+  save();
+  return maxNumber;
+}
+
+function takeNextWorkshopRequestNumber() {
+  ensureWorkshopRequestNumbers();
+  const db = load();
+  db.settings = db.settings || {};
+  const current = normalizeRequestNumber(db.settings.workshopRequestCounter);
+  const next = current + 1;
+  db.settings.workshopRequestCounter = next;
+  save();
+  return next;
+}
+
 function normalizeWorkshopRequestItem(item = {}) {
   return {
     ...item,
+    requestNumber: normalizeRequestNumber(item.requestNumber),
     text: normalizeText(item.text),
     status: normalizeStatus(item.status),
     employeeId: String(item.employeeId || '').trim(),
@@ -66,14 +136,9 @@ function normalizeWorkshopRequestItem(item = {}) {
   };
 }
 
-function sortByCreatedAtDesc(left = {}, right = {}) {
-  const leftTime = new Date(left.createdAt || 0).getTime();
-  const rightTime = new Date(right.createdAt || 0).getTime();
-  return rightTime - leftTime;
-}
-
 const WorkshopRequestStore = {
   findAll() {
+    ensureWorkshopRequestNumbers();
     return load().workshopRequests
       .slice()
       .map((item) => normalizeWorkshopRequestItem(item))
@@ -81,6 +146,7 @@ const WorkshopRequestStore = {
   },
 
   findById(requestId) {
+    ensureWorkshopRequestNumbers();
     const normalizedRequestId = String(requestId || '').trim();
     if (!normalizedRequestId) return null;
     const item = load().workshopRequests.find((entry) => entry._id === normalizedRequestId) || null;
@@ -92,10 +158,15 @@ const WorkshopRequestStore = {
     if (!text) return 'empty_text';
 
     const db = load();
+    ensureWorkshopRequestNumbers();
     const actor = normalizeActor(data.actor);
     const now = new Date().toISOString();
+    const requestNumber = data.requestNumber
+      ? normalizeRequestNumber(data.requestNumber) || takeNextWorkshopRequestNumber()
+      : takeNextWorkshopRequestNumber();
     const nextItem = {
       _id: id(),
+      requestNumber,
       text,
       status: normalizeStatus(data.status),
       source: 'telegram-workshop',
@@ -115,10 +186,11 @@ const WorkshopRequestStore = {
     };
     db.workshopRequests.push(nextItem);
     save();
-    return nextItem;
+    return normalizeWorkshopRequestItem(nextItem);
   },
 
   updateStatus(requestId, nextStatus, actor = {}) {
+    ensureWorkshopRequestNumbers();
     const db = load();
     const normalizedRequestId = String(requestId || '').trim();
     const item = db.workshopRequests.find((entry) => entry._id === normalizedRequestId);
@@ -126,7 +198,7 @@ const WorkshopRequestStore = {
 
     const status = normalizeStatus(nextStatus);
     if (item.status === status) {
-      return item;
+      return normalizeWorkshopRequestItem(item);
     }
 
     const normalizedActor = normalizeActor(actor);
@@ -149,10 +221,11 @@ const WorkshopRequestStore = {
     }
 
     save();
-    return item;
+    return normalizeWorkshopRequestItem(item);
   },
 
   delete(requestId) {
+    ensureWorkshopRequestNumbers();
     const db = load();
     const normalizedRequestId = String(requestId || '').trim();
     if (!normalizedRequestId) return false;
@@ -160,11 +233,14 @@ const WorkshopRequestStore = {
     if (itemIndex === -1) return null;
     const [deletedItem] = db.workshopRequests.splice(itemIndex, 1);
     save();
-    return deletedItem || null;
+    return deletedItem ? normalizeWorkshopRequestItem(deletedItem) : null;
   },
 };
 
 module.exports = {
   WORKSHOP_REQUEST_STATUS,
   WorkshopRequestStore,
+  ensureWorkshopRequestNumbers,
+  takeNextWorkshopRequestNumber,
+  normalizeRequestNumber,
 };

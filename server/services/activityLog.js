@@ -83,12 +83,40 @@ function clearActivityLogs() {
 }
 
 function getRequestActor(req, fallback = {}) {
-  if (req?.auth?.role) {
+  const auth = req?.auth || null;
+  if (auth) {
+    const employeeName = String(auth.employeeName || auth.employee_fullName || '').trim();
+    const username = String(auth.username || '').trim();
+    const userId = String(auth.userId || '').trim();
+    const employeeId = String(auth.employeeId || '').trim();
+    const roleKey = String(auth.roleKey || auth.roleKeyLabel || auth.role || '').trim();
+    const permissionPages = auth.permissions && typeof auth.permissions === 'object' ? auth.permissions : null;
+    const pagesCount = permissionPages
+      ? Object.values(permissionPages).filter(Boolean).length
+      : null;
+    let label = String(fallback?.label || '').trim() || '';
+    let name = String(fallback?.name || '').trim() || employeeName || username || '';
+    if (!label) {
+      if (employeeName) label = employeeName;
+      else if (username) label = username;
+      else if (auth.role === 'admin') label = 'Администратор';
+      else if (auth.role === 'manager') label = 'Менеджер';
+      else label = roleKey || (auth.fullAccess ? 'Администратор' : 'Пользователь');
+    }
     return {
-      type: 'app',
-      role: req.auth.role,
-      label: req.auth.role === 'admin' ? 'Администратор' : 'Менеджер',
+      type: userId ? 'user' : (employeeId ? 'employee' : 'app'),
+      role: auth.role || roleKey || '',
+      roleKey,
+      roleLabel: label,
+      name,
+      label,
+      userId,
+      employeeId,
+      pagesCount,
       ...fallback,
+      name: fallback?.name || name,
+      label: fallback?.label || label,
+      role: fallback?.role || auth.role || roleKey || '',
     };
   }
   return buildActor(fallback);

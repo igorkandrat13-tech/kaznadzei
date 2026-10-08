@@ -136,6 +136,7 @@ function getUnifiedSourceLabel(source = '') {
 
 function buildExcelExportRows(rows = []) {
   return (Array.isArray(rows) ? rows : []).map((row) => ({
+    '№ заявки': row.requestNumber ? `№ ${row.requestNumber}` : '',
     Источник: row.sourceLabel || '',
     Статус: row.status === 'completed' ? 'Выполнено' : 'Открыто',
     Заявка: row.text || '',
@@ -180,6 +181,7 @@ function buildRequestRows(orders = [], workshopRequests = [], canManageRequests 
   const workshopRows = (Array.isArray(workshopRequests) ? workshopRequests : []).map((request) => {
     const attachments = normalizeItemAttachments(request.attachments);
     const firstAttachment = attachments[0] || null;
+    const requestNumber = Number(request.requestNumber) || 0;
     return {
       key: `workshop:${request._id}`,
       source: 'workshop',
@@ -197,6 +199,9 @@ function buildRequestRows(orders = [], workshopRequests = [], canManageRequests 
       attachmentsCount: attachments.length,
       openUrl: firstAttachment ? getWorkshopRequestAttachmentOpenUrl(String(request._id || '').trim(), firstAttachment) : '',
       requestId: String(request._id || '').trim(),
+      requestNumber,
+      resolvedAt: String(request.resolvedAt || '').trim(),
+      resolvedByName: String(request?.resolvedBy?.employeeName || '').trim(),
       toggleKind: 'workshop',
       canToggleStatus: Boolean(canManageRequests),
       canDelete: Boolean(canManageRequests),
@@ -229,6 +234,9 @@ function buildRequestRows(orders = [], workshopRequests = [], canManageRequests 
           orderId: String(order._id || '').trim(),
           itemId: String(item.itemId || '').trim(),
           packageItemId: String(packageItem.id || '').trim(),
+          requestNumber: 0,
+          resolvedAt: '',
+          resolvedByName: '',
           toggleKind: 'package',
           canToggleStatus: Boolean(canManageRequests),
           canDelete: Boolean(canManageRequests),
@@ -257,6 +265,9 @@ function buildRequestRows(orders = [], workshopRequests = [], canManageRequests 
             orderId: String(order._id || '').trim(),
             itemId: String(item.itemId || '').trim(),
             materialRequestItemId: String(requestItem.id || '').trim(),
+            requestNumber: 0,
+            resolvedAt: '',
+            resolvedByName: '',
             toggleKind: 'material',
             canToggleStatus: Boolean(canManageRequests),
             canDelete: Boolean(canManageRequests),
@@ -369,6 +380,7 @@ function WorkshopRequestsPage() {
 
   const filteredRows = useMemo(() => {
     const query = String(search || '').trim().toLowerCase();
+    const numericQueryOnly = String(search || '').trim().replace(/\D/g, '');
     const sourceRows = rows.filter((row) => {
       if (sourceFilter !== 'all' && row.source !== sourceFilter) return false;
       if (authorFilter !== 'all' && row.author !== authorFilter) return false;
@@ -383,8 +395,18 @@ function WorkshopRequestsPage() {
         row.itemName,
         row.author,
         row.sourceLabel,
+        row.requestNumber ? String(row.requestNumber) : '',
       ].join(' ').toLowerCase();
-      return haystack.includes(query);
+      if (haystack.includes(query)) return true;
+      if (numericQueryOnly) {
+        const numberHaystack = [
+          String(row.requestNumber || ''),
+          String(row.orderNumber || ''),
+          String(row.itemNumber || ''),
+        ].join(' ');
+        if (numberHaystack.includes(numericQueryOnly)) return true;
+      }
+      return false;
     });
 
     const completedSet = new Set((Array.isArray(completedKeyOrder) ? completedKeyOrder : []).filter(Boolean));
@@ -642,6 +664,7 @@ function WorkshopRequestsPage() {
           <table className="unified-orders-table workshop-requests-table">
             <thead>
               <tr>
+                <th style={{ width: 72 }}>№</th>
                 <th>Источник</th>
                 <th>Чек</th>
                 <th>Заявка</th>
@@ -655,7 +678,7 @@ function WorkshopRequestsPage() {
             <tbody>
               {!loading && filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="order-card-empty">По текущим фильтрам заявки не найдены.</div>
                   </td>
                 </tr>
@@ -671,6 +694,9 @@ function WorkshopRequestsPage() {
                     key={row.key}
                     className={rowClass || undefined}
                   >
+                    <td>
+                      <span className="workshop-request-number">{row.requestNumber ? `№ ${row.requestNumber}` : '—'}</span>
+                    </td>
                     <td>
                       <span className="workshop-source-text">
                         {row.sourceLabel}
