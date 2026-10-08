@@ -16,10 +16,12 @@ import {
   isTelegramEmployeeSessionTokenExpired,
   isTelegramWebApp,
   markTelegramWebAppSession,
+  readTelegramUrlSessionToken,
   setTelegramEmployeeSessionToken,
+  getTelegramEmployeeSessionToken,
 } from './telegramWebApp';
-import { apiFetch } from './api';
-import { canAccessPage, canAccessRole, clearAppAuthSession, getAppAuthRole, getAppAuthToken, subscribeToAppAuth } from './appAuth';
+import { apiFetch, parseJsonSafely } from './api';
+import { canAccessPage, canAccessRole, clearAppAuthSession, getAppAuthMe, getAppAuthRole, getAppAuthToken, setAppAuthSession, subscribeToAppAuth } from './appAuth';
 import { showGlobalError } from './globalErrors';
 import { RoleConfigProvider } from './RoleConfigContext';
 import './App.css';
@@ -136,6 +138,7 @@ function AppLayout() {
     const telegramMode = isTelegramWebApp() || hasTelegramWebAppSession() || routeTelegramMode;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [authRole, setAuthRole] = useState(() => getAppAuthRole());
+    const [me, setMe] = useState(() => getAppAuthMe());
     const canAccessOrders = canAccessRole('manager', authRole);
     const mobileMenuAnchorRef = useRef(null);
 
@@ -202,14 +205,69 @@ function AppLayout() {
     useEffect(() => {
         const syncAuth = () => {
             setAuthRole(getAppAuthRole());
+            setMe(getAppAuthMe());
         };
         return subscribeToAppAuth(syncAuth);
     }, []);
 
     useEffect(() => {
         const token = getAppAuthToken();
+        if (token) {
+            setAuthRole(getAppAuthRole());
+            setMe(getAppAuthMe());
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        const tryExchangeEmployeeToken = async () => {
+            const urlToken = readTelegramUrlSessionToken();
+            const storedToken = getTelegramEmployeeSessionToken();
+            const exchangeToken = urlToken || storedToken;
+            if (!exchangeToken) return;
+
+            if (urlToken) {
+                setTelegramEmployeeSessionToken(urlToken);
+                markTelegramWebAppSession();
+            }
+
+            try {
+                const res = await apiFetch('/api/auth/employee-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: exchangeToken }),
+                });
+                const data = await parseJsonSafely(res);
+                if (!res.ok) {
+                    throw new Error(data?.message || 'Не удалось выполнить вход сотрудника.');
+                }
+                if (cancelled) return;
+                setAppAuthSession({
+                    sessionToken: data.sessionToken,
+                    role: data.role,
+                    me: data.me,
+                    permissions: data.permissions,
+                    fullAccess: false,
+                });
+                setAuthRole(data.role);
+                setMe(data.me);
+            } catch (error) {
+                // Failure to exchange non-fatal: request will use fallback bearer header from api.js
+            }
+        };
+
+        tryExchangeEmployeeToken();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        const token = getAppAuthToken();
         if (!token) {
             setAuthRole('');
+            setMe(null);
             return undefined;
         }
 
@@ -220,8 +278,14 @@ function AppLayout() {
                     clearAppAuthSession();
                     return;
                 }
+                const data = await parseJsonSafely(res);
                 if (!cancelled) {
                     setAuthRole(getAppAuthRole());
+                    if (data?.me) {
+                        setMe(data.me);
+                    } else {
+                            setMe(getAppAuthMe());
+                        }
                 }
             })
             .catch(() => {
@@ -238,8 +302,26 @@ function AppLayout() {
     const handleLogout = () => {
         clearAppAuthSession();
         setAuthRole('');
+        setMe(null);
         setMobileMenuOpen(false);
     };
+
+    const displayName = me?.employeeName
+        ? me.employeeName
+        : (me?.username || '');
+    const roleLabel = me?.role?.name
+        ? me.role.name
+        : getAuthRoleLabel(authRole);
+    let pagesCount = me?.pagesCount;
+    if (!pagesCount && me?.role?.pages && typeof me.role.pages === 'object') {
+        pagesCount = Object.values(me.role.pages).filter(Boolean).length;
+    } else if (!pagesCount) {
+        const permPages = me?.permissions && typeof me.permissions === 'object' ? me.permissions : null;
+        const fullAccess = me?.fullAccess === true;
+        if (fullAccess) pagesCount = 8;
+        else if (permPages) pagesCount = Object.values(permPages).filter(Boolean).length;
+    }
+    const pagesSummary = pagesCount ? `${pagesCount}/8 стр.` : '';
 
     return (
         <>
@@ -292,6 +374,17 @@ function AppLayout() {
                                     {canAccessRole('admin', authRole) && <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>Настройки</Link>}
                                 </nav>
                                 <div className="App-header-menu-footer">
+                                    {(displayName || roleLabel || pagesSummary) ? (
+                                        <div className="App-header-user-indicator">
+                                            {displayName ? (
+                                                <div className="App-header-user-name">{displayName}</div>
+                                            ) : null}
+                                            <div className="App-header-user-role">
+                                                {roleLabel || 'Рабочий доступ'}
+                                                {pagesSummary ? ` · ${pagesSummary}` : ''}
+                                            </div>
+                                        </div>
+                                    ) : null}
                                     {authRole ? (
                                         <button className="btn btn-secondary App-header-logout" type="button" onClick={handleLogout}>
                                             Выйти

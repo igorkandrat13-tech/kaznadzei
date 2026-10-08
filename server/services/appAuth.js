@@ -207,6 +207,50 @@ function getPublicAuthConfig() {
   };
 }
 
+function getEmployeeRolePages(role) {
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  const pages = {
+    orders: false,
+    requests: false,
+    archive: false,
+    customers: false,
+    employees: false,
+    stages: false,
+    users: false,
+    settings: false,
+  };
+  if (!normalizedRole) return pages;
+  pages.orders = true;
+  pages.requests = true;
+  pages.archive = true;
+  const businessRoles = new Set([
+    'accountant', 'buhgalter', 'buh', 'manager', 'uprav', 'director', 'ruk', 'rukovoditel',
+    'boss', 'owner', 'supervisor', 'nachalnik', 'head', 'foreman', 'proizvoditel', 'prorab',
+    'supply', 'logist', 'logistik', 'engineer', 'injener', 'technologist', 'tehnolog', 'designer',
+    'konstruktor', 'design',
+  ]);
+  if (businessRoles.has(normalizedRole)) {
+    pages.customers = true;
+  }
+  return pages;
+}
+
+function createAppSessionTokenForEmployee(employee) {
+  const employeeId = String(employee?._id || '');
+  const employeeName = String(employee?.fullName || employee?.name || '').trim();
+  const employeeRole = String(employee?.role || '').trim();
+  const pages = getEmployeeRolePages(employeeRole);
+  return signPayload({
+    tokenType: 'app-session',
+    employeeId,
+    employeeName,
+    roleKey: `employee:${employeeRole || 'worker'}`,
+    permissions: pages,
+    fullAccess: false,
+    exp: Date.now() + SESSION_TTL_MS,
+  });
+}
+
 function createAppSessionTokenForUser(user, role) {
   const userId = String(user?._id || '');
   const username = String(user?.username || '');
@@ -251,7 +295,9 @@ module.exports = {
   authenticateUsernamePassword,
   canAccessRole,
   createAppSessionToken,
+  createAppSessionTokenForEmployee,
   createAppSessionTokenForUser,
+  getEmployeeRolePages,
   getPublicAuthConfig,
   getBootstrapAdminPassword,
   hashPassword,

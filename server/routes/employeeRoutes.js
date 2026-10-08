@@ -1,14 +1,14 @@
 const express = require('express');
 const EmployeeStore = require('../stores/employeeStore');
 const SettingsStore = require('../stores/settingsStore');
-const { requireAdminAccess } = require('../middleware/security');
+const { requireAdminAccess, requireAnyPageAccess } = require('../middleware/security');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { sendMessage, setChatMenuButton } = require('../services/telegramService');
 const { sanitizeEmployeeInput } = require('../utils/validators');
 
 const router = express.Router();
 
-router.get('/employees', requireAdminAccess(), (req, res) => {
+router.get('/employees', requireAnyPageAccess(['employees', 'users', 'settings']), (req, res) => {
   const employees = EmployeeStore.findAll().sort((a, b) => {
     const roleDiff = String(a.role || '').localeCompare(String(b.role || ''), 'ru');
     if (roleDiff !== 0) return roleDiff;

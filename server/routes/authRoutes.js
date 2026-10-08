@@ -2,6 +2,7 @@ const express = require('express');
 const SettingsStore = require('../stores/settingsStore');
 const UserStore = require('../stores/userStore');
 const PermissionRoleStore = require('../stores/permissionRoleStore');
+const EmployeeStore = require('../stores/employeeStore');
 const {
   requireAdminAccess,
   requireManagerAccess,
@@ -12,11 +13,14 @@ const {
   authenticateRolePassword,
   authenticateUsernamePassword,
   createAppSessionToken,
+  createAppSessionTokenForEmployee,
   createAppSessionTokenForUser,
+  getEmployeeRolePages,
   getPublicAuthConfig,
   hashPassword,
   verifyAppSessionToken,
 } = require('../services/appAuth');
+const { verifyTelegramEmployeeSessionToken } = require('../services/telegramWebAppAuth');
 const LoginLockout = require('../services/loginLockout');
 const {
   ensureSystemFullAccessRole,
@@ -49,32 +53,115 @@ function getMeFromSession(req) {
     const token = getRequestSessionToken(req);
     if (!token) return null;
     const payload = verifyAppSessionToken(token);
-    if (!payload || !payload.userId) return null;
-    const user = UserStore.findById(payload.userId);
-    if (!user) return null;
-    const EmployeeStore = require('../stores/employeeStore');
-    const employee = user.employeeId ? EmployeeStore.findById(user.employeeId) : null;
-    const role = user.roleId ? PermissionRoleStore.findById(user.roleId) : null;
-    return {
-      userId: user._id,
-      username: user.username,
-      employeeId: user.employeeId || null,
-      employeeName: employee ? (employee.fullName || employee.name || '') : '',
-      role: role
-        ? {
-            _id: role._id,
-            name: role.name,
-            pages: role.pages || PermissionRoleStore.normalizePages({}),
-            isSystem: Boolean(role.isSystem),
-          }
-        : null,
-      fullAccess: Boolean(payload.fullAccess),
-      permissions: payload.permissions || PermissionRoleStore.normalizePages({}),
-    };
+    if (payload?.userId) {
+      const user = UserStore.findById(payload.userId);
+      if (!user) return null;
+      const employee = user.employeeId ? EmployeeStore.findById(user.employeeId) : null;
+      const role = user.roleId ? PermissionRoleStore.findById(user.roleId) : null;
+      return {
+        userId: user._id,
+        username: user.username,
+        employeeId: user.employeeId || null,
+        employeeName: employee ? (employee.fullName || employee.name || '') : '',
+        role: role
+          ? {
+              _id: role._id,
+              name: role.name,
+              pages: role.pages || PermissionRoleStore.normalizePages({}),
+              isSystem: Boolean(role.isSystem),
+            }
+          : null,
+        fullAccess: Boolean(payload.fullAccess),
+        permissions: payload.permissions || PermissionRoleStore.normalizePages({}),
+      };
+    }
+    if (payload?.employeeId) {
+      const employee = EmployeeStore.findById(payload.employeeId);
+      const permissions = payload.permissions || PermissionRoleStore.normalizePages({});
+      return {
+        userId: '',
+        username: '',
+        employeeId: payload.employeeId,
+        employeeName: employee ? (employee.fullName || employee.name || '') : (payload.employeeName || ''),
+        employeeRole: employee ? String(employee.role || '') : String(payload.roleKey || '').replace(/^employee:/, ''),
+        role: {
+          _id: '',
+          name: employee ? String(employee.role || '') : String(payload.roleKey || '').replace(/^employee:/, ''),
+          pages: permissions,
+          isSystem: false,
+        },
+        fullAccess: Boolean(payload.fullAccess),
+        permissions,
+      };
+    }
+    return null;
   } catch {
     return null;
   }
 }
+
+function getConfiguredBotToken(botKind = 'primary') {
+  const normalized = botKind === 'supply' ? 'supply' : 'primary';
+  const settings = SettingsStore.get();
+  return normalized === 'supply'
+    ? String(settings.telegramSupplyBotToken || '').trim()
+    : String(settings.telegramBotToken || '').trim();
+}
+
+router.post('/auth/employee-login', express.json({ limit: '16kb' }), (req, res) => {
+  try {
+    const employeeSessionToken = String((req.body || {}).sessionToken || '').trim();
+    if (!employeeSessionToken) {
+      return res.status(400).json({ ok: false, message: 'Не передан sessionToken сотрудника.' });
+    }
+    let payload = null;
+    const primaryToken = getConfiguredBotToken('primary');
+    const supplyToken = getConfiguredBotToken('supply');
+    for (const botToken of [primaryToken, supplyToken]) {
+      if (!botToken) continue;
+      try {
+        payload = verifyTelegramEmployeeSessionToken(botToken, employeeSessionToken);
+        break;
+      } catch (_err) {
+        payload = null;
+      }
+    }
+    if (!payload) {
+      return res.status(401).json({ ok: false, message: 'Session token сотрудника не прошёл проверку. Откройте ссылку из бота заново.' });
+    }
+    const employee = EmployeeStore.findById(payload.employeeId);
+    if (!employee) {
+      return res.status(404).json({ ok: false, message: 'Сотрудник не найден в системе. Обратитесь к администратору.' });
+    }
+    const sessionToken = createAppSessionTokenForEmployee(employee);
+    const pages = getEmployeeRolePages(employee.role);
+    const pagesCount = Object.values(pages).filter(Boolean).length;
+    res.json({
+      ok: true,
+      sessionToken,
+      role: 'manager',
+      bootstrapUsed: false,
+      me: {
+        userId: '',
+        username: '',
+        employeeId: employee._id,
+        employeeName: employee.fullName || employee.name || '',
+        employeeRole: String(employee.role || ''),
+        fullAccess: false,
+        pagesCount,
+        role: {
+          _id: '',
+          name: String(employee.role || ''),
+          pages,
+          isSystem: false,
+        },
+      },
+      permissions: pages,
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({ ok: false, message: error.message || 'Не удалось выполнить вход сотрудника.' });
+  }
+});
 
 router.get('/auth/config', (req, res) => {
   res.json(getPublicAuthConfig());

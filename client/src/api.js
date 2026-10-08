@@ -1,4 +1,5 @@
 import { getAppAuthToken } from './appAuth';
+import { getTelegramEmployeeSessionToken } from './telegramWebApp';
 import { normalizeErrorMessage } from './globalErrors';
 
 const ADMIN_TOKEN_KEY = 'kaznadzei_admin_token';
@@ -22,7 +23,10 @@ export function clearAdminToken() {
 
 function withAdminHeaders(headers = {}) {
   const nextHeaders = new Headers(headers);
-  const authToken = getAppAuthToken();
+  let authToken = getAppAuthToken();
+  if (!authToken) {
+    authToken = getTelegramEmployeeSessionToken();
+  }
   if (authToken) {
     nextHeaders.set('Authorization', `Bearer ${authToken}`);
   }
