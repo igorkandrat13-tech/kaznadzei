@@ -1442,8 +1442,13 @@ function OrdersWorkspace() {
     }));
   }, [rowsByKey]);
 
+  const hasAnyEditableManualCellSelected = useMemo(
+    () => selectedStageSelections.some((sel) => canEditManualColumn(sel?.columnKey)),
+    [canEditManualColumn, selectedStageSelections],
+  );
+
   useEffect(() => {
-    if (!isAdmin || selectedStageSelections.length === 0) return undefined;
+    if (!hasAnyEditableManualCellSelected) return undefined;
 
     const handlePointerDown = (event) => {
       const target = event.target;
@@ -1461,10 +1466,10 @@ function OrdersWorkspace() {
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('touchstart', handlePointerDown);
     };
-  }, [clearSelectedStageCells, isAdmin, selectedStageSelections.length]);
+  }, [clearSelectedStageCells, hasAnyEditableManualCellSelected]);
 
   useLayoutEffect(() => {
-    if (!isAdmin || selectedStageSelections.length === 0) {
+    if (!hasAnyEditableManualCellSelected) {
       setManualStageToolbarPosition(null);
       return undefined;
     }
@@ -1572,7 +1577,7 @@ function OrdersWorkspace() {
       visualViewport?.removeEventListener('scroll', updateToolbarPosition);
       bodyNode?.removeEventListener('scroll', updateToolbarPosition);
     };
-  }, [cellLogs.length, cellLogsError, cellLogsLoading, isAdmin, selectedStageSelections.length, selectedStageCellKeys]);
+  }, [cellLogs.length, cellLogsError, cellLogsLoading, hasAnyEditableManualCellSelected, selectedStageSelections.length, selectedStageCellKeys]);
 
   const syncHorizontalScroll = useCallback((source, target) => {
     if (!source || !target) return;
@@ -1585,7 +1590,7 @@ function OrdersWorkspace() {
   }, []);
 
   const handleManualStageCellClick = useCallback((event, rowKey, columnKey) => {
-    if ((!isAdmin && !canEditManualColumn(columnKey)) || manualStageSaving) return;
+    if (!canEditManualColumn(columnKey) || manualStageSaving) return;
     if (!isManualStageSelectableColumn(columnKey)) return;
     if (event.target.closest('a, button, input, textarea, select, summary, details, label')) return;
 
@@ -1598,7 +1603,7 @@ function OrdersWorkspace() {
       }
       return [cellKey];
     });
-  }, [canEditManualColumn, isAdmin, manualStageSaving]);
+  }, [canEditManualColumn, manualStageSaving]);
 
   const fetchCellLogs = useCallback(async (selection) => {
     if (!selection?.orderId || !selection?.columnKey) return;
@@ -1734,7 +1739,7 @@ function OrdersWorkspace() {
     } finally {
       setManualStageSaving(false);
     }
-  }, [canEditSelectedStageHighlight, clearSelectedStageCells, fetchOrders, isAdmin, manualStageSaving, selectedStageSelections]);
+  }, [canEditSelectedStageHighlight, clearSelectedStageCells, fetchOrders, manualStageSaving, selectedStageSelections]);
 
   const applyManualDateThroughOrderUpdate = useCallback(async (payload) => {
     const ordersById = new Map(
@@ -1823,7 +1828,7 @@ function OrdersWorkspace() {
   }, [orders]);
 
   const applyManualDateToSelection = useCallback(async () => {
-    if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0 || !canEditSelectedDates) return;
+    if (manualStageSaving || selectedStageSelections.length === 0 || !canEditSelectedDates) return;
 
     if (selectedStageSingleColumnKey === 'duration') {
       if (!manualOrderDateDraft.startDate && !manualOrderDateDraft.endDate) {

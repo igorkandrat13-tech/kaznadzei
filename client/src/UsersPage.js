@@ -209,10 +209,6 @@ function UsersPage() {
       showFeedback('error', 'Невозможно удалить системное право.');
       return;
     }
-    if (Number(role.usersCount || 0) > 0) {
-      showFeedback('error', `У этого права есть ${role.usersCount} пользователей — переназначьте их, чтобы удалить право.`);
-      return;
-    }
     setConfirmDeleteRole(role);
   };
 
@@ -221,10 +217,17 @@ function UsersPage() {
     setDeleteLoading(prev => ({ ...prev, role: true }));
     try {
       const res = await apiFetch(`/api/roles/${confirmDeleteRole._id}`, { method: 'DELETE' });
-      if (res.status === 204 || res.ok) {
+      if (res.ok) {
+        const data = await parseJsonSafely(res).catch(() => ({}));
+        const affected = Number(data?.affectedUsersCount || 0);
         setConfirmDeleteRole(null);
         await loadAll();
-        showFeedback('success', 'Право удалено.');
+        showFeedback(
+          'success',
+          affected > 0
+            ? `Право удалено. Отвязано пользователей: ${affected}.`
+            : 'Право удалено.',
+        );
       } else {
         const data = await parseJsonSafely(res);
         throw new Error(data?.message || 'Не удалось удалить право.');
@@ -282,66 +285,6 @@ function UsersPage() {
               </button>,
             ]}
           />
-          <div className="desktop-table-only">
-            <table className="settings-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: '22%' }}>Имя пользователя</th>
-                  <th style={{ width: '28%' }}>Сотрудник</th>
-                  <th style={{ width: '28%' }}>Права доступа</th>
-                  <th style={{ width: '22%', textAlign: 'right' }}>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.length === 0 ? (
-                  <tr><td colSpan={4} style={{ padding: 24, textAlign: 'center', opacity: 0.7 }}>Пользователей пока нет.</td></tr>
-                ) : users.map((u) => {
-                  const canDelete = !u.isSystem;
-                  return (
-                    <tr key={u._id} className={u.isSystem ? 'workshop-requests-row--completed' : ''} style={u.isSystem ? { background: 'rgba(251,191,36,0.08)', cursor: 'default' } : {}}>
-                      <td style={{ verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <strong>{u.username}</strong>
-                          {u.isSystem ? <span className="badge badge-active" style={{ background: '#fde68a', color: '#92400e', fontSize: 12 }}>Системный</span> : null}
-                        </div>
-                      </td>
-                      <td style={{ verticalAlign: 'middle' }}>{u.employeeName || '—'}</td>
-                      <td style={{ verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span>{u.roleName || '—'}</span>
-                          <span style={{ fontSize: 12, opacity: 0.65 }}>
-                            {typeof u.pagesCount === 'number' ? `${u.pagesCount}/8 стр.` : ''}
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ textAlign: 'right', verticalAlign: 'middle' }}>
-                        <div className="section-header-actions" style={{ justifyContent: 'flex-end', gap: 4 }}>
-                          <button
-                            type="button"
-                            className="btn btn-ghost row-action-icon"
-                            title="Редактировать"
-                            onClick={() => openEditUser(u)}
-                          >
-                            ✎
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost row-action-icon"
-                            title={canDelete ? 'Удалить' : 'Невозможно удалить системного пользователя'}
-                            onClick={() => askDeleteUser(u)}
-                            disabled={!canDelete}
-                            style={canDelete ? { color: '#b91c1c' } : { opacity: 0.4, cursor: 'not-allowed' }}
-                          >
-                            🗑
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
           <div className="mobile-settings-list">
             {users.length === 0 ? (
               <div className="card" style={{ padding: 20, opacity: 0.7 }}>Пользователей пока нет.</div>
@@ -399,66 +342,13 @@ function UsersPage() {
               </button>,
             ]}
           />
-          <div className="desktop-table-only">
-            <table className="settings-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: '38%' }}>Название</th>
-                  <th style={{ width: '18%' }}>Страниц в правах</th>
-                  <th style={{ width: '18%' }}>Пользователей</th>
-                  <th style={{ width: '26%', textAlign: 'right' }}>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roles.length === 0 ? (
-                  <tr><td colSpan={4} style={{ padding: 24, textAlign: 'center', opacity: 0.7 }}>Прав пока нет.</td></tr>
-                ) : roles.map(r => {
-                  const canEdit = !r.isSystem;
-                  const canDelete = !r.isSystem && Number(r.usersCount || 0) === 0;
-                  return (
-                    <tr key={r._id} style={r.isSystem ? { background: 'rgba(251,191,36,0.08)' } : {}}>
-                      <td style={{ verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <strong>{r.name}</strong>
-                          {r.isSystem ? <span className="badge badge-active" style={{ background: '#fde68a', color: '#92400e', fontSize: 12 }}>Системная</span> : null}
-                        </div>
-                      </td>
-                      <td style={{ verticalAlign: 'middle' }}>{r.pagesCount || 0} / 8</td>
-                      <td style={{ verticalAlign: 'middle' }}>{r.usersCount || 0}</td>
-                      <td style={{ textAlign: 'right', verticalAlign: 'middle' }}>
-                        <div className="section-header-actions" style={{ justifyContent: 'flex-end', gap: 4 }}>
-                          <button
-                            type="button"
-                            className="btn btn-ghost row-action-icon"
-                            title={canEdit ? 'Редактировать' : r.isSystem ? 'Просмотр' : 'Редактировать'}
-                            onClick={() => openEditRole(r)}
-                          >
-                            {r.isSystem ? '👁' : '✎'}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost row-action-icon"
-                            title={canDelete ? 'Удалить' : (r.isSystem ? 'Невозможно удалить системное право' : `У права ${r.usersCount || 0} пользователей`)}
-                            onClick={() => askDeleteRole(r)}
-                            disabled={!canDelete}
-                            style={canDelete ? { color: '#b91c1c' } : { opacity: 0.4, cursor: 'not-allowed' }}
-                          >
-                            🗑
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
           <div className="mobile-settings-list">
             {roles.length === 0 ? (
               <div className="card" style={{ padding: 20, opacity: 0.7 }}>Прав пока нет.</div>
             ) : roles.map(r => {
               const canEdit = !r.isSystem;
-              const canDelete = !r.isSystem && Number(r.usersCount || 0) === 0;
+              const canDelete = !r.isSystem;
+              const hasUsers = Number(r.usersCount || 0) > 0;
               return (
                 <div key={r._id} className="mobile-settings-card" style={r.isSystem ? { borderLeft: '4px solid #f59e0b' } : {}}>
                   <div className="mobile-settings-card-header">
@@ -483,7 +373,7 @@ function UsersPage() {
                         className="btn btn-ghost row-action-icon"
                         type="button"
                         disabled={!canDelete}
-                        title={canDelete ? 'Удалить' : (r.isSystem ? 'Невозможно удалить системное право' : `У права ${r.usersCount || 0} пользователей`)}
+                        title={canDelete ? (hasUsers ? `Удалить (у права ${r.usersCount || 0} пользователей)` : 'Удалить') : 'Невозможно удалить системное право'}
                         style={canDelete ? { color: '#b91c1c' } : { opacity: 0.45 }}
                         onClick={() => askDeleteRole(r)}
                       >
@@ -533,7 +423,14 @@ function UsersPage() {
       <ConfirmDialog
         open={Boolean(confirmDeleteRole)}
         title="Удалить право?"
-        message={confirmDeleteRole ? `Вы действительно хотите удалить право «${confirmDeleteRole.name}»? Это действие нельзя отменить.` : ''}
+        message={confirmDeleteRole
+          ? (
+            Number(confirmDeleteRole.usersCount || 0) > 0
+              ? `Вы действительно хотите удалить право «${confirmDeleteRole.name}»?
+У этого права ${confirmDeleteRole.usersCount} пользователей — они будут отвязаны от права и потеряют доступ до назначения нового набора прав. Действие нельзя отменить.`
+              : `Вы действительно хотите удалить право «${confirmDeleteRole.name}»? Это действие нельзя отменить.`
+          )
+          : ''}
         confirmLabel="Удалить"
         cancelLabel="Отмена"
         variant="danger"

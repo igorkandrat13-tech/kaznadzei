@@ -78,16 +78,9 @@ router.delete('/roles/:id', requirePageAccess('users'), (req, res) => {
     const existing = PermissionRoleStore.findById(roleId);
     if (!existing) return res.status(404).json({ ok: false, message: 'Право не найдено.' });
     if (existing.isSystem) return res.status(409).json({ ok: false, message: 'Невозможно удалить системное право.' });
-    const usersCount = UserStore.countByRoleId(roleId);
-    if (usersCount > 0) {
-      const plural = usersCount === 1 ? 'пользователь' : usersCount < 5 ? 'пользователя' : 'пользователей';
-      return res.status(409).json({
-        ok: false,
-        message: `У этого права есть ${usersCount} ${plural} — переназначьте их, чтобы удалить право.`,
-      });
-    }
+    const affectedUsersCount = UserStore.clearRoleForUsersByRoleId(roleId);
     PermissionRoleStore.delete(roleId);
-    res.status(204).end();
+    res.json({ ok: true, affectedUsersCount });
   } catch (error) {
     res.status(error.status || 500).json({ ok: false, message: error.message || 'Не удалось удалить право.' });
   }

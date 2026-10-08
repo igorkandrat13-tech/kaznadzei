@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
 import {
+  canAccessPage,
   canAccessRole,
   getAppAuthRole,
 } from './appAuth';
@@ -214,7 +215,8 @@ function CustomersPage() {
   });
   const [telegramActionLoadingKey, setTelegramActionLoadingKey] = useState('');
   const authRole = getAppAuthRole();
-  const canDeleteCustomers = canAccessRole('admin', authRole);
+  const canManageCustomers = canAccessRole('admin', authRole) || canAccessPage('customers');
+  const canDeleteCustomers = canManageCustomers;
   useGlobalErrorEffect(error, 'Ошибка при работе с заказчиками.');
 
   const fetchPageData = useCallback(async () => {
@@ -384,12 +386,14 @@ function CustomersPage() {
   }, [fetchCustomerTelegramAccess]);
 
   const openCreateEditor = () => {
+    if (!canManageCustomers) return;
     setSuccessMessage('');
     setCustomerDraft(createEmptyCustomerDraft());
     setEditorOpen(true);
   };
 
   const openEditEditor = (customer) => {
+    if (!canManageCustomers) return;
     setSuccessMessage('');
     setCustomerDraft(mapCustomerToDraft(customer));
     setEditorOpen(true);
@@ -654,9 +658,9 @@ function CustomersPage() {
             <p>Единый список заказчиков с поиском, созданием, редактированием и удалением карточек.</p>
           </div>
           <div className="section-header-actions">
-            <Button variant="success" onClick={openCreateEditor}>Добавить заказчика</Button>
+            <Button variant="success" onClick={openCreateEditor} disabled={!canManageCustomers}>Добавить заказчика</Button>
             <Link to="/orders" className="btn btn-secondary">К заказам</Link>
-            {canAccessRole('admin', authRole) ? (
+            {canManageCustomers ? (
               <Link to="/settings" className="btn btn-secondary">К настройкам</Link>
             ) : null}
           </div>
@@ -773,9 +777,9 @@ function CustomersPage() {
               </div>
 
               <div className="customer-card-actions">
-                <Button variant="secondary" onClick={() => openEditEditor(customer)}>Редактировать</Button>
+                <Button variant="secondary" onClick={() => openEditEditor(customer)} disabled={!canManageCustomers}>Редактировать</Button>
                 {canDeleteCustomers ? (
-                  <Button variant="danger" onClick={() => requestDeleteCustomer(customer)}>Удалить</Button>
+                  <Button variant="danger" onClick={() => requestDeleteCustomer(customer)} disabled={!canManageCustomers}>Удалить</Button>
                 ) : null}
               </div>
             </div>

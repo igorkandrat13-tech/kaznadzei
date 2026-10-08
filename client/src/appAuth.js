@@ -122,13 +122,27 @@ export function canAccessRole(requiredRole, actualRole = getAppAuthRole()) {
   if (requiredRole === 'manager') {
     const parsed = readSessionFromStorage();
     if (parsed?.fullAccess) return true;
-    if (canAccessPage('orders', parsed?.permissions || null)) return true;
+    if (
+      canAccessPage('orders', parsed?.permissions || null)
+      || canAccessPage('customers', parsed?.permissions || null)
+      || canAccessPage('requests', parsed?.permissions || null)
+      || canAccessPage('archive', parsed?.permissions || null)
+    ) {
+      return true;
+    }
     return actualRole === 'manager' || actualRole === 'admin';
   }
   if (requiredRole === 'admin') {
     const parsed = readSessionFromStorage();
     if (parsed?.fullAccess) return true;
-    if (canAccessPage('settings', parsed?.permissions || null)) return true;
+    if (
+      canAccessPage('settings', parsed?.permissions || null)
+      || canAccessPage('users', parsed?.permissions || null)
+      || canAccessPage('employees', parsed?.permissions || null)
+      || canAccessPage('stages', parsed?.permissions || null)
+    ) {
+      return true;
+    }
     return actualRole === 'admin';
   }
   return false;

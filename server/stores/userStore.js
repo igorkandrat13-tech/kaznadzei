@@ -80,6 +80,25 @@ const UserStore = {
     save();
     return true;
   },
+
+  clearRoleForUsersByRoleId(roleId) {
+    const target = String(roleId || '');
+    if (!target) return 0;
+    const db = load();
+    const now = new Date().toISOString();
+    let cleared = 0;
+    for (const user of db.users) {
+      if (String(user.roleId || '') === target) {
+        user.roleId = null;
+        user.updatedAt = now;
+        cleared += 1;
+      }
+    }
+    if (cleared > 0) {
+      save();
+    }
+    return cleared;
+  },
 };
 
 module.exports = UserStore;

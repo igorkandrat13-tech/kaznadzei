@@ -3,7 +3,7 @@ const CustomerStore = require('../stores/customerStore');
 const OrderStore = require('../stores/orderStore');
 const CustomerTelegramAccessStore = require('../stores/customerTelegramAccessStore');
 const CustomerTelegramLogStore = require('../stores/customerTelegramLogStore');
-const { requireManagerAccess, requireAdminAccess } = require('../middleware/security');
+const { requireAnyPageAccess, requireManagerAccess } = require('../middleware/security');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const { sanitizeCustomerInput } = require('../utils/validators');
 const {
@@ -370,7 +370,7 @@ router.put('/customers/:id', requireManagerAccess(), (req, res) => {
   }
 });
 
-router.delete('/customers/:id', requireAdminAccess(), (req, res) => {
+router.delete('/customers/:id', requireAnyPageAccess(['customers', 'orders']), (req, res) => {
   const customer = CustomerStore.findById(req.params.id);
   if (!customer) {
     return res.status(404).json({ message: 'Заказчик не найден.' });
