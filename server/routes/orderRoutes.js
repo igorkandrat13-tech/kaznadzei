@@ -22,6 +22,8 @@ const {
   notifyMaterialRequestWatchers,
   notifyOrderCreated,
   notifyStageWatchers,
+  notifySupplyItemRequestCompleted,
+  notifySupplyItemRequestReopened,
 } = require('../services/orderNotifications');
 
 function shortFullName(fullName = '') {
@@ -2090,8 +2092,14 @@ router.patch('/orders/:id/material-request-items/:materialRequestItemId/toggle',
     const targetBefore = itemBefore
       ? (Array.isArray(itemBefore.materialRequestItems) ? itemBefore.materialRequestItems.find((m) => String(m?.id || '').trim() === materialRequestItemId) || null : null)
       : null;
+    const previousCompleted = targetBefore ? Boolean(targetBefore.isCompleted) : false;
 
-    const updatedOrder = OrderStore.toggleMaterialRequestItem(orderId, itemId, materialRequestItemId);
+    const toggleActor = {
+      employeeId: req.auth?.employeeId || '',
+      employeeName: req.auth?.employeeName || req.auth?.name || '',
+      role: req.auth?.role || '',
+    };
+    const updatedOrder = OrderStore.toggleMaterialRequestItem(orderId, itemId, materialRequestItemId, toggleActor);
     if (updatedOrder === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
     }
@@ -2126,9 +2134,20 @@ router.patch('/orders/:id/material-request-items/:materialRequestItemId/toggle',
 
     if (updatedTarget) {
       const nextCompleted = Boolean(updatedTarget.isCompleted);
-      notifyMaterialRequestWatchers(
-        buildMaterialRequestToggleText(updatedOrder, updatedItem, updatedTarget, 'material', nextCompleted)
-      ).catch(() => {});
+      const nextReopened = previousCompleted === true && nextCompleted === false;
+      if (nextCompleted) {
+        notifySupplyItemRequestCompleted(updatedTarget, {
+          executorName: String(toggleActor.employeeName || '').trim(),
+        }).catch(() => {});
+      } else if (nextReopened) {
+        notifySupplyItemRequestReopened(updatedTarget, {
+          executorName: String(toggleActor.employeeName || '').trim(),
+        }).catch(() => {});
+      } else {
+        notifyMaterialRequestWatchers(
+          buildMaterialRequestToggleText(updatedOrder, updatedItem, updatedTarget, 'material', nextCompleted)
+        ).catch(() => {});
+      }
     }
 
     return res.json({
@@ -2164,8 +2183,14 @@ router.patch('/orders/:id/package-items/:packageItemId/toggle', requireManagerAc
     const targetBefore = itemBefore
       ? (Array.isArray(itemBefore.packageItems) ? itemBefore.packageItems.find((p) => String(p?.id || '').trim() === packageItemId) || null : null)
       : null;
+    const previousCompleted = targetBefore ? Boolean(targetBefore.isCompleted) : false;
 
-    const updatedOrder = OrderStore.togglePackageItem(orderId, itemId, packageItemId);
+    const toggleActor = {
+      employeeId: req.auth?.employeeId || '',
+      employeeName: req.auth?.employeeName || req.auth?.name || '',
+      role: req.auth?.role || '',
+    };
+    const updatedOrder = OrderStore.togglePackageItem(orderId, itemId, packageItemId, toggleActor);
     if (updatedOrder === null) {
       return res.status(404).json({ message: 'Заказ не найден.' });
     }
@@ -2200,9 +2225,20 @@ router.patch('/orders/:id/package-items/:packageItemId/toggle', requireManagerAc
 
     if (updatedTarget) {
       const nextCompleted = Boolean(updatedTarget.isCompleted);
-      notifyMaterialRequestWatchers(
-        buildMaterialRequestToggleText(updatedOrder, updatedItem, updatedTarget, 'package', nextCompleted)
-      ).catch(() => {});
+      const nextReopened = previousCompleted === true && nextCompleted === false;
+      if (nextCompleted) {
+        notifySupplyItemRequestCompleted(updatedTarget, {
+          executorName: String(toggleActor.employeeName || '').trim(),
+        }).catch(() => {});
+      } else if (nextReopened) {
+        notifySupplyItemRequestReopened(updatedTarget, {
+          executorName: String(toggleActor.employeeName || '').trim(),
+        }).catch(() => {});
+      } else {
+        notifyMaterialRequestWatchers(
+          buildMaterialRequestToggleText(updatedOrder, updatedItem, updatedTarget, 'package', nextCompleted)
+        ).catch(() => {});
+      }
     }
 
     return res.json({

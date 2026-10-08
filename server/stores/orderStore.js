@@ -5,6 +5,146 @@ const RoleStore = require('./roleStore');
 const EmployeeStore = require('./employeeStore');
 const { canAccessRole } = require('../services/appAuth');
 
+function normalizeMaterialRequestNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0 || !Number.isInteger(numeric)) {
+    return 0;
+  }
+  return numeric;
+}
+
+function takeNextMaterialRequestNumber() {
+  const db = load();
+  if (!db.settings || typeof db.settings !== 'object') {
+    db.settings = {};
+  }
+  const currentMax = Math.max(
+    ...(Array.isArray(db.orders) ? db.orders : []).flatMap((order) => {
+      const items = Array.isArray(order?.items) ? order.items : [];
+      return items.flatMap((item) => {
+        const packageNumbers = (Array.isArray(item?.packageItems) ? item.packageItems : [])
+          .map((entry) => normalizeMaterialRequestNumber(entry?.requestNumber));
+        const materialNumbers = (Array.isArray(item?.materialRequestItems) ? item.materialRequestItems : [])
+          .map((entry) => normalizeMaterialRequestNumber(entry?.requestNumber));
+        return [...packageNumbers, ...materialNumbers];
+      });
+    }),
+    normalizeMaterialRequestNumber(db?.settings?.materialRequestCounter),
+    0,
+  );
+  const next = currentMax + 1;
+  db.settings.materialRequestCounter = next;
+  save();
+  return next;
+}
+
+function collectOrderItemMaterialEntries(db) {
+  const orders = Array.isArray(db?.orders) ? db.orders : [];
+  const entries = [];
+  orders.forEach((order) => {
+    const items = Array.isArray(order?.items) ? order.items : [];
+    const orderCreatedAt = String(order?.createdAt || order?.updatedAt || '').trim();
+    items.forEach((item, itemIndex) => {
+      const packageItems = Array.isArray(item?.packageItems) ? item.packageItems : [];
+      packageItems.forEach((entry, entryIndex) => {
+        entries.push({
+          kind: 'package',
+          orderId: String(order?._id || '').trim(),
+          orderCreatedAt,
+          orderNumber: String(order?.orderNumber || '').trim(),
+          itemId: String(item?.itemId || item?._id || `${order?._id || ''}-item-${itemIndex}`).trim(),
+          itemIndex,
+          entryIndex,
+          entry,
+        });
+      });
+      const materialItems = Array.isArray(item?.materialRequestItems) ? item.materialRequestItems : [];
+      materialItems.forEach((entry, entryIndex) => {
+        entries.push({
+          kind: 'material',
+          orderId: String(order?._id || '').trim(),
+          orderCreatedAt,
+          orderNumber: String(order?.orderNumber || '').trim(),
+          itemId: String(item?.itemId || item?._id || `${order?._id || ''}-item-${itemIndex}`).trim(),
+          itemIndex,
+          entryIndex,
+          entry,
+        });
+      });
+    });
+  });
+  return entries;
+}
+
+function compareMaterialEntriesForMigrationAsc(a, b) {
+  const aCreated = String(a?.entry?.createdAt || a?.orderCreatedAt || '').trim();
+  const bCreated = String(b?.entry?.createdAt || b?.orderCreatedAt || '').trim();
+  if (aCreated && bCreated && aCreated !== bCreated) {
+    return aCreated < bCreated ? -1 : 1;
+  }
+  if (aCreated !== bCreated) {
+    return aCreated ? -1 : 1;
+  }
+  if (a.itemIndex !== b.itemIndex) return a.itemIndex - b.itemIndex;
+  if (a.entryIndex !== b.entryIndex) return a.entryIndex - b.entryIndex;
+  return 0;
+}
+
+function ensureMaterialRequestNumbers() {
+  const db = load();
+  if (!db) return;
+  const entries = collectOrderItemMaterialEntries(db);
+  const existingNumbers = new Set();
+  entries.forEach(({ entry }) => {
+    const number = normalizeMaterialRequestNumber(entry?.requestNumber);
+    if (number > 0) existingNumbers.add(number);
+  });
+  const missingEntries = entries.filter(({ entry }) => normalizeMaterialRequestNumber(entry?.requestNumber) <= 0);
+  if (missingEntries.length === 0) {
+    if (!normalizeMaterialRequestNumber(db?.settings?.materialRequestCounter)) {
+      const maxExisting = existingNumbers.size ? Math.max(...Array.from(existingNumbers)) : 0;
+      db.settings = db.settings || {};
+      if (!Number.isFinite(Number(db.settings.materialRequestCounter)) || Number(db.settings.materialRequestCounter) < maxExisting) {
+        db.settings.materialRequestCounter = maxExisting;
+        save();
+      }
+    }
+    return;
+  }
+  missingEntries.sort(compareMaterialEntriesForMigrationAsc);
+  let counter = normalizeMaterialRequestNumber(db?.settings?.materialRequestCounter);
+  if (existingNumbers.size && counter <= Math.max(...Array.from(existingNumbers))) {
+    counter = Math.max(...Array.from(existingNumbers));
+  }
+  let changed = false;
+  missingEntries.forEach(({ orderId, itemId, kind, entryIndex, entry, itemIndex }) => {
+    const order = db.orders.find((o) => String(o?._id || '').trim() === orderId);
+    if (!order) return;
+    const item = (Array.isArray(order.items) ? order.items : []).find((it) => {
+      const id = String(it?.itemId || it?._id || `${order._id}-item-${itemIndex}`).trim();
+      return id === itemId;
+    });
+    if (!item) return;
+    const listField = kind === 'package' ? 'packageItems' : 'materialRequestItems';
+    const list = Array.isArray(item[listField]) ? item[listField] : [];
+    if (!list[entryIndex]) return;
+    counter += 1;
+    while (existingNumbers.has(counter)) counter += 1;
+    const nextNumber = counter;
+    list[entryIndex] = {
+      ...(list[entryIndex] || {}),
+      requestNumber: nextNumber,
+    };
+    existingNumbers.add(nextNumber);
+    changed = true;
+  });
+  if (changed || !Number.isFinite(Number(db?.settings?.materialRequestCounter)) || Number(db.settings.materialRequestCounter) < counter) {
+    db.settings = db.settings || {};
+    db.settings.materialRequestCounter = counter;
+    save();
+  }
+}
+
 const MANUAL_STAGE_ORDER = ['unprocessed', 'brief', 'drafting', 'approved', 'kitting', 'stock', 'assembly', 'paint', 'postpaint', 'qc', 'logistics', 'ready'];
 const MANUAL_STAGE_STATUS = {
   unprocessed: 'pending',
@@ -504,15 +644,37 @@ function normalizeChecklistItems(source = [], legacyValue = '', options = {}) {
   const mapExtraFields = typeof options.mapExtraFields === 'function'
     ? options.mapExtraFields
     : null;
+  const now = new Date().toISOString();
   const normalizedItems = sourceItems.reduce((acc, item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return acc;
     const name = String(item.name || '').trim();
     if (!name) return acc;
+    const rawCreatedAt = String(item.createdAt || now).trim();
     acc.push({
       id: String(item.id || item.packageItemId || id()).trim(),
+      requestNumber: normalizeMaterialRequestNumber(item.requestNumber || 0),
       name,
       isCompleted: Boolean(item.isCompleted),
-      completedAt: item.isCompleted ? (item.completedAt || new Date().toISOString().split('T')[0]) : null,
+      completedAt: item.isCompleted ? (item.completedAt || (new Date().toISOString().split('T')[0])) : null,
+      createdAt: rawCreatedAt,
+      createdBy: item.createdBy && typeof item.createdBy === 'object' ? {
+        employeeId: String(item.createdBy.employeeId || '').trim(),
+        employeeName: String(item.createdBy.employeeName || '').trim(),
+        role: String(item.createdBy.role || '').trim(),
+      } : (item.createdBy ? {
+        employeeId: String(item.createdBy || '').trim(),
+        employeeName: '',
+        role: '',
+      } : null),
+      completedBy: item.completedBy && typeof item.completedBy === 'object' ? {
+        employeeId: String(item.completedBy.employeeId || '').trim(),
+        employeeName: String(item.completedBy.employeeName || '').trim(),
+        role: String(item.completedBy.role || '').trim(),
+      } : (item.isCompleted && (item.updatedBy || item.actor) ? {
+        employeeId: String(item.updatedBy?.employeeId || item.actor?.employeeId || '').trim(),
+        employeeName: String(item.updatedBy?.employeeName || item.actor?.employeeName || item.updatedBy || item.actor || '').trim(),
+        role: String(item.updatedBy?.role || item.actor?.role || '').trim(),
+      } : null),
       ...(mapExtraFields ? mapExtraFields(item) : {}),
     });
     return acc;
@@ -534,9 +696,13 @@ function normalizeChecklistItems(source = [], legacyValue = '', options = {}) {
       .trim();
     return {
       id: id(),
+      requestNumber: 0,
       name: normalizedName || token,
       isCompleted,
       completedAt: isCompleted ? new Date().toISOString().split('T')[0] : null,
+      createdAt: now,
+      createdBy: null,
+      completedBy: null,
     };
   }).filter((item) => item.name).map((item) => ({
     id: id(),
@@ -1012,6 +1178,7 @@ function ensureOrders(db) {
       changed = true;
     }
   }
+  ensureMaterialRequestNumbers();
   return changed;
 }
 
@@ -1259,7 +1426,7 @@ const OrderStore = {
     return order;
   },
 
-  addPackageItem(orderId, itemId, packageItem = {}) {
+  addPackageItem(orderId, itemId, packageItem = {}, actor = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1270,15 +1437,27 @@ const OrderStore = {
     const itemName = String(packageItem?.name || '').trim();
     if (!itemName) return 'invalid';
 
+    const nextNumber = normalizeMaterialRequestNumber(packageItem?.requestNumber || 0) || takeNextMaterialRequestNumber();
+    const now = new Date().toISOString();
+    const normalizedActor = actor && typeof actor === 'object' ? {
+      employeeId: String(actor.employeeId || actor.id || '').trim(),
+      employeeName: String(actor.employeeName || actor.fullName || actor.name || '').trim(),
+      role: String(actor.role || '').trim(),
+    } : null;
+
     const nextPackageItems = [
       ...normalizePackageItems(item.packageItems, item.packageName),
       {
         id: String(packageItem?.id || id()).trim(),
+        requestNumber: nextNumber,
         name: itemName,
         isCompleted: Boolean(packageItem?.isCompleted),
         completedAt: packageItem?.isCompleted
-          ? (String(packageItem?.completedAt || '').trim() || new Date().toISOString().split('T')[0])
+          ? (String(packageItem?.completedAt || '').trim() || now)
           : null,
+        createdAt: String(packageItem?.createdAt || now).trim(),
+        createdBy: packageItem?.createdBy || normalizedActor,
+        completedBy: packageItem?.isCompleted ? (packageItem?.completedBy || normalizedActor) : null,
       },
     ];
 
@@ -1291,7 +1470,7 @@ const OrderStore = {
     return order;
   },
 
-  togglePackageItem(orderId, itemId, packageItemId) {
+  togglePackageItem(orderId, itemId, packageItemId, actor = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1306,15 +1485,28 @@ const OrderStore = {
     const hasTargetItem = currentPackageItems.some((packageItem) => packageItem.id === normalizedPackageItemId);
     if (!hasTargetItem) return 'package_item_not_found';
 
-    const nextPackageItems = currentPackageItems.map((packageItem) => (
-      packageItem.id === normalizedPackageItemId
-        ? {
-            ...packageItem,
-            isCompleted: !packageItem.isCompleted,
-            completedAt: !packageItem.isCompleted ? new Date().toISOString().split('T')[0] : null,
-          }
-        : packageItem
-    ));
+    const normalizedActor = actor && typeof actor === 'object' ? {
+      employeeId: String(actor.employeeId || actor.id || '').trim(),
+      employeeName: String(actor.employeeName || actor.fullName || actor.name || '').trim(),
+      role: String(actor.role || '').trim(),
+    } : null;
+    const now = new Date().toISOString();
+
+    const nextPackageItems = currentPackageItems.map((packageItem) => {
+      if (packageItem.id !== normalizedPackageItemId) return packageItem;
+      const nextCompleted = !Boolean(packageItem.isCompleted);
+      const currentNumber = normalizeMaterialRequestNumber(packageItem.requestNumber || 0);
+      const nextNumber = currentNumber > 0 ? currentNumber : takeNextMaterialRequestNumber();
+      return {
+        ...packageItem,
+        requestNumber: nextNumber,
+        isCompleted: nextCompleted,
+        completedAt: nextCompleted ? (String(packageItem.completedAt || now).trim() || now) : null,
+        completedBy: nextCompleted ? (packageItem.completedBy || normalizedActor) : null,
+        createdAt: String(packageItem.createdAt || now).trim(),
+        createdBy: packageItem.createdBy || normalizedActor,
+      };
+    });
 
     if (!updateItemPackageState(item, nextPackageItems)) {
       return order;
@@ -1354,7 +1546,7 @@ const OrderStore = {
     };
   },
 
-  addMaterialRequestItem(orderId, itemId, materialRequestItem = {}) {
+  addMaterialRequestItem(orderId, itemId, materialRequestItem = {}, actor = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1369,17 +1561,29 @@ const OrderStore = {
     const itemName = String(materialRequestItem?.name || '').trim() || (normalizedKind === 'photo' ? 'Фото' : '');
     if (!itemName) return 'invalid';
 
+    const nextNumber = normalizeMaterialRequestNumber(materialRequestItem?.requestNumber || 0) || takeNextMaterialRequestNumber();
+    const now = new Date().toISOString();
+    const normalizedActor = actor && typeof actor === 'object' ? {
+      employeeId: String(actor.employeeId || actor.id || '').trim(),
+      employeeName: String(actor.employeeName || actor.fullName || actor.name || '').trim(),
+      role: String(actor.role || '').trim(),
+    } : null;
+
     const nextMaterialRequestItems = [
       ...normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests),
       {
         id: String(materialRequestItem?.id || id()).trim(),
+        requestNumber: nextNumber,
         name: itemName,
         kind: normalizedKind,
         comment: String(materialRequestItem?.comment || '').trim(),
         isCompleted: Boolean(materialRequestItem?.isCompleted),
         completedAt: materialRequestItem?.isCompleted
-          ? (String(materialRequestItem?.completedAt || '').trim() || new Date().toISOString().split('T')[0])
+          ? (String(materialRequestItem?.completedAt || '').trim() || now)
           : null,
+        createdAt: String(materialRequestItem?.createdAt || now).trim(),
+        createdBy: materialRequestItem?.createdBy || normalizedActor,
+        completedBy: materialRequestItem?.isCompleted ? (materialRequestItem?.completedBy || normalizedActor) : null,
         attachments: attachmentList,
       },
     ];
@@ -1496,7 +1700,7 @@ const OrderStore = {
       .find((attachment) => attachment.attachmentId === normalizedAttachmentId) || false;
   },
 
-  toggleMaterialRequestItem(orderId, itemId, materialRequestItemId) {
+  toggleMaterialRequestItem(orderId, itemId, materialRequestItemId, actor = {}) {
     const db = load();
     ensureOrders(db);
     const order = db.orders.find((currentOrder) => currentOrder._id === orderId);
@@ -1511,15 +1715,28 @@ const OrderStore = {
     const hasTargetItem = currentMaterialRequestItems.some((requestItem) => requestItem.id === normalizedMaterialRequestItemId);
     if (!hasTargetItem) return 'material_request_item_not_found';
 
-    const nextMaterialRequestItems = currentMaterialRequestItems.map((requestItem) => (
-      requestItem.id === normalizedMaterialRequestItemId
-        ? {
-            ...requestItem,
-            isCompleted: !requestItem.isCompleted,
-            completedAt: !requestItem.isCompleted ? new Date().toISOString().split('T')[0] : null,
-          }
-        : requestItem
-    ));
+    const normalizedActor = actor && typeof actor === 'object' ? {
+      employeeId: String(actor.employeeId || actor.id || '').trim(),
+      employeeName: String(actor.employeeName || actor.fullName || actor.name || '').trim(),
+      role: String(actor.role || '').trim(),
+    } : null;
+    const now = new Date().toISOString();
+
+    const nextMaterialRequestItems = currentMaterialRequestItems.map((requestItem) => {
+      if (requestItem.id !== normalizedMaterialRequestItemId) return requestItem;
+      const nextCompleted = !Boolean(requestItem.isCompleted);
+      const currentNumber = normalizeMaterialRequestNumber(requestItem.requestNumber || 0);
+      const nextNumber = currentNumber > 0 ? currentNumber : takeNextMaterialRequestNumber();
+      return {
+        ...requestItem,
+        requestNumber: nextNumber,
+        isCompleted: nextCompleted,
+        completedAt: nextCompleted ? (String(requestItem.completedAt || now).trim() || now) : null,
+        completedBy: nextCompleted ? (requestItem.completedBy || normalizedActor) : null,
+        createdAt: String(requestItem.createdAt || now).trim(),
+        createdBy: requestItem.createdBy || normalizedActor,
+      };
+    });
 
     if (!updateItemMaterialRequestState(item, nextMaterialRequestItems)) {
       return order;

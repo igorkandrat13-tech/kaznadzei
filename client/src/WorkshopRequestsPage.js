@@ -214,37 +214,49 @@ function buildRequestRows(orders = [], workshopRequests = [], canManageRequests 
     .flatMap((order) => {
       const orderItems = Array.isArray(order.items) ? order.items : [];
       return orderItems.flatMap((item) => {
-        const packageRows = normalizePackageItems(item.packageItems, item.packageName).map((packageItem) => ({
-          key: `package:${order._id}:${item.itemId}:${packageItem.id}`,
-          source: 'package',
-          sourceLabel: getUnifiedSourceLabel('package'),
-          status: packageItem.isCompleted ? 'completed' : 'open',
-          text: packageItem.name,
-          orderNumber: String(order.orderNumber || '').trim(),
-          customer: String(order.customer || '').trim(),
-          room: String(item.room || '').trim(),
-          itemNumber: String(item.itemNumber || '').trim(),
-          itemName: String(item.name || '').trim(),
-          author: '',
-          createdAt: String(packageItem.completedAt || item.updatedAt || order.updatedAt || order.createdAt || '').trim(),
-          updatedAt: String(item.updatedAt || order.updatedAt || order.createdAt || '').trim(),
-          attachmentsCount: 0,
-          openUrl: '',
-          requestId: '',
-          orderId: String(order._id || '').trim(),
-          itemId: String(item.itemId || '').trim(),
-          packageItemId: String(packageItem.id || '').trim(),
-          requestNumber: 0,
-          resolvedAt: '',
-          resolvedByName: '',
-          toggleKind: 'package',
-          canToggleStatus: Boolean(canManageRequests),
-          canDelete: Boolean(canManageRequests),
-          sortTimestamp: String(order.createdAt || '').trim(),
-        }));
+        const packageRows = normalizePackageItems(item.packageItems, item.packageName).map((packageItem) => {
+          const requestNumber = Number(packageItem.requestNumber) || 0;
+          const createdAt = String(packageItem.createdAt || item.updatedAt || order.updatedAt || order.createdAt || '').trim();
+          const resolvedAt = String(packageItem.completedAt || '').trim();
+          const resolvedByName = String(packageItem?.completedBy?.employeeName || '').trim();
+          const authorName = String(packageItem?.createdBy?.employeeName || '').trim();
+          return ({
+            key: `package:${order._id}:${item.itemId}:${packageItem.id}`,
+            source: 'package',
+            sourceLabel: getUnifiedSourceLabel('package'),
+            status: packageItem.isCompleted ? 'completed' : 'open',
+            text: packageItem.name,
+            orderNumber: String(order.orderNumber || '').trim(),
+            customer: String(order.customer || '').trim(),
+            room: String(item.room || '').trim(),
+            itemNumber: String(item.itemNumber || '').trim(),
+            itemName: String(item.name || '').trim(),
+            author: authorName,
+            createdAt,
+            updatedAt: String(item.updatedAt || order.updatedAt || order.createdAt || '').trim(),
+            attachmentsCount: 0,
+            openUrl: '',
+            requestId: '',
+            orderId: String(order._id || '').trim(),
+            itemId: String(item.itemId || '').trim(),
+            packageItemId: String(packageItem.id || '').trim(),
+            requestNumber,
+            resolvedAt,
+            resolvedByName,
+            toggleKind: 'package',
+            canToggleStatus: Boolean(canManageRequests),
+            canDelete: Boolean(canManageRequests),
+            sortTimestamp: String(packageItem.createdAt || order.createdAt || '').trim(),
+          });
+        });
 
         const materialRows = normalizeMaterialRequestItems(item.materialRequestItems, item.materialRequests).map((requestItem) => {
           const firstAttachment = Array.isArray(requestItem.attachments) ? requestItem.attachments[0] : null;
+          const requestNumber = Number(requestItem.requestNumber) || 0;
+          const createdAt = String(requestItem.createdAt || firstAttachment?.uploadedAt || item.updatedAt || order.updatedAt || order.createdAt || '').trim();
+          const resolvedAt = String(requestItem.completedAt || '').trim();
+          const resolvedByName = String(requestItem?.completedBy?.employeeName || '').trim();
+          const authorName = String(requestItem?.createdBy?.employeeName || '').trim();
           return {
             key: `material:${order._id}:${item.itemId}:${requestItem.id}`,
             source: 'material',
@@ -256,8 +268,8 @@ function buildRequestRows(orders = [], workshopRequests = [], canManageRequests 
             room: String(item.room || '').trim(),
             itemNumber: String(item.itemNumber || '').trim(),
             itemName: String(item.name || '').trim(),
-            author: '',
-            createdAt: String(requestItem.completedAt || firstAttachment?.uploadedAt || item.updatedAt || order.updatedAt || order.createdAt || '').trim(),
+            author: authorName,
+            createdAt,
             updatedAt: String(item.updatedAt || order.updatedAt || order.createdAt || '').trim(),
             attachmentsCount: Array.isArray(requestItem.attachments) ? requestItem.attachments.length : 0,
             openUrl: firstAttachment ? getAttachmentOpenUrl(order._id, item.itemId, requestItem.id, firstAttachment) : '',
@@ -265,13 +277,13 @@ function buildRequestRows(orders = [], workshopRequests = [], canManageRequests 
             orderId: String(order._id || '').trim(),
             itemId: String(item.itemId || '').trim(),
             materialRequestItemId: String(requestItem.id || '').trim(),
-            requestNumber: 0,
-            resolvedAt: '',
-            resolvedByName: '',
+            requestNumber,
+            resolvedAt,
+            resolvedByName,
             toggleKind: 'material',
             canToggleStatus: Boolean(canManageRequests),
             canDelete: Boolean(canManageRequests),
-            sortTimestamp: String(firstAttachment?.uploadedAt || order.createdAt || '').trim(),
+            sortTimestamp: String(requestItem.createdAt || firstAttachment?.uploadedAt || order.createdAt || '').trim(),
           };
         });
 

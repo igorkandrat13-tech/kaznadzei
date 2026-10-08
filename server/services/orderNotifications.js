@@ -227,6 +227,68 @@ async function notifySupplyWorkshopRequestReopened(request = {}, options = {}) {
   });
 }
 
+function buildSupplyItemRequestCompletedText(item = {}, options = {}) {
+  const requestNumber = Number(item?.requestNumber || options?.requestNumber || 0) || 0;
+  const name = String(item?.name || options?.name || '').trim() || 'Заявка';
+  const titleLine = requestNumber > 0 ? `Заявка №${requestNumber}` : 'Заявка';
+  const authorName = String(item?.createdBy?.employeeName || options?.authorName || '').trim() || 'Не указан';
+  const executorName = String(item?.completedBy?.employeeName || options?.executorName || '').trim() || 'Не указан';
+  const createdAtStr = String(item?.createdAt || '').trim();
+  const resolvedAtStr = String(item?.completedAt || options?.resolvedAt || '').trim();
+  let durationLine = '';
+  if (createdAtStr && resolvedAtStr) {
+    const createdMs = new Date(createdAtStr).getTime();
+    const resolvedMs = new Date(resolvedAtStr).getTime();
+    if (Number.isFinite(createdMs) && Number.isFinite(resolvedMs) && resolvedMs >= createdMs) {
+      const durationText = formatDurationRussian(resolvedMs - createdMs);
+      if (durationText) {
+        durationLine = `Время выполнения - ${durationText}`;
+      }
+    }
+  }
+  const lines = [
+    titleLine,
+    `${name} - Выполнено`,
+    `Автор - ${shortFullNameEmployee(authorName)}`,
+    `Исполнитель - ${shortFullNameEmployee(executorName)}`,
+  ];
+  if (durationLine) lines.push(durationLine);
+  return lines.filter(Boolean).join('\n');
+}
+
+function buildSupplyItemRequestReopenText(item = {}, options = {}) {
+  const requestNumber = Number(item?.requestNumber || options?.requestNumber || 0) || 0;
+  const name = String(item?.name || options?.name || '').trim() || 'Заявка';
+  const titleLine = requestNumber > 0 ? `Заявка №${requestNumber}` : 'Заявка';
+  const authorName = String(item?.createdBy?.employeeName || options?.authorName || '').trim() || 'Не указан';
+  const executorName = String(options?.executorName || item?.completedBy?.employeeName || '').trim() || 'Не указан';
+  const lines = [
+    titleLine,
+    `${name} - Возврат в работу`,
+    `Автор - ${shortFullNameEmployee(authorName)}`,
+    `Исполнитель - ${shortFullNameEmployee(executorName)}`,
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+async function notifySupplyItemRequestCompleted(item = {}, options = {}) {
+  const text = buildSupplyItemRequestCompletedText(item, options);
+  if (!text) return;
+  await notifyMaterialRequestWatchers(text, {
+    notificationType: 'request-only',
+    attachments: Array.isArray(options?.attachments) ? options.attachments : [],
+  });
+}
+
+async function notifySupplyItemRequestReopened(item = {}, options = {}) {
+  const text = buildSupplyItemRequestReopenText(item, options);
+  if (!text) return;
+  await notifyMaterialRequestWatchers(text, {
+    notificationType: 'request-only',
+    attachments: Array.isArray(options?.attachments) ? options.attachments : [],
+  });
+}
+
 async function notifyOrderCreated(order) {
   const stages = OrderStore.getOrderStages(order);
   const firstActiveStage = stages.find(stage => stage.status === 'in_progress')
@@ -278,6 +340,8 @@ async function notifyStageWatchers(order, itemsUpdate, options = {}) {
 module.exports = {
   buildWorkshopRequestCompletedSupplyText,
   buildWorkshopRequestReopenSupplyText,
+  buildSupplyItemRequestCompletedText,
+  buildSupplyItemRequestReopenText,
   formatDurationRussian,
   notifyEmployeesByRole,
   notifyEmployeesByIds,
@@ -286,6 +350,8 @@ module.exports = {
   notifyStageWatchers,
   notifySupplyWorkshopRequestCompleted,
   notifySupplyWorkshopRequestReopened,
+  notifySupplyItemRequestCompleted,
+  notifySupplyItemRequestReopened,
   buildStageWatcherText,
   getEmployeeTelegramBotTokens,
 };
