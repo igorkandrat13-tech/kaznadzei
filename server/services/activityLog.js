@@ -84,6 +84,9 @@ function clearActivityLogs() {
 
 function getRequestActor(req, fallback = {}) {
   const auth = req?.auth || null;
+  const fallbackLabel = String(fallback?.label || '').trim() || '';
+  const fallbackName = String(fallback?.name || '').trim() || '';
+  const fallbackRole = String(fallback?.role || '').trim() || '';
   if (auth) {
     const employeeName = String(auth.employeeName || auth.employee_fullName || '').trim();
     const username = String(auth.username || '').trim();
@@ -94,32 +97,37 @@ function getRequestActor(req, fallback = {}) {
     const pagesCount = permissionPages
       ? Object.values(permissionPages).filter(Boolean).length
       : null;
-    let label = String(fallback?.label || '').trim() || '';
-    let name = String(fallback?.name || '').trim() || employeeName || username || '';
-    if (!label) {
-      if (employeeName) label = employeeName;
-      else if (username) label = username;
-      else if (auth.role === 'admin') label = 'Администратор';
-      else if (auth.role === 'manager') label = 'Менеджер';
-      else label = roleKey || (auth.fullAccess ? 'Администратор' : 'Пользователь');
-    }
+    let label = '';
+    if (employeeName) label = employeeName;
+    else if (username) label = username;
+    else if (auth.role === 'admin') label = 'Администратор';
+    else if (auth.role === 'manager') label = 'Менеджер';
+    else label = roleKey || (auth.fullAccess ? 'Администратор' : 'Пользователь');
+    const finalLabel = String(label || '').trim() || fallbackLabel;
+    const finalName = String(employeeName || username || '').trim() || fallbackName;
+    const finalRole = String(auth.role || roleKey || '').trim() || fallbackRole;
     return {
       type: userId ? 'user' : (employeeId ? 'employee' : 'app'),
-      role: auth.role || roleKey || '',
+      role: finalRole,
       roleKey,
-      roleLabel: label,
-      name,
-      label,
+      roleLabel: finalLabel,
+      name: finalName,
+      label: finalLabel,
       userId,
       employeeId,
       pagesCount,
       ...fallback,
-      name: fallback?.name || name,
-      label: fallback?.label || label,
-      role: fallback?.role || auth.role || roleKey || '',
+      name: finalName,
+      label: finalLabel,
+      role: finalRole,
     };
   }
-  return buildActor(fallback);
+  return buildActor({
+    ...fallback,
+    label: fallbackLabel || fallbackName || fallback?.label || '',
+    name: fallbackName || fallback?.name || '',
+    role: fallbackRole || fallback?.role || '',
+  });
 }
 
 module.exports = {

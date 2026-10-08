@@ -56,6 +56,21 @@ function buildWorkshopRequestCompletedSupplyText(request = {}, options = {}) {
   return lines.filter(Boolean).join('\n');
 }
 
+function buildWorkshopRequestReopenSupplyText(request = {}, options = {}) {
+  const requestNumber = Number(request?.requestNumber) || 0;
+  const text = String(request?.text || '').trim() || 'Заявка';
+  const titleLine = requestNumber > 0 ? `Заявка №${requestNumber}` : 'Заявка';
+  const authorName = String(request?.employeeName || options?.authorName || '').trim() || 'Не указан';
+  const executorName = String(options?.executorName || request?.resolvedBy?.employeeName || '').trim() || 'Не указан';
+  const lines = [
+    titleLine,
+    `${text} - Возврат в работу`,
+    `Автор - ${shortFullNameEmployee(authorName)}`,
+    `Исполнитель - ${shortFullNameEmployee(executorName)}`,
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
 const STAGE_STATUS_LABELS = {
   pending: 'Ожидает',
   in_progress: 'В работе',
@@ -203,6 +218,15 @@ async function notifySupplyWorkshopRequestCompleted(request = {}, options = {}) 
   });
 }
 
+async function notifySupplyWorkshopRequestReopened(request = {}, options = {}) {
+  const text = buildWorkshopRequestReopenSupplyText(request, options);
+  if (!text) return;
+  await notifyMaterialRequestWatchers(text, {
+    notificationType: 'request-only',
+    attachments: Array.isArray(options?.attachments) ? options.attachments : [],
+  });
+}
+
 async function notifyOrderCreated(order) {
   const stages = OrderStore.getOrderStages(order);
   const firstActiveStage = stages.find(stage => stage.status === 'in_progress')
@@ -253,6 +277,7 @@ async function notifyStageWatchers(order, itemsUpdate, options = {}) {
 
 module.exports = {
   buildWorkshopRequestCompletedSupplyText,
+  buildWorkshopRequestReopenSupplyText,
   formatDurationRussian,
   notifyEmployeesByRole,
   notifyEmployeesByIds,
@@ -260,6 +285,7 @@ module.exports = {
   notifyOrderCreated,
   notifyStageWatchers,
   notifySupplyWorkshopRequestCompleted,
+  notifySupplyWorkshopRequestReopened,
   buildStageWatcherText,
   getEmployeeTelegramBotTokens,
 };

@@ -662,17 +662,28 @@ function WorkshopRequestsPage() {
 
         <div className="table-scroll" style={{ marginTop: 16 }}>
           <table className="unified-orders-table workshop-requests-table">
+            <colgroup>
+              <col style={{ width: 64, minWidth: 64, maxWidth: 64 }} />
+              <col style={{ width: 96, minWidth: 96, maxWidth: 96 }} />
+              <col style={{ width: 56, minWidth: 56, maxWidth: 56 }} />
+              <col />
+              <col />
+              <col />
+              <col />
+              <col style={{ width: 116, minWidth: 116, maxWidth: 116 }} />
+              <col style={{ width: 72, minWidth: 72, maxWidth: 72 }} />
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ width: 72 }}>№</th>
-                <th>Источник</th>
-                <th>Чек</th>
+                <th style={{ width: 64 }}>№</th>
+                <th style={{ width: 96 }}>Источник</th>
+                <th style={{ width: 56 }}>Чек</th>
                 <th>Заявка</th>
                 <th>Заказ</th>
                 <th>Помещение / изделие</th>
                 <th>Автор</th>
-                <th>Дата</th>
-                <th>Удалить</th>
+                <th style={{ width: 116 }}>Дата</th>
+                <th style={{ width: 72 }}>Удалить</th>
               </tr>
             </thead>
             <tbody>

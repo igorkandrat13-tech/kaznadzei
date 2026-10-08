@@ -1026,7 +1026,7 @@ function handleManualStageMarks(req, res) {
 
     ensureActorCanUseManualColumns(req.auth || { role: 'admin' }, normalizedSelections);
 
-    const requestActor = getRequestActor(req, { label: 'Администратор' });
+    const requestActor = getRequestActor(req);
     const cellLabelByColumnKey = normalizedSelections.reduce((acc, selection) => {
       acc[selection.columnKey] = getManualStageCellLabel(selection.columnKey, settings);
       return acc;
@@ -1034,8 +1034,8 @@ function handleManualStageMarks(req, res) {
     const updatedOrders = OrderStore.setManualStageMarks(
       normalizedSelections,
       legendKey,
-      requestActor.label || req.auth?.role || 'admin',
-      { actorRole: req.auth?.role || requestActor.role || 'admin' }
+      requestActor.label || requestActor.name || 'Сотрудник',
+      { actorRole: req.auth?.role || requestActor.role || '' }
     );
 
     if (updatedOrders === false) {
@@ -1141,14 +1141,14 @@ function handleManualDateOverrides(req, res) {
 
     ensureActorCanUseManualColumns(req.auth || { role: 'admin' }, normalizedSelections);
 
-    const requestActor = getRequestActor(req, { label: 'Администратор' });
+    const requestActor = getRequestActor(req);
     const cellLabelByColumnKey = normalizedSelections.reduce((acc, selection) => {
       acc[selection.columnKey] = getManualStageCellLabel(selection.columnKey, settings);
       return acc;
     }, {});
     const payload = {
       columnKey,
-      actor: requestActor.label || req.auth?.role || 'admin',
+      actor: requestActor.label || requestActor.name || 'Сотрудник',
     };
     if (columnKey === 'duration') {
       const startDate = normalizeDate(req.body?.startDate ?? '', 'startDate', { allowUndefined: false });

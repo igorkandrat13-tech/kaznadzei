@@ -7,7 +7,11 @@ const {
   resolveWorkshopRequestAttachmentAbsolutePath,
 } = require('../services/workshopRequestAttachments');
 const { WORKSHOP_REQUEST_STATUS, WorkshopRequestStore } = require('../stores/workshopRequestStore');
-const { notifyMaterialRequestWatchers, notifySupplyWorkshopRequestCompleted } = require('../services/orderNotifications');
+const {
+  notifyMaterialRequestWatchers,
+  notifySupplyWorkshopRequestCompleted,
+  notifySupplyWorkshopRequestReopened,
+} = require('../services/orderNotifications');
 
 const router = express.Router();
 
@@ -81,11 +85,15 @@ router.patch('/workshop-requests/:id/status', requireAnyPageAccess(['orders', 'r
     return res.status(400).json({ message: 'Некорректный статус заявки.' });
   }
 
-  const updatedItem = WorkshopRequestStore.updateStatus(requestId, status, {
+  const previousItem = WorkshopRequestStore.findById(requestId);
+  const previousStatus = previousItem ? String(previousItem.status || '').trim() : '';
+
+  const toggleActor = {
     employeeId: req.auth?.employeeId || '',
     employeeName: req.auth?.employeeName || req.auth?.name || '',
     role: req.auth?.role || '',
-  });
+  };
+  const updatedItem = WorkshopRequestStore.updateStatus(requestId, status, toggleActor);
   if (!updatedItem) {
     return res.status(404).json({ message: 'Заявка не найдена.' });
   }
@@ -105,9 +113,18 @@ router.patch('/workshop-requests/:id/status', requireAnyPageAccess(['orders', 'r
     },
   });
 
+  const statusChanged = previousStatus !== String(updatedItem.status || '').trim();
   const nextCompleted = String(updatedItem.status || '').trim() === WORKSHOP_REQUEST_STATUS.COMPLETED;
+  const nextReopened = statusChanged
+    && previousStatus === WORKSHOP_REQUEST_STATUS.COMPLETED
+    && String(updatedItem.status || '').trim() === WORKSHOP_REQUEST_STATUS.OPEN;
+
   if (nextCompleted) {
     notifySupplyWorkshopRequestCompleted(updatedItem).catch(() => {});
+  } else if (nextReopened) {
+    notifySupplyWorkshopRequestReopened(updatedItem, {
+      executorName: String(toggleActor.employeeName || toggleActor.employeeId || '').trim(),
+    }).catch(() => {});
   } else {
     notifyMaterialRequestWatchers(buildWorkshopRequestStatusText(updatedItem, nextCompleted)).catch(() => {});
   }
