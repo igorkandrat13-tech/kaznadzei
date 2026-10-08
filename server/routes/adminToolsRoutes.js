@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAdminAccess } = require('../middleware/security');
+const { requireAdminAccess, requireAnyPageAccess } = require('../middleware/security');
 const { getSnapshot, replaceSnapshot, normalizeDb } = require('../stores/store');
 const OrderStore = require('../stores/orderStore');
 const {
@@ -113,7 +113,7 @@ router.post('/backup/import', requireAdminAccess(), (req, res) => {
   }
 });
 
-router.get('/activity-logs', requireAdminAccess(), (req, res) => {
+router.get('/activity-logs', requireAnyPageAccess(['orders', 'requests', 'archive', 'customers', 'settings']), (req, res) => {
   const limit = Math.max(1, Math.min(Number(req.query?.limit) || 200, 1000));
   const filters = {
     orderId: String(req.query?.orderId || '').trim(),

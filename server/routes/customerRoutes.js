@@ -92,11 +92,11 @@ function mapOrderItems(order = {}) {
   }));
 }
 
-router.get('/customers', requireManagerAccess(), (req, res) => {
+router.get('/customers', requireAnyPageAccess(['customers', 'orders', 'requests', 'archive']), (req, res) => {
   res.json(CustomerStore.findAll());
 });
 
-router.get('/customers/:id/telegram-access', requireManagerAccess(), (req, res) => {
+router.get('/customers/:id/telegram-access', requireAnyPageAccess(['customers', 'orders', 'archive']), (req, res) => {
   const customer = CustomerStore.findById(req.params.id);
   if (!customer) {
     return res.status(404).json({ message: 'Заказчик не найден.' });
@@ -128,7 +128,7 @@ router.get('/customers/:id/telegram-access', requireManagerAccess(), (req, res) 
   });
 });
 
-router.post('/customers/:id/telegram-access/:orderId/regenerate', requireManagerAccess(), async (req, res) => {
+router.post('/customers/:id/telegram-access/:orderId/regenerate', requireAnyPageAccess(['customers', 'orders', 'archive']), async (req, res) => {
   try {
     const payload = await issueCustomerOrderAccess({
       customerId: req.params.id,
@@ -161,7 +161,7 @@ router.post('/customers/:id/telegram-access/:orderId/regenerate', requireManager
   }
 });
 
-router.post('/customers/:id/telegram-access/:orderId/issue', requireManagerAccess(), async (req, res) => {
+router.post('/customers/:id/telegram-access/:orderId/issue', requireAnyPageAccess(['customers', 'orders', 'archive']), async (req, res) => {
   try {
     const payload = await ensureCustomerOrderAccess({
       customerId: req.params.id,
@@ -198,7 +198,7 @@ router.post('/customers/:id/telegram-access/:orderId/issue', requireManagerAcces
   }
 });
 
-router.post('/customers/:id/telegram-access/:orderId/revoke', requireManagerAccess(), async (req, res) => {
+router.post('/customers/:id/telegram-access/:orderId/revoke', requireAnyPageAccess(['customers', 'orders', 'archive']), async (req, res) => {
   const customer = CustomerStore.findById(req.params.id);
   if (!customer) {
     return res.status(404).json({ message: 'Заказчик не найден.' });
@@ -273,7 +273,7 @@ router.post('/customers/:id/telegram-access/:orderId/revoke', requireManagerAcce
   return res.json({ ok: true });
 });
 
-router.get('/customers/:id/telegram-access/:orderId/share', requireManagerAccess(), async (req, res) => {
+router.get('/customers/:id/telegram-access/:orderId/share', requireAnyPageAccess(['customers', 'orders', 'archive']), async (req, res) => {
   try {
     const customer = CustomerStore.findById(req.params.id);
     if (!customer) {
@@ -301,7 +301,7 @@ router.get('/customers/:id/telegram-access/:orderId/share', requireManagerAccess
   }
 });
 
-router.get('/customers/:id/telegram-access/:orderId/logs', requireManagerAccess(), (req, res) => {
+router.get('/customers/:id/telegram-access/:orderId/logs', requireAnyPageAccess(['customers', 'orders', 'archive']), (req, res) => {
   const customer = CustomerStore.findById(req.params.id);
   if (!customer) {
     return res.status(404).json({ message: 'Заказчик не найден.' });
@@ -330,7 +330,7 @@ router.get('/customers/:id/telegram-access/:orderId/logs', requireManagerAccess(
   });
 });
 
-router.post('/customers', requireManagerAccess(), (req, res) => {
+router.post('/customers', requireAnyPageAccess(['customers', 'orders']), (req, res) => {
   try {
     const customer = CustomerStore.create(sanitizeCustomerInput(req.body || {}));
     addActivityLog({
@@ -348,7 +348,7 @@ router.post('/customers', requireManagerAccess(), (req, res) => {
   }
 });
 
-router.put('/customers/:id', requireManagerAccess(), (req, res) => {
+router.put('/customers/:id', requireAnyPageAccess(['customers', 'orders']), (req, res) => {
   try {
     const updates = sanitizeCustomerInput(req.body || {}, { partial: true });
     const customer = CustomerStore.update(req.params.id, updates);

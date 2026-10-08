@@ -1620,7 +1620,13 @@ function OrdersWorkspace() {
       const res = await apiFetch(`/api/activity-logs?${params.toString()}`);
       const data = await parseJsonSafely(res);
       if (!res.ok) {
-        throw new Error(data?.message || 'Не удалось загрузить логи ячейки.');
+        const normalizedMessage = String((data?.message || '') || '').trim();
+        if (res.status === 403) {
+          setCellLogs([]);
+          setCellLogsError('');
+          return;
+        }
+        throw new Error(normalizedMessage || 'Не удалось загрузить логи ячейки.');
       }
 
       const allowedActions = new Set([
@@ -4306,7 +4312,7 @@ function OrdersWorkspace() {
         </div>
       </div>
 
-      {isAdmin && selectedStageSelections.length > 0 ? (
+      {hasAnyEditableManualCellSelected ? (
         <div
           ref={manualStageToolbarRef}
           className="manual-stage-toolbar manual-stage-toolbar-floating"
