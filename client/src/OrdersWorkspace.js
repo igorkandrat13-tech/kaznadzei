@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import ConfirmDialog from './ConfirmDialog';
 import { apiFetch, getErrorMessage, parseJsonSafely, toUserErrorMessage } from './api';
-import { canAccessRole, getAppAuthRole } from './appAuth';
+import { canAccessRole, canAccessPage, getAppAuthRole } from './appAuth';
 import { showGlobalError, useGlobalErrorEffect } from './globalErrors';
 import { buildOrderStageLegendConfig, DEFAULT_ORDER_PRIMARY_HEADERS } from './orderStageLegend';
 import { formatDateDisplay, formatDateShortDisplay, formatDateTimeDisplay, formatTimeDisplay } from './dateTime';
@@ -874,7 +874,8 @@ function OrdersWorkspace() {
   const navigate = useNavigate();
   const authRole = getAppAuthRole();
   const isAdmin = canAccessRole('admin', authRole);
-  const canManageCustomers = canAccessRole('manager', authRole);
+  const canManageOrders = canAccessRole('manager', authRole) || canAccessPage('orders');
+  const canManageCustomers = canAccessRole('manager', authRole) || canAccessPage('customers');
   const { getRoleMetaByKey } = useRoleConfig();
   const authRoleMeta = getRoleMetaByKey(authRole);
   const allowedManualColumns = useMemo(
@@ -882,8 +883,8 @@ function OrdersWorkspace() {
     [authRoleMeta?.allowedColumns],
   );
   const canEditManualColumn = useCallback(
-    (columnKey = '') => isAdmin || allowedManualColumns.has(String(columnKey || '').trim()),
-    [allowedManualColumns, isAdmin],
+    (columnKey = '') => isAdmin || canManageOrders || allowedManualColumns.has(String(columnKey || '').trim()),
+    [allowedManualColumns, canManageOrders, isAdmin],
   );
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -1687,7 +1688,7 @@ function OrdersWorkspace() {
   }, [cellLogs, cellLogsLoading, selectedStageSingleSelectionLogKey]);
 
   const applyManualStageToSelection = useCallback(async ({ clear = false } = {}) => {
-    if ((!isAdmin && selectedStageSelections.length === 0) || manualStageSaving || selectedStageSelections.length === 0) return;
+    if (manualStageSaving || selectedStageSelections.length === 0) return;
     if (!canEditSelectedStageHighlight) {
       clearSelectedStageCells();
       return;

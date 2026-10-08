@@ -110,6 +110,46 @@ function requireManagerAccess(options = {}) {
   return requirePageAccess('orders', options);
 }
 
+function requireAnyPageAccess(pages = [], options = {}) {
+  const normalizedPages = Array.isArray(pages) ? pages.filter(Boolean) : [];
+  const badPage = normalizedPages.find((p) => !PAGE_KEYS.includes(p));
+  if (badPage) {
+    return (_req, res) => res.status(500).json({ message: `Неизвестная страница ACL: ${badPage}` });
+  }
+  return (req, res, next) => {
+    try {
+      const sessionToken = getRequestSessionToken(req);
+      if (sessionToken) {
+        const session = verifyAppSessionToken(sessionToken);
+        const hasPermission = Boolean(
+          session.fullAccess
+          || (
+            session.permissions
+            && normalizedPages.some((page) => Boolean(session.permissions[page]))
+          ),
+        );
+        if (hasPermission) {
+          req.auth = session;
+          return next();
+        }
+        return res.status(403).json({
+          message: options.invalidTokenMessage || 'Недостаточно прав для этого действия.',
+        });
+      }
+    } catch (error) {
+      return res.status(401).json({
+        message: options.invalidTokenMessage || error.message || 'Требуется вход по паролю.',
+      });
+    }
+
+    const fallback = checkAdminAccess(req, options);
+    if (fallback) {
+      return res.status(fallback.status).json(fallback.body);
+    }
+    next();
+  };
+}
+
 function requireWriteAccess(req, res, next) {
   next();
 }
@@ -131,6 +171,7 @@ module.exports = {
   checkAdminAccess,
   getConfiguredAdminToken,
   isSelfUpdateEnabled,
+  requireAnyPageAccess,
   requirePageAccess,
   requireAdminAccess,
   requireManagerAccess,

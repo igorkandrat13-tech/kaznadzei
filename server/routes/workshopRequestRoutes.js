@@ -1,6 +1,6 @@
 const express = require('express');
 const fs = require('fs');
-const { requireManagerAccess, requireWriteAccess } = require('../middleware/security');
+const { requireAnyPageAccess, requireManagerAccess, requireWriteAccess } = require('../middleware/security');
 const { addActivityLog, getRequestActor } = require('../services/activityLog');
 const {
   deleteWorkshopRequestAttachmentFiles,
@@ -34,7 +34,7 @@ function buildWorkshopRequestDeleteText(request) {
   ].filter(Boolean).join('\n');
 }
 
-router.get('/workshop-requests', requireManagerAccess(), (req, res) => {
+router.get('/workshop-requests', requireAnyPageAccess(['orders', 'requests']), (req, res) => {
   const items = WorkshopRequestStore.findAll();
   res.json({
     ok: true,
@@ -71,7 +71,7 @@ router.get('/workshop-requests/:id/attachments/:attachmentId/file', requireWrite
   return res.sendFile(absolutePath);
 });
 
-router.patch('/workshop-requests/:id/status', requireManagerAccess(), (req, res) => {
+router.patch('/workshop-requests/:id/status', requireAnyPageAccess(['orders', 'requests']), (req, res) => {
   const requestId = String(req.params.id || '').trim();
   const status = String(req.body?.status || '').trim();
   if (!requestId) {
@@ -114,7 +114,7 @@ router.patch('/workshop-requests/:id/status', requireManagerAccess(), (req, res)
   });
 });
 
-router.delete('/workshop-requests/:id', requireManagerAccess(), (req, res) => {
+router.delete('/workshop-requests/:id', requireAnyPageAccess(['orders', 'requests']), (req, res) => {
   const requestId = String(req.params.id || '').trim();
   if (!requestId) {
     return res.status(400).json({ message: 'Не указана заявка.' });

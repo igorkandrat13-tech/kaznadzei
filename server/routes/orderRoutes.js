@@ -1198,10 +1198,10 @@ function handleManualDateOverrides(req, res) {
   }
 }
 
-router.patch('/orders/manual-stage-marks', requireAdminAccess(), handleManualStageMarks);
-router.post('/orders/manual-stage-marks', requireAdminAccess(), handleManualStageMarks);
-router.patch('/orders/manual-date-overrides', requireAdminAccess(), handleManualDateOverrides);
-router.post('/orders/manual-date-overrides', requireAdminAccess(), handleManualDateOverrides);
+router.patch('/orders/manual-stage-marks', requireManagerAccess(), handleManualStageMarks);
+router.post('/orders/manual-stage-marks', requireManagerAccess(), handleManualStageMarks);
+router.patch('/orders/manual-date-overrides', requireManagerAccess(), handleManualDateOverrides);
+router.post('/orders/manual-date-overrides', requireManagerAccess(), handleManualDateOverrides);
 
 router.post('/orders/:id/telegram-comment', (req, res) => {
   try {

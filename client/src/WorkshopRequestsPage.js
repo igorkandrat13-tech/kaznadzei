@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { apiFetch, parseJsonSafely, toUserErrorMessage } from './api';
 import ConfirmDialog from './ConfirmDialog';
+import { canAccessRole, canAccessPage, getAppAuthRole } from './appAuth';
 import { formatDateTimeDisplay } from './dateTime';
 import { useGlobalErrorEffect } from './globalErrors';
 import { Button, Modal, ModalHeader } from './ui';
@@ -175,7 +176,7 @@ function downloadMaterialRequestsWorkbook(rows = []) {
   XLSX.writeFile(workbook, `zayavki-na-materialy-${timestamp}.xlsx`);
 }
 
-function buildRequestRows(orders = [], workshopRequests = []) {
+function buildRequestRows(orders = [], workshopRequests = [], canManageRequests = true) {
   const workshopRows = (Array.isArray(workshopRequests) ? workshopRequests : []).map((request) => {
     const attachments = normalizeItemAttachments(request.attachments);
     const firstAttachment = attachments[0] || null;
@@ -197,8 +198,8 @@ function buildRequestRows(orders = [], workshopRequests = []) {
       openUrl: firstAttachment ? getWorkshopRequestAttachmentOpenUrl(String(request._id || '').trim(), firstAttachment) : '',
       requestId: String(request._id || '').trim(),
       toggleKind: 'workshop',
-      canToggleStatus: true,
-      canDelete: true,
+      canToggleStatus: Boolean(canManageRequests),
+      canDelete: Boolean(canManageRequests),
       sortTimestamp: String(firstAttachment?.uploadedAt || request.createdAt || '').trim(),
     };
   });
@@ -229,8 +230,8 @@ function buildRequestRows(orders = [], workshopRequests = []) {
           itemId: String(item.itemId || '').trim(),
           packageItemId: String(packageItem.id || '').trim(),
           toggleKind: 'package',
-          canToggleStatus: true,
-          canDelete: true,
+          canToggleStatus: Boolean(canManageRequests),
+          canDelete: Boolean(canManageRequests),
           sortTimestamp: String(order.createdAt || '').trim(),
         }));
 
@@ -257,8 +258,8 @@ function buildRequestRows(orders = [], workshopRequests = []) {
             itemId: String(item.itemId || '').trim(),
             materialRequestItemId: String(requestItem.id || '').trim(),
             toggleKind: 'material',
-            canToggleStatus: true,
-            canDelete: true,
+            canToggleStatus: Boolean(canManageRequests),
+            canDelete: Boolean(canManageRequests),
             sortTimestamp: String(firstAttachment?.uploadedAt || order.createdAt || '').trim(),
           };
         });
@@ -279,6 +280,10 @@ function buildRequestRows(orders = [], workshopRequests = []) {
 }
 
 function WorkshopRequestsPage() {
+  const authRole = getAppAuthRole();
+  const canManageRequests = canAccessRole('manager', authRole)
+    || canAccessPage('orders')
+    || canAccessPage('requests');
   const [orders, setOrders] = useState([]);
   const [workshopRequests, setWorkshopRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -350,8 +355,8 @@ function WorkshopRequestsPage() {
   }, [attachmentPreview]);
 
   const rows = useMemo(
-    () => buildRequestRows(orders, workshopRequests),
-    [orders, workshopRequests],
+    () => buildRequestRows(orders, workshopRequests, canManageRequests),
+    [orders, workshopRequests, canManageRequests],
   );
 
   const authorOptions = useMemo(() => Array.from(new Set(
