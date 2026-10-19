@@ -180,7 +180,7 @@ function extractCustomerAccessTokenFromStartText(text = '') {
 }
 
 async function buildCustomerSharePayload(access = {}, deps = {}) {
-  const { getBotInfo } = deps.telegramService || require('./telegramService');
+  const { getBotInfo } = deps.telegramService || require('../telegramService');
   const token = getConfiguredBotToken();
   if (!token) throw new Error('Токен Telegram-бота не настроен.');
   const bot = await getBotInfo(token);
