@@ -18,6 +18,7 @@ function getDefaultSettings() {
     adminPasswordHash: '',
     authSessionSecret: (process.env.APP_AUTH_SECRET || '').trim() || crypto.randomBytes(32).toString('hex'),
     strictStageOwnershipEnabled: false,
+    stageOwnershipBypassEmployeeIds: [],
     roleLabels: getDefaultRoleLabels(),
     roles: getDefaultRoles(),
     orderStageLegendConfig: getDefaultOrderStageLegendConfig(),
@@ -45,6 +46,7 @@ function normalizeSettings(source = {}) {
     adminPasswordHash: source.adminPasswordHash ?? defaults.adminPasswordHash,
     authSessionSecret: source.authSessionSecret ?? defaults.authSessionSecret,
     strictStageOwnershipEnabled: source.strictStageOwnershipEnabled ?? defaults.strictStageOwnershipEnabled,
+    stageOwnershipBypassEmployeeIds: normalizeEmployeeIds(source.stageOwnershipBypassEmployeeIds ?? defaults.stageOwnershipBypassEmployeeIds),
     roleLabels: roles.reduce((acc, role) => {
       acc[role.key] = role.label;
       return acc;
@@ -71,6 +73,7 @@ function toPublicSettings(source = {}) {
     updateBranch: source.updateBranch || 'main',
     updateRepositoryUrl: source.updateRepositoryUrl || '',
     strictStageOwnershipEnabled: Boolean(source.strictStageOwnershipEnabled),
+    stageOwnershipBypassEmployeeIds: normalizeEmployeeIds(source.stageOwnershipBypassEmployeeIds),
     roleLabels: normalizeRoleLabels(source.roleLabels || {}),
     roles: normalizeRoles(source.roles || []),
     orderStageLegendConfig: normalizeOrderStageLegendConfig(source.orderStageLegendConfig || {}),

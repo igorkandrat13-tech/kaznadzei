@@ -132,6 +132,8 @@ function normalizeManualStageMarks(value, fieldName) {
       legendKey: normalizeString(mark.legendKey, `${fieldName}.${normalizedColumnKey}.legendKey`, { required: false, maxLength: 40 }),
       updatedAt: normalizeString(mark.updatedAt, `${fieldName}.${normalizedColumnKey}.updatedAt`, { required: false, maxLength: 80 }),
       updatedBy: normalizeString(mark.updatedBy, `${fieldName}.${normalizedColumnKey}.updatedBy`, { required: false, maxLength: 120 }),
+      ownerId: normalizeString(mark.ownerId, `${fieldName}.${normalizedColumnKey}.ownerId`, { required: false, maxLength: 80 }),
+      ownerName: normalizeString(mark.ownerName, `${fieldName}.${normalizedColumnKey}.ownerName`, { required: false, maxLength: 160 }),
     };
     return acc;
   }, {});
@@ -512,6 +514,16 @@ function sanitizeSettingsInput(payload, options = {}) {
   }
   if (!partial || payload.strictStageOwnershipEnabled !== undefined) {
     data.strictStageOwnershipEnabled = normalizeBoolean(payload.strictStageOwnershipEnabled, 'strictStageOwnershipEnabled');
+  }
+  if (!partial || payload.stageOwnershipBypassEmployeeIds !== undefined) {
+    const employeeIds = normalizeStringArray(payload.stageOwnershipBypassEmployeeIds, 'stageOwnershipBypassEmployeeIds', {
+      allowUndefined: partial,
+      maxItems: 200,
+      maxLength: 80,
+    });
+    if (employeeIds !== undefined) {
+      data.stageOwnershipBypassEmployeeIds = Array.from(new Set(employeeIds.filter(Boolean)));
+    }
   }
   if (!partial || payload.updateBranch !== undefined) {
     data.updateBranch = normalizeString(payload.updateBranch, 'updateBranch', { required: !partial, maxLength: 80 });

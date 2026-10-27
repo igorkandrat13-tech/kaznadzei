@@ -1037,7 +1037,13 @@ function handleManualStageMarks(req, res) {
       normalizedSelections,
       legendKey,
       requestActor.label || requestActor.name || 'Сотрудник',
-      { actorRole: req.auth?.role || requestActor.role || '' }
+      {
+        actorLabel: requestActor.label || requestActor.name || 'Сотрудник',
+        actorRole: req.auth?.role || requestActor.role || '',
+        actorEmployeeId: req.auth?.employeeId || requestActor.employeeId || '',
+        actorFullAccess: Boolean(req.auth?.fullAccess),
+        actorPermissions: req.auth?.permissions || null,
+      }
     );
 
     if (updatedOrders === false) {
@@ -1150,7 +1156,13 @@ function handleManualDateOverrides(req, res) {
     }, {});
     const payload = {
       columnKey,
-      actor: requestActor.label || requestActor.name || 'Сотрудник',
+      actor: {
+        label: requestActor.label || requestActor.name || 'Сотрудник',
+        role: req.auth?.role || requestActor.role || '',
+        employeeId: req.auth?.employeeId || requestActor.employeeId || '',
+        fullAccess: Boolean(req.auth?.fullAccess),
+        permissions: req.auth?.permissions || null,
+      },
     };
     if (columnKey === 'duration') {
       const startDate = normalizeDate(req.body?.startDate ?? '', 'startDate', { allowUndefined: false });
@@ -1411,7 +1423,11 @@ router.post('/orders/:id/telegram-stage-mark', (req, res) => {
       return res.status(400).json({ message: 'Для выбранной колонки не найден цветовой этап.' });
     }
 
-    const updatedOrders = OrderStore.setManualStageMarks(selections, '', stageActorName, { actorRole: employee.role || '' });
+    const updatedOrders = OrderStore.setManualStageMarks(selections, '', stageActorName, {
+      actorLabel: stageActorName,
+      actorRole: employee.role || '',
+      actorEmployeeId: employee._id || '',
+    });
 
     if (!Array.isArray(updatedOrders) || updatedOrders.length === 0) {
       if (context.clear) {

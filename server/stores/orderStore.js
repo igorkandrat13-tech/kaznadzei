@@ -205,6 +205,60 @@ function getEmployeeDisplayName(employee) {
   return '';
 }
 
+function resolveEmployeeByActorLabel(actorLabel = '') {
+  const normalizedLabel = String(actorLabel || '').trim();
+  if (!normalizedLabel) return null;
+
+  return EmployeeStore.findAll().find((employee) => {
+    const employeeId = String(employee?._id || '').trim();
+    const fullName = String(employee?.fullName || '').trim();
+    const displayName = getEmployeeDisplayName(employee);
+    return employeeId === normalizedLabel || fullName === normalizedLabel || displayName === normalizedLabel;
+  }) || null;
+}
+
+function normalizeStageActorMeta(actorLabel = '', options = {}) {
+  const normalizedLabel = String(options?.actorLabel || actorLabel || '').trim();
+  const normalizedEmployeeId = String(options?.actorEmployeeId || options?.employeeId || '').trim();
+  const normalizedRole = String(options?.actorRole || options?.role || '').trim();
+  const permissions = options?.actorPermissions && typeof options.actorPermissions === 'object'
+    ? options.actorPermissions
+    : null;
+  const fullAccess = Boolean(options?.actorFullAccess || options?.fullAccess);
+  const matchedEmployee = normalizedEmployeeId
+    ? EmployeeStore.findById(normalizedEmployeeId)
+    : resolveEmployeeByActorLabel(normalizedLabel);
+
+  return {
+    label: normalizedLabel || getEmployeeDisplayName(matchedEmployee) || '',
+    employeeId: normalizedEmployeeId || String(matchedEmployee?._id || '').trim(),
+    role: normalizedRole,
+    fullAccess,
+    permissions,
+  };
+}
+
+function canBypassStageOwnership(actorMeta = {}, settings = {}) {
+  if (Boolean(actorMeta?.fullAccess)) return true;
+  if (canAccessRole(String(actorMeta?.role || '').trim(), 'admin')) return true;
+
+  const bypassIds = new Set(
+    (Array.isArray(settings?.stageOwnershipBypassEmployeeIds) ? settings.stageOwnershipBypassEmployeeIds : [])
+      .map((item) => String(item || '').trim())
+      .filter(Boolean),
+  );
+  return Boolean(String(actorMeta?.employeeId || '').trim() && bypassIds.has(String(actorMeta.employeeId || '').trim()));
+}
+
+function getManualStageOwnerDisplayName(mark = {}) {
+  const ownerId = String(mark?.ownerId || '').trim();
+  const ownerName = String(mark?.ownerName || mark?.updatedBy || '').trim();
+  if (ownerName) return ownerName;
+  if (!ownerId) return '';
+  const matchedOwner = EmployeeStore.findById(ownerId);
+  return getEmployeeDisplayName(matchedOwner) || ownerId;
+}
+
 function getStageEmployeeName(stage = {}) {
   const currentName = String(stage.employeeName || '').trim();
   if (currentName) return currentName;
@@ -332,11 +386,19 @@ function normalizeManualStageMarks(source = {}) {
 
     const legendKey = String(mark.legendKey || '').trim();
     if (!legendKey || !MANUAL_STAGE_ORDER.includes(legendKey)) return acc;
+    const updatedBy = String(mark.updatedBy || '').trim();
+    const matchedOwner = String(mark.ownerId || '').trim()
+      ? EmployeeStore.findById(String(mark.ownerId || '').trim())
+      : resolveEmployeeByActorLabel(mark.ownerName || updatedBy);
+    const ownerId = String(mark.ownerId || matchedOwner?._id || '').trim();
+    const ownerName = String(mark.ownerName || updatedBy || getEmployeeDisplayName(matchedOwner) || '').trim();
 
     acc[normalizedColumnKey] = {
       legendKey,
       updatedAt: mark.updatedAt || new Date().toISOString(),
-      updatedBy: String(mark.updatedBy || '').trim(),
+      updatedBy,
+      ownerId,
+      ownerName,
     };
     return acc;
   }, {});
@@ -1839,11 +1901,9 @@ const OrderStore = {
       return false;
     }
 
-    const actorRole = String(options?.actorRole || '').trim() || '';
-    const isAdminActor = actorRole === 'admin'
-      || String(actor || '').trim() === 'Администратор'
-      || String(actor || '').trim().toLowerCase() === 'admin';
-    const actorCanBypassOwnership = Boolean(isAdminActor) || canAccessRole(actorRole, 'admin');
+    const settings = SettingsStore.get();
+    const actorMeta = normalizeStageActorMeta(actor, options);
+    const actorCanBypassOwnership = canBypassStageOwnership(actorMeta, settings);
 
     let changed = false;
     const touchedOrderIds = new Set();
@@ -1876,24 +1936,16 @@ const OrderStore = {
 
       if (shouldClear) {
         if (currentMark) {
-          const settings = SettingsStore.get();
           if (Boolean(settings?.strictStageOwnershipEnabled) && !actorCanBypassOwnership) {
-            const actorLabel = String(actor || '').trim();
-            const ownerLabel = String(currentMark.updatedBy || '').trim();
-            if (ownerLabel && actorLabel !== ownerLabel) {
-              let ownerDisplayName = ownerLabel;
-              try {
-                const matchedOwner = EmployeeStore.findAll().find((emp) => {
-                  const empName = String(emp?.fullName || '').trim();
-                  const empDisplay = getEmployeeDisplayName(emp) || '';
-                  return empName === ownerLabel || empDisplay === ownerLabel || String(emp?._id || '').trim() === ownerLabel;
-                }) || null;
-                if (matchedOwner) {
-                  ownerDisplayName = getEmployeeDisplayName(matchedOwner) || matchedOwner.fullName || ownerLabel;
-                }
-              } catch (lookupErr) {
-                ownerDisplayName = ownerLabel;
-              }
+            const actorEmployeeId = String(actorMeta.employeeId || '').trim();
+            const actorLabel = String(actorMeta.label || actor || '').trim();
+            const ownerId = String(currentMark.ownerId || '').trim();
+            const ownerLabel = String(currentMark.ownerName || currentMark.updatedBy || '').trim();
+            const isOwner = ownerId
+              ? Boolean(actorEmployeeId) && actorEmployeeId === ownerId
+              : Boolean(ownerLabel) && actorLabel === ownerLabel;
+            if (!isOwner) {
+              const ownerDisplayName = getManualStageOwnerDisplayName(currentMark) || ownerLabel || 'исполнитель';
               const err = new Error(`Отменить этап может только исполнитель: ${ownerDisplayName}.`);
               err.status = 403;
               err.ownershipError = true;
@@ -1906,14 +1958,14 @@ const OrderStore = {
         if (!currentClear) {
           item.manualStageClears[columnKey] = {
             updatedAt: new Date().toISOString(),
-            updatedBy: String(actor || '').trim(),
+            updatedBy: String(actorMeta.label || actor || '').trim(),
           };
           itemChanged = true;
-        } else if (!currentClear.updatedAt || currentClear.updatedBy !== String(actor || '').trim()) {
+        } else if (!currentClear.updatedAt || currentClear.updatedBy !== String(actorMeta.label || actor || '').trim()) {
           item.manualStageClears[columnKey] = {
             ...currentClear,
             updatedAt: currentClear.updatedAt || new Date().toISOString(),
-            updatedBy: String(actor || '').trim(),
+            updatedBy: String(actorMeta.label || actor || '').trim(),
           };
           itemChanged = true;
         }
@@ -1921,7 +1973,9 @@ const OrderStore = {
         const nextMark = {
           legendKey: effectiveLegendKey,
           updatedAt: new Date().toISOString(),
-          updatedBy: String(actor || '').trim(),
+          updatedBy: String(actorMeta.label || actor || '').trim(),
+          ownerId: String(actorMeta.employeeId || '').trim(),
+          ownerName: String(actorMeta.label || actor || '').trim(),
         };
         if (currentClear) {
           delete item.manualStageClears[columnKey];
@@ -1966,7 +2020,8 @@ const OrderStore = {
     const date = String(payload?.date || '').trim();
     const startDate = String(payload?.startDate || '').trim();
     const endDate = String(payload?.endDate || '').trim();
-    const actor = String(payload?.actor || '').trim();
+    const actorMeta = normalizeStageActorMeta(payload?.actor?.label || payload?.actor || '', payload?.actor || {});
+    const actorLabel = String(actorMeta.label || payload?.actor?.label || payload?.actor || '').trim();
     const touchedOrderIds = new Set();
     let changed = false;
 
@@ -2008,7 +2063,9 @@ const OrderStore = {
         ...(currentMarks[columnKey] || {}),
         legendKey: nextLegendKey,
         updatedAt: new Date(`${date}T00:00:00.000Z`).toISOString(),
-        updatedBy: actor,
+        updatedBy: actorLabel,
+        ownerId: String(actorMeta.employeeId || currentMarks[columnKey]?.ownerId || '').trim(),
+        ownerName: actorLabel || String(currentMarks[columnKey]?.ownerName || '').trim(),
       };
 
       if (JSON.stringify(currentMarks[columnKey] || {}) !== JSON.stringify(nextMark)) {

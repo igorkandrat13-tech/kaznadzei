@@ -27,6 +27,30 @@ import { Button, Modal, ModalHeader } from './ui';
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
 const EMPLOYEE_HIDDEN_COLUMN_KEYS = new Set(['orderNumber', 'customer']);
 
+function normalizeEmployeeIds(value) {
+  return Array.isArray(value)
+    ? Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean)))
+    : [];
+}
+
+function buildAppSettingsState(source = {}, prev = {}) {
+  return {
+    publicBaseUrl: typeof source?.publicBaseUrl === 'string' ? source.publicBaseUrl : (prev.publicBaseUrl || ''),
+    telegramBotToken: typeof source?.telegramBotToken === 'string' ? source.telegramBotToken : (prev.telegramBotToken || ''),
+    telegramSupplyBotToken: typeof source?.telegramSupplyBotToken === 'string' ? source.telegramSupplyBotToken : (prev.telegramSupplyBotToken || ''),
+    telegramSupergroupChatId: typeof source?.telegramSupergroupChatId === 'string' ? source.telegramSupergroupChatId : (prev.telegramSupergroupChatId || ''),
+    telegramSupergroupEnabled: typeof source?.telegramSupergroupEnabled === 'boolean' ? source.telegramSupergroupEnabled : Boolean(prev.telegramSupergroupEnabled),
+    telegramStageNotificationEmployeeIds: normalizeEmployeeIds(source?.telegramStageNotificationEmployeeIds ?? prev.telegramStageNotificationEmployeeIds),
+    telegramRequestNotificationEmployeeIds: normalizeEmployeeIds(source?.telegramRequestNotificationEmployeeIds ?? prev.telegramRequestNotificationEmployeeIds),
+    selfUpdateEnabled: typeof source?.selfUpdateEnabled === 'boolean' ? source.selfUpdateEnabled : Boolean(prev.selfUpdateEnabled),
+    updateBranch: typeof source?.updateBranch === 'string' ? source.updateBranch : (prev.updateBranch || 'main'),
+    updateRepositoryUrl: typeof source?.updateRepositoryUrl === 'string' ? source.updateRepositoryUrl : (prev.updateRepositoryUrl || ''),
+    strictStageOwnershipEnabled: typeof source?.strictStageOwnershipEnabled === 'boolean' ? source.strictStageOwnershipEnabled : Boolean(prev.strictStageOwnershipEnabled),
+    stageOwnershipBypassEmployeeIds: normalizeEmployeeIds(source?.stageOwnershipBypassEmployeeIds ?? prev.stageOwnershipBypassEmployeeIds),
+    roleLabels: source?.roleLabels && typeof source.roleLabels === 'object' ? source.roleLabels : (prev.roleLabels || {}),
+  };
+}
+
 function buildLegendSaveErrorMessage({
   summary,
   step,
@@ -75,20 +99,7 @@ function Admin() {
   const [installingUpdates, setInstallingUpdates] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState('');
-  const [appSettings, setAppSettings] = useState({
-    publicBaseUrl: '',
-    telegramBotToken: '',
-    telegramSupplyBotToken: '',
-    telegramSupergroupChatId: '',
-    telegramSupergroupEnabled: false,
-    telegramStageNotificationEmployeeIds: [],
-    telegramRequestNotificationEmployeeIds: [],
-    selfUpdateEnabled: false,
-    updateBranch: 'main',
-    updateRepositoryUrl: '',
-    strictStageOwnershipEnabled: false,
-    roleLabels: {},
-  });
+  const [appSettings, setAppSettings] = useState(() => buildAppSettingsState());
   const [telegramCheckResult, setTelegramCheckResult] = useState(null);
   const [checkingTelegramBot, setCheckingTelegramBot] = useState(false);
   const [settingTelegramWebhook, setSettingTelegramWebhook] = useState(false);
@@ -590,20 +601,7 @@ function Admin() {
     if (!res.ok) {
       throw new Error(data?.message || 'Не удалось загрузить настройки.');
     }
-    setAppSettings({
-      publicBaseUrl: data?.publicBaseUrl || '',
-      telegramBotToken: data?.telegramBotToken || '',
-      telegramSupplyBotToken: data?.telegramSupplyBotToken || '',
-      telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
-      telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
-      telegramStageNotificationEmployeeIds: Array.isArray(data?.telegramStageNotificationEmployeeIds) ? data.telegramStageNotificationEmployeeIds : [],
-      telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
-      selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
-      updateBranch: data?.updateBranch || 'main',
-      updateRepositoryUrl: data?.updateRepositoryUrl || '',
-      strictStageOwnershipEnabled: Boolean(data?.strictStageOwnershipEnabled),
-      roleLabels: data?.roleLabels || {},
-    });
+    setAppSettings((prev) => buildAppSettingsState(data, prev));
   };
 
   const fetchEmployees = async () => {
@@ -732,18 +730,7 @@ function Admin() {
       });
       const data = await parseJsonSafely(res);
       if (!res.ok) throw new Error(data?.message || 'Не удалось сохранить настройки обновления');
-      setAppSettings({
-        publicBaseUrl: data?.publicBaseUrl || '',
-        telegramBotToken: data?.telegramBotToken || '',
-        telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
-        telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
-        telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
-        selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
-        updateBranch: data?.updateBranch || 'main',
-        updateRepositoryUrl: data?.updateRepositoryUrl || '',
-        strictStageOwnershipEnabled: Boolean(data?.strictStageOwnershipEnabled),
-        roleLabels: data?.roleLabels || {},
-      });
+      setAppSettings((prev) => buildAppSettingsState(data, prev));
       await refreshRoleConfig();
       setUpdateMessage('Настройки обновления сохранены.');
       await fetchUpdateStatus();
@@ -784,6 +771,10 @@ function Admin() {
     employees.filter((employee) => String(employee.telegramChatId || '').trim())
   ), [employees]);
 
+  const sortedEmployees = useMemo(() => (
+    [...employees].sort((left, right) => String(left?.fullName || '').localeCompare(String(right?.fullName || '').trim(), 'ru', { sensitivity: 'base' }))
+  ), [employees]);
+
   const telegramReadyEmployeeIds = useMemo(() => (
     new Set(telegramReadyEmployees.map((employee) => String(employee._id || '').trim()).filter(Boolean))
   ), [telegramReadyEmployees]);
@@ -795,6 +786,60 @@ function Admin() {
         .filter(Boolean),
     )
   ), [appSettings.telegramRequestNotificationEmployeeIds]);
+
+  const stageOwnershipBypassEmployeeIdsSet = useMemo(() => (
+    new Set(normalizeEmployeeIds(appSettings.stageOwnershipBypassEmployeeIds))
+  ), [appSettings.stageOwnershipBypassEmployeeIds]);
+
+  const stageOwnershipBypassEmployees = useMemo(() => (
+    sortedEmployees.filter((employee) => stageOwnershipBypassEmployeeIdsSet.has(String(employee?._id || '').trim()))
+  ), [sortedEmployees, stageOwnershipBypassEmployeeIdsSet]);
+
+  const queueStageOwnershipSettingsSave = useCallback((nextSettings, rollbackSettings) => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    if (stageOwnershipSaveTimerRef.current != null) {
+      window.clearTimeout(stageOwnershipSaveTimerRef.current);
+      stageOwnershipSaveTimerRef.current = null;
+    }
+    const requestId = ++stageOwnershipRequestRef.current;
+    stageOwnershipSaveTimerRef.current = window.setTimeout(async () => {
+      setSavingStageOwnership(true);
+      try {
+        const res = await apiFetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(nextSettings),
+        });
+        if (requestId !== stageOwnershipRequestRef.current) {
+          return;
+        }
+        const payload = await parseJsonSafely(res);
+        if (!res.ok) {
+          setAppSettings(buildAppSettingsState(rollbackSettings));
+          throw new Error(payload?.message || 'Не удалось сохранить настройки');
+        }
+        const persisted = payload?.data?.settings || payload?.settings || payload || {};
+        setAppSettings((prev) => buildAppSettingsState(persisted, prev));
+        setSettingsSuccess('Настройки сохранены');
+      } catch (err) {
+        if (requestId === stageOwnershipRequestRef.current) {
+          setSettingsError(toUserErrorMessage(err));
+        }
+      } finally {
+        if (requestId === stageOwnershipRequestRef.current) {
+          setSavingStageOwnership(false);
+        }
+      }
+    }, 220);
+  }, []);
+
+  const updateStageOwnershipSettings = useCallback((updates) => {
+    const previousSettings = buildAppSettingsState(appSettings);
+    const nextSettings = buildAppSettingsState({ ...appSettings, ...updates }, appSettings);
+    setAppSettings(nextSettings);
+    queueStageOwnershipSettingsSave(nextSettings, previousSettings);
+  }, [appSettings, queueStageOwnershipSettingsSave]);
 
   const openTelegramNotificationModal = () => {
     setTelegramStageNotificationDraftIds(
@@ -866,20 +911,7 @@ function Admin() {
         throw new Error(data?.message || 'Не удалось сохранить получателей Telegram-уведомлений.');
       }
 
-      setAppSettings({
-        publicBaseUrl: data?.publicBaseUrl || '',
-        telegramBotToken: data?.telegramBotToken || '',
-        telegramSupplyBotToken: data?.telegramSupplyBotToken || '',
-        telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
-        telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
-        telegramStageNotificationEmployeeIds: Array.isArray(data?.telegramStageNotificationEmployeeIds) ? data.telegramStageNotificationEmployeeIds : [],
-        telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
-        selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
-        updateBranch: data?.updateBranch || 'main',
-        updateRepositoryUrl: data?.updateRepositoryUrl || '',
-        strictStageOwnershipEnabled: Boolean(data?.strictStageOwnershipEnabled),
-        roleLabels: data?.roleLabels || {},
-      });
+      setAppSettings((prev) => buildAppSettingsState(data, prev));
       setTelegramStageNotificationDraftIds(Array.isArray(data?.telegramStageNotificationEmployeeIds) ? data.telegramStageNotificationEmployeeIds : []);
       setTelegramNotificationDraftIds(Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : []);
       setShowTelegramNotificationModal(false);
@@ -917,20 +949,7 @@ function Admin() {
         setSettingsError(toUserErrorMessage(data?.message, 'Не удалось сохранить настройки.'));
         return;
       }
-      setAppSettings({
-        publicBaseUrl: data?.publicBaseUrl || '',
-        telegramBotToken: data?.telegramBotToken || '',
-        telegramSupplyBotToken: data?.telegramSupplyBotToken || '',
-        telegramSupergroupChatId: data?.telegramSupergroupChatId || '',
-        telegramSupergroupEnabled: Boolean(data?.telegramSupergroupEnabled),
-        telegramStageNotificationEmployeeIds: Array.isArray(data?.telegramStageNotificationEmployeeIds) ? data.telegramStageNotificationEmployeeIds : [],
-        telegramRequestNotificationEmployeeIds: Array.isArray(data?.telegramRequestNotificationEmployeeIds) ? data.telegramRequestNotificationEmployeeIds : [],
-        selfUpdateEnabled: Boolean(data?.selfUpdateEnabled),
-        updateBranch: data?.updateBranch || 'main',
-        updateRepositoryUrl: data?.updateRepositoryUrl || '',
-        strictStageOwnershipEnabled: Boolean(data?.strictStageOwnershipEnabled),
-        roleLabels: data?.roleLabels || {},
-      });
+      setAppSettings((prev) => buildAppSettingsState(data, prev));
       await refreshRoleConfig();
       setSettingsSuccess('Настройки сохранены.');
       await fetchUpdateStatus();
@@ -1508,6 +1527,11 @@ function Admin() {
         telegramRequestNotificationEmployeeIds: (
           Array.isArray(current.telegramRequestNotificationEmployeeIds)
             ? current.telegramRequestNotificationEmployeeIds
+            : []
+        ).filter((item) => item !== id),
+        stageOwnershipBypassEmployeeIds: (
+          Array.isArray(current.stageOwnershipBypassEmployeeIds)
+            ? current.stageOwnershipBypassEmployeeIds
             : []
         ).filter((item) => item !== id),
       }));
@@ -2485,73 +2509,44 @@ function Admin() {
                       <input
                         type="checkbox"
                         checked={Boolean(appSettings.strictStageOwnershipEnabled)}
-                        onChange={(e) => {
-                          const nextValue = e.target.checked;
-                          let mergedSnapshot;
-                          setAppSettings((prev) => {
-                            mergedSnapshot = { ...prev, strictStageOwnershipEnabled: nextValue };
-                            return mergedSnapshot;
-                          });
-                          setSettingsError('');
-                          setSettingsSuccess('');
-                          if (stageOwnershipSaveTimerRef.current != null) {
-                            window.clearTimeout(stageOwnershipSaveTimerRef.current);
-                            stageOwnershipSaveTimerRef.current = null;
-                          }
-                          const requestId = ++stageOwnershipRequestRef.current;
-                          stageOwnershipSaveTimerRef.current = window.setTimeout(async () => {
-                            setSavingStageOwnership(true);
-                            try {
-                              const res = await apiFetch('/api/settings', {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(mergedSnapshot),
-                              });
-                              if (requestId !== stageOwnershipRequestRef.current) {
-                                return;
-                              }
-                              if (!res.ok) {
-                                const body = await parseJsonSafely(res);
-                                setAppSettings((prevRollback) => ({
-                                  ...prevRollback,
-                                  strictStageOwnershipEnabled: Boolean(prevRollback.strictStageOwnershipEnabled ?? !nextValue),
-                                }));
-                                throw new Error(await getErrorMessage(res, 'Не удалось сохранить настройки'));
-                              }
-                              const payload = await parseJsonSafely(res);
-                              const persisted = payload?.data?.settings || payload?.settings || payload || {};
-                              setAppSettings((prevPersist) => ({
-                                publicBaseUrl: typeof persisted.publicBaseUrl === 'string' ? persisted.publicBaseUrl : prevPersist.publicBaseUrl,
-                                telegramBotToken: typeof persisted.telegramBotToken === 'string' ? persisted.telegramBotToken : prevPersist.telegramBotToken,
-                                telegramSupplyBotToken: typeof persisted.telegramSupplyBotToken === 'string' ? persisted.telegramSupplyBotToken : prevPersist.telegramSupplyBotToken,
-                                telegramSupergroupChatId: typeof persisted.telegramSupergroupChatId === 'string' ? persisted.telegramSupergroupChatId : prevPersist.telegramSupergroupChatId,
-                                telegramSupergroupEnabled: typeof persisted.telegramSupergroupEnabled === 'boolean' ? persisted.telegramSupergroupEnabled : prevPersist.telegramSupergroupEnabled,
-                                telegramStageNotificationEmployeeIds: Array.isArray(persisted.telegramStageNotificationEmployeeIds) ? persisted.telegramStageNotificationEmployeeIds : prevPersist.telegramStageNotificationEmployeeIds,
-                                telegramRequestNotificationEmployeeIds: Array.isArray(persisted.telegramRequestNotificationEmployeeIds) ? persisted.telegramRequestNotificationEmployeeIds : prevPersist.telegramRequestNotificationEmployeeIds,
-                                selfUpdateEnabled: typeof persisted.selfUpdateEnabled === 'boolean' ? persisted.selfUpdateEnabled : prevPersist.selfUpdateEnabled,
-                                strictStageOwnershipEnabled: typeof persisted.strictStageOwnershipEnabled === 'boolean' ? persisted.strictStageOwnershipEnabled : prevPersist.strictStageOwnershipEnabled,
-                                updateBranch: typeof persisted.updateBranch === 'string' ? persisted.updateBranch : prevPersist.updateBranch,
-                                updateRepositoryUrl: typeof persisted.updateRepositoryUrl === 'string' ? persisted.updateRepositoryUrl : prevPersist.updateRepositoryUrl,
-                                roleLabels: persisted.roleLabels && typeof persisted.roleLabels === 'object' ? persisted.roleLabels : prevPersist.roleLabels,
-                              }));
-                              setSettingsSuccess('Настройки сохранены');
-                            } catch (err) {
-                              if (requestId === stageOwnershipRequestRef.current) {
-                                setSettingsError(toUserErrorMessage(err));
-                              }
-                            } finally {
-                              if (requestId === stageOwnershipRequestRef.current) {
-                                setSavingStageOwnership(false);
-                              }
-                            }
-                          }, 220);
-                        }}
+                        onChange={(e) => updateStageOwnershipSettings({ strictStageOwnershipEnabled: e.target.checked })}
                       />
                       <span className="settings-switch-track" aria-hidden="true">
                         <span className="settings-switch-thumb" />
                       </span>
                     </span>
                   </label>
+                </div>
+
+                <div className="form-group">
+                  <label className="helper-label">
+                    Исключения по сотрудникам
+                    <HelpTooltip text="Эти сотрудники смогут сбрасывать закраску, даже если этап был принят другим исполнителем. Администратор с полным доступом тоже всегда может обойти запрет." />
+                  </label>
+                  <select
+                    multiple
+                    size={Math.min(Math.max(sortedEmployees.length || 4, 4), 10)}
+                    value={normalizeEmployeeIds(appSettings.stageOwnershipBypassEmployeeIds)}
+                    onChange={(event) => {
+                      const nextIds = Array.from(event.target.selectedOptions).map((option) => option.value);
+                      updateStageOwnershipSettings({ stageOwnershipBypassEmployeeIds: nextIds });
+                    }}
+                    disabled={savingStageOwnership || sortedEmployees.length === 0}
+                  >
+                    {sortedEmployees.map((employee) => (
+                      <option key={employee._id} value={employee._id}>
+                        {employee.fullName || 'Без имени'}{employee.role ? ` (${getRoleLabel(employee.role)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="text-small text-subtle" style={{ marginTop: 8 }}>
+                    Выделение множественное: можно отметить нескольких сотрудников.
+                  </div>
+                  <div className="text-small text-subtle" style={{ marginTop: 8 }}>
+                    {stageOwnershipBypassEmployees.length > 0
+                      ? `Сейчас обход разрешён: ${stageOwnershipBypassEmployees.map((employee) => employee.fullName || 'Без имени').join(', ')}`
+                      : 'Исключений пока нет.'}
+                  </div>
                 </div>
 
                 <div className="modal-actions">
