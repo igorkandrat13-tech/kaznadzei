@@ -2503,12 +2503,12 @@ function Admin() {
                     Исключения по сотрудникам
                     <HelpTooltip text="Эти сотрудники смогут сбрасывать закраску, даже если этап был принят другим исполнителем. Администратор с полным доступом тоже всегда может обойти запрет." />
                   </label>
-                  <div style={{ display: 'grid', gap: 8, maxHeight: 260, overflowY: 'auto', padding: '8px 0' }}>
+                  <div className="stage-ownership-exceptions-grid">
                     {sortedEmployees.map((employee) => {
                       const employeeId = String(employee?._id || '').trim();
                       const checked = stageOwnershipBypassDraftIds.includes(employeeId);
                       return (
-                        <label key={employeeId} className="settings-switch" style={{ alignItems: 'center' }}>
+                        <label key={employeeId} className="settings-switch stage-ownership-exception-item">
                           <div className="settings-switch-copy">
                             <span className="settings-switch-title">
                               {employee.fullName || 'Без имени'}

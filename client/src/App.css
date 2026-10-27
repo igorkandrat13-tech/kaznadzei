@@ -1893,6 +1893,20 @@ body .order-primary-title-button-badge {
   box-shadow: 0 0 0 3px rgba(110, 232, 178, 0.18);
 }
 
+.stage-ownership-exceptions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.stage-ownership-exception-item {
+  align-items: center;
+  min-width: 0;
+}
+
 .mobile-settings-color-row {
   display: inline-flex;
   align-items: center;
@@ -9892,6 +9906,9 @@ body .home-auth-status-pending {
     gap: 8px;
   }
   .telegram-package-input-row {
+    grid-template-columns: 1fr;
+  }
+  .stage-ownership-exceptions-grid {
     grid-template-columns: 1fr;
   }
   .telegram-material-request-input-row {
