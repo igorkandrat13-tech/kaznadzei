@@ -120,6 +120,8 @@ function Admin() {
   const [showTelegramNotificationModal, setShowTelegramNotificationModal] = useState(false);
   const [showStageOwnershipModal, setShowStageOwnershipModal] = useState(false);
   const [savingStageOwnership, setSavingStageOwnership] = useState(false);
+  const [stageOwnershipEnabledDraft, setStageOwnershipEnabledDraft] = useState(false);
+  const [stageOwnershipBypassDraftIds, setStageOwnershipBypassDraftIds] = useState([]);
   const [telegramNotificationDraftIds, setTelegramNotificationDraftIds] = useState([]);
   const [telegramStageNotificationDraftIds, setTelegramStageNotificationDraftIds] = useState([]);
   const [telegramNotificationActiveTab, setTelegramNotificationActiveTab] = useState('stages');
@@ -150,8 +152,6 @@ function Admin() {
   const [employeeSessionMenuButtonCheckLoading, setEmployeeSessionMenuButtonCheckLoading] = useState(false);
   const [employeeSessionLastMenuButtonCheck, setEmployeeSessionLastMenuButtonCheck] = useState(null);
   const backupImportInputRef = useRef(null);
-  const stageOwnershipRequestRef = useRef(0);
-  const stageOwnershipSaveTimerRef = useRef(null);
   const settingsTabs = buildSettingsTabs();
   const settingsTabKeySet = useMemo(() => new Set(settingsTabs.map((tab) => tab.key)), [settingsTabs]);
   const requestedSettingsTab = useMemo(() => {
@@ -461,16 +461,6 @@ function Admin() {
       window.clearInterval(intervalId);
       window.removeEventListener('focus', refreshOverview);
       document.removeEventListener('visibilitychange', handleVisibilityRefresh);
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stageOwnershipRequestRef.current = 0;
-      if (stageOwnershipSaveTimerRef.current != null) {
-        window.clearTimeout(stageOwnershipSaveTimerRef.current);
-        stageOwnershipSaveTimerRef.current = null;
-      }
     };
   }, []);
 
@@ -787,59 +777,53 @@ function Admin() {
     )
   ), [appSettings.telegramRequestNotificationEmployeeIds]);
 
-  const stageOwnershipBypassEmployeeIdsSet = useMemo(() => (
-    new Set(normalizeEmployeeIds(appSettings.stageOwnershipBypassEmployeeIds))
-  ), [appSettings.stageOwnershipBypassEmployeeIds]);
-
-  const stageOwnershipBypassEmployees = useMemo(() => (
-    sortedEmployees.filter((employee) => stageOwnershipBypassEmployeeIdsSet.has(String(employee?._id || '').trim()))
-  ), [sortedEmployees, stageOwnershipBypassEmployeeIdsSet]);
-
-  const queueStageOwnershipSettingsSave = useCallback((nextSettings, rollbackSettings) => {
+  const openStageOwnershipModal = useCallback(() => {
+    setStageOwnershipEnabledDraft(Boolean(appSettings.strictStageOwnershipEnabled));
+    setStageOwnershipBypassDraftIds(normalizeEmployeeIds(appSettings.stageOwnershipBypassEmployeeIds));
     setSettingsError('');
     setSettingsSuccess('');
-    if (stageOwnershipSaveTimerRef.current != null) {
-      window.clearTimeout(stageOwnershipSaveTimerRef.current);
-      stageOwnershipSaveTimerRef.current = null;
-    }
-    const requestId = ++stageOwnershipRequestRef.current;
-    stageOwnershipSaveTimerRef.current = window.setTimeout(async () => {
-      setSavingStageOwnership(true);
-      try {
-        const res = await apiFetch('/api/settings', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(nextSettings),
-        });
-        if (requestId !== stageOwnershipRequestRef.current) {
-          return;
-        }
-        const payload = await parseJsonSafely(res);
-        if (!res.ok) {
-          setAppSettings(buildAppSettingsState(rollbackSettings));
-          throw new Error(payload?.message || 'Не удалось сохранить настройки');
-        }
-        const persisted = payload?.data?.settings || payload?.settings || payload || {};
-        setAppSettings((prev) => buildAppSettingsState(persisted, prev));
-        setSettingsSuccess('Настройки сохранены');
-      } catch (err) {
-        if (requestId === stageOwnershipRequestRef.current) {
-          setSettingsError(toUserErrorMessage(err));
-        }
-      } finally {
-        if (requestId === stageOwnershipRequestRef.current) {
-          setSavingStageOwnership(false);
-        }
-      }
-    }, 220);
-  }, []);
+    setShowStageOwnershipModal(true);
+  }, [appSettings]);
 
-  const updateStageOwnershipSettings = useCallback((updates) => {
-    const previousSettings = buildAppSettingsState(appSettings);
-    const nextSettings = buildAppSettingsState({ ...appSettings, ...updates }, appSettings);
-    setAppSettings(nextSettings);
-    queueStageOwnershipSettingsSave(nextSettings, previousSettings);
-  }, [appSettings, queueStageOwnershipSettingsSave]);
+  const closeStageOwnershipModal = useCallback(() => {
+    if (savingStageOwnership) return;
+    setShowStageOwnershipModal(false);
+    setStageOwnershipEnabledDraft(Boolean(appSettings.strictStageOwnershipEnabled));
+    setStageOwnershipBypassDraftIds(normalizeEmployeeIds(appSettings.stageOwnershipBypassEmployeeIds));
+  }, [appSettings, savingStageOwnership]);
+
+  const saveStageOwnershipSettings = useCallback(async () => {
+    if (savingStageOwnership) return;
+    setSavingStageOwnership(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const nextSettings = buildAppSettingsState({
+        ...appSettings,
+        strictStageOwnershipEnabled: Boolean(stageOwnershipEnabledDraft),
+        stageOwnershipBypassEmployeeIds: normalizeEmployeeIds(stageOwnershipBypassDraftIds),
+      }, appSettings);
+      const res = await apiFetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nextSettings),
+      });
+      const payload = await parseJsonSafely(res);
+      if (!res.ok) {
+        throw new Error(payload?.message || 'Не удалось сохранить настройки');
+      }
+      const persisted = payload?.data?.settings || payload?.settings || payload || {};
+      setAppSettings((prev) => buildAppSettingsState(persisted, prev));
+      setStageOwnershipEnabledDraft(Boolean(persisted?.strictStageOwnershipEnabled));
+      setStageOwnershipBypassDraftIds(normalizeEmployeeIds(persisted?.stageOwnershipBypassEmployeeIds));
+      setShowStageOwnershipModal(false);
+      setSettingsSuccess('Настройки сохранены');
+    } catch (err) {
+      setSettingsError(toUserErrorMessage(err));
+    } finally {
+      setSavingStageOwnership(false);
+    }
+  }, [appSettings, savingStageOwnership, stageOwnershipBypassDraftIds, stageOwnershipEnabledDraft]);
 
   const openTelegramNotificationModal = () => {
     setTelegramStageNotificationDraftIds(
@@ -2354,7 +2338,7 @@ function Admin() {
 
             <SettingsActions>
               <button className="btn btn-success" onClick={openCreateEmployeeModal}>Добавить сотрудника</button>
-              <button className="btn" onClick={() => setShowStageOwnershipModal(true)}>⚙️ Управление этапами</button>
+              <button className="btn" onClick={openStageOwnershipModal}>⚙️ Управление этапами</button>
               <button className="btn" onClick={openTelegramNotificationModal}>Уведомления в ТГ</button>
             </SettingsActions>
 
@@ -2477,9 +2461,7 @@ function Admin() {
           </div>
 
           {showStageOwnershipModal && (
-            <div className="modal-overlay" onClick={() => {
-              if (!savingStageOwnership) setShowStageOwnershipModal(false);
-            }}>
+            <div className="modal-overlay" onClick={closeStageOwnershipModal}>
               <div className="modal-window" onClick={(event) => event.stopPropagation()} style={{ maxWidth: 520 }}>
                 <div className="modal-header">
                   <div>
@@ -2488,9 +2470,7 @@ function Admin() {
                       Глобальные правила отмены этапов. Зависит от того, кто принял этап.
                     </div>
                   </div>
-                  <button className="btn btn-small modal-close-btn" onClick={() => {
-                    if (!savingStageOwnership) setShowStageOwnershipModal(false);
-                  }} disabled={savingStageOwnership}>
+                  <button className="btn btn-small modal-close-btn" onClick={closeStageOwnershipModal} disabled={savingStageOwnership}>
                     ✕
                   </button>
                 </div>
@@ -2500,16 +2480,16 @@ function Admin() {
                     <div className="settings-switch-copy">
                       <span className="settings-switch-title">Управление этапами</span>
                       <span className="settings-switch-subtitle">
-                        {Boolean(appSettings.strictStageOwnershipEnabled)
+                        {Boolean(stageOwnershipEnabledDraft)
                           ? 'Только тот, кто принял этап, может его отменить'
                           : 'Все сотрудники с доступом к этапу могут его принимать и отменять'}
                       </span>
                     </div>
-                    <span className={`settings-switch-control ${Boolean(appSettings.strictStageOwnershipEnabled) ? 'settings-switch-control-on' : ''}`}>
+                    <span className={`settings-switch-control ${Boolean(stageOwnershipEnabledDraft) ? 'settings-switch-control-on' : ''}`}>
                       <input
                         type="checkbox"
-                        checked={Boolean(appSettings.strictStageOwnershipEnabled)}
-                        onChange={(e) => updateStageOwnershipSettings({ strictStageOwnershipEnabled: e.target.checked })}
+                        checked={Boolean(stageOwnershipEnabledDraft)}
+                        onChange={(e) => setStageOwnershipEnabledDraft(e.target.checked)}
                       />
                       <span className="settings-switch-track" aria-hidden="true">
                         <span className="settings-switch-thumb" />
@@ -2523,38 +2503,63 @@ function Admin() {
                     Исключения по сотрудникам
                     <HelpTooltip text="Эти сотрудники смогут сбрасывать закраску, даже если этап был принят другим исполнителем. Администратор с полным доступом тоже всегда может обойти запрет." />
                   </label>
-                  <select
-                    multiple
-                    size={Math.min(Math.max(sortedEmployees.length || 4, 4), 10)}
-                    value={normalizeEmployeeIds(appSettings.stageOwnershipBypassEmployeeIds)}
-                    onChange={(event) => {
-                      const nextIds = Array.from(event.target.selectedOptions).map((option) => option.value);
-                      updateStageOwnershipSettings({ stageOwnershipBypassEmployeeIds: nextIds });
-                    }}
-                    disabled={savingStageOwnership || sortedEmployees.length === 0}
-                  >
-                    {sortedEmployees.map((employee) => (
-                      <option key={employee._id} value={employee._id}>
-                        {employee.fullName || 'Без имени'}{employee.role ? ` (${getRoleLabel(employee.role)})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="text-small text-subtle" style={{ marginTop: 8 }}>
-                    Выделение множественное: можно отметить нескольких сотрудников.
+                  <div style={{ display: 'grid', gap: 8, maxHeight: 260, overflowY: 'auto', padding: '8px 0' }}>
+                    {sortedEmployees.map((employee) => {
+                      const employeeId = String(employee?._id || '').trim();
+                      const checked = stageOwnershipBypassDraftIds.includes(employeeId);
+                      return (
+                        <label key={employeeId} className="settings-switch" style={{ alignItems: 'center' }}>
+                          <div className="settings-switch-copy">
+                            <span className="settings-switch-title">
+                              {employee.fullName || 'Без имени'}
+                            </span>
+                            <span className="settings-switch-subtitle">
+                              {employee.role ? getRoleLabel(employee.role) : 'Без роли'}
+                            </span>
+                          </div>
+                          <span className={`settings-switch-control ${checked ? 'settings-switch-control-on' : ''}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(event) => {
+                                const isChecked = event.target.checked;
+                                setStageOwnershipBypassDraftIds((current) => {
+                                  const next = new Set(normalizeEmployeeIds(current));
+                                  if (isChecked) next.add(employeeId);
+                                  else next.delete(employeeId);
+                                  return Array.from(next);
+                                });
+                              }}
+                              disabled={savingStageOwnership}
+                            />
+                            <span className="settings-switch-track" aria-hidden="true">
+                              <span className="settings-switch-thumb" />
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                    {sortedEmployees.length === 0 ? (
+                      <div className="text-small text-subtle">Сотрудников пока нет.</div>
+                    ) : null}
                   </div>
                   <div className="text-small text-subtle" style={{ marginTop: 8 }}>
-                    {stageOwnershipBypassEmployees.length > 0
-                      ? `Сейчас обход разрешён: ${stageOwnershipBypassEmployees.map((employee) => employee.fullName || 'Без имени').join(', ')}`
+                    Отметь сотрудников, которым разрешён обход запрета на сброс чужой закраски.
+                  </div>
+                  <div className="text-small text-subtle" style={{ marginTop: 8 }}>
+                    {stageOwnershipBypassDraftIds.length > 0
+                      ? `Будет сохранено: ${sortedEmployees.filter((employee) => stageOwnershipBypassDraftIds.includes(String(employee?._id || '').trim())).map((employee) => employee.fullName || 'Без имени').join(', ')}`
                       : 'Исключений пока нет.'}
                   </div>
                 </div>
 
                 <div className="modal-actions">
                   <div />
-                  <button className="btn" onClick={() => {
-                    if (!savingStageOwnership) setShowStageOwnershipModal(false);
-                  }} disabled={savingStageOwnership}>
+                  <button className="btn" onClick={closeStageOwnershipModal} disabled={savingStageOwnership}>
                     Закрыть
+                  </button>
+                  <button className="btn btn-success" onClick={saveStageOwnershipSettings} disabled={savingStageOwnership}>
+                    {savingStageOwnership ? 'Сохранение...' : 'Сохранить'}
                   </button>
                 </div>
               </div>
