@@ -2503,37 +2503,32 @@ function Admin() {
                     Исключения по сотрудникам
                     <HelpTooltip text="Эти сотрудники смогут сбрасывать закраску, даже если этап был принят другим исполнителем. Администратор с полным доступом тоже всегда может обойти запрет." />
                   </label>
-                  <div className="stage-ownership-exceptions-grid">
+                  <div className="stage-ownership-exceptions-list">
                     {sortedEmployees.map((employee) => {
                       const employeeId = String(employee?._id || '').trim();
                       const checked = stageOwnershipBypassDraftIds.includes(employeeId);
                       return (
-                        <label key={employeeId} className="settings-switch stage-ownership-exception-item">
-                          <div className="settings-switch-copy">
-                            <span className="settings-switch-title">
+                        <label key={employeeId} className="stage-ownership-exception-option">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              const isChecked = event.target.checked;
+                              setStageOwnershipBypassDraftIds((current) => {
+                                const next = new Set(normalizeEmployeeIds(current));
+                                if (isChecked) next.add(employeeId);
+                                else next.delete(employeeId);
+                                return Array.from(next);
+                              });
+                            }}
+                            disabled={savingStageOwnership}
+                          />
+                          <span className="stage-ownership-exception-copy">
+                            <span className="stage-ownership-exception-name">
                               {employee.fullName || 'Без имени'}
                             </span>
-                            <span className="settings-switch-subtitle">
+                            <span className="stage-ownership-exception-role">
                               {employee.role ? getRoleLabel(employee.role) : 'Без роли'}
-                            </span>
-                          </div>
-                          <span className={`settings-switch-control ${checked ? 'settings-switch-control-on' : ''}`}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(event) => {
-                                const isChecked = event.target.checked;
-                                setStageOwnershipBypassDraftIds((current) => {
-                                  const next = new Set(normalizeEmployeeIds(current));
-                                  if (isChecked) next.add(employeeId);
-                                  else next.delete(employeeId);
-                                  return Array.from(next);
-                                });
-                              }}
-                              disabled={savingStageOwnership}
-                            />
-                            <span className="settings-switch-track" aria-hidden="true">
-                              <span className="settings-switch-thumb" />
                             </span>
                           </span>
                         </label>
